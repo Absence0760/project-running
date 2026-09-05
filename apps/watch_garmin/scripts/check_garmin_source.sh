@@ -62,6 +62,18 @@
 #      everywhere else. Both members exist and are the same type, so the wrong
 #      one compiles, runs, and is wrong only for the runners who set them apart.
 #
+#   7. The GAP reference golden is graded through the SHIPPED window. The
+#      four-rail fixture bracket (decisions § 1160) freezes eight numbers on
+#      each rail and joins them as one spec, so a golden pace is a claim about
+#      an algorithm rather than about an arbitrary track. On this rail the
+#      reduction that turns the fixture into a pace lives in the (:test) suite
+#      rather than in source/, because the field is a streaming estimator with
+#      no batch entry point. That is the whole exposure: a reduction that
+#      stopped driving a real `GradeTracker`, or that spelled the window as a
+#      literal instead of reading `MIN_SEGMENT_M`, would go on reporting 311
+#      against a window nothing on this rail uses -- agreeing with the other
+#      three about a number while saying nothing about the code.
+#
 # WHAT THIS DOES NOT PROVE. It parses text. It does not compile Monkey C, does
 # not run it, and is not evidence that the app builds or that the GAP numbers
 # are right — `source-test/GradeAdjustedPaceTest.mc` makes that claim and has
@@ -417,6 +429,59 @@ if view is not None:
             "source/GradeAdjustedPaceView.mc reads `distanceUnits`. Nothing in "
             "this field is a distance; the label and the divisor are both about "
             "pace, so the pace preference is the one to follow."
+        )
+
+# --------------------------------------------------------------------------
+# 7. The GAP reference golden is graded through the shipped window.
+# --------------------------------------------------------------------------
+GAP_REFERENCE_CONSTANTS = (
+    "GAP_REFERENCE_POINTS",
+    "GAP_REFERENCE_STEP_M",
+    "GAP_REFERENCE_STEP_S",
+    "GAP_REFERENCE_BASE_GRADE",
+    "GAP_REFERENCE_AMPLITUDE_M",
+    "GAP_REFERENCE_PERIOD_M",
+    "GAP_REFERENCE_S_PER_KM",
+    "GAP_REFERENCE_MAX_COST",
+)
+gap_test = strip_comments(read("source-test/GradeAdjustedPaceTest.mc"))
+if re.search(r"\bmodule\s+GradeAdjustedPaceTest\b", gap_test) is None:
+    fail(
+        "source-test/GradeAdjustedPaceTest.mc no longer declares "
+        "`module GradeAdjustedPaceTest` — the claims below read it and would "
+        "pass on an empty file"
+    )
+for name in GAP_REFERENCE_CONSTANTS:
+    hits = len(re.findall(r"\bconst\s+%s\s*=\s*[^;]+;" % name, gap_test))
+    if hits != 1:
+        fail(
+            "source-test/GradeAdjustedPaceTest.mc declares `const %s` %d times, "
+            "expected once. scripts/check_watch_wire_vectors.mjs joins all eight "
+            "GAP_REFERENCE_* values into one spec per rail and compares the "
+            "specs; a name it cannot read exactly once takes this rail out of "
+            "the comparison rather than failing it." % (name, hits)
+        )
+
+walk = body_of(gap_test, "function gapReferenceReportedSPerKm")
+if walk is None:
+    fail(
+        "source-test/GradeAdjustedPaceTest.mc declares no "
+        "`gapReferenceReportedSPerKm` — the golden has nothing to grade the "
+        "reference track through"
+    )
+else:
+    if not re.search(r"\bnew\s+GradeTracker\s*\(", walk):
+        fail(
+            "gapReferenceReportedSPerKm does not drive a `GradeTracker`. The "
+            "golden's only value is that the fixture is graded through THIS "
+            "rail's rolling window; a private copy of the walk would report 311 "
+            "whatever the shipped tracker did."
+        )
+    if not re.search(r"\$\.MIN_SEGMENT_M\b", walk):
+        fail(
+            "gapReferenceReportedSPerKm does not read `$.MIN_SEGMENT_M`. The "
+            "window is the value this golden brackets; spelled as a literal it "
+            "would keep reporting 311 after the window moved."
         )
 
 if failures:
