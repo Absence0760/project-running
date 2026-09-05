@@ -21978,3 +21978,176 @@ they do not. And `document_title.test.ts` gained the assertion that would have
 caught it: no built page may carry an unsubstituted `%sveltekit.*` placeholder.
 That is a whole-artifact claim rather than a head-shape one, which is the level
 this class of damage is visible at.
+
+## 1175. The exercise grouping key's case fold is a frozen Unicode 17.0 table on all three rails, and the three now answer identically at every code point
+
+`normaliseExerciseName` is derived on three rails — `apps/web/src/lib/gym/gym_prs.ts`,
+`apps/mobile_android/lib/gym_prs.dart` and the SQL `public.normalise_exercise_name` —
+and the answer is PERSISTED as `gym_sets.exercise_key` (server-stamped since
+§ 1076), `gym_routine_exercises.exercise_key` and `exercises.name_key` (both
+client-stamped), each under a VALIDATED CHECK naming the SQL function. § 790
+took the locale provider out of the WHITESPACE half by naming code points.
+§ 830 took the collation out of the CASE half by pinning `und-x-icu` and folding
+U+0130 and final sigma by hand, and filed what it could not afford: each rail
+still reached for its own runtime's Unicode case table.
+
+Re-measured here before acting on the filing, over all 1,112,063 assignable code
+points and after the two hand folds, the three still disagreed at **465** code
+points web↔mobile, **410** mobile↔server and **55** web↔server — the filing's
+figures exactly. Every one of those is a name one rail cannot write without a
+23514 from a predicate the other two agree on, and a lift the three would bucket
+as two exercises if nothing rejected it.
+
+**The authority is Unicode's SIMPLE lowercase mapping, frozen at Unicode 17.0**,
+rendered from Unicode's own data by `scripts/gen_exercise_fold_table.mjs` into
+`apps/web/src/lib/gym/exercise_fold_table.ts` and
+`apps/mobile_android/lib/exercise_fold_table.dart`, and into the `translate()`
+inside the new `public.exercise_fold_case` (migration `20270709000010`). Simple
+rather than FULL mapping for one reason wearing two hats: full lowercase carries
+a CONTEXT (Final_Sigma) and a 1:many expansion (U+0130 → `i` + U+0307, the only
+unconditional one in Unicode), and a per-code-point table can express neither.
+Under the simple mapping all 1,488 entries are 1:1 — which is exactly what lets
+the SQL rail be a `translate()` — and U+0130 → a bare `i` is the answer § 830
+already chose by hand, so its pre-fold becomes a table entry and is **deleted**
+from all three rails. The final-sigma fold stays, because it is a context and
+not a case: the table always answers U+03C3, and folding a typed U+03C2 onto it
+is what makes an all-caps Greek spelling meet its lower-case one.
+
+Measured after the change:
+
+* **Residual disagreement is zero.** Every assignable code point through each
+  rail's whole shipped pipeline, chunk-hashed: the SQL function, the shipped
+  `normaliseExerciseName` in `gym_prs.ts` and the shipped one in `gym_prs.dart`
+  all answer md5 `76a152d0e2a86b0b39a311597b42633b`. 465 / 410 / 55 → 0 / 0 / 0.
+* **Web does not move at all.** The frozen table is web's own answer: over
+  8,896,512 strings — every code point in eight contexts, alone, ASCII-flanked,
+  doubled, before a combining acute, after a Greek all-caps word, before a
+  capital sigma — the old and new web pipelines differ on **zero**. The move is
+  entirely about bringing mobile and the server onto what web already said.
+* **The server moves at exactly 55 code points and only ever by folding one it
+  used to leave alone.** Against the frozen table, ICU root folds NOTHING the
+  table does not, and the single differing VALUE is U+0130, whose ICU
+  `i` + U+0307 the hand-written pre-fold had already replaced with the bare `i`.
+  So no stored key changes value; 55 gain a fold. This corrects the filing,
+  which reported the ICU-vs-newer-table delta as **28** (27 one way, 1 the
+  other): that was measured against Unicode **16.0**. On this box — Node 24,
+  Unicode 17.0 — it is **55 one way and 0 the other**, and the "1 the other way"
+  was U+0130, which is a differing value rather than a fold ICU has and the
+  table lacks.
+* **Blast radius on real rows**, local stack: 0 of 23 `gym_sets`, 0 of 4
+  `gym_routine_exercises`, 0 of 43 `exercises` re-key, and no `exercises`
+  unique-key collision arises. The backfills run anyway, for the reason § 790
+  gave — "every client build that ever wrote a row conformed" is a claim about
+  history a migration cannot verify.
+* **Cost.** `translate()` over the full table is **60.2 µs** a call against
+  **0.35 µs** for `lower()` — the filing's 60 µs / 0.34 µs, reproduced. The
+  ASCII fast path (§ 1178) takes an all-ASCII name to 2.5 µs against 4.5 µs for
+  the whole of the old function. That is now a per-WRITE cost (§ 1076), so a
+  logged 40-set session spends 2.4 ms of folding.
+
+A side effect worth naming: the `collate "und-x-icu"` pin § 830 added is gone
+with the `lower()` it pinned. `translate`, `regexp_replace` over named code
+points and `btrim(x, ' ')` name no collation, so the derivation is now
+collation-**free** rather than collation-pinned, and the `immutable` marking is
+true in fact. A CHECK over a function whose answer moved with the server's ICU
+build was a claim the catalogue could not keep: an ICU upgrade would silently
+have left validated rows failing their own constraint.
+
+`scripts/check_shared_constants.mjs` compares the three tables (§ 1176), and the
+two client suites plus `apps/backend/supabase/tests/normalise_exercise_name_test.sql`
+pin the fold from each side.
+
+## 1176. A FROZEN generated artifact gets a cross-rail guard and deliberately no re-render guard — the opposite of a TRACKING one
+
+§ 852 / § 855 established the pattern for a generated table: a `scripts/gen_*.mjs`
+that renders it from Unicode's own data, a committed artifact, and a
+`scripts/check_*.mjs` that re-renders and fails on drift. The fold table of
+§ 1175 follows the first two and **deliberately drops the third**, and the
+difference is worth stating because the two look identical from outside.
+
+`catalogue_fold_table.dart` **tracks**: it exists to carry web's runtime `fold()`
+to a Dart side that cannot compute it, so a committed table that differs from a
+fresh render IS a defect, and re-rendering under a newer Node is how the fix
+arrives. The exercise fold table is **frozen**: the whole point is that the
+answer stops moving when a runtime moves. Re-rendering it under a newer Node
+SHOULD differ, and a guard that failed on that would report a Node bump as
+table drift and invite the wrong fix — regenerating the clients alone, which
+would break the two client-stamped columns against the server's CHECK.
+
+So what is guarded is the three rails against EACH OTHER, in
+`check_shared_constants.mjs` rather than as a parallel mechanism: a dedicated
+`checkExerciseFoldTable` beside `checkColumnBounds`, not a `REGISTRY` entry,
+because the entry checker prints every value it compared on SUCCESS and 1,488
+pairs would be a 30 KB line on every green run. It reports the first eight
+differing code points and the total. Two further claims ride along: the two
+client rails must name the same frozen Unicode version (two tables agreeing
+today while naming different versions agree by luck), and the SQL fast path must
+be exactly the table's ASCII half (§ 1178).
+
+The version is instead cross-checked where it can be done honestly — in the web
+suite, which compares the shipped table against `String.prototype.toLowerCase`
+only when `process.versions.unicode` equals the stamped version, and says it is
+skipping otherwise rather than passing silently.
+
+Moving the table is therefore a deliberate act: re-run the generator, take the
+SQL literals from its `--sql` mode into a NEW migration that replaces
+`exercise_fold_case` and re-validates the three CHECKs, and land all three rails
+in one change (§ 1102's constraint, unchanged).
+
+## 1177. A fold that only ever widens can make two catalogue rows duplicates, so the migration merges them rather than being able to abort
+
+`exercises` carries two partial unique indexes over the grouping key —
+`(author_id, name_key) where author_id is not null` and `(name_key) where
+author_id is null`. The § 1175 fold only ever WIDENS (it adds folds at 55 code
+points and removes none), so two rows that keyed distinctly can now key the
+same, and the backfill would raise 23505. Nothing else in the schema can
+collide: `gym_routine_exercises` and `gym_sets` have no unique index on their
+key.
+
+Keeping both rows is not available — the canonical CHECK forces every row to
+carry `normalise_exercise_name(name)`, so both take the new key and the index
+refuses one. That leaves merge or abort, and **a migration that can fail on real
+data is a failed deploy**, which is worse than the merge: the duplicate is two
+catalogue entries Unicode says are one exercise, and merging them is the
+outcome the author would want anyway.
+
+The merge is deterministic and total: the oldest row wins (`created_at`, then
+`id`), every `gym_sets.exercise_id` pointing at a loser is repointed at it, and
+the losers are deleted. Repointing BEFORE the delete is load-bearing — the FK is
+`ON DELETE SET NULL`, so deleting first would silently unlink logged sets from
+their catalogue entry. `partition by author_id, <key>` covers both indexes at
+once, because window partitioning treats NULLs as equal and every global row
+sharing a key therefore lands in one partition exactly as the
+`where author_id is null` index sees them. Measured: 0 collisions on the local
+stack, and the pass runs anyway for § 790's reason.
+
+## 1178. The SQL fold's all-ASCII fast path is a second copy of 26 pairs, admitted only because a guard proves it is the same 26 pairs
+
+`translate()` over the 1,488-pair table costs 60.2 µs a call, and the cost is
+dominated by the characters that DON'T match: Postgres scans the whole `from`
+string before concluding a character is unmapped, so an all-lowercase ASCII name
+pays 68 µs while an all-uppercase one pays 8.2 µs (matching within the first 26
+entries). `exercise_fold_case` therefore takes a 26-pair branch when
+`octet_length(p) = length(p)` — true exactly when every character is one UTF-8
+byte, which is exactly ASCII, and which names no collation and no locale.
+Measured: 2.5 µs for an all-ASCII name against 60.2 µs, and a mixed corpus one
+third non-ASCII at 24 µs.
+
+§ 830 rejected an ASCII fast path on a fairness argument — "it leaves non-ASCII
+names at 62 µs, taxing exactly the population the table protects." That argument
+was priced when the fold ran once per `gym_sets` row per READ. § 1076 moved it
+to write time, and 62 µs on a row insert is not a tax anyone can perceive. What
+the fast path does buy, at the moment the cost is highest, is the migration's
+own backfill and its three `VALIDATE CONSTRAINT` scans: at the 500,000-row
+`gym_sets` scale § 1076 measured against, ~64 s of pure folding becomes ~3 s.
+
+It is nonetheless a SECOND copy of part of a shared constant, which this repo
+otherwise refuses. It is admitted because the copy is *proved*, not trusted, in
+three places: `check_shared_constants.mjs` derives the table's ASCII half and
+demands the branch equal it; both client suites assert the table's ASCII half is
+exactly A-Z → a-z; and `normalise_exercise_name_test.sql` sends every one of the
+127 ASCII code points through BOTH branches — alone, which is all-ASCII, and
+followed by a non-ASCII character, which forces the full table — and requires
+the leading character to fold the same either way. A fast path that folded one
+ASCII code point differently would split a bucket on the commonest names in the
+product, which is why the equivalence is asserted rather than argued.
