@@ -3229,6 +3229,7 @@ export const messages = {
 	"socialClubs.loadErrorTitle": "No se pudieron cargar los clubes",
 	"socialClubs.loadErrorText": "Algo salió mal al cargar los clubes. Comprueba tu conexión e inténtalo de nuevo.",
 	"socialClubs.retry": "Reintentar",
+	"socialClubs.membershipUnknown": "No se pudo comprobar a cuáles de estos te has unido: tu rol y los botones de unirte pueden ser incorrectos hasta que se recargue.",
 	"socialClubs.emptyMineTitle": "Aún no te has unido a ningún club",
 	"socialClubs.emptyMineText": "Los clubes son grupos semanales, círculos para compartir rutas y centros de eventos. Explora los públicos cerca de ti, pide unirte con un toque o crea el tuyo.",
 	"socialClubs.findAClub": "Buscar un club",

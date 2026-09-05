@@ -12,6 +12,7 @@ import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { SUPPORTED_LOCALES } from './i18n/locale';
+import { stripComments } from './core/strip_comments';
 
 function read(...parts: string[]): string {
 	return readFileSync(resolve(...parts), 'utf-8');
@@ -207,9 +208,9 @@ test('FundraiserSection keeps a totals failure from erasing the campaign', () =>
 	);
 });
 
-test('the read-failure copy is localized in all six catalogues', () => {
-	// Reason: an error state added in English only is the same bug in five
-	// locales. `satisfies Messages` catches an omission at build time, but
+test('the read-failure copy is localized in every catalogue', () => {
+	// Reason: an error state added in English only is the same bug in every
+	// other locale. `satisfies Messages` catches an omission at build time, but
 	// only once the key exists in en — assert every catalogue carries it.
 	const keys = [
 		'routeDetail.loadFailedTitle',
@@ -291,5 +292,94 @@ test('/clubs/[slug] surfaces a failed post reply instead of swallowing it', () =
 		for (const key of ['clubHome.replyFailed', 'clubHome.repliesLoadFailed']) {
 			assert.ok(catalogue.includes(`"${key}":`), `${key} missing from ${locale}.ts`);
 		}
+	}
+});
+
+test('FundraiserSection tells a non-owner the campaign read failed', () => {
+	// Reason: the load catch deliberately leaves `fundraiser = null` so a
+	// transient failure cannot hide the owner's "Create fundraiser" CTA — and
+	// that is right as far as it goes. For everyone else it rendered NOTHING,
+	// which is exactly what a run with no campaign renders, so a donor
+	// following a shared link could not tell a failed read from "no campaign".
+	// The component already models the sibling failure precisely (totalsFailed,
+	// so a totals blip is not drawn as "0 raised"); this is the same treatment
+	// one read up.
+	const source = read('src/lib/components/FundraiserSection.svelte');
+	const loader = source.match(/async function load\(\)[\s\S]*?\n\t\}/);
+	assert.ok(loader, 'load body missing — rename?');
+	assert.match(
+		loader![0],
+		/loadFailed = true;/,
+		'a failed campaign read must be reported, not collapsed into "no campaign"',
+	);
+	assert.match(
+		loader![0],
+		/loadFailed = false;/,
+		'the flag must reset on each attempt, or a retry that succeeds still shows the error',
+	);
+	assert.match(
+		source,
+		/\{#if loadFailed\}[\s\S]{0,400}?fundraiser\.loadFailed[\s\S]{0,300}?fundraiser\.retry/,
+		'the failure branch must render the localized message and a retry',
+	);
+	assert.match(
+		source,
+		/onclick=\{\(\) => void load\(\)\}/,
+		'the retry must re-run the load, matching /fundraisers/[id]',
+	);
+	// The owner CTA must survive: hiding it on a blip is the regression the
+	// original catch was written to prevent.
+	assert.match(
+		source,
+		/data-testid="fundraiser-create-cta"/,
+		'the owner Create CTA must still render when the read failed',
+	);
+});
+
+test('a club list survives a membership blip instead of becoming an error page', () => {
+	// Reason: enrichClubs reporting a failed club_members read was the right
+	// call (a null role must not be asserted as non-membership), but returning
+	// `clubs: []` discarded rows the caller had already read, so every surface
+	// rendered "couldn't load clubs" for a list that had loaded fine. Browsing
+	// a club list does not require knowing your own role in each one. The
+	// single-club reader is deliberately NOT included: an unknown role there
+	// silently downgrades an owner to the member view.
+	const data = stripComments(read('src/lib/core/data.ts'));
+	const start = data.indexOf('async function enrichClubs(');
+	assert.ok(start >= 0, 'enrichClubs moved — re-anchor this guard');
+	const body = data.slice(start, data.indexOf('\nexport ', start + 1));
+	const failure = body.slice(body.indexOf('if (rolesRes.error)'));
+	assert.doesNotMatch(
+		failure.slice(0, failure.indexOf('}')),
+		/clubs: \[\]/,
+		'a membership blip must not discard the clubs the caller already read',
+	);
+	assert.match(
+		data,
+		/if \(rolesError\) return \{ club: null, error: rolesError \};/,
+		'fetchClubBySlug must still fail — an unknown role hides an owner admin controls',
+	);
+
+	const panel = read('src/lib/components/SocialClubs.svelte');
+	assert.match(
+		panel,
+		/\{:else if loadError && visible\.length > 0\}/,
+		'a list with rows and an error must render the rows plus a notice, not the error card',
+	);
+	assert.match(
+		panel,
+		/socialClubs\.membershipUnknown/,
+		'the notice must say membership is unknown, not that the clubs failed to load',
+	);
+	assert.match(
+		panel,
+		/\{:else if loadError\}[\s\S]{0,200}?socialClubs\.loadErrorTitle/,
+		'with no rows to show, the full error card is still the honest answer',
+	);
+	for (const locale of SUPPORTED_LOCALES) {
+		assert.ok(
+			read(`src/lib/i18n/locales/${locale}.ts`).includes('"socialClubs.membershipUnknown":'),
+			`socialClubs.membershipUnknown missing from ${locale}.ts`,
+		);
 	}
 });

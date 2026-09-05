@@ -3224,6 +3224,7 @@ export const messages = {
 	"socialClubs.loadErrorTitle": "クラブを読み込めませんでした",
 	"socialClubs.loadErrorText": "クラブの読み込み中に問題が発生しました。接続を確認して、もう一度お試しください。",
 	"socialClubs.retry": "再試行",
+	"socialClubs.membershipUnknown": "どのクラブに参加しているか確認できませんでした。再読み込みまで、役割と参加ボタンが正しくない場合があります。",
 	"socialClubs.emptyMineTitle": "まだクラブに参加していません",
 	"socialClubs.emptyMineText": "クラブは週ごとのグループ、ルート共有のサークル、イベントの拠点です。近くの公開クラブをさがし、ワンタップで参加申請するか、自分のクラブを作りましょう。",
 	"socialClubs.findAClub": "クラブをさがす",

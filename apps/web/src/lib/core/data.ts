@@ -2662,27 +2662,34 @@ async function enrichClubs(
 				.eq('user_id', userId)
 		: { data: [] as { club_id: string; role: string; status: string }[], error: null };
 
-	if (rolesRes.error) {
-		console.error('enrichClubs (viewer membership) failed', rolesRes.error);
-		return { clubs: [], error: describeReadError(rolesRes.error) };
-	}
-
 	const roles = new Map<string, ClubRole>();
 	const statuses = new Map<string, MembershipStatus>();
-	for (const row of (rolesRes.data ?? []) as { club_id: string; role: string; status: string }[]) {
-		if (row.status === 'active') roles.set(row.club_id, row.role as ClubRole);
-		statuses.set(row.club_id, row.status as MembershipStatus);
-	}
-	return {
-		clubs: clubs.map((c) => ({
+	const withMembership = (): ClubWithMeta[] =>
+		clubs.map((c) => ({
 			...c,
 			join_policy: (c.join_policy ?? 'open') as JoinPolicy,
 			member_count: c.member_count ?? 0,
 			viewer_role: roles.get(c.id) ?? null,
 			viewer_status: statuses.get(c.id) ?? null
-		})),
-		error: null
-	};
+		}));
+
+	// A failed membership read is not non-membership — but it is not a failure
+	// to read the CLUBS either, and discarding rows the caller already has
+	// turns a blip into "you are in no clubs". Hand the rows back with every
+	// role and status null and the error alongside, and let each surface say
+	// membership is unknown rather than render the list as an error. The
+	// single-club reader (fetchClubBySlug) deliberately still fails: an
+	// unknown role there silently downgrades an owner to the member view.
+	if (rolesRes.error) {
+		console.error('enrichClubs (viewer membership) failed', rolesRes.error);
+		return { clubs: withMembership(), error: describeReadError(rolesRes.error) };
+	}
+
+	for (const row of (rolesRes.data ?? []) as { club_id: string; role: string; status: string }[]) {
+		if (row.status === 'active') roles.set(row.club_id, row.role as ClubRole);
+		statuses.set(row.club_id, row.status as MembershipStatus);
+	}
+	return { clubs: withMembership(), error: null };
 }
 
 export async function createClub(input: {

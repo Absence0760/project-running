@@ -3240,6 +3240,7 @@ export const en = {
 	"socialClubs.loadErrorTitle": "Couldn't load clubs",
 	"socialClubs.loadErrorText": "Something went wrong loading clubs. Check your connection and try again.",
 	"socialClubs.retry": "Try again",
+	"socialClubs.membershipUnknown": "Couldn’t check which of these you’ve joined — your role and Join buttons may be wrong until this reloads.",
 	"socialClubs.emptyMineTitle": "You haven't joined a club yet",
 	"socialClubs.emptyMineText": "Clubs are weekly groups, route-sharing circles, and event hubs. Browse what's public near you, request to join with one tap, or start your own.",
 	"socialClubs.findAClub": "Find a club",

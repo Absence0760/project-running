@@ -24039,3 +24039,46 @@ filed with its blast radius rather than half-applied. And `/routes` still gates
 the preview on a non-empty `waypoints`, so the fill alone does not yet put the
 map back on screen; that is one block in a page this lane does not own, handed
 to the integrator as a grant.
+
+## 1231. A failed read is legible on both surfaces § 1220 left half-done — the donor gets a retry, and a club list survives a membership blip
+
+§ 1220 made five reads report their failures instead of returning a neutral
+value, and named two surfaces it could not finish. Both are finished here, and
+they are the same shape: the data layer now knows the difference between "there
+is nothing" and "we could not tell", and the surface has to say which.
+
+`FundraiserSection` catches its campaign read on purpose — a transient failure
+must not hide the owner's "Create fundraiser" CTA — and that policy is kept.
+What it did not do was tell the OTHER reader anything: a donor following a
+shared link to a run whose fundraiser read failed saw the section render
+nothing, byte for byte what a run with no campaign renders. The component
+already modelled the sibling failure precisely (`totalsFailed`, so a totals blip
+is not drawn as "0 raised"), so this is that treatment one read up: a
+`loadFailed` state, a `role="alert"` line with a retry that re-runs the load,
+and the owner CTA still rendered beneath it. **The filing's stated blocker was
+wrong and worth recording**: it said this needed a new key in all seven
+catalogues, which is why an earlier lane skipped it. `fundraiser.loadFailed` and
+`fundraiser.retry` already exist in all seven — `/fundraisers/[id]` added them
+— so the change needed no new copy at all.
+
+`enrichClubs` reporting a failed `club_members` read was right; returning
+`clubs: []` alongside the error was not. Browsing a club list does not require
+knowing your own role in each one, so discarding rows the caller had already
+read turned a membership blip into "you are in no clubs" on a list that had
+loaded fine. It now returns the rows with every `viewer_role` and
+`viewer_status` null and the error beside them, and `SocialClubs` renders the
+list under a "couldn't check which of these you've joined" notice when it has
+rows, keeping the full error card for when it has none. `fetchClubBySlug` is
+deliberately excluded and still fails the whole read: an unknown role on a club
+detail page silently downgrades an owner to the member view, which is a worse
+lie than an error. That asymmetry is what the guard pins.
+
+Five mutations, each caught by exactly one assertion: dropping `loadFailed =
+true` from the catch, never resetting it between attempts (a successful retry
+would keep showing the error), restoring `clubs: []`, making the panel show the
+error card even when it has rows, and adding the one new key
+(`socialClubs.membershipUnknown`) to English only. The Playwright spec
+`tests-e2e/fundraising/section-load-failure.spec.ts` covers the donor path
+anonymously and carries the control the assertion needs to mean anything — that
+a run with genuinely no campaign still renders nothing — and was NOT executed in
+this lane.
