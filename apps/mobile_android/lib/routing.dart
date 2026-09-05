@@ -7,10 +7,19 @@ import 'package:core_models/core_models.dart' show Waypoint;
 import 'package:flutter/foundation.dart' show kReleaseMode, visibleForTesting;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-/// Dart port of `apps/web/src/lib/routes/routing.ts` — OSRM client for the
-/// in-app route builder. Two helpers: [snapToRoad] for the
-/// nearest-road service, and [fetchRouteThrough] for a full route
-/// through N waypoints.
+/// OSRM client for the in-app route builder. Two helpers: [snapToRoad]
+/// for the nearest-road service, and [fetchRouteThrough] for a full
+/// route through N waypoints.
+///
+/// This file is the SOLE client-side OSRM implementation and is
+/// deliberately NOT a lockstep parity pair. It once was a port of
+/// `apps/web/src/lib/routes/routing.ts`, but decisions § 1119 deleted
+/// that file's `snapToRoad` / `fetchRoute` / `fetchFullRoute` — nothing
+/// imported them — leaving it the `/api/routes/osrm` proxy client
+/// (`OSRM_PROXY_BASE` + `osrmProxyFetch`) and nothing else. Web's route
+/// builder builds its OSRM service paths inline in `RouteBuilder.svelte`
+/// and hands each to that proxy, so the two platforms no longer share a
+/// function to keep in step.
 ///
 /// All callers can pass a [fetcher] (a `Future<String> Function(Uri)`)
 /// to inject a mock for unit tests. The default fetcher uses
@@ -25,10 +34,11 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 /// Fly.io). [assertOsrmConfiguredForProd] throws on the first
 /// routing call when a release-mode build still resolves to the
 /// public demo — keeping the binary from silently leaking user
-/// waypoints to an uncontracted third party. Mirrors the web
-/// `assertOsrmConfiguredForProd` in
-/// `apps/web/src/lib/routes/routing.ts`. See audit/third-party-data-flows
-/// (2026-05-25).
+/// waypoints to an uncontracted third party. Web has no client-side
+/// counterpart any more: the same posture is enforced where the config
+/// lives, by the proxy handler's fail-closed 501 when `OSRM_URL` is
+/// unset (`routes/osrm_proxy/handler.ts`). See
+/// audit/third-party-data-flows (2026-05-25).
 
 const _kPublicDemoOsrm = 'https://router.project-osrm.org';
 
