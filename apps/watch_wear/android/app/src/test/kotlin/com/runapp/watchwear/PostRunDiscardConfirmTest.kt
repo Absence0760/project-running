@@ -79,7 +79,7 @@ class PostRunDiscardConfirmTest {
         )
         assertTrue(
             "the arm must name the stake: this run is not saved anywhere else",
-            body.contains("R.string.discard_stake"),
+            body.contains("R.plurals.discard_stake"),
         )
         assertTrue(
             "the confirm must announce itself to TalkBack too — the `×` and the " +

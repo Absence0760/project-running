@@ -748,7 +748,7 @@ private fun PreRunScreen(
                 if (discardArmedAtMs != null) {
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        stringResource(R.string.discard_stake),
+                        pluralStringResource(R.plurals.discard_stake, 1),
                         style = MaterialTheme.typography.caption3,
                         color = DuskPalette.warning,
                         textAlign = TextAlign.Center,
@@ -900,7 +900,11 @@ private fun PreRunScreen(
                 // The label carries the count in both states because the
                 // runner is agreeing to a number, and `discard_stake` renders
                 // only while armed so the arc states no stake for a run
-                // nobody is discarding.
+                // nobody is discarding. It takes the count too: the caption is
+                // a predicate about the runs, so French, Spanish and Portuguese
+                // inflect it, and the single-run callers that already used the
+                // key were reading a sentence about one run to someone
+                // discarding several (decisions § 1389).
                 var discardArmedAtMs by remember { mutableStateOf<Long?>(null) }
                 LaunchedEffect(discardArmedAtMs) {
                     val armedAt = discardArmedAtMs ?: return@LaunchedEffect
@@ -954,7 +958,7 @@ private fun PreRunScreen(
                 )
                 if (armed) {
                     Text(
-                        stringResource(R.string.discard_stake),
+                        pluralStringResource(R.plurals.discard_stake, rejectedCount),
                         style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                         color = DuskPalette.warning,
                         textAlign = TextAlign.Center,
@@ -2222,7 +2226,7 @@ private fun PostRunScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    stringResource(R.string.discard_stake),
+                    pluralStringResource(R.plurals.discard_stake, 1),
                     style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                     color = DuskPalette.warning,
                     textAlign = TextAlign.Center,

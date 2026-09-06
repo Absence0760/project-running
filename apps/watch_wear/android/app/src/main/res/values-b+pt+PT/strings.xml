@@ -85,7 +85,10 @@
     <string name="save_it">Guardar</string>
     <string name="discard">Descartar</string>
     <string name="discard_confirm">Descartar?</string>
-    <string name="discard_stake">Não guardada em mais nenhum lado</string>
+    <plurals name="discard_stake">
+        <item quantity="one">Não guardada em mais nenhum lado</item>
+        <item quantity="other">Não guardadas em mais nenhum lado</item>
+    </plurals>
 
     <string name="battery_allow_background">Permitir atividade em segundo plano</string>
     <string name="battery_samsung_summary">Os relógios Samsung gerem isto no Galaxy Wearable no seu telemóvel.</string>

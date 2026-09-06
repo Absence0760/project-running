@@ -85,7 +85,10 @@
     <string name="save_it">Enregistrer</string>
     <string name="discard">Supprimer</string>
     <string name="discard_confirm">Supprimer ?</string>
-    <string name="discard_stake">Enregistrée nulle part ailleurs</string>
+    <plurals name="discard_stake">
+        <item quantity="one">Enregistrée nulle part ailleurs</item>
+        <item quantity="other">Enregistrées nulle part ailleurs</item>
+    </plurals>
 
     <string name="battery_allow_background">Autoriser l\'activité en arrière-plan</string>
     <string name="battery_samsung_summary">Les montres Samsung gèrent cela dans Galaxy Wearable sur votre téléphone.</string>
