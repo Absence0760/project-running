@@ -2808,7 +2808,7 @@ jobs:
       - name: Validate the served-tree mutation table
         run: |
           if ! node --test apps/backend/scripts/check_served_envelope_mutations.test.mjs; then
-            echo "::error::The served-tree mutation guard's own tests fail. Nothing here involves the live host, the typecheck or the pure-helper suite — an anchor in check_served_envelope_mutations.mjs no longer occurs exactly once in the handler it names, or a mutation claims a test case the file no longer carries. Re-anchor the entry on the line that guards it now; deleting it puts that case back to unmeasured."
+            echo "::error::The served-tree mutation guard's own tests fail. Nothing here involves the live host, the typecheck or the pure-helper suite — an anchor in check_served_envelope_mutations.mjs no longer occurs exactly once in the handler it names, a mutation claims a test case the file no longer carries, or the source census found a declared case that no mutation names (a case whose ignore: gate is never false in CI runs nowhere, so neither the unmeasured-case nor the phantom-kill check can see it -- register it or exempt it in UNMEASURED_CASES with a reason). Re-anchor the entry on the line that guards it now; deleting it puts that case back to unmeasured."
             echo "Reproduce locally with: node --test apps/backend/scripts/check_served_envelope_mutations.test.mjs"
             exit 1
           fi
