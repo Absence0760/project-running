@@ -59,6 +59,21 @@
     <string name="sync_count">Sync %1$d</string>
     <string name="sync_retry">Retry sync</string>
     <string name="cd_sync_unreadable_retry">Saved runs unreadable, tap to retry</string>
+    <!-- Queue entries the server permanently refused. The chip states the
+         refusal, arms on the first tap, and only the second tap discards. -->
+    <plurals name="sync_rejected">
+        <item quantity="one">%1$d can\'t sync</item>
+        <item quantity="other">%1$d can\'t sync</item>
+    </plurals>
+    <string name="sync_rejected_discard">Discard %1$d?</string>
+    <plurals name="cd_sync_rejected">
+        <item quantity="one">%1$d saved run the server refused. Tap to discard.</item>
+        <item quantity="other">%1$d saved runs the server refused. Tap to discard.</item>
+    </plurals>
+    <plurals name="cd_sync_rejected_confirm">
+        <item quantity="one">Confirm discarding %1$d run. Not saved anywhere else.</item>
+        <item quantity="other">Confirm discarding %1$d runs. Not saved anywhere else.</item>
+    </plurals>
     <string name="offline">Offline</string>
     <string name="not_signed_in">Not signed in</string>
     <string name="race_armed">RACE ARMED</string>

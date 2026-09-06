@@ -40,7 +40,7 @@ class StoredGear implements SyncEntry {
   factory StoredGear.fromJson(Map<String, dynamic> json) => StoredGear(
         row: Map<String, dynamic>.from(json['row'] as Map),
         syncState: syncStateFromWire(json['sync_state'] as String?),
-        lastModifiedAt: storedClockOrNow(json['last_modified_at']),
+        lastModifiedAt: storedClockOrEpoch(json['last_modified_at']),
       );
 }
 
@@ -258,7 +258,7 @@ class LocalGearStore extends OfflineSyncStore<StoredGear> {
         name: stored.row['name'] as String,
         brand: stored.row['brand'] as String?,
         model: stored.row['model'] as String?,
-        purchasedAt: _parseDate(stored.row['purchased_at']),
+        purchasedAt: parseCalendarDate(stored.row['purchased_at']),
         targetDistanceM: (stored.row['target_distance_m'] as num?)?.toInt(),
         notes: stored.row['notes'] as String?,
       );
@@ -269,8 +269,8 @@ class LocalGearStore extends OfflineSyncStore<StoredGear> {
         name: stored.row['name'] as String?,
         brand: stored.row['brand'] as String?,
         model: stored.row['model'] as String?,
-        purchasedAt: _parseDate(stored.row['purchased_at']),
-        retiredAt: _parseDate(stored.row['retired_at']),
+        purchasedAt: parseCalendarDate(stored.row['purchased_at']),
+        retiredAt: parseCalendarDate(stored.row['retired_at']),
         clearRetiredAt: stored.row['retired_at'] == null,
         targetDistanceM: (stored.row['target_distance_m'] as num?)?.toInt(),
         notes: stored.row['notes'] as String?,
@@ -280,15 +280,4 @@ class LocalGearStore extends OfflineSyncStore<StoredGear> {
   Future<void> pushDelete(ApiClient api, StoredGear stored) =>
       api.deleteGear(stored.id);
 
-  // Deliberately NOT [parseServerTimestamp]. `purchased_at` / `retired_at` are
-  // `date` columns, so their zone-less text is a calendar DAY rather than an
-  // instant: it parses to local midnight, and normalising THAT to UTC would
-  // move the day itself for every device west of Greenwich — a shoe bought on
-  // the 3rd would read as bought on the 2nd, and `gearBackfillCandidates`
-  // would then drop the purchase day's own runs (decisions § 1289).
-  static DateTime? _parseDate(dynamic v) {
-    // zone-verbatim: a `date` column is a calendar day, not an instant.
-    if (v is String && v.isNotEmpty) return DateTime.tryParse(v);
-    return null;
-  }
 }

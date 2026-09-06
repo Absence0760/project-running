@@ -7,10 +7,10 @@
 	import { formatISO } from '$lib/training/training';
 	import { m } from '$lib/i18n/store.svelte';
 	import { periodNeedsFullHistory, type PeriodType } from '$lib/core/dashboard_runs';
-	import type { Run } from '$lib/types';
+	import type { PeriodSummaryRun } from '$lib/core/data';
 
 	interface Props {
-		runs: Run[];
+		runs: PeriodSummaryRun[];
 		initialType?: PeriodType;
 		initialDate?: Date;
 		onPeriodChange?: (type: PeriodType, date: Date) => void;
@@ -21,7 +21,7 @@
 		 * past the bound would silently roll up a truncated total.
 		 */
 		coveredFrom?: Date | null;
-		loadFullHistory?: () => Promise<Run[]>;
+		loadFullHistory?: () => Promise<PeriodSummaryRun[]>;
 	}
 
 	let {
@@ -98,7 +98,7 @@
 		return d.toLocaleDateString(activeFormatLocale(), { month: 'long', year: 'numeric' });
 	}
 
-	let fullRuns = $state<Run[] | null>(null);
+	let fullRuns = $state<PeriodSummaryRun[] | null>(null);
 	let loadingFullHistory = $state(false);
 	let fullHistoryFailed = $state(false);
 

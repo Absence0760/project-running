@@ -7,7 +7,7 @@
 		type GymSetInput,
 	} from '$lib/core/data';
 	import type { Exercise, GymSetType } from '$lib/types';
-	import { normaliseExerciseName } from '$lib/gym/gym_prs';
+	import { normaliseExerciseName, sameExerciseName as sameExercise } from '$lib/gym/gym_prs';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 	import { parseWeight, weightInputValue, weightUnitLabel } from '$lib/format/units.svelte';
@@ -150,7 +150,7 @@
 				duration: s.duration_s == null ? '' : String(s.duration_s),
 				setType: s.set_type ?? 'working',
 			};
-			if (last && last.name === s.exercise_name) last.sets.push(row);
+			if (last && sameExercise(last.name, s.exercise_name)) last.sets.push(row);
 			else blocks.push({ name: s.exercise_name, sets: [row] });
 		}
 		return blocks;
@@ -170,7 +170,7 @@
 				setType: 'working',
 			};
 			const last = blocks[blocks.length - 1];
-			if (last && last.name === s.exercise_name) last.sets.push(row);
+			if (last && sameExercise(last.name, s.exercise_name)) last.sets.push(row);
 			else blocks.push({ name: s.exercise_name, sets: [row] });
 		}
 		return blocks;

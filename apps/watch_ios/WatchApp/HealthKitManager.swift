@@ -5,11 +5,19 @@ import HealthKit
 ///
 /// The watchOS half of Wear OS's `HeartRateClaim` / `heartRateClaim`
 /// (`apps/watch_wear/.../recording/HeartRateCoverage.kt`). Deliberately NOT a
-/// registered parity pair: the registries pair web with mobile, the two watch
-/// clients are additive surfaces under decisions § 24, and there is no
-/// enforcement rail between them. What has to match is the MEANING of the
-/// number, because both clients write the same row — see the `hr_coverage`
-/// registry entry in `docs/backend/metadata.md` (decisions § 1156).
+/// registered parity pair: the registries pair web with mobile and the two
+/// watch clients are additive surfaces under decisions § 24. What has to match
+/// is the MEANING of the number, because both clients write the same row — see
+/// the `hr_coverage` registry entry in `docs/backend/metadata.md`
+/// (decisions § 1156).
+///
+/// The two FIGURES underneath it are enforced, though the shapes around them
+/// are not: claim (12) of `scripts/check_watch_ios_source.mjs` reads
+/// `minAverageBPMCoverage` and `sampleFreshInterval` here and
+/// `MIN_AVG_BPM_COVERAGE` / `HR_SAMPLE_FRESH_MS` there, converts the
+/// seconds-versus-milliseconds difference, and fails the PR on a disagreement
+/// — or on a rename that leaves either unreadable. Until § 1348 the lockstep
+/// was asserted in these comments and nowhere else.
 struct HeartRateClaim: Equatable {
     /// The mean of the run's samples, or nil when there were none — or when
     /// there were, but over too little of the run to call it the run's

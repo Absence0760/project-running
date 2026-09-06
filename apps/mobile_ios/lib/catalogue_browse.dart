@@ -140,15 +140,34 @@ num? _num(num? value) {
   return value.isFinite ? value : null;
 }
 
-/// Total order on names. Compares folded names, ties breaking on `id` so the
-/// result never depends on sort stability — which matters more here than on
-/// web, because Dart's `List.sort` is not stable where JS's is.
-int _byName(CatalogueSegment a, CatalogueSegment b) {
-  final c = fold(a.name).compareTo(fold(b.name));
+/// Total order on a pair of named, identified rows. Compares FOLDED names,
+/// ties breaking on `id` so the result never depends on sort stability — which
+/// matters more here than on web, because Dart's `List.sort` is not stable
+/// where JS's is.
+///
+/// Neither platform's built-in ordering is used, and that is the point. Web
+/// has `localeCompare`, a collation whose answer depends on the host's ICU
+/// data; Dart has no collation at all, only [String.compareTo], which is
+/// UTF-16 code-unit order. Measured over the 145,672 Unicode letters as
+/// single-character names, the two disagree about **31.75 % of all pairs**,
+/// and every one of those code points is ordered differently against at least
+/// one other; over just the Latin/Greek/Cyrillic alphabet a name realistically
+/// holds, 17.38 % of 344,035 pairs still disagree. A collation puts `Å` beside
+/// `A` where a code-unit order puts it after `Z` — two different orderings,
+/// not two roundings of one (decisions § 1337).
+///
+/// Folding first and comparing the folded keys is decided one code point at a
+/// time from [kCatalogueFoldKeys] / [kCatalogueFoldValues], which is the only
+/// shape both platforms can hold exactly.
+int compareFoldedNames(String aName, String aId, String bName, String bId) {
+  final c = fold(aName).compareTo(fold(bName));
   if (c != 0) return c < 0 ? -1 : 1;
-  final byId = a.id.compareTo(b.id);
+  final byId = aId.compareTo(bId);
   return byId == 0 ? 0 : (byId < 0 ? -1 : 1);
 }
+
+int _byName(CatalogueSegment a, CatalogueSegment b) =>
+    compareFoldedNames(a.name, a.id, b.name, b.id);
 
 /// The identity [catalogueRegions] dedupes on AND [filterCatalogue] compares
 /// against — one function for both, because they are one decision. The dropdown

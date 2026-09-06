@@ -508,8 +508,8 @@ class SocialService extends ChangeNotifier {
     return _enrichClubs(rows);
   }
 
-  /// Region-aware club search. Mirrors web's `searchClubs` in
-  /// `apps/web/src/lib/core/data.ts`. Tries to geocode the query first
+  /// Region-aware club search. Mirrors
+  /// `apps/web/src/lib/core/data.ts:searchClubs`. Tries to geocode the query first
   /// (so "Virginia" → centroid + ~470 km radius → ST_DWithin against
   /// `clubs.location_point`) and forwards the bbox params to the
   /// `search_clubs` RPC. Falls back to [browseClubs] when the
@@ -791,7 +791,7 @@ class SocialService extends ChangeNotifier {
   /// Trim a club link, returning null for empty / non-http(s) input so a
   /// `javascript:`/`data:` URL can't be stored (XSS). The DB CHECK is the
   /// authoritative backstop; this is the friendly client-side gate. Twin of
-  /// web's `normaliseClubLink` in `data.ts`.
+  /// `apps/web/src/lib/core/data.ts:normaliseClubLink`.
   static String? normaliseClubLink(String? raw) {
     final v = (raw ?? '').trim();
     if (v.isEmpty) return null;
@@ -957,7 +957,7 @@ class SocialService extends ChangeNotifier {
 
   /// Redeem a club invite token. Returns the slug of the club the
   /// user just joined so the caller can navigate to its detail
-  /// screen. Mirrors web `joinClubByToken` (apps/web/src/lib/core/data.ts).
+  /// screen. Mirrors `apps/web/src/lib/core/data.ts:joinClubByToken`.
   /// Surfaces the RPC's own error messages on failure ("expired",
   /// "already a member", "invalid token") so the caller can render
   /// them as-is.
@@ -1440,7 +1440,7 @@ class SocialService extends ChangeNotifier {
     // is needed by the leaderboard UI). Mobile previously read the
     // base table with `select()`, leaking those fields to non-owner
     // viewers — the same data-leak the audit-pass-3 fix closed on
-    // web's `fetchEventResults`. See apps/web/src/lib/core/data.ts.
+    // `apps/web/src/lib/core/data.ts:fetchEventResults`.
     final rows = await _c
         .from('event_results_redacted')
         .select(

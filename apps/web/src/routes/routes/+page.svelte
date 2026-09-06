@@ -10,6 +10,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import { routeSurfaceLabel } from '$lib/i18n/enum_labels.svelte';
+	import { fold, compareFoldedNames } from '$lib/segments/catalogue_browse';
 	import ImportRoute from '$lib/components/ImportRoute.svelte';
 	import RunSurfaceTabs from '$lib/components/RunSurfaceTabs.svelte';
 	import RouteExplorer from '$lib/components/RouteExplorer.svelte';
@@ -150,14 +151,21 @@
 	let distanceUnitLabel = $derived(getUnit() === 'mi' ? 'mi' : 'km');
 
 	let filteredRoutes = $derived.by(() => {
-		const q = search.trim().toLowerCase();
+		// Folded on BOTH sides of the comparison, never `toLowerCase`. The two
+		// runtimes' own lower-case answers differ at 466 code points, and the one
+		// reachable in Latin text is U+0130: `'İstanbul Loop'.toLowerCase()` is
+		// `i̇stanbul loop` in a browser — an `i` plus a combining dot — which does
+		// NOT contain `istanbul`, while Dart's simple mapping drops the dot and
+		// does. So the same route was findable by typing `istanbul` on the phone
+		// and not here (decisions § 1337). Folding also strips the accent, which
+		// is what lets `zurich` reach `Zürich Loop` from a keyboard without one.
+		const q = fold(search.trim());
 		const out = routes.filter((r) => {
 			if (starredOnly && !r.is_starred) return false;
 			if (surfaceFilter !== 'any' && r.surface !== surfaceFilter) return false;
 			if (!inDistanceBucket(r.distance_m, distanceFilter)) return false;
 			if (q) {
-				const name = (r.name ?? '').toLowerCase();
-				if (!name.includes(q)) return false;
+				if (!fold(r.name ?? '').includes(q)) return false;
 			}
 			return true;
 		});
@@ -177,7 +185,9 @@
 				out.sort((a, b) => (b.run_count ?? 0) - (a.run_count ?? 0));
 				break;
 			case 'az':
-				out.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+				out.sort((a, b) =>
+					compareFoldedNames(a.name ?? '', a.id, b.name ?? '', b.id),
+				);
 				break;
 		}
 		return out;

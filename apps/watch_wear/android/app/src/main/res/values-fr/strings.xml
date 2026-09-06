@@ -42,6 +42,19 @@
     <string name="sync_count">Synchroniser %1$d</string>
     <string name="sync_retry">Réessayer</string>
     <string name="cd_sync_unreadable_retry">Courses enregistrées illisibles, appuyez pour réessayer</string>
+    <plurals name="sync_rejected">
+        <item quantity="one">%1$d refusée</item>
+        <item quantity="other">%1$d refusées</item>
+    </plurals>
+    <string name="sync_rejected_discard">Supprimer %1$d ?</string>
+    <plurals name="cd_sync_rejected">
+        <item quantity="one">%1$d course enregistrée refusée par le serveur. Appuyez pour supprimer.</item>
+        <item quantity="other">%1$d courses enregistrées refusées par le serveur. Appuyez pour supprimer.</item>
+    </plurals>
+    <plurals name="cd_sync_rejected_confirm">
+        <item quantity="one">Confirmer la suppression de %1$d course. Enregistrée nulle part ailleurs.</item>
+        <item quantity="other">Confirmer la suppression de %1$d courses. Enregistrées nulle part ailleurs.</item>
+    </plurals>
     <string name="offline">Hors ligne</string>
     <string name="not_signed_in">Non connecté</string>
     <string name="race_armed">COURSE PRÊTE</string>

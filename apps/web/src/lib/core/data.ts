@@ -24,7 +24,8 @@ import {
 	ROUTE_LIST_COLS,
 	PUBLIC_ROUTE_LIST_COLS,
 	type RouteListItem,
-	type PublicRouteListRow
+	type PublicRouteListRow,
+	type PublicRouteSummary
 } from '../routes/route_list_columns';
 import type {
 	Run,
@@ -91,7 +92,6 @@ import { auth } from '../stores/auth.svelte';
 import { compareLeaderboard } from '../runs/race_leaderboard';
 import { readRankRows } from '../segments/effort_rank';
 import type { RecapPeriodKind } from '../types';
-import { normaliseExerciseName } from '../gym/gym_prs';
 import { GYM_SESSION_DRAFT_KEY, hasSessionDraft } from '../gym/gym_session_draft';
 import type { RoutineHistoryAggregate, RoutineSessionRow } from '../gym/routine_history';
 import type { YearInRunningRecap } from '../runs/recap';
@@ -148,7 +148,20 @@ import {
 
 // --- Runs ---
 
-export interface FetchRunsOptions {
+/// A `runs` projection, as the tuple both the wire string and the row type are
+/// derived from. `satisfies RunColumns` on a literal refuses a name that is not
+/// a column, so a migration that drops one fails to compile at the declaration
+/// rather than asking PostgREST for nothing.
+///
+/// The wire string is `.join()`ed from the tuple, which is `string` rather than a
+/// literal type. That costs nothing today — the browser client is constructed
+/// without the `Database` generic, so supabase-js infers no row shape from any
+/// select in this file — but whoever types that client has to convert these
+/// joins back to literals, and `route_list_columns.ts` already carries the
+/// `Join<T, D>` template-literal type that does it.
+export type RunColumns = readonly (keyof Run)[];
+
+export interface FetchRunsOptions<C extends RunColumns = RunColumns> {
 	/** Cap the number of rows returned. Pair with `offset` for paging. */
 	limit?: number;
 	/** Skip this many rows before the page (for paged loads). */
@@ -162,18 +175,28 @@ export interface FetchRunsOptions {
 	 */
 	throwOnError?: boolean;
 	/**
-	 * PostgREST select list. Defaults to `*`. A caller that reads only a
-	 * handful of columns should narrow — `*` ships the `metadata` jsonb bag
-	 * on every row, which is what made the unbounded history scan expensive
-	 * in the first place (#332).
+	 * The columns to project, as a tuple. Absent means `*`. A caller that
+	 * reads only a handful should narrow — `*` ships the `metadata` jsonb bag
+	 * on every row, which is what made the unbounded history scan expensive in
+	 * the first place (#332).
+	 *
+	 * A tuple rather than the PostgREST string it becomes, because the string
+	 * narrowed the WIRE while the return type stayed `Run[]`: nineteen of the
+	 * twenty-four columns were `undefined` behind a type promising them
+	 * (§ 1330). The tuple is the one declaration both halves derive from — the
+	 * select list is joined from it and the row type is `Pick`ed from it.
 	 */
-	columns?: string;
+	columns?: C;
 	/** Inclusive lower bound on `started_at`, as an ISO instant. */
 	startedAtFrom?: string;
 	/** Exclusive upper bound on `started_at`, as an ISO instant. */
 	startedAtBefore?: string;
 }
 
+export async function fetchRuns(opts?: Omit<FetchRunsOptions, 'columns'>): Promise<Run[]>;
+export async function fetchRuns<C extends RunColumns>(
+	opts: FetchRunsOptions<C> & { columns: C },
+): Promise<Pick<Run, C[number]>[]>;
 export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 	// Explicit user_id filter as defence in depth — RLS already scopes
 	// runs to the caller, but every other personal-data list in this
@@ -184,7 +207,7 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 	const build = () => {
 		let q = supabase
 			.from(TABLES.runs)
-			.select(opts?.columns ?? '*')
+			.select(opts?.columns ? opts.columns.join(', ') : '*')
 			.eq('user_id', userId);
 		if (opts?.startedAtFrom != null) q = q.gte('started_at', opts.startedAtFrom);
 		if (opts?.startedAtBefore != null) q = q.lt('started_at', opts.startedAtBefore);
@@ -249,7 +272,7 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 /// `fetchFoodLogWithError` convention. A signed-out caller is empty, not an
 /// error (nothing to load yet).
 export async function fetchRunsWithError(
-	opts?: FetchRunsOptions,
+	opts?: Omit<FetchRunsOptions, 'columns'>,
 ): Promise<{ runs: Run[]; error: string | null }> {
 	try {
 		const runs = await fetchRuns({ ...opts, throwOnError: true });
@@ -274,6 +297,24 @@ export async function fetchRunsWithError(
 /// Reports the read error: almost every card on /dashboard derives from this
 /// one set, so degrading to `[]` rendered a complete, convincing brand-new
 /// account — zero runs, no PRs, an empty week — to a runner mid-outage.
+export const DASHBOARD_RUN_COLUMNS = [
+	'id',
+	'user_id',
+	'started_at',
+	'distance_m',
+	'duration_s',
+	'source',
+	'activity_type',
+	'is_dnf',
+	'elevation_gain_m',
+	'metadata',
+] as const satisfies RunColumns;
+
+/// What the dashboard read actually carries. Exported, and deliberately not yet
+/// what `fetchRunsForDashboard` declares: the widening below is stated at the
+/// one line where it happens and the remaining step is filed (§ 1330).
+export type DashboardRun = Pick<Run, (typeof DASHBOARD_RUN_COLUMNS)[number]>;
+
 export async function fetchRunsForDashboard(): Promise<{
 	runs: Run[];
 	error: string | null;
@@ -283,20 +324,25 @@ export async function fetchRunsForDashboard(): Promise<{
 	const windowStart = dashboardRunsWindowStart(new Date());
 	const { data, error } = await supabase
 		.from(TABLES.runs)
-		.select(
-			'id, user_id, started_at, distance_m, duration_s, source, activity_type, is_dnf, elevation_gain_m, metadata',
-		)
+		.select(DASHBOARD_RUN_COLUMNS.join(', '))
 		.eq('user_id', userId)
 		.gte('started_at', windowStart.toISOString())
 		.order('started_at', { ascending: false });
 	if (error) return { runs: [], error: error.message };
 	if (!data) return { runs: [], error: null };
 	return {
+		// Widened, like `fetchRunsForRecap`'s, and for the same reason: every
+		// card on /dashboard feeds these rows into `computeRunStreaks`,
+		// `buildYearInRunningRecap`'s siblings in `training/` and the race
+		// predictor, whose `Run[]` parameters are halves of registered TS<->Dart
+		// pairs. `DashboardRun` above is what the ten columns really are; making
+		// it the declared type is a one-line change once those parameters take a
+		// structural bound (§ 1330).
 		runs: data.map((r: any) => ({
 			...r,
 			source: parseRunSource(r.source),
 			track: null,
-		})) as Run[],
+		})) as unknown as Run[],
 		error: null,
 	};
 }
@@ -371,7 +417,17 @@ export async function fetchRunStreaks(
 /// Exactly the columns `PeriodSummary` reads. The period drilldown has to
 /// ship every row — it lists them — so the saving is per-row width, not row
 /// count: no `metadata` jsonb bag, no elevation, no DNF flag.
-export const PERIOD_SUMMARY_RUN_COLUMNS = 'id, started_at, distance_m, duration_s, source';
+export const PERIOD_SUMMARY_RUN_COLUMNS = [
+	'id',
+	'started_at',
+	'distance_m',
+	'duration_s',
+	'source',
+] as const satisfies RunColumns;
+
+/// A run as the period drilldown reads it — the five values it renders, and
+/// nothing it can read `undefined` off.
+export type PeriodSummaryRun = Pick<Run, (typeof PERIOD_SUMMARY_RUN_COLUMNS)[number]>;
 
 /// Complete run history for a `PeriodSummary`, column-narrowed to the five
 /// values it renders. Both drilldown entry points use it: the standalone
@@ -379,7 +435,7 @@ export const PERIOD_SUMMARY_RUN_COLUMNS = 'id, started_at, distance_m, duration_
 /// requested period reaches past `DASHBOARD_RUNS_WINDOW_DAYS`. Throws on a
 /// fetch error so the caller can show a retry rather than a total that is
 /// silently short.
-export async function fetchRunsForPeriodSummary(): Promise<Run[]> {
+export async function fetchRunsForPeriodSummary(): Promise<PeriodSummaryRun[]> {
 	return fetchRuns({ columns: PERIOD_SUMMARY_RUN_COLUMNS, throwOnError: true });
 }
 
@@ -389,8 +445,20 @@ export async function fetchRunsForPeriodSummary(): Promise<Run[]> {
 /// behind the run-family longest / fastest rules, and the route id for the
 /// unique-route tally. `source` rides along because `fetchRuns` narrows it on
 /// every row it returns.
-export const RECAP_RUN_COLUMNS =
-	'id, started_at, distance_m, duration_s, elevation_gain_m, activity_type, route_id, source, metadata';
+export const RECAP_RUN_COLUMNS = [
+	'id',
+	'started_at',
+	'distance_m',
+	'duration_s',
+	'elevation_gain_m',
+	'activity_type',
+	'route_id',
+	'source',
+	'metadata',
+] as const satisfies RunColumns;
+
+/// A run as the recap engine reads it.
+export type RecapRun = Pick<Run, (typeof RECAP_RUN_COLUMNS)[number]>;
 
 /// Runs shaped for a recap card, without the lifetime `select('*')` scan both
 /// pages used to do — ~3,000 full rows, `metadata` bag and all, to render a
@@ -412,10 +480,20 @@ export async function fetchRunsForRecap(year: number): Promise<Run[]> {
 			startedAtFrom: win.fromIso,
 			startedAtBefore: win.beforeIso,
 		}),
-		fetchRuns({ columns: 'started_at' }),
+		fetchRuns({ columns: ['started_at'] as const }),
 	]);
+	// The one place in this file where a narrowed read is still widened back to
+	// the full row, and it is deliberate rather than overlooked. `windowed` IS
+	// a `RecapRun[]` — nine of the twenty-four columns — but the consumers of
+	// the merged list are `mergeRecapRuns` (web-only), then
+	// `buildYearInRunningRecap` and `computeRunStreaks`, and the last two are
+	// registered TS<->Dart parity pairs whose `Run[]` parameters would each
+	// have to widen to a structural bound the Dart half cannot express the same
+	// way. Narrowing the return here would move the error into those pairs
+	// rather than remove it, so the widening is stated once, here, and the
+	// remaining step is filed (§ 1330).
 	return mergeRecapRuns(
-		windowed,
+		windowed as unknown as Run[],
 		allStartedAt.map((r) => r.started_at),
 		win,
 	);
@@ -1460,12 +1538,16 @@ export async function deleteRouteReview(routeId: string): Promise<void> {
 
 // --- Routes ---
 
+/// The public-route catalogue near a point. `nearby_routes` is declared
+/// `setof public_routes`, so what comes back is the view's fifteen columns and
+/// not a `routes` row — `PublicRouteSummary` says so rather than casting past
+/// it to a `Route` the RPC cannot produce (§ 1328).
 export async function nearbyPublicRoutes(options: {
 	lat: number;
 	lng: number;
 	radiusM?: number;
 	limit?: number;
-}): Promise<Route[]> {
+}): Promise<PublicRouteSummary[]> {
 	const { lat, lng, radiusM = 50000, limit = 50 } = options;
 	const { data, error } = await supabase.rpc('nearby_routes', {
 		lat,
@@ -1474,7 +1556,7 @@ export async function nearbyPublicRoutes(options: {
 		max_results: limit,
 	});
 	if (error || !data) return [];
-	return data as Route[];
+	return data as PublicRouteSummary[];
 }
 
 export async function searchPublicRoutes(options?: {
@@ -1487,7 +1569,7 @@ export async function searchPublicRoutes(options?: {
 	sort?: 'newest' | 'popular' | 'featured';
 	limit?: number;
 	offset?: number;
-}): Promise<Route[]> {
+}): Promise<PublicRouteSummary[]> {
 	const {
 		query,
 		minDistanceM,
@@ -1522,7 +1604,7 @@ export async function searchPublicRoutes(options?: {
 	// legitimately empty result so it can show a retry affordance instead
 	// of a misleading "no matches" empty state.
 	if (error) throw error;
-	return (data ?? []) as Route[];
+	return (data ?? []) as PublicRouteSummary[];
 }
 
 /// The set of tags currently used across any public route, ordered by
@@ -1765,7 +1847,9 @@ export async function fetchRouteById(id: string): Promise<Route | null> {
 		// `shadow_hidden` is a server-/trigger-owned moderation column
 		// (migration 20270218_001) the client has no business reading; the
 		// `public_routes` view already projects it away, so strip it from the
-		// base-table owner read too. `surface` is narrowed through the same
+		// base-table owner read too. `Route` no longer declares it either
+		// (§ 1327) — the strip is what makes the returned value that type
+		// rather than a cast over it. `surface` is narrowed through the same
 		// defensive parse `fetchRunById` uses for `source`, so a value outside
 		// the RouteSurface union can't leak past the read boundary.
 		const { shadow_hidden, ...rest } = ownerRead.data as typeof ownerRead.data & {
@@ -9551,10 +9635,14 @@ export async function fetchExerciseCatalogue(): Promise<Exercise[]> {
 	return (data ?? []) as Exercise[];
 }
 
-/// Create an owner-scoped custom exercise. name_key is the normalised name so
-/// it binds to logged sets the same way gym_prs / gym_routine_exercises key.
+/// Create an owner-scoped custom exercise. `name_key` is NOT sent: the
+/// `exercises_stamp_name_key` trigger derives it from `name` on every insert
+/// and update (migration 20270711000001), so a client value is overwritten
+/// rather than used, and computing one here would be a fourth rail that can
+/// drift from the fold the two partial unique indexes are actually built on.
 /// RLS rejects an insert with any author_id other than the caller. Returns the
-/// created row, or null on conflict/error (e.g. a duplicate name_key).
+/// created row, or null on conflict/error (e.g. a duplicate name_key -- the
+/// conflict is decided on the SERVER's fold).
 export async function createCustomExercise(input: {
 	name: string;
 	category?: ExerciseCategory;
@@ -9570,7 +9658,6 @@ export async function createCustomExercise(input: {
 		.insert({
 			author_id: userId,
 			name,
-			name_key: normaliseExerciseName(name),
 			category: input.category ?? 'other',
 			modality: input.modality ?? 'weight_reps',
 			last_modified_at: nowIso,
@@ -9958,7 +10045,9 @@ export async function createGymRoutine(input: GymRoutineInput): Promise<GymRouti
 		return {
 			routine_id: routine.id,
 			exercise_name: ex.exercise_name.trim(),
-			exercise_key: ex.exercise_key,
+			// exercise_key is NOT sent: gym_routine_exercises_stamp_exercise_key
+			// derives it from exercise_name on every write (20270711000001). The
+			// caller still carries one for its own plan-to-log matching.
 			position: ex.position,
 			superset_group: supersetGroup,
 			superset_order: supersetGroup == null ? null : ex.superset_order ?? 0,

@@ -10328,6 +10328,11 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gymCatalogueEmpty => 'Nenhum exercício corresponde.';
 
   @override
+  String gymCatalogueOtherCategory(String name, String category) {
+    return '“$name” já está no catálogo, em $category.';
+  }
+
+  @override
   String get gymCatalogueCustomBadge => 'Personalizado';
 
   @override
@@ -24349,6 +24354,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get gymCatalogueEmpty => 'Nenhum exercício corresponde.';
+
+  @override
+  String gymCatalogueOtherCategory(String name, String category) {
+    return '“$name” já está no catálogo, em $category.';
+  }
 
   @override
   String get gymCatalogueCustomBadge => 'Personalizado';

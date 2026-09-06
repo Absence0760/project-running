@@ -42,6 +42,19 @@
     <string name="sync_count">%1$d synchronisieren</string>
     <string name="sync_retry">Sync erneut</string>
     <string name="cd_sync_unreadable_retry">Gespeicherte Läufe nicht lesbar, zum Wiederholen tippen</string>
+    <plurals name="sync_rejected">
+        <item quantity="one">%1$d abgelehnt</item>
+        <item quantity="other">%1$d abgelehnt</item>
+    </plurals>
+    <string name="sync_rejected_discard">%1$d verwerfen?</string>
+    <plurals name="cd_sync_rejected">
+        <item quantity="one">%1$d gespeicherter Lauf vom Server abgelehnt. Zum Verwerfen tippen.</item>
+        <item quantity="other">%1$d gespeicherte Läufe vom Server abgelehnt. Zum Verwerfen tippen.</item>
+    </plurals>
+    <plurals name="cd_sync_rejected_confirm">
+        <item quantity="one">Verwerfen von %1$d Lauf bestätigen. Nirgendwo sonst gespeichert.</item>
+        <item quantity="other">Verwerfen von %1$d Läufen bestätigen. Nirgendwo sonst gespeichert.</item>
+    </plurals>
     <string name="offline">Offline</string>
     <string name="not_signed_in">Nicht angemeldet</string>
     <string name="race_armed">RENNEN BEREIT</string>

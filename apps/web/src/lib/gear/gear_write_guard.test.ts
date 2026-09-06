@@ -82,12 +82,23 @@ test('backfill candidates are fetched column-narrowed and windowed by the purcha
 	assert.ok(call, '/settings/gear must load backfill candidates via fetchRuns.');
 	assert.match(
 		call[0],
-		/columns:\s*'[^']*'/,
+		/columns:\s*\w/,
 		'the backfill fetch must narrow its columns — never select(*) over the ' +
 			'whole history.',
 	);
-	assert.doesNotMatch(
+	// The tuple is read out of the page rather than the call, because the call
+	// names it: since § 1330 `columns` is a `satisfies RunColumns` tuple, so
+	// that a projected column and the row type it is read as cannot diverge.
+	// Asserting the identifier alone would let the tuple grow `metadata` back.
+	const tuple = /const BACKFILL_RUN_COLUMNS = \[([^\]]*)\]/.exec(page);
+	assert.ok(tuple, 'the backfill column tuple must be declared on the page — re-anchor.');
+	assert.match(
 		call[0],
+		/columns:\s*BACKFILL_RUN_COLUMNS/,
+		'the backfill fetch must project the declared tuple, not a second column list.',
+	);
+	assert.doesNotMatch(
+		tuple[1],
 		/metadata/,
 		'the backfill fetch must not pull the metadata jsonb bag; activity_type ' +
 			'is a real column (migration 20261207_001).',

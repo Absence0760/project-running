@@ -36,6 +36,7 @@ class _FakeCrossingsApi extends ApiClient {
     upserts.add({
       'event_id': eventId,
       'checkpoint_id': checkpointId,
+      'instance_start': instanceStart,
       'bib': bib,
       'user_id': userId,
       'in_time': inTime?.toIso8601String(),
@@ -128,6 +129,158 @@ void main() {
           store.rowsForCheckpoint(eventId, checkpointId, instanceStart);
       expect(here, hasLength(1));
       expect(here.first['bib'], '1');
+    });
+
+    test('matches an occurrence however the stored row SPELLS it', () async {
+      // decisions § 1343. One occurrence has several spellings on the wire:
+      // PostgREST answers `+00:00`, `CheckpointCrossingRow.toJson` re-writes
+      // that as `.000Z`, and a row this store wrote before § 1343 carries the
+      // writer's bare local wall clock. The old string equality matched only
+      // the last of the three, so a server-fetched crossing never appeared in
+      // "who has already been stamped here".
+      final spellings = <String, String>{
+        'postgrest': '2026-06-14T07:00:00+00:00',
+        'row-dto': '2026-06-14T07:00:00.000Z',
+        'offset': '2026-06-14T09:00:00+02:00',
+        'legacy-local':
+            DateTime.utc(2026, 6, 14, 7).toLocal().toIso8601String(),
+      };
+      await store.replaceFromServer([
+        for (final e in spellings.entries)
+          <String, dynamic>{
+            'id': 'aaaaaaaa-aaaa-aaaa-aaaa-0000000000${spellings.keys.toList().indexOf(e.key)}0',
+            'event_id': eventId,
+            'checkpoint_id': checkpointId,
+            'instance_start': e.value,
+            'bib': e.key,
+            'recorded_at': DateTime.utc(2026, 6, 14, 7, 5).toIso8601String(),
+          },
+      ]);
+      final here =
+          store.rowsForCheckpoint(eventId, checkpointId, instanceStart);
+      expect(here.map((r) => r['bib']).toSet(), spellings.keys.toSet());
+    });
+
+    test('a DIFFERENT occurrence of the same series is still excluded',
+        () async {
+      // The instant comparison must not have widened the filter into a
+      // same-event-and-checkpoint match: a weekly series files each week
+      // under its own key and the screen shows one of them.
+      await store.createLocal(
+        eventId: eventId,
+        checkpointId: checkpointId,
+        instanceStart: instanceStart,
+        bib: 'this-week',
+      );
+      await store.createLocal(
+        eventId: eventId,
+        checkpointId: checkpointId,
+        instanceStart: instanceStart.add(const Duration(days: 7)),
+        bib: 'next-week',
+      );
+      final here =
+          store.rowsForCheckpoint(eventId, checkpointId, instanceStart);
+      expect(here.map((r) => r['bib']), ['this-week']);
+    });
+
+    test('an unreadable stored instance matches nothing', () async {
+      await store.replaceFromServer([
+        <String, dynamic>{
+          'id': 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa99',
+          'event_id': eventId,
+          'checkpoint_id': checkpointId,
+          'instance_start': 'not a date',
+          'bib': 'corrupt',
+          'recorded_at': DateTime.utc(2026, 6, 14, 7, 5).toIso8601String(),
+        },
+      ]);
+      expect(store.rowsForCheckpoint(eventId, checkpointId, instanceStart),
+          isEmpty);
+    });
+  });
+
+  group('instance_start is pushed as an INSTANT', () {
+    test('a stamp taken in a non-UTC zone pushes the UTC instant', () async {
+      // The row is stored through `instanceStartKey`, so the on-disk key and
+      // the key `pushCreate` sends are the value web writes for the same
+      // occurrence — not the reader's wall clock, which Postgres would
+      // re-anchor in its own TimeZone.
+      final local = DateTime.utc(2026, 6, 14, 7).toLocal();
+      final stored = await store.createLocal(
+        eventId: eventId,
+        checkpointId: checkpointId,
+        instanceStart: local,
+        bib: '7',
+      );
+      expect(stored.row['instance_start'], endsWith('Z'));
+      expect(
+          DateTime.parse(stored.row['instance_start'] as String)
+              .isAtSameMomentAs(local),
+          isTrue);
+
+      final api = _FakeCrossingsApi();
+      await store.syncWithServer(api);
+      expect(api.upserts, hasLength(1));
+      expect(
+          (api.upserts.single['instance_start'] as DateTime)
+              .isAtSameMomentAs(local),
+          isTrue);
+    });
+
+    test('a legacy zone-less stored row still pushes the instant it names',
+        () async {
+      // A row written before § 1343 carries the writer's bare wall clock.
+      // Reading it back recovers the instant that produced it, so the drain
+      // files it under the same occurrence a fresh stamp would.
+      final local = DateTime.utc(2026, 6, 14, 7).toLocal();
+      final stored = StoredCrossing(
+        row: <String, dynamic>{
+          'id': 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa11',
+          'event_id': eventId,
+          'checkpoint_id': checkpointId,
+          'instance_start': local.toIso8601String(),
+          'bib': 'legacy',
+          'recorded_at': DateTime.utc(2026, 6, 14, 7, 5).toIso8601String(),
+        },
+        syncState: CrossingSyncState.pendingCreate,
+      );
+      File('${dir.path}/${stored.id}.json')
+          .writeAsStringSync(jsonEncode(stored.toJson()));
+      final reloaded = LocalCrossingsStore();
+      await reloaded.init(overrideDirectory: dir);
+
+      final api = _FakeCrossingsApi();
+      await reloaded.syncWithServer(api);
+      expect(api.upserts, hasLength(1));
+      expect(
+          (api.upserts.single['instance_start'] as DateTime)
+              .isAtSameMomentAs(local),
+          isTrue);
+    });
+
+    test('a crossing whose stored instance is unreadable is refused, not '
+        'filed under a guess', () async {
+      final stored = StoredCrossing(
+        row: <String, dynamic>{
+          'id': 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa22',
+          'event_id': eventId,
+          'checkpoint_id': checkpointId,
+          'instance_start': 'not a date',
+          'bib': 'corrupt',
+          'recorded_at': DateTime.utc(2026, 6, 14, 7, 5).toIso8601String(),
+        },
+        syncState: CrossingSyncState.pendingCreate,
+      );
+      File('${dir.path}/${stored.id}.json')
+          .writeAsStringSync(jsonEncode(stored.toJson()));
+      final reloaded = LocalCrossingsStore();
+      await reloaded.init(overrideDirectory: dir);
+
+      final api = _FakeCrossingsApi();
+      expect(await reloaded.syncWithServer(api), 0);
+      expect(api.upserts, isEmpty);
+      expect(reloaded.rowsById[stored.id]!.syncState,
+          CrossingSyncState.pendingCreate);
     });
   });
 

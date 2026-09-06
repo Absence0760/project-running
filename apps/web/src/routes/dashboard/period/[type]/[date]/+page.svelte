@@ -2,12 +2,11 @@
 	import { page } from '$app/stores';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { fetchRunsForPeriodSummary } from '$lib/core/data';
+	import { fetchRunsForPeriodSummary, type PeriodSummaryRun } from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { formatISO } from '$lib/training/training';
 	import { m } from '$lib/i18n/store.svelte';
 	import PeriodSummary from '$lib/components/PeriodSummary.svelte';
-	import type { Run } from '$lib/types';
 
 	type PeriodType = 'week' | 'month' | 'all';
 
@@ -41,7 +40,7 @@
 				: m('period.taglineAll'),
 	);
 
-	let runs = $state<Run[]>([]);
+	let runs = $state<PeriodSummaryRun[]>([]);
 	let loading = $state(true);
 	let loadFailed = $state(false);
 

@@ -401,4 +401,183 @@ class DrainQueueLoopTest {
         // bug must not regress.
         assertTrue(removed.isEmpty())
     }
+
+    // ───────────── Permanent rejection, carried out to the UI ─────────────
+
+    @Test fun `a permanent skip is reported as a rejection a later success cannot erase`() = runBlocking {
+        // The defect: `lastError = null` runs on every success, so the trailing
+        // clean run wiped the skipped run's message, `anyTransientFailure` stayed
+        // false, and the caller reported a successful sync while the queue count
+        // never fell. `lastError` KEEPS that behaviour — the two assertions above
+        // state it deliberately — and the rejection rides its own field.
+        val result = drainQueueLoop(
+            snapshot = listOf(run("malformed"), run("clean")),
+            push = PushQueuedRun { r ->
+                if (r.id == "malformed") throw HttpException(422, "validation failed")
+            },
+            refresh = RefreshAuthForDrain { error("unreachable") },
+            onSuccessfulDrain = OnSuccessfulDrain { },
+            classify = ::classifyDrainError,
+        )
+        assertEquals(listOf("malformed"), result.rejectedIds)
+        assertEquals(listOf("clean"), result.drainedIds)
+        // The stated decision, unchanged.
+        assertNull(result.lastError)
+        assertFalse(result.anyTransientFailure)
+    }
+
+    @Test fun `every classification that keeps the run queued is reported`() = runBlocking {
+        val result = drainQueueLoop(
+            snapshot = listOf(run("a"), run("b"), run("c"), run("d")),
+            push = PushQueuedRun { r ->
+                when (r.id) {
+                    "a" -> throw HttpException(400, "bad request")
+                    "b" -> throw HttpException(404, "no such table")
+                    "c" -> throw HttpException(409, "duplicate key")
+                    else -> throw HttpException(422, "validation failed")
+                }
+            },
+            refresh = RefreshAuthForDrain { error("unreachable") },
+            onSuccessfulDrain = OnSuccessfulDrain { error("nothing drains") },
+            classify = ::classifyDrainError,
+        )
+        assertEquals(listOf("a", "b", "c", "d"), result.rejectedIds)
+        assertEquals(emptyList<String>(), result.drainedIds)
+    }
+
+    @Test fun `an all-success pass rejects nothing`() = runBlocking {
+        val result = drainQueueLoop(
+            snapshot = listOf(run("a"), run("b")),
+            push = PushQueuedRun { },
+            refresh = RefreshAuthForDrain { error("unreachable") },
+            onSuccessfulDrain = OnSuccessfulDrain { },
+            classify = { error("unreachable") },
+        )
+        assertEquals(emptyList<String>(), result.rejectedIds)
+        assertEquals(listOf("a", "b"), result.attemptedIds)
+    }
+
+    @Test fun `a transient break leaves every later run unattempted`() = runBlocking {
+        // The reason `attemptedIds` exists: the caller carries rejections across
+        // passes, and a run this pass never reached has no verdict to carry.
+        val result = drainQueueLoop(
+            snapshot = listOf(run("skipped"), run("down"), run("never-reached")),
+            push = PushQueuedRun { r ->
+                when (r.id) {
+                    "skipped" -> throw HttpException(400, "bad request")
+                    "down" -> throw HttpException(503, "upstream timeout")
+                    else -> error("`never-reached` must not be attempted")
+                }
+            },
+            refresh = RefreshAuthForDrain { error("unreachable") },
+            onSuccessfulDrain = OnSuccessfulDrain { },
+            classify = ::classifyDrainError,
+        )
+        assertEquals(listOf("skipped", "down"), result.attemptedIds)
+        assertEquals(listOf("skipped"), result.rejectedIds)
+        assertTrue(result.anyTransientFailure)
+    }
+
+    @Test fun `a 401 whose refresh-retry succeeds is attempted once and rejected never`() = runBlocking {
+        var pushAttempts = 0
+        val result = drainQueueLoop(
+            snapshot = listOf(run("a")),
+            push = PushQueuedRun {
+                pushAttempts++
+                if (pushAttempts == 1) throw HttpException(401, "JWT expired")
+            },
+            refresh = RefreshAuthForDrain { true },
+            onSuccessfulDrain = OnSuccessfulDrain { },
+            classify = ::classifyDrainError,
+        )
+        // Two pushes, one entry: `attemptedIds` is about runs, not requests.
+        assertEquals(listOf("a"), result.attemptedIds)
+        assertEquals(emptyList<String>(), result.rejectedIds)
+    }
+
+    // ───────────────────── rejectedAfterPass ─────────────────────
+
+    private fun result(
+        drained: List<String> = emptyList(),
+        rejected: List<String> = emptyList(),
+        attempted: List<String> = emptyList(),
+    ) = DrainQueueLoopResult(
+        drainedIds = drained,
+        rejectedIds = rejected,
+        attemptedIds = attempted,
+        anyTransientFailure = false,
+        lastError = null,
+    )
+
+    @Test fun `a fresh rejection enters the carried set`() {
+        assertEquals(
+            setOf("a"),
+            rejectedAfterPass(
+                previouslyRejected = emptySet(),
+                queuedIdsBeforePass = listOf("a", "b"),
+                result = result(drained = listOf("b"), rejected = listOf("a"), attempted = listOf("a", "b")),
+            ),
+        )
+    }
+
+    @Test fun `a run this pass reached and did NOT reject loses its rejection`() {
+        // The server was fixed, or the failure is transient this time. Either
+        // way the standing claim is no longer this pass's verdict.
+        assertEquals(
+            emptySet<String>(),
+            rejectedAfterPass(
+                previouslyRejected = setOf("a"),
+                queuedIdsBeforePass = listOf("a", "b"),
+                result = result(attempted = listOf("a")),
+            ),
+        )
+    }
+
+    @Test fun `a run this pass never reached keeps the verdict of the pass that did`() {
+        // A server that goes down before the loop reaches the stuck entry must
+        // not take the only notice of it off the screen.
+        assertEquals(
+            setOf("b"),
+            rejectedAfterPass(
+                previouslyRejected = setOf("b"),
+                queuedIdsBeforePass = listOf("a", "b"),
+                result = result(attempted = listOf("a")),
+            ),
+        )
+    }
+
+    @Test fun `a rejection that drained this pass is dropped`() {
+        assertEquals(
+            emptySet<String>(),
+            rejectedAfterPass(
+                previouslyRejected = setOf("a"),
+                queuedIdsBeforePass = listOf("a"),
+                result = result(drained = listOf("a"), attempted = listOf("a")),
+            ),
+        )
+    }
+
+    @Test fun `a rejection for an id no longer in the queue is dropped`() {
+        // Discarded from the chip, or cleared by a sign-out. Carrying it would
+        // keep the chip claiming a run that does not exist.
+        assertEquals(
+            emptySet<String>(),
+            rejectedAfterPass(
+                previouslyRejected = setOf("gone"),
+                queuedIdsBeforePass = listOf("a"),
+                result = result(drained = listOf("a"), attempted = listOf("a")),
+            ),
+        )
+    }
+
+    @Test fun `an empty pass over an empty queue carries nothing`() {
+        assertEquals(
+            emptySet<String>(),
+            rejectedAfterPass(
+                previouslyRejected = setOf("a"),
+                queuedIdsBeforePass = emptyList(),
+                result = result(),
+            ),
+        )
+    }
 }
