@@ -224,6 +224,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                         PreRunScreen(
                             queuedCount = state.queuedCount,
                             queueUnreadable = state.queueUnreadable,
+                            rejectedCount = state.rejectedRunIds.size,
                             syncing = state.syncing,
                             authed = state.authed,
                             authError = state.authError,
@@ -253,6 +254,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                             onRecover = vm::recoverCheckpoint,
                             onDiscardRecovery = vm::discardCheckpoint,
                             onSync = vm::sync,
+                            onDiscardRejected = vm::discardRejectedRuns,
                         )
                     }
                 }
@@ -642,6 +644,7 @@ private fun permissionCostLabel(cost: PermissionCost): Int = when (cost) {
 private fun PreRunScreen(
     queuedCount: Int,
     queueUnreadable: Boolean,
+    rejectedCount: Int,
     syncing: Boolean,
     authed: Boolean,
     authError: String?,
@@ -665,6 +668,7 @@ private fun PreRunScreen(
     onRecover: () -> Unit,
     onDiscardRecovery: () -> Unit,
     onSync: () -> Unit,
+    onDiscardRejected: () -> Unit,
 ) {
     // Recovery prompt takes precedence — user has unsaved-run state from
     // a previous app kill. Show that exclusively until they decide.
@@ -873,6 +877,89 @@ private fun PreRunScreen(
                         .widthIn(max = 100.dp)
                         .semantics { contentDescription = unreadableCd },
                 )
+            } else if (rejectedCount > 0 && authed) {
+                // The server has permanently refused these entries — a
+                // 400/404/409/422 that no retry moves. They stay queued by
+                // design (§ 17: dropping one silently loses a run), so the
+                // counted chip's own claim is the one thing this state makes
+                // false: it offers a Sync that reports success on every tap
+                // while the count it states never falls. It therefore yields
+                // the slot, exactly as it does to the unreadable chip
+                // (decisions § 1104), and for the same reason — the figure is
+                // right and the sentence around it is not.
+                //
+                // Yielding costs the manual Sync of any run queued behind the
+                // stuck ones, and that is the intended order: the entry that
+                // cannot move is what the runner has to clear first, and once
+                // they have, the counted chip is back with the rest.
+                //
+                // Destructive, so the estate's two-press confirm guards it
+                // (decisions § 1253) — the first tap arms and relabels, the
+                // second discards, and the arm lapses on its own so a watch
+                // put down does not come back one tap from destroying a run.
+                // The label carries the count in both states because the
+                // runner is agreeing to a number, and `discard_stake` renders
+                // only while armed so the arc states no stake for a run
+                // nobody is discarding.
+                var discardArmedAtMs by remember { mutableStateOf<Long?>(null) }
+                LaunchedEffect(discardArmedAtMs) {
+                    val armedAt = discardArmedAtMs ?: return@LaunchedEffect
+                    delay(CONFIRM_WINDOW_MS)
+                    if (discardArmedAtMs == armedAt) discardArmedAtMs = null
+                }
+                // A drain that lands between the arm and the confirm changes
+                // what the second tap would destroy. Disarm rather than let it
+                // commit to a set the runner never saw.
+                LaunchedEffect(rejectedCount) { discardArmedAtMs = null }
+                val armed = discardArmedAtMs != null
+                val rejectedCd = if (armed) {
+                    pluralStringResource(
+                        R.plurals.cd_sync_rejected_confirm, rejectedCount, rejectedCount
+                    )
+                } else {
+                    pluralStringResource(R.plurals.cd_sync_rejected, rejectedCount, rejectedCount)
+                }
+                CompactChip(
+                    onClick = {
+                        val now = System.currentTimeMillis()
+                        when (confirmPress(discardArmedAtMs, now)) {
+                            ConfirmPress.Armed -> discardArmedAtMs = now
+                            ConfirmPress.Confirmed -> {
+                                discardArmedAtMs = null
+                                onDiscardRejected()
+                            }
+                        }
+                    },
+                    label = {
+                        Text(
+                            if (armed) {
+                                stringResource(R.string.sync_rejected_discard, rejectedCount)
+                            } else {
+                                pluralStringResource(
+                                    R.plurals.sync_rejected, rejectedCount, rejectedCount
+                                )
+                            },
+                            style = MaterialTheme.typography.caption3,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        )
+                    },
+                    colors = ChipDefaults.secondaryChipColors(
+                        backgroundColor = Color.White.copy(alpha = 0.15f),
+                        contentColor = DuskPalette.warning,
+                    ),
+                    modifier = Modifier
+                        .widthIn(max = 100.dp)
+                        .semantics { contentDescription = rejectedCd },
+                )
+                if (armed) {
+                    Text(
+                        stringResource(R.string.discard_stake),
+                        style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
+                        color = DuskPalette.warning,
+                        textAlign = TextAlign.Center,
+                    )
+                }
             } else if (queuedCount > 0) {
                 // Tappable so the runner can force a retry — the queue
                 // also drains automatically on every connectivity edge

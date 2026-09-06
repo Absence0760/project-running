@@ -41,6 +41,16 @@
     <string name="sync_count">%1$d 件を同期</string>
     <string name="sync_retry">再同期</string>
     <string name="cd_sync_unreadable_retry">保存した記録を読み取れません。タップして再試行</string>
+    <plurals name="sync_rejected">
+        <item quantity="other">%1$d 件を拒否</item>
+    </plurals>
+    <string name="sync_rejected_discard">%1$d 件を破棄？</string>
+    <plurals name="cd_sync_rejected">
+        <item quantity="other">サーバーが拒否した保存済みの記録が %1$d 件。タップして破棄。</item>
+    </plurals>
+    <plurals name="cd_sync_rejected_confirm">
+        <item quantity="other">%1$d 件の破棄を確認。他に保存されていません。</item>
+    </plurals>
     <string name="offline">オフライン</string>
     <string name="not_signed_in">サインインしていません</string>
     <string name="race_armed">レース準備完了</string>
