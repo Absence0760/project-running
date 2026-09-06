@@ -2875,6 +2875,20 @@ jobs:
       # Retry + port-cleanup rationale lives in the composite action.
       - name: Start local Supabase stack
         uses: ./.github/actions/start-supabase
+      - name: Check the server_only registry matches the migrations
+        run: |
+          if ! node apps/backend/scripts/check_server_only_registry.mjs; then
+            echo "::error::A routine some migration revokes from authenticated is missing from anon_execute_contract_test.sql's server_only fixture (or vice versa). The fixture is a hand-kept list of what must never be callable by a signed-in user; a routine absent from it is one the contract test never asks about."
+            echo "Reproduce with: node apps/backend/scripts/check_server_only_registry.mjs"
+            exit 1
+          fi
+      - name: Validate the server_only registry guard
+        run: |
+          if ! node --test apps/backend/scripts/check_server_only_registry.test.mjs; then
+            echo "::error::The server_only registry guard's own tests fail, so its green means nothing."
+            echo "Fix apps/backend/scripts/check_server_only_registry.mjs (or its tests) first."
+            exit 1
+          fi
       - name: Run pgtap RLS suite
         working-directory: apps/backend
         run: |
