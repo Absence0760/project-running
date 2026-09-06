@@ -24,6 +24,7 @@
 		type GearWearArea,
 		type GearWearLog,
 		type GearRotationWithMembers,
+		type RunColumns,
 	} from '$lib/core/data';
 	import type { Run } from '$lib/types';
 	import { getUnit } from '$lib/format/units.svelte';
@@ -356,7 +357,17 @@
 	// Post-create backfill offer: the gear the runner just registered, plus the
 	// past runs it could plausibly have been worn for. Non-null only while the
 	// prompt is up, so each offer gets a fresh modal instance.
-	let backfill = $state<{ gear: Gear; candidates: Run[] } | null>(null);
+	/// The columns the backfill offer reads, declared once: the tuple is what
+	/// `fetchRuns` projects AND what the candidate type is `Pick`ed from, so the
+	/// prompt cannot read a field the read did not fetch.
+	const BACKFILL_RUN_COLUMNS = [
+		'id',
+		'started_at',
+		'distance_m',
+		'activity_type',
+	] as const satisfies RunColumns;
+	type BackfillRun = Pick<Run, (typeof BACKFILL_RUN_COLUMNS)[number]>;
+	let backfill = $state<{ gear: Gear; candidates: BackfillRun[] } | null>(null);
 
 	/// A pair of shoes is rarely registered the day it's bought — by the time
 	/// the runner adds it, some of its mileage is already in the app on runs
@@ -370,7 +381,7 @@
 			// Bound the read at the purchase date and narrow the columns: the
 			// window can be years wide, and the prompt reads four fields.
 			const runs = await fetchRuns({
-				columns: 'id,started_at,distance_m,activity_type',
+				columns: BACKFILL_RUN_COLUMNS,
 				startedAtFrom: new Date(sinceMs).toISOString(),
 			});
 			const candidates = gearBackfillCandidates({

@@ -9,10 +9,13 @@
 
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { stripComments } from './strip_comments';
+// Type-only, so nothing in `data.ts` (the supabase singleton, `$env/static/public`)
+// is evaluated when this file runs under `tsx --test`.
+import type { PeriodSummaryRun } from './data';
 
 function read(...parts: string[]): string {
 	return readFileSync(resolve(...parts), 'utf-8');
@@ -47,9 +50,21 @@ test('fetchRunsForDashboard is bounded + column-narrowed, not the unbounded sele
 	);
 	assert.match(
 		body,
-		/\.select\(\s*['"`][^'"`]*started_at[^'"`]*distance_m/,
-		'fetchRunsForDashboard must select the explicit consumer columns (started_at, distance_m, …).',
+		/\.select\(DASHBOARD_RUN_COLUMNS\.join\(/,
+		'fetchRunsForDashboard must project the declared tuple, not a second column list.',
 	);
+	// Anchored on the tuple's CONTENTS, not on the identifier: since § 1330 the
+	// select string is joined from `DASHBOARD_RUN_COLUMNS`, so naming it proves
+	// nothing about which columns it holds.
+	const dashTuple = /const DASHBOARD_RUN_COLUMNS = \[([^\]]*)\]/.exec(source);
+	assert.ok(dashTuple, 'DASHBOARD_RUN_COLUMNS must be a column tuple — re-anchor.');
+	for (const c of ['started_at', 'distance_m', 'duration_s', 'source', 'activity_type']) {
+		assert.match(
+			dashTuple[1],
+			new RegExp(`'${c}'`),
+			`DASHBOARD_RUN_COLUMNS must carry ${c} — every card on /dashboard derives from it.`,
+		);
+	}
 	// The dashboard page must call the bounded reader, not the unbounded one.
 	const page = read('src/routes/dashboard/+page.svelte');
 	assert.match(
@@ -143,10 +158,16 @@ test('fetchRunsForPeriodSummary ships the whole history column-narrowed, and sur
 		/throwOnError:\s*true/,
 		'a failed history fetch must throw, not degrade to an incomplete total.',
 	);
+	// Anchored on the whole tuple, not its first line: since § 1330 the
+	// constant is a multi-line `as const satisfies RunColumns` array, so
+	// reading one line proved nothing about what it names.
+	const tuple = /const PERIOD_SUMMARY_RUN_COLUMNS = \[([^\]]*)\]/.exec(source);
+	assert.ok(tuple, 'PERIOD_SUMMARY_RUN_COLUMNS must be a column tuple — re-anchor.');
 	assert.doesNotMatch(
-		source.slice(source.indexOf('PERIOD_SUMMARY_RUN_COLUMNS =')).split('\n')[0],
-		/\*/,
-		'PERIOD_SUMMARY_RUN_COLUMNS must be an explicit column list, never `*`.',
+		tuple[1],
+		/[*]|metadata/,
+		'PERIOD_SUMMARY_RUN_COLUMNS must be an explicit column list, never `*` ' +
+			'and never the metadata jsonb bag the drilldown does not read.',
 	);
 	// The standalone deep-link route shares the narrowed reader.
 	const route = read('src/routes/dashboard/period/[type]/[date]/+page.svelte');
@@ -1514,3 +1535,179 @@ test('the club slug is derived by the shared helper, never re-spelled here', () 
 		'a lower-case feeding a strip is the slug derivation re-grown; call clubSlug.',
 	);
 });
+
+/// The three enumerated reads in this file and the row types they are handed
+/// back as have to describe the SAME column set, and every name in them has to
+/// be one the client is granted.
+///
+/// Both halves are derived, never restated: the column sets come out of the
+/// `.select()` literals in `data.ts`, the type sets out of the `Omit<…Row, …>`
+/// overlays in `types.ts` crossed with the generated `database.types.ts`, and
+/// the grant out of a replay of every migration. A literal repeated here would
+/// be a fourth declaration that agrees until it doesn't ([§ 641]).
+function generatedColumns(table: string): Set<string> {
+	const types = read('src/lib/database.types.ts');
+	const start = types.indexOf(`      ${table}: {`);
+	assert.ok(start > 0, `could not locate ${table} in database.types.ts — re-anchor`);
+	const row = types.slice(
+		types.indexOf('Row: {', start) + 'Row: {'.length,
+		types.indexOf('Insert: {', start),
+	);
+	return new Set(
+		row
+			.split('\n')
+			.map((l) => l.trim())
+			.filter((l) => l.includes(':'))
+			.map((l) => l.split(':')[0].trim()),
+	);
+}
+
+/// The keys an `Omit<XRow, 'a' | 'b'> & { a: Narrow }` overlay declares: every
+/// generated column, less the omitted ones, plus whatever the intersection
+/// puts back. A column omitted and NOT put back is the deliberate withholding
+/// this guard is about.
+function overlayColumns(alias: string, table: string): Set<string> {
+	const src = read('src/lib/types.ts');
+	const decl = src.slice(src.indexOf(`export type ${alias} = Omit<`));
+	assert.ok(decl.length > 0, `could not locate the ${alias} overlay — re-anchor`);
+	const omitEnd = decl.indexOf('> & {');
+	const intersectionEnd = decl.indexOf('\n};');
+	const omitted = [...decl.slice(0, omitEnd).matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+	const readded = [...decl.slice(omitEnd, intersectionEnd).matchAll(/^\t(\w+)\??:/gm)].map(
+		(m) => m[1],
+	);
+	const keys = generatedColumns(table);
+	for (const c of omitted) keys.delete(c);
+	for (const c of readded) keys.add(c);
+	return keys;
+}
+
+/// The columns `authenticated` may SELECT, replayed from every migration in
+/// filename order: a bare `revoke select on <t>` clears the set, a
+/// `grant select (a, b) on <t>` adds to it, a bare `grant select on <t>` means
+/// every column. Column-level REVOKE is deliberately not modelled — it is a
+/// no-op while the role holds the table-level grant, which is precisely why
+/// `20260723_001` was rewritten into the revoke-then-column-grant shape.
+function grantedColumns(table: string): Set<string> | 'all' {
+	const dir = '../backend/supabase/migrations';
+	let granted: Set<string> | 'all' = 'all';
+	for (const f of readdirSync(resolve(dir)).sort()) {
+		if (!f.endsWith('.sql')) continue;
+		const sql = read(dir, f).replace(/--[^\n]*/g, '');
+		const revoke = new RegExp(`revoke\\s+select\\s+on\\s+(?:public\\.)?${table}\\s+from\\b`, 'i');
+		if (revoke.test(sql)) granted = new Set();
+		const grant = new RegExp(
+			`grant\\s+select\\s*(\\(([^)]*)\\))?\\s*on\\s+(?:public\\.)?${table}\\s+to\\b`,
+			'gi',
+		);
+		for (const m of sql.matchAll(grant)) {
+			if (!m[2]) {
+				granted = 'all';
+				continue;
+			}
+			if (granted === 'all') continue;
+			for (const c of m[2].split(',')) granted.add(c.trim());
+		}
+	}
+	return granted;
+}
+
+function selectLiteral(constant: string): string[] {
+	const source = read('src/lib/core/data.ts');
+	const m = source.match(new RegExp(`const ${constant}\\s*=\\s*\\n?\\s*'([^']*)'`));
+	assert.ok(m, `could not locate ${constant} in data.ts — re-anchor`);
+	return m[1].split(',').map((c) => c.trim());
+}
+
+test('the enumerated club / event reads and the row types they are read as name the same columns', () => {
+	// Reason: a narrowed select handed back under the table's full row type is
+	// `undefined` at runtime behind a type that declares it, with no throw and
+	// no error (§ 1294 / § 1327 / § 1329). `routes` shipped that way for eleven
+	// columns and `events` for three. Equality in BOTH directions is the point:
+	// a column added to the overlay without being added to the projection is
+	// the original defect, and one added to the projection without the overlay
+	// is a column paid for on the wire and unreadable.
+	for (const [constant, alias, table] of [
+		['EVENT_SELECT_COLS', 'Event', 'events'],
+		['CLUB_SELECT_COLS', 'Club', 'clubs'],
+	] as const) {
+		assert.deepEqual(
+			[...selectLiteral(constant)].sort(),
+			[...overlayColumns(alias, table)].sort(),
+			`${constant} and the ${alias} overlay describe different column sets`,
+		);
+	}
+});
+
+test('the club roster read and ClubMember name the same columns', () => {
+	// Reason: the same claim for the one enumerated read whose column list is
+	// written inline rather than as a shared constant. `activity_waiver_ack_at`
+	// is left out on purpose — on a public club anyone may read the roster, and
+	// when a member signed the liability waiver is not public roster data — so
+	// the overlay must not promise it either.
+	const source = read('src/lib/core/data.ts');
+	const selects = [...source.matchAll(/\.select\('(club_id, user_id, role, status[^']*)'\)/g)].map(
+		(m) => m[1].split(',').map((c) => c.trim()),
+	);
+	assert.equal(selects.length, 2, 'expected the two club_members roster reads — re-anchor');
+	const declared = [...overlayColumns('ClubMember', 'club_members')].sort();
+	for (const cols of selects) assert.deepEqual([...cols].sort(), declared);
+});
+
+test('no enumerated read, and no row type, names a column the client is not granted', () => {
+	// Reason: SELECT on `clubs` and `events` is revoked wholesale and re-granted
+	// column by column (migration 20260818_001, plus the later per-column
+	// grants), so a name outside that set does not read as null — it raises
+	// 42501 and the whole query fails. `invite_token`, `location_point`,
+	// `host_user_id`, `meet_lat` and `meet_lng` are the withheld five; the
+	// precise meet point is reachable only through the member-gated
+	// `get_event_meet_point` RPC, and the payout recipient not at all.
+	for (const [constant, alias, table] of [
+		['EVENT_SELECT_COLS', 'Event', 'events'],
+		['CLUB_SELECT_COLS', 'Club', 'clubs'],
+	] as const) {
+		const granted = grantedColumns(table);
+		assert.notEqual(granted, 'all', `${table} SELECT is not column-scoped any more — re-anchor`);
+		const allowed = granted as Set<string>;
+		for (const c of selectLiteral(constant)) {
+			assert.ok(allowed.has(c), `${constant} asks for ${c}, which ${table} does not grant`);
+		}
+		for (const c of overlayColumns(alias, table)) {
+			assert.ok(allowed.has(c), `${alias} declares ${c}, which ${table} does not grant`);
+		}
+	}
+});
+
+
+// ── Compile-time: a narrowed run read cannot be read for what it did not fetch ──
+//
+// `svelte-check` is the gate for these, not `tsx --test`: a read of an absent
+// field yields `undefined` rather than throwing, so the only assertion that can
+// see the defect is one the compiler makes (§ 1294 / § 1330).
+
+/// The period drilldown projects five of `runs`' twenty-four columns. Each of
+/// these was a field `Run` promised and the query never fetched. The
+/// `@ts-expect-error` is the mutation test: widen the return type back to
+/// `Run[]` and every directive here reports unused, which fails the build.
+export const periodSummaryWithheldReadsDoNotCompile = (r: PeriodSummaryRun) => [
+	// @ts-expect-error — the jsonb bag the drilldown does not read
+	r.metadata,
+	// @ts-expect-error — not in PERIOD_SUMMARY_RUN_COLUMNS
+	r.elevation_gain_m,
+	// @ts-expect-error — not in PERIOD_SUMMARY_RUN_COLUMNS
+	r.activity_type,
+	// @ts-expect-error — not in PERIOD_SUMMARY_RUN_COLUMNS
+	r.is_dnf,
+	// @ts-expect-error — a lazy Storage download, never a column
+	r.track_url,
+];
+
+/// The five it does read have to stay readable, or the narrowing has gone too
+/// far and the pin above is the only thing still passing.
+export const periodSummaryReadsCompile = (r: PeriodSummaryRun) => [
+	r.id,
+	r.started_at,
+	r.distance_m,
+	r.duration_s,
+	r.source,
+];
