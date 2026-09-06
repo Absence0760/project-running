@@ -6602,7 +6602,10 @@ class ApiClient {
           .insert({
             GymRoutineExerciseRow.colRoutineId: routine.id,
             GymRoutineExerciseRow.colExerciseName: ex.exerciseName.trim(),
-            GymRoutineExerciseRow.colExerciseKey: ex.exerciseKey,
+            // exercise_key is NOT sent: gym_routine_exercises_stamp_exercise_key
+            // derives it from exercise_name on every write (20270711000001), so
+            // a client value is overwritten. [GymRoutineExerciseInput.exerciseKey]
+            // stays -- the caller matches its own plan to its own log with it.
             GymRoutineExerciseRow.colPosition: p,
             GymRoutineExerciseRow.colSupersetGroup: g,
             GymRoutineExerciseRow.colSupersetOrder:
@@ -7897,9 +7900,10 @@ typedef GymRoutineSetInput = ({
 });
 
 /// One planned exercise in a [ApiClient.createGymRoutine] call. [exerciseKey]
-/// is `normaliseExerciseName(exerciseName)` stamped at write time (the frozen
-/// identity that binds the plan to logged sets). `position` is assigned
-/// positionally on insert. [supersetGroup] / [supersetOrder] bracket the
+/// is `normaliseExerciseName(exerciseName)`, the frozen identity that binds the
+/// caller's plan to its own logged sets -- it is NOT sent to the server, which
+/// derives the stored column itself (migration 20270711000001).
+/// `position` is assigned positionally on insert. [supersetGroup] / [supersetOrder] bracket the
 /// exercise into a superset; [modality] / [progression] / [progressionParams]
 /// carry the P2 modality + P4 progression scheme.
 typedef GymRoutineExerciseInput = ({
