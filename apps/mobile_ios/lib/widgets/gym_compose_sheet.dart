@@ -658,10 +658,10 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
       textEditingController: ex.name,
       focusNode: ex.nameFocus,
       optionsBuilder: (value) {
-        final q = value.text.trim().toLowerCase();
+        final q = normaliseExerciseName(value.text);
         if (q.isEmpty) return const Iterable<String>.empty();
         return _datalistNames
-            .where((s) => s.toLowerCase().contains(q))
+            .where((s) => normaliseExerciseName(s).contains(q))
             .take(6);
       },
       fieldViewBuilder: (context, controller, focusNode, onSubmit) => Semantics(

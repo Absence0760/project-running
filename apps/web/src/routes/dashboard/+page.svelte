@@ -39,6 +39,7 @@
 	import { supabase } from '$lib/core/supabase';
 	import type { GymWorkout, GymSetWithDate } from '$lib/core/data';
 	import { liftsFromSetHistory } from '$lib/gym/lift_load';
+	import { distinctExerciseCount } from '$lib/gym/gym_prs';
 	import {
 		computeNutritionTargets,
 		ageFromDob,
@@ -247,10 +248,7 @@
 		return Math.round(v);
 	}
 	function liftExerciseCount(id: string): number {
-		const names = new Set<string>();
-		for (const s of setsByWorkout.get(id) ?? [])
-			names.add(s.exercise_name.trim().toLowerCase());
-		return names.size;
+		return distinctExerciseCount((setsByWorkout.get(id) ?? []).map((s) => s.exercise_name));
 	}
 
 	// Today's logged lift(s) — the "today's modality" card the Home spec

@@ -99,12 +99,13 @@ class _ExerciseCataloguePickerScreenState
   String get _query => _search.text.trim();
 
   List<GymCatalogueEntry> get _filtered {
-    final q = _query.toLowerCase();
+    final q = normaliseExerciseName(_query);
     final out = _entries
         .where((e) => _category == 'all' || e.category == _category)
-        .where((e) => q.isEmpty || e.name.toLowerCase().contains(q))
+        .where((e) => q.isEmpty || normaliseExerciseName(e.name).contains(q))
         .toList();
-    out.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    out.sort((a, b) =>
+        normaliseExerciseName(a.name).compareTo(normaliseExerciseName(b.name)));
     return out;
   }
 

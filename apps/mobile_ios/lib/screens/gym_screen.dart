@@ -36,15 +36,11 @@ int gymWorkoutVolume(StoredGymWorkout w) {
   return v.round();
 }
 
-/// Distinct exercise names (case-insensitive) in a stored workout.
-int gymExerciseCount(StoredGymWorkout w) {
-  final names = <String>{};
-  for (final s in w.sets) {
-    final n = ((s['exercise_name'] as String?) ?? '').trim().toLowerCase();
-    if (n.isNotEmpty) names.add(n);
-  }
-  return names.length;
-}
+/// Distinct exercises in a stored workout, bucketed by the canonical grouping
+/// key — the same one the PR engine and the server-stamped `exercise_key` use.
+int gymExerciseCount(StoredGymWorkout w) => distinctExerciseCount(
+      [for (final s in w.sets) (s['exercise_name'] as String?) ?? ''],
+    );
 
 List<GymSetLike> _setsToLikes(StoredGymWorkout w) => [
       for (final s in w.sets)
@@ -108,8 +104,8 @@ List<String> gymExerciseSuggestions(List<StoredGymWorkout> workouts) {
   for (final w in workouts) {
     for (final s in w.sets) {
       final raw = ((s['exercise_name'] as String?) ?? '').trim();
-      if (raw.isEmpty) continue;
-      final key = raw.toLowerCase();
+      final key = normaliseExerciseName(raw);
+      if (key.isEmpty) continue;
       counts[key] = (counts[key] ?? 0) + 1;
       display.putIfAbsent(key, () => raw);
     }

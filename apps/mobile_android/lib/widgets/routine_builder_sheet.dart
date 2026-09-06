@@ -667,10 +667,10 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
       textEditingController: ex.name,
       focusNode: ex.nameFocus,
       optionsBuilder: (value) {
-        final q = value.text.trim().toLowerCase();
+        final q = normaliseExerciseName(value.text);
         if (q.isEmpty) return const Iterable<String>.empty();
         return widget.suggestions
-            .where((s) => s.toLowerCase().contains(q))
+            .where((s) => normaliseExerciseName(s).contains(q))
             .take(6);
       },
       fieldViewBuilder: (context, controller, focusNode, onSubmit) => Semantics(

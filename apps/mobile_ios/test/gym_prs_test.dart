@@ -136,6 +136,46 @@ void main() {
       final prs = workoutPrs(prior, [_set('bench press', 5, 95)]);
       expect(prs, isEmpty);
     });
+
+    test('the result carries the grouping key, not a re-derivable display string', () {
+      // The name carries BOTH collapses the naive fold misses, because the two
+      // runtimes miss DIFFERENT ones and the intersection is empty: measured
+      // over all 1,488 table entries, Dart 3.12 disagrees with the frozen table
+      // at 465 code points and Node 24 (Unicode 17.0) at exactly U+0130, which
+      // is in neither set the other misses. The internal whitespace run is the
+      // witness that holds on both, so this test and its web mirror take the
+      // same input.
+      //
+      // A caller that keys a lookup on `exerciseName.trim().toLowerCase()`
+      // stores a key no block spelled `incline press` can ever hit, and the
+      // exercise's chips vanish with no error anywhere (§ 1248). An ASCII
+      // single-spaced name would pass either way.
+      final prs = workoutPrs([], [_set('\u0130ncline  Press', 5, 100)]);
+      expect(prs.length, 1);
+      expect(prs[0].key, 'incline press');
+      expect(prs[0].exerciseName, '\u0130ncline  Press');
+      expect(prs[0].key, isNot(prs[0].exerciseName.trim().toLowerCase()));
+      expect(prs[0].key, normaliseExerciseName('incline press'));
+    });
+  });
+
+  group('distinctExerciseCount', () {
+    test('spellings the canonical fold merges count once', () {
+      // Each pair is one lift under two spellings that `trim().toLowerCase()`
+      // keeps apart: an internal whitespace run, a non-breaking space, and a
+      // code point the runtimes disagree about.
+      expect(distinctExerciseCount(['Bench  Press', 'Bench Press']), 1);
+      expect(distinctExerciseCount(['Bench\u00a0Press', 'bench press']), 1);
+      expect(distinctExerciseCount(['\u0130ncline Press', 'incline press']), 1);
+      expect(distinctExerciseCount(['Bench Press', 'Back Squat']), 2);
+    });
+
+    test('blank and whitespace-only names contribute nothing', () {
+      // Matches computeExercisePrs, which drops a blank-named set outright — a
+      // count that included it disagreed with every keyed surface.
+      expect(distinctExerciseCount(['', '   ', '\u00a0', 'Bench Press']), 1);
+      expect(distinctExerciseCount(<String>[]), 0);
+    });
   });
 
   group('RunningPrTracker', () {

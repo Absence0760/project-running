@@ -24874,3 +24874,173 @@ No client holds that method. The client-side "fetch the blob then clip the point
 `docs/product/parity.md`'s snap-to-road row still called `routing.dart` a "Dart port of `apps/web/src/lib/routes/routing.ts`", which § 1218 corrected everywhere else; § 1119 had deleted that file's `snapToRoad` / `fetchRoute` / `fetchFullRoute` because nothing imported them. Its test figure was stale too — `test/routing_test.dart` declares 36, not the 9 stated.
 
 The fourth filing in this group was **already fixed and never ticked**, which is § 1217's own pattern recurring. `apps/job_worker/deployment.md:229` was reported as opening five table columns against a three-column header from two unescaped pipes inside a code span; the pipes are escaped at the base commit this round was cut from, so the fix landed in the same PR that filed it. Re-measured rather than trusted, by the filing's own method: across all 369 markdown tables and 2,845 body rows in the repo, counting `|`-delimited cells with backslash escapes honoured, **zero** rows disagree with their header.
+
+## 1248. Six web surfaces keyed the exercise grouping on the runtime's own fold, and the two that were lookups lost a badge — the fix carries the key rather than re-deriving it
+
+[§ 1175](#1175-the-exercise-grouping-keys-case-fold-is-a-frozen-unicode-170-table-on-all-three-rails-and-the-three-now-answer-identically-at-every-code-point) made `normaliseExerciseName` the one derivation of the exercise grouping
+key on all three rails. Six surfaces went on deriving it with
+`trim().toLowerCase()`, which collapses neither an internal whitespace run nor
+the code points the frozen table covers. Three of them were counts, and were
+merely wrong: a workout logging "Bench Press" and "Bench  Press" reported two
+exercises where `gym_workout_summaries` reports one. Two were a LOOKUP, and
+those are the reason this is a defect rather than an inconsistency —
+`prByExercise` was WRITTEN under `workoutPrs`' returned display spelling and
+READ back under each block's own, so a block spelled differently from the first
+one missed and its PR chips simply did not render, with no failure anywhere.
+
+The filing was right about the class and wrong about three details, each
+corrected here. It named five web sites; there are six — `prevByExercise`'s own
+key at `+page.svelte:270` was not listed. It said the "vs last time" hint fails
+too; it does not, because that map is written and read with the same naive
+expression and is merely self-consistently wrong. And "the PR badges just do
+not render" is too strong: the display spelling is by construction one of the
+blocks' spellings, so the FIRST block always hits and only the others lose the
+chip. Reproduced before fixing, with `workoutPrs([], [{Incline Press with
+U+0130}])`: the naive key is `i̇ncline press` (JS answers `i` + U+0307) where
+the canonical key is `incline press`, and a second block spelled `incline
+press` gets `null` from the naive map and the full kind list from the canonical
+one.
+
+The durable fix is not six calls to `normaliseExerciseName` — it is that
+`WorkoutPrResult` now carries `key`, so no caller can re-derive it from a
+display string at all, and `distinctExerciseCount` gives the three count sites
+one home that drops a blank name the way the PR map does. The mobile detail
+screen already keyed canonically, which is why the divergence was web-only; it
+now reads `r.key` and cannot drift back. One pre-existing bug fell out while
+rewriting the block keying: `prevByExercise` took its "this session's heaviest"
+per BLOCK, and a superset logs one lift in non-consecutive sets, so the delta
+was computed against whichever half came first. It is now taken over the whole
+workout.
+
+## 1249. Two more mobile fold sites the audit missed, and every mobile exercise autocomplete now folds canonically
+
+A source scan of the Dart tree — rather than a read of the filing — found two
+sites beyond the one it named. `gymExerciseSuggestions` dedupes the composer's
+autocomplete on `trim().toLowerCase()`, and that list is a LOCAL re-derivation
+of what the server's `gym_exercise_names` answers off `gym_sets.exercise_key`:
+one lift under two spellings therefore appeared twice, and the use count that
+orders the list split between the two entries. And the three exercise
+autocompletes (`gym_compose_sheet`, `routine_builder_sheet`,
+`exercise_catalogue_picker`) matched a typed query against candidate names with
+Dart's own case table, which is not the one the web half uses.
+
+The query folds are a different kind from the key folds and are fixed anyway,
+because the canonical fold is strictly the better instrument for them: it
+collapses the whitespace class as well, so a name stored with a non-breaking
+space is now reachable by typing an ordinary one. The catalogue picker's
+alphabetical sort goes through the same fold for consistency within the file;
+that sort's real divergence from web is `localeCompare` versus a case fold, a
+different problem left to § 1251's survivor list.
+
+## 1250. The exercise-fold guards are anchored on what a file does, not on where it sits
+
+Two source guards now stand over the fold, one per platform, carrying the same
+rule. The rule that gives them teeth is that a file naming an exercise anywhere
+in its CODE may not reach for the runtime's lower-case at all; anywhere else,
+the fold is reported only when the receiver expression or the enclosing
+statement names one. A receiver test alone is not enough on either platform and
+is useless on Dart: the gym surfaces call their locals `raw`, `q` and `s`, so
+`q.toLowerCase()` inside the composer reads as unrelated to exercises and the
+scan walks straight past the very site it exists to catch. A hand-listed set of
+gym directories has the same hole one rename later. Prose does not count —
+comments and string literals are blanked first, which is what keeps
+`route_detail_screen.dart`'s "a stub to exercise the enhance path" from banning
+a route search.
+
+Three refinements came out of running it rather than reading it. Only the LOWER
+half of the fold is bannable file-wide: nine Dart section labels are
+`label.toUpperCase()` presentation and none is a key, so upper-casing is
+reported on the receiver rule alone. The statement walk stops at a comma as
+well as a semicolon, because a Flutter build method is one enormous
+comma-separated argument list with no semicolons in it and a `;`-only walk read
+`_exerciseBlock(...)` four lines up as context for a section label. And
+`lib/core/data.ts` gets a waiver from the file-level ban — it serves every
+domain, so naming an exercise somewhere says nothing about what `slugify`'s
+`name.toLowerCase()` is folding; its folds are still judged one at a time, and
+a planted `s.exercise_name.toLowerCase()` in it is still caught.
+
+Both guards were mutation-tested against live planted violations, not only
+synthetic ones. Web: a neutral fold in `routes/gym/[id]/+page.svelte`, one in
+`routes/dashboard/+page.svelte`, an upper-case fold in `lib/gym/gym_prs.ts` —
+all three reported, and a PENDING entry re-pointed at a file with no fold
+failed the staleness test that exists to stop an exemption outliving its site.
+Dart: a fold in `gym_screen.dart`, one in `routine_builder_sheet.dart`, and one
+in `local_run_store.dart` reached through a quoted map index — the last caught
+by the receiver rule in a file that names no exercise at all. The web guard
+carries three PENDING entries for real sites in trees this change does not own
+(`share_workout_meta.ts`, `coach/context.ts`, `ExerciseCataloguePicker.svelte`);
+the Dart list is empty.
+
+## 1251. The residual Dart case gap was measured against the wrong instrument — in European text its whole reachable surface is one code point
+
+The standing filing said the Dart `toLowerCase()` gap is "465 code points wide
+for every other Dart consumer too". 465 is Dart against the FROZEN TABLE, which
+is the right number for a site that must produce `exercise_key` and the wrong
+one for a site that must merely agree with a web rail. Measured directly, JS
+and Dart disagree at 150 code points across U+0020-U+2FFF, and the distribution
+is what decides every ranking below: **one** in Latin-1 Supplement plus Latin
+Extended-A (U+0130, the Turkish dotted capital I), **one** in Greek and Coptic
+(U+037F, capital yot, which no living orthography puts in a word), and **zero**
+in Latin Extended-B, Cyrillic, Latin Extended Additional (all of Vietnamese)
+and Greek Extended (all of polytonic Greek). The other 148 are Cherokee (86),
+Georgian Mtavruli (46) and 16 Latin Extended-D, Coptic and Glagolitic
+additions. So "a phone matching fewer strings than the web does for the same
+query" is real, and in any Latin, Greek or Cyrillic name its entire reachable
+surface is `İ`.
+
+Against that measurement the surviving Dart sites rank into four groups.
+Reachable, persisted, two rails: the club slug, `club_form_sheet.dart`'s
+`_slugify` against `data.ts`'s, where "İzmir" yields `izmir` on the phone and
+`i-zmir` on the web because JS emits a combining dot that `[^a-z0-9]+` then
+turns into a separator — a different public slug for the same club name
+depending on which client created it. Reachable, not persisted, two rails: the
+food-search dedupe key (`food_search.dart:465` against `food_search.ts:411`)
+and the route-name search and sort (`routes_screen.dart` against
+`routes/+page.svelte`). Reachable but single-rail, and therefore not a
+divergence at all: `route_picker_screen.dart` and `add_run_screen.dart` fold
+both sides of their comparison identically. Unreachable by measurement, and
+this is the larger half: the runner-handle match is bounded by
+`user_profiles_handle_format`, `^[a-z0-9_]{3,30}$`; the finisher-certificate
+filename strips to `[A-Za-z0-9]` BEFORE folding; `profile_query` folds uuid
+hex; and every remaining site folds a machine token — a locale tag, a file
+extension, a URI scheme, a currency code, an `activity_type`, an env-flag
+value, a CSV header, an auth error code.
+
+The fix for the survivors is deliberately NOT the frozen exercise table. That
+table is frozen because two of the three columns keyed through it are
+client-stamped under a validated CHECK, so moving it is a migration; a club
+slug and a search filter carry no such constraint and should not inherit that
+cost. The instrument built for exactly this shape is `catalogue_fold_table`
+(§ 854), the generated accent-plus-case table the segment catalogue already
+uses to make one query answer the same on both platforms. Filed against the
+three reachable sites, ranked, with the slug first because it is the only one
+that persists.
+
+## 1252. A stale phone's widened refusal gets an honest doc note, and the durable fix is the trigger the third keyed column already has
+
+[§ 1175](#1175-the-exercise-grouping-keys-case-fold-is-a-frozen-unicode-170-table-on-all-three-rails-and-the-three-now-answer-identically-at-every-code-point) widened the server's fold at 55 code points, so a phone built before it
+disagrees with the CHECK at 465 code points where it previously disagreed at
+410. The open question was whether that owes a client-visible "update the app"
+message. It does not, and the measurement is why: of the 465, **zero** lie in
+Latin-1 Supplement, Latin Extended-A, Latin Extended-B, Cyrillic, Latin
+Extended Additional or Greek Extended, and exactly one lies in Greek and Coptic.
+Reaching the refusal means naming a lift in Cherokee, Georgian Mtavruli,
+Deseret, Adlam, Garay, Medefaidrin, Vithkuqi or Sidetic, on a build predating
+the change, and the surface closes the moment that build updates.
+
+A special-cased message would also be a lie in the general case. The current
+client can raise the same `23514` for a reason that has nothing to do with its
+version, and telling the two apart requires re-deriving the server's fold —
+precisely what a stale client cannot do. So the generic save failure stays, and
+what is owed is that the doc says so.
+
+The durable fix for the whole class is already in the tree, applied to one of
+the three columns. `gym_sets.exercise_key` is stamped by
+`gym_sets_stamp_exercise_key_trigger`, whose comment records that it "stamps
+unconditionally, so a client-supplied exercise_key is replaced rather than
+rejected". `gym_routine_exercises.exercise_key` and `exercises.name_key` still
+carry a CHECK that REFUSES a disagreeing client value instead. Extending the
+same trigger to those two turns every version of this refusal into a silent
+correction and removes the client-version coupling for good — 410, 465 and 55
+all become zero. Filed for the lane that owns migrations; the doc note is the
+interim, not the answer.
