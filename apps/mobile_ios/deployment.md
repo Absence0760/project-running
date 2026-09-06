@@ -26,8 +26,8 @@ So: `mobile_ios@1.2.3` triggers one CI workflow that ships **both** apps.
 
 ```
 com.threkir.app            ← iOS phone app
-com.threkir.app.watchkitapp ← Apple Watch app target
-com.threkir.app.watchkitapp.WidgetsExtension  ← (when the complication ships)
+com.threkir.app.watchapp ← Apple Watch app target
+com.threkir.app.watchapp.WidgetsExtension  ← (when the complication ships)
 ```
 
 **Country / region rollout:** Same shape as Android — start with UK + Australia + US, expand once stable.
@@ -42,7 +42,7 @@ com.threkir.app.watchkitapp.WidgetsExtension  ← (when the complication ships)
    - Bundle ID: `com.threkir.app` (Explicit)
    - Capabilities: HealthKit, Sign in with Apple, Push Notifications, Background Modes (Location updates), Maps, Associated Domains (for universal links — optional)
 4. **Create the Watch App ID:**
-   - Bundle ID: `com.threkir.app.watchkitapp`
+   - Bundle ID: `com.threkir.app.watchapp`
    - Capabilities: HealthKit, Background Modes (Workout processing)
 5. **Provisioning profiles.** Create App Store distribution profiles for both bundle IDs. Set the team to your Developer Program team. Download the `.mobileprovision` files.
 6. **Create the App Store listing** at App Store Connect:
@@ -135,8 +135,12 @@ Required strings (Apple rejects without a meaningful description):
 Required keys:
 
 - `UIBackgroundModes` array containing `location` (background GPS) and `workout-processing` (Apple Watch session)
-- `WKWatchKitApp` (in the watch target's Info.plist) — true
-- `WKCompanionAppBundleIdentifier` — `com.threkir.app`
+- `WKApplication` (in the watch target's Info.plist) — true. This is the
+  single-target key; `WKWatchKitApp` is the legacy two-target spelling and
+  this project does not use it.
+- `WKCompanionAppBundleIdentifier` — `com.threkir.app`. NOT declared today:
+  the target ships `WKWatchOnly`, and swapping the two is step 3 of the
+  five-step Mac-only sequence in decisions § 1256.
 
 ### Capabilities to enable in Signing & Capabilities
 
@@ -224,7 +228,7 @@ There's no separate review for the Watch app. App Store review covers both targe
 
 ### HealthKit entitlements (Watch)
 
-The Watch target needs its own HealthKit entitlement (separate from the iOS one). Set up at developer.apple.com → Identifiers → `com.threkir.app.watchkitapp` → enable HealthKit.
+The Watch target needs its own HealthKit entitlement (separate from the iOS one). Set up at developer.apple.com → Identifiers → `com.threkir.app.watchapp` → enable HealthKit.
 
 ### Watch Connectivity
 
