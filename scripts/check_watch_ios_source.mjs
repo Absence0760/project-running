@@ -89,7 +89,41 @@
 //       The same claim carries Apple's documented mutual exclusivity:
 //       `WKWatchOnly` says the app has no iOS companion and cannot coexist
 //       with `WKCompanionAppBundleIdentifier`, so a session resolving the
-//       companion question must remove one while adding the other.
+//       companion question must remove one while adding the other. And the
+//       declaration is held against the only thing Linux can check it
+//       against — whether the PHONE project bundles the watch app at all.
+//       `WKWatchOnly` is a true description of the Xcode project and a false
+//       one of an app whose whole sync path is `WCSession`; § 1256 measured
+//       that flipping the key alone would move the lie rather than fix it,
+//       because `Runner.xcodeproj` embeds nothing. So the plist follows the
+//       build: the moment the embed lands, the guard says so, and a
+//       companion named while nothing embeds fails the same way
+//       (decisions § 1349).
+//
+//  (12) The heart-rate coverage figures agree with Wear OS's. `avg_bpm` is
+//       SUPPRESSED below a coverage threshold and coverage itself is advanced
+//       against a sample-freshness window, and both watch clients write the
+//       same `runs.avg_bpm` / `runs.metadata.hr_coverage` on the same
+//       account. Two thresholds is one column with two meanings — the same
+//       run recorded on either wrist keeps its average on one and loses it on
+//       the other — and the two files have said so in each other's doc
+//       comments since § 1083 with nothing able to see a divergence. They are
+//       in NEITHER parity registry and cannot be: those pair web with mobile,
+//       and the watch clients are additive surfaces under § 24. So the rail
+//       is here, the way `check_shared_constants.mjs` carries the rails that
+//       are not two clients of one registry (decisions § 1348).
+//
+//  (13) Every Swift file in the tree is a member of some target. A file
+//       Xcode never compiles is not a build error and not a red test — it is
+//       simply absent, and a TEST file that is absent takes its coverage with
+//       it while still reading as coverage in the repo. That has already
+//       happened once here: `Complications/ActiveRunComplication.swift` is in
+//       no target, which is why claim (4) exists at all — `ComplicationFormatterTests`
+//       links the OTHER copy of the formatters and passing proves nothing
+//       about the one the widget runs. The same slip on
+//       `HealthKitFailureTests.swift` would leave the `test-watch-ios` job
+//       green having never run the accumulator that decides whether a shipped
+//       run keeps its `avg_bpm` (decisions § 1350).
 //
 // WHAT THIS GUARD DOES NOT PROVE. It parses text. It does not compile Swift,
 // does not run it, and cannot see anything a type-checker would: claim (1)
@@ -107,8 +141,32 @@ import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
+/**
+ * A file's contents, or null when it is not there.
+ *
+ * Used where absence is a state the guard should REPORT rather than crash on.
+ * @param {string} abs
+ */
+export function readIfPresent(abs) {
+	try {
+		return readFileSync(abs, 'utf8');
+	} catch {
+		return null;
+	}
+}
+
 /** Swift source directories, relative to the `apps/watch_ios` root. */
 export const SWIFT_DIRS = ['WatchApp', 'Complications'];
+
+/**
+ * Every directory claim (13) holds against the project's target membership.
+ *
+ * A superset of `SWIFT_DIRS` on purpose: the TEST directory is the one where
+ * an orphaned file costs the most — a suite green having never run it — and
+ * the narrower list exists for the String Catalog claims, which have nothing
+ * to say about a test file's literals.
+ */
+export const TARGET_MEMBER_DIRS = [...SWIFT_DIRS, 'WatchAppTests'];
 
 /**
  * APIs whose FIRST positional string literal is a `LocalizedStringKey` (or a
@@ -519,6 +577,132 @@ export const DELEGATE_IDENTITY_GATES = [
 ];
 
 /** The watch target's Xcode project, claim (10)'s second rail. */
+/**
+ * Wear OS's half of the heart-rate coverage contract, relative to the repo
+ * root rather than to `watchRoot` — it is the one file this guard reads
+ * outside the watchOS tier's own two ends, and it is read for the same reason
+ * claims (6) and (7) read the phone's: the figure is written by both and owned
+ * by neither.
+ */
+/**
+ * The PHONE's Xcode project — the one that would have to embed the watch app
+ * for the companion relationship to exist as a build rather than only as a
+ * runtime `WCSession` conversation.
+ */
+/**
+ * Swift files deliberately in no target, each with the reason. An entry that
+ * goes stale — the file gains a target, or stops existing — fails, so the
+ * exemption cannot outlive what it excuses.
+ * @type {Record<string, string>}
+ */
+export const UNBUILT_SWIFT = {
+	'Complications/ActiveRunComplication.swift':
+		'the Widget Extension target it belongs in does not exist in this project yet — ' +
+		'Complications/README.md is the instruction for adding it in Xcode. This is the ' +
+		'exemption claim (4) exists because of: the formatters are duplicated precisely ' +
+		'so the suite can link a copy it CAN build.',
+};
+
+export const PHONE_PBXPROJ = join(
+	'apps', 'mobile_ios', 'ios', 'Runner.xcodeproj', 'project.pbxproj',
+);
+
+/**
+ * Fixed strings that can only appear in an iOS project that bundles a watch
+ * app: Apple's Embed Watch Content phase copies into `…/Watch`, and the built
+ * product is referenced by name. Broad on purpose — anything that embeds the
+ * watch has to name the product or the destination, and a false positive here
+ * costs a sentence in a PR while a false negative costs the whole point of
+ * the claim.
+ */
+export const WATCH_EMBED_MARKERS = ['$(CONTENTS_FOLDER_PATH)/Watch', 'WatchApp.app'];
+
+/**
+ * The watch app's own bundle identifier, read off its project rather than
+ * written down — a third marker, and the one an embed cannot avoid carrying.
+ * The `.tests` target's id is dropped: it is a substring relationship, not a
+ * second app.
+ * @param {string} pbxproj
+ */
+export function watchBundleIdentifiers(pbxproj) {
+	return [
+		...new Set(
+			[...pbxproj.matchAll(/PRODUCT_BUNDLE_IDENTIFIER\s*=\s*"?([\w.-]+)"?\s*;/g)].map(
+				(m) => m[1],
+			),
+		),
+	].filter((id) => !id.endsWith('.tests'));
+}
+
+export const WEAR_COVERAGE = join(
+	'apps', 'watch_wear', 'android', 'app', 'src', 'main', 'kotlin',
+	'com', 'runapp', 'watchwear', 'recording', 'HeartRateCoverage.kt',
+);
+
+/**
+ * The two figures that decide what a finished run may say about its heart
+ * rate, as they are spelled on each wrist.
+ *
+ * `kotlinPerSwift` is how many Kotlin units make one Swift unit — the two
+ * files hold the freshness window in different units on purpose (a
+ * `TimeInterval` is seconds, an Android elapsed-realtime delta is
+ * milliseconds), and a guard that compared the raw literals would demand they
+ * be spelled the same rather than MEAN the same. Integer multipliers, applied
+ * to the Swift figure, so the comparison stays exact.
+ * @type {{ swift: string, kotlin: string, kotlinPerSwift: number, what: string }[]}
+ */
+export const COVERAGE_RAILS = [
+	{
+		swift: 'minAverageBPMCoverage',
+		kotlin: 'MIN_AVG_BPM_COVERAGE',
+		kotlinPerSwift: 1,
+		what:
+			'the share of a run the sensor must have covered for the mean of its ' +
+			'samples to be saved as the run\'s `avg_bpm`. A threshold that differs ' +
+			'by wrist means the same run keeps its average on one watch and loses ' +
+			'it on the other',
+	},
+	{
+		swift: 'sampleFreshInterval',
+		kotlin: 'HR_SAMPLE_FRESH_MS',
+		kotlinPerSwift: 1000,
+		what:
+			'how old the newest sample may be and still count as a delivering ' +
+			'sensor. A window that differs by wrist makes `hr_coverage` two ' +
+			'measurements under one column name — the figure a suppressed average ' +
+			'is then explained by',
+	},
+];
+
+/**
+ * The numeric literal a `static let <name>` is initialised to, or null.
+ *
+ * Deliberately refuses anything that is not a literal: a constant computed
+ * from another expression cannot be compared to the other wrist's by reading,
+ * and reporting "not found" is the honest answer rather than a silent pass.
+ * @param {string} src @param {string} name
+ */
+export function swiftNumericConstant(src, name) {
+	const m = new RegExp(
+		`static\\s+let\\s+${name}\\s*(?::\\s*[A-Za-z0-9_.]+\\s*)?=\\s*(-?[0-9][0-9_]*(?:\\.[0-9]+)?)\\s*$`,
+		'm',
+	).exec(src);
+	return m === null ? null : Number(m[1].replace(/_/g, ''));
+}
+
+/**
+ * The same for Kotlin's `const val <NAME>`, tolerating the `L` / `F` / `D`
+ * suffix and `_` digit separators the Wear side writes its milliseconds with.
+ * @param {string} src @param {string} name
+ */
+export function kotlinNumericConstant(src, name) {
+	const m = new RegExp(
+		`const\\s+val\\s+${name}\\s*(?::\\s*[A-Za-z0-9_.?<>]+\\s*)?=\\s*(-?[0-9][0-9_]*(?:\\.[0-9]+)?)[LlFfDd]?\\s*$`,
+		'm',
+	).exec(src);
+	return m === null ? null : Number(m[1].replace(/_/g, ''));
+}
+
 export const PBXPROJ = join('WatchApp.xcodeproj', 'project.pbxproj');
 
 /** The watch app's committed Info.plist, read by claims (3) and (10). */
@@ -865,9 +1049,19 @@ export const UNGUARDED_DESTRUCTIVE = {
  *   for a caller that has no phone half staged.
  * @param {string | null} [routeBridgePath] absolute path to the phone's
  *   `apple_watch_route_bridge.dart`; null skips claim (7) alone.
+ * @param {string | null} [wearCoveragePath] absolute path to Wear OS's
+ *   `HeartRateCoverage.kt`; null skips claim (12) alone.
+ * @param {string | null} [phonePbxprojPath] absolute path to the phone's
+ *   `Runner.xcodeproj/project.pbxproj`; null skips claim (10)'s embed half.
  * @returns {{ errors: string[], ok: string[] }}
  */
-export function check(watchRoot, ingestPath = null, routeBridgePath = null) {
+export function check(
+	watchRoot,
+	ingestPath = null,
+	routeBridgePath = null,
+	wearCoveragePath = null,
+	phonePbxprojPath = null,
+) {
 	/** @type {string[]} */ const errors = [];
 	/** @type {string[]} */ const ok = [];
 	/** @param {string} rel */
@@ -1013,9 +1207,26 @@ export function check(watchRoot, ingestPath = null, routeBridgePath = null) {
 	}
 
 	// (4) The duplicated complication formatters.
-	const originSrc = read(FORMATTER_ORIGIN);
-	const copySrc = read(FORMATTER_COPY);
+	//
+	//     Read defensively: a deleted copy is a real state (the Widget
+	//     Extension finally landing would move these) and a guard that throws
+	//     an ENOENT stack instead of naming the file is one a reader cannot
+	//     act on — which is the whole complaint this file exists to make about
+	//     silent watchOS failures.
+	const originSrc = readIfPresent(join(watchRoot, FORMATTER_ORIGIN));
+	const copySrc = readIfPresent(join(watchRoot, FORMATTER_COPY));
 	let diverged = 0;
+	for (const [rel, src] of [[FORMATTER_ORIGIN, originSrc], [FORMATTER_COPY, copySrc]]) {
+		if (src !== null) continue;
+		diverged += 1;
+		errors.push(
+			`${rel} is gone. Claim (4) holds the complication's copy of the pure formatters ` +
+				'against the app\'s, and it cannot read one of them.',
+		);
+	}
+	if (originSrc === null || copySrc === null) {
+		// Fall through to the remaining claims rather than comparing null.
+	} else {
 	for (const name of DUPLICATED_FORMATTERS) {
 		const a = functionBody(originSrc, name);
 		const b = functionBody(copySrc, name);
@@ -1036,6 +1247,7 @@ export function check(watchRoot, ingestPath = null, routeBridgePath = null) {
 				'the first, so a divergence means the watch face and the run screen round the same run ' +
 				'differently and every test still passes.',
 		);
+	}
 	}
 	if (diverged === 0) {
 		ok.push(`${DUPLICATED_FORMATTERS.length} duplicated complication formatters are byte-identical`);
@@ -1318,13 +1530,117 @@ export function check(watchRoot, ingestPath = null, routeBridgePath = null) {
 							'(decisions § 1256).',
 					);
 				}
-				if (errors.length === 0) {
+				if (phonePbxprojPath !== null) {
+					// The declaration held against the build rather than only
+					// against itself. This is the half § 1256 could settle but
+					// not act on: `WKWatchOnly` describes the PROJECT truly and
+					// the APP falsely, and the fix is the embed, not the key —
+					// so the key is required to follow the embed, in both
+					// directions, and the day the integration lands is the day
+					// this says so.
+					const phone = readFileSync(phonePbxprojPath, 'utf8');
+					const markers = [
+						...WATCH_EMBED_MARKERS,
+						...watchBundleIdentifiers(read(PBXPROJ)),
+					];
+					const embedded = markers.filter((m) => phone.includes(m));
+					const watchOnly = plist.get('WKWatchOnly') === true;
+					const companion = plist.has('WKCompanionAppBundleIdentifier');
+					if (embedded.length > 0 && watchOnly) {
+						errors.push(
+							`${PHONE_PBXPROJ} now bundles the watch app (it names ` +
+								`${embedded.map((m) => `\`${m}\``).join(', ')}) while ${WATCH_PLIST} ` +
+								'still declares `WKWatchOnly`, which Apple documents as "this app has ' +
+								'no iOS companion". Replace it with `WKCompanionAppBundleIdentifier` ' +
+								"naming the phone's bundle id — the embed is the build integration " +
+								'§ 1256 said had to come first, and it has.',
+						);
+					} else if (embedded.length === 0 && companion) {
+						errors.push(
+							`${WATCH_PLIST} names a companion via \`WKCompanionAppBundleIdentifier\`, ` +
+								`but ${PHONE_PBXPROJ} references neither the watch product nor an Embed ` +
+								'Watch Content destination — so nothing ships the two as one `.ipa` and ' +
+								'the declaration is a claim about a build that does not exist. That is ' +
+								'the "move the lie" outcome § 1256 refused: do the embed, then flip the ' +
+								'key.',
+						);
+					} else if (errors.length === 0) {
+						ok.push(
+							`${WATCH_PLIST} owns its own keys (no inert INFOPLIST_KEY_* on the ` +
+								'manual-plist target) and its companion declaration matches the build' +
+								(watchOnly
+									? ' — still `WKWatchOnly`, and the phone project still bundles no ' +
+										'watch app, so the § 1256 integration is owed rather than done'
+									: ''),
+						);
+					}
+				} else if (errors.length === 0) {
 					ok.push(
 						`${WATCH_PLIST} owns its own keys (no inert INFOPLIST_KEY_* on the manual-plist ` +
 							'target) and its companion declaration is self-consistent',
 					);
 				}
 			}
+		}
+	}
+
+	// (13) Every Swift file is a member of some target.
+	//
+	//      A file Xcode never compiles is absent rather than broken, and an
+	//      absent TEST file takes its coverage with it while still reading as
+	//      coverage in the repo — `test-watch-ios` goes green having never run
+	//      it. Read off the `in Sources */` build-file entries, which is what
+	//      membership IS in this format; a file reference alone puts it in the
+	//      navigator and in no build (decisions § 1350).
+	{
+		const pbx = read(PBXPROJ);
+		/** @type {string[]} */ const members = [];
+		for (const dir of TARGET_MEMBER_DIRS) {
+			for (const name of readdirSync(join(watchRoot, dir)).sort()) {
+				if (name.endsWith('.swift')) members.push(join(dir, name));
+			}
+		}
+		if (members.length === 0) {
+			errors.push('Found no Swift files at all — claim (13) would pass vacuously.');
+		}
+		/** @type {string[]} */ const orphans = [];
+		for (const rel of members) {
+			const name = rel.split('/').pop();
+			if (pbx.includes(`${name} in Sources */`)) {
+				if (rel in UNBUILT_SWIFT) {
+					errors.push(
+						`${rel} is exempted from claim (13) but IS now a target member. ` +
+							`The exemption said: ${UNBUILT_SWIFT[rel]} Delete the entry — and if ` +
+							'this is the complication finally getting its Widget Extension, claim (4)' +
+							"'s duplicated formatters may be able to go with it.",
+					);
+				}
+				continue;
+			}
+			if (rel in UNBUILT_SWIFT) continue;
+			orphans.push(rel);
+		}
+		for (const rel of orphans) {
+			errors.push(
+				`${rel} is in no target: ${PBXPROJ} has no \`… in Sources */\` entry for it, so ` +
+					'Xcode never compiles it. Nothing fails — the file is simply absent from the ' +
+					'build, and if it is a test file the suite is green having never run it. Add it ' +
+					`to a target, or declare it in UNBUILT_SWIFT with the reason.`,
+			);
+		}
+		for (const rel of Object.keys(UNBUILT_SWIFT)) {
+			if (!members.includes(rel)) {
+				errors.push(
+					`UNBUILT_SWIFT names ${rel}, which this tree no longer has. A stale exemption ` +
+						'is a hole nobody can see: delete it.',
+				);
+			}
+		}
+		if (orphans.length === 0 && members.length > 0) {
+			ok.push(
+				`all ${members.length - Object.keys(UNBUILT_SWIFT).length} Swift files are target ` +
+					`members (${Object.keys(UNBUILT_SWIFT).length} declared unbuilt)`,
+			);
 		}
 	}
 
@@ -1391,6 +1707,51 @@ export function check(watchRoot, ingestPath = null, routeBridgePath = null) {
 		}
 	}
 
+	// (12) The two watch clients agree about heart-rate coverage.
+	//
+	//      Neither parity registry can hold this pair and the two files have
+	//      only ever said so to each other in prose, so a tuning edit on one
+	//      wrist has never been visible from the other (decisions § 1348).
+	//      The rail is the FIGURES, not the spelling: the units differ on
+	//      purpose and `kotlinPerSwift` is what converts, so nothing here
+	//      pushes a `TimeInterval` into milliseconds to satisfy a guard.
+	if (wearCoveragePath !== null) {
+		const wear = stripSwiftComments(readFileSync(wearCoveragePath, 'utf8'));
+		let agreed = 0;
+		for (const rail of COVERAGE_RAILS) {
+			const a = swiftNumericConstant(hk, rail.swift);
+			const b = kotlinNumericConstant(wear, rail.kotlin);
+			if (a === null || b === null) {
+				// Not a skip. A renamed or computed constant is exactly the edit
+				// that would take the two figures apart unobserved, so it fails
+				// rather than passing quietly on a rail it can no longer read.
+				errors.push(
+					`Claim (12) cannot read ${a === null ? `\`${rail.swift}\` in ${HEALTHKIT}` : `\`${rail.kotlin}\` in the Wear OS HeartRateCoverage.kt`} ` +
+						'as a numeric literal. It is renamed, computed from something else, or ' +
+						'gone — and either way the two wrists can no longer be compared by reading, ' +
+						`which is the only way they are compared at all. The figure is ${rail.what}.`,
+				);
+				continue;
+			}
+			if (a * rail.kotlinPerSwift === b) {
+				agreed += 1;
+				continue;
+			}
+			errors.push(
+				`Heart-rate coverage disagrees between the two watch clients: watchOS ` +
+					`\`${rail.swift}\` is ${a}, Wear OS \`${rail.kotlin}\` is ${b}` +
+					(rail.kotlinPerSwift === 1
+						? ''
+						: ` (${a} × ${rail.kotlinPerSwift} = ${a * rail.kotlinPerSwift})`) +
+					`. Both write the same account's \`runs.avg_bpm\` and ` +
+					`\`runs.metadata.hr_coverage\`, so this is ${rail.what}.`,
+			);
+		}
+		if (agreed === COVERAGE_RAILS.length) {
+			ok.push(`${agreed} heart-rate coverage figures agree with Wear OS's`);
+		}
+	}
+
 	return { errors, ok };
 }
 
@@ -1400,6 +1761,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 		root,
 		process.argv[3] ?? join(REPO_ROOT, INGEST),
 		process.argv[4] ?? join(REPO_ROOT, ROUTE_BRIDGE),
+		process.argv[5] ?? join(REPO_ROOT, WEAR_COVERAGE),
+		process.argv[6] ?? join(REPO_ROOT, PHONE_PBXPROJ),
 	);
 	for (const line of ok) console.log(`  ok: ${line}`);
 	if (errors.length > 0) {
