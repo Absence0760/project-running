@@ -307,6 +307,21 @@ and install from there.
   Play Console verification page after the first Wear release.
 - No uncommitted secrets. `grep -r SUPABASE_SERVICE_ROLE_KEY apps/` and
   friends should return only `.env.example` hits.
+- **The one-off SPA-shell cutover gates the next `web@*` release, per
+  environment.** Since [decisions § 1268](../architecture/decisions.md) the
+  SPA shell is `build/200.html` and `build/index.html` is the prerendered
+  landing page. The repo half is merged and guarded; the live distributions
+  have to be walked through a three-step order separately, and `prod` and
+  `preview` are independent. Publishing a `web@*` Release to an environment
+  that has not been through it makes CloudFront serve the *landing page* as
+  the body of every deep link -- broken, since its asset URLs resolve under
+  the deep link's own directory -- until the `terraform apply` catches up.
+  Check before tagging, don't assume:
+  `aws cloudfront get-distribution-config --id <DIST_ID> --query 'DistributionConfig.CustomErrorResponses.Items[?ErrorCode==`403`].ResponsePagePath' --output text`
+  -- `/200.html` means done, `/index.html` means do the cutover first. The
+  order, its rollback and the one claim in it that is derived rather than
+  measured are in [`deployment.md` § One-off: the SPA-shell cutover from
+  `index.html` to `200.html`](deployment.md#one-off-the-spa-shell-cutover-from-indexhtml-to-200html).
 - **Supabase Auth URL configuration (every release, web or mobile).**
   In the hosted project's dashboard, confirm **Authentication → URL
   Configuration**: **Site URL** is the prod origin (`https://threkir.com`,
