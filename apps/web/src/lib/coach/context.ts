@@ -6,6 +6,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { TABLES } from '../core/schema';
+import { distinctExerciseCount } from '../gym/gym_prs';
 
 export interface CoachContext {
 	data?: unknown;
@@ -310,7 +311,9 @@ export interface LiftSummary {
 	/// Local-ish calendar date (YYYY-MM-DD) of the session.
 	date: string;
 	title: string | null;
-	/// Distinct exercise names in the session.
+	/// Distinct exercises in the session, counted on the canonical grouping
+	/// key so a lift logged under two spellings is one exercise here as it is
+	/// everywhere else in the app.
 	exercises: number;
 	/// Total logged sets.
 	sets: number;
@@ -346,11 +349,8 @@ export function summarizeRecentLifts(
 	}
 	return workouts.slice(0, cap).map((w) => {
 		const mine = byWorkout.get(w.id) ?? [];
-		const names = new Set<string>();
 		let volume = 0;
 		for (const s of mine) {
-			const name = s.exercise_name?.trim().toLowerCase();
-			if (name) names.add(name);
 			if (
 				s.reps != null &&
 				s.weight_kg != null &&
@@ -363,7 +363,11 @@ export function summarizeRecentLifts(
 		return {
 			date: w.started_at.slice(0, 10),
 			title: w.title,
-			exercises: names.size,
+			// Counted on the canonical grouping key, not the runtime's own
+			// fold: the model is being told how many exercises the session
+			// held, and every keyed surface in the app answers that with
+			// `normaliseExerciseName` (§ 1274).
+			exercises: distinctExerciseCount(mine.map((s) => s.exercise_name)),
 			sets: mine.length,
 			volume_kg: Math.round(volume),
 		};
