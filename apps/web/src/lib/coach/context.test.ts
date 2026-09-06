@@ -484,6 +484,35 @@ test('summarizeRecentLifts ignores bodyweight sets in volume + caps count', () =
 	assert.equal(out[0].sets, 2);
 });
 
+test('summarizeRecentLifts counts exercises on the canonical grouping key', () => {
+	// One lift, five spellings. Told to the model as five exercises, the
+	// session reads as a circuit rather than as the five sets of bench it
+	// was — and the tally used to answer differently from every keyed
+	// surface in the app (§ 1274).
+	const workouts = [{ id: 'w1', title: 'Push day', started_at: '2026-06-03T08:00:00.000Z' }];
+	const spellings = ['Bench Press', 'bench press ', 'Bench  Press', 'Bench\u00a0Press', '\u0130ncline Press'];
+	const sets = spellings.map((exercise_name) => ({
+		workout_id: 'w1',
+		exercise_name,
+		reps: 5,
+		weight_kg: 60,
+	}));
+	const out = summarizeRecentLifts(workouts, sets);
+	assert.equal(out[0].exercises, 2, 'four spellings of bench plus one incline');
+	assert.equal(out[0].sets, 5);
+});
+
+test('summarizeRecentLifts: a blank exercise name is not an exercise', () => {
+	const workouts = [{ id: 'w1', title: null, started_at: '2026-06-03T08:00:00.000Z' }];
+	const sets = [
+		{ workout_id: 'w1', exercise_name: '   ', reps: 5, weight_kg: 60 },
+		{ workout_id: 'w1', exercise_name: '\u00a0', reps: 5, weight_kg: 60 },
+	];
+	const out = summarizeRecentLifts(workouts, sets);
+	assert.equal(out[0].exercises, 0);
+	assert.equal(out[0].sets, 2);
+});
+
 // --- summarizeNutrition -----------------------------------------------
 
 test('summarizeNutrition averages over days logged within the 7-day window', () => {

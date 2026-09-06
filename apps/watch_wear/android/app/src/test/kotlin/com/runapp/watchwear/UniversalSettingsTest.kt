@@ -271,13 +271,32 @@ class UniversalSettingsTest {
 
     @Test
     fun `out-of-range resting and max hr are sanitised`() {
-        // resting in [25, 120], max in [100, 240]. Anything outside
+        // resting in [25, 120], max in MAX_HR_BPM_RANGE. Anything outside
         // is treated as a corrupt write and zeroed.
         val out = parseUniversalSettings(
-            """[{"prefs":{"resting_hr_bpm":15,"max_hr_bpm":80}}]""",
+            """[{"prefs":{"resting_hr_bpm":15,"max_hr_bpm":40}}]""",
         )
         assertNull(out?.restingHrBpm)
         assertNull(out?.maxHrBpm)
+    }
+
+    @Test
+    fun `the max hr parse gate is the shared range, not a narrower one of its own`() {
+        // This parse is the only producer of a `UniversalSettings`, so a gate
+        // narrower than `MAX_HR_BPM_RANGE` is not belt-and-braces — it makes
+        // `resolveZoneCutoffs`' own check unreachable over the difference and
+        // silently disagrees with web and the phone about the same stored
+        // number. It read 100..240 against a shared 80..240, which is exactly
+        // the band a beta-blocked masters runner's real max falls in
+        // (decisions § 1303).
+        for (bpm in listOf(MAX_HR_BPM_RANGE.first, 95, MAX_HR_BPM_RANGE.last)) {
+            val out = parseUniversalSettings("""[{"prefs":{"max_hr_bpm":$bpm}}]""")
+            assertEquals("stored $bpm is inside the shared range", bpm, out?.maxHrBpm)
+        }
+        for (bpm in listOf(MAX_HR_BPM_RANGE.first - 1, MAX_HR_BPM_RANGE.last + 1)) {
+            val out = parseUniversalSettings("""[{"prefs":{"max_hr_bpm":$bpm}}]""")
+            assertNull("stored $bpm is outside the shared range", out?.maxHrBpm)
+        }
     }
 
     @Test

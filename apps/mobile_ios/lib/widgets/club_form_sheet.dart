@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:ui_kit/ui_kit.dart' show ChoiceChipOption, ChoiceChipRow;
 
+import '../club_slug.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../rate_limit_message.dart';
 import '../social_service.dart';
@@ -106,11 +107,14 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
     super.dispose();
   }
 
-  String _slugify(String s) =>
-      s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-').replaceAll(
-            RegExp(r'(^-|-$)'),
-            '',
-          );
+  /// Whether [name] carries any Unicode letter or digit. Deliberately wider
+  /// than the slug's own `[a-z0-9]`: it decides whether the name is NAMING
+  /// something, which every script can do, where the slug decides what the URL
+  /// can spell, which only ASCII can. Mobile-only — the web editor asks for a
+  /// non-blank name and nothing else.
+  static final RegExp _letterOrDigit = RegExp(r'[\p{L}\p{N}]', unicode: true);
+
+  bool _hasLetterOrDigit(String name) => _letterOrDigit.hasMatch(name);
 
   Future<void> _submit() async {
     if (_busy) return;
@@ -119,12 +123,18 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
     // Empty name used to return silently — Save looked dead. Flag the
     // field instead (sign_up_screen idiom); the no-usable-characters
     // case is name-attributable too.
-    final slug = _slugify(name);
+    final slug = clubSlug(name);
+    // The refusal tests the NAME for a letter or digit, not the slug for
+    // emptiness. A club called `Бегуны Москвы` folds to no `[a-z0-9]` at all,
+    // so the old test refused to create it — with a message claiming the name
+    // had no letter or digit, about a name made entirely of letters — while
+    // the web created it happily under the shared fallback slug. Every
+    // non-Latin script was unreachable on the phone (decisions § 1281).
     final nameError = name.isEmpty
         ? l10n.clubFormErrName
-        : slug.isEmpty
-            ? l10n.clubFormErrSlug
-            : null;
+        : _hasLetterOrDigit(name)
+            ? null
+            : l10n.clubFormErrSlug;
     setState(() => _nameError = nameError);
     if (nameError != null) return;
     // Pre-flight readiness check — without this the createClub call
@@ -161,7 +171,7 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
       }
       final club = await widget.social.createClub(
         name: name,
-        slug: slug,
+        slug: slug.isEmpty ? kClubSlugFallback : slug,
         description: _description.text.trim().isEmpty
             ? null
             : _description.text.trim(),

@@ -41,11 +41,23 @@
 	// without waiting for the host to reload the catalogue from the server.
 	let entries = $state<Exercise[]>(untrack(() => [...catalogue]));
 
+	// Both sides of the match fold through `normaliseExerciseName`, the one
+	// derivation of the exercise grouping key (§ 1175), as the mobile picker
+	// already does. `trim().toLowerCase()` matched strictly fewer names, and
+	// the shortfall was not merely a miss: `hasExact` below has always folded
+	// canonically, so an entry holding a U+00A0 or a U+0130 was invisible to
+	// the naive filter AND suppressed the create affordance the empty state
+	// exists to offer — the exercise could neither be found nor added
+	// (§ 1276).
+	//
+	// The sort stays on `localeCompare` over the DISPLAY name: ordering a
+	// human-facing list is not keying it, and a code-unit compare over folded
+	// keys files every accented custom after "z".
 	const filtered = $derived.by(() => {
-		const q = query.trim().toLowerCase();
+		const q = normaliseExerciseName(query);
 		return entries
 			.filter((e) => category === 'all' || e.category === category)
-			.filter((e) => q === '' || e.name.toLowerCase().includes(q))
+			.filter((e) => q === '' || normaliseExerciseName(e.name).includes(q))
 			.sort((a, b) => a.name.localeCompare(b.name));
 	});
 

@@ -11,14 +11,30 @@ import { resolveBaseUrl } from './fixtures/base-url';
  * The dev server is auto-started by the webServer block below.
  *
  * Why `vite dev` instead of `vite build && vite preview`:
- *   adapter-static + `fallback: "index.html"` returns the SPA shell
- *   for any unmatched route (e.g. /runs/<id>). The fallback HTML
- *   computes its asset base via `new URL("..", location).pathname` —
- *   for /runs/<id> that resolves to /runs, breaking _app/ asset URLs.
- *   Production fixes this with a CloudFront viewer-request rewrite;
- *   `vite preview` doesn't have that, so dev mode is the right
- *   server for e2e. The trade-off (HMR + slower first-paint) doesn't
- *   matter for headless tests.
+ *   the app's eleven `+server.ts` endpoints are not in an
+ *   adapter-static build. `/api/coach` and the `/api/routes/osrm`
+ *   proxy declare `prerender = false`, so nothing is emitted for them
+ *   and `vite preview` would answer a POST to `/api/coach` with the
+ *   SPA fallback — a 200 of HTML. `cross-cutting/paywall-wire.spec.ts`
+ *   posts there directly to pin the SERVER-side tier gate (429 at the
+ *   cap, 401 anonymous) and `cross-cutting/tier-cache-resilience.spec.ts`
+ *   fetches it to prove the handler re-reads the tier per call; both
+ *   would stop testing anything without failing. Production serves
+ *   those endpoints as Lambdas (decisions §53), which `vite preview`
+ *   has no equivalent of either. Second reason: a static build bakes
+ *   `PUBLIC_*` at BUILD time, so the `webServer.env` overrides below —
+ *   which force the localhost tile + OSRM services empty — would have
+ *   to move into the build command to have any effect at all.
+ *
+ *   Not the reason, though it stood here until round 41: an asset-base
+ *   break on deep links. SvelteKit computes the relative
+ *   `new URL("..", location)` base only when the page is NOT the
+ *   fallback (`!state.prerendering?.fallback` in kit's
+ *   `runtime/server/page/render.js`); the fallback carries the literal
+ *   `paths.base` and absolute `_app/` URLs, so `/runs/<id>` cannot
+ *   break them. The claim also named `fallback: "index.html"`, which
+ *   the build has not produced since the shell was renamed to
+ *   `200.html` (svelte.config.js, decisions § 1268).
  *
  * Local dev: `cd apps/web && pnpm test:e2e` (auto-boots dev server).
  * Or `pnpm test:e2e:ui` for the UI picker.

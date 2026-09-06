@@ -95,12 +95,35 @@ test('formatKgStable — canonical kg, rounded, blank for absent / non-positive'
 	assert.equal(formatKgStable(Number.POSITIVE_INFINITY), '');
 });
 
-test('distinctExerciseCount — case- and whitespace-insensitive', () => {
-	assert.equal(
-		distinctExerciseCount([s({ exercise_name: 'Back Squat' }), s({ exercise_name: 'back squat ' })]),
-		1,
-	);
+test('distinctExerciseCount — counted on the canonical grouping key', () => {
+	// Every pair below is ONE lift to `gym_workout_summaries` and to every
+	// keyed surface. `trim().toLowerCase()` merged only the first of them:
+	// it splits an internal whitespace run and answers a different letter
+	// from the frozen table (§ 1274).
+	const two = (a: string, b: string) =>
+		distinctExerciseCount([s({ exercise_name: a }), s({ exercise_name: b })]);
+	assert.equal(two('Back Squat', 'back squat '), 1);
+	assert.equal(two('Bench  Press', 'Bench Press'), 1);
+	assert.equal(two('Bench\u00a0Press', 'bench press'), 1);
+	assert.equal(two('Bench\tPress', 'bench press'), 1);
+	assert.equal(two('\u0130ncline Press', 'incline press'), 1);
+	assert.equal(two('Bench Press', 'Back Squat'), 2);
+	// A blank name is not an exercise — same rule the PR map applies.
+	assert.equal(two('   ', '\u00a0'), 0);
 	assert.equal(distinctExerciseCount([]), 0);
+});
+
+test('buildWorkoutShareDescription — two spellings of one lift unfurl as one exercise', () => {
+	// The count reaches every unfurler that touches the link, so a workout
+	// the app itself calls one exercise must not advertise two.
+	const desc = buildWorkoutShareDescription(
+		w({
+			sets: [s({ exercise_name: 'Bench  Press' }), s({ set_index: 1, exercise_name: 'bench press' })],
+			set_count: 2,
+		}),
+		'Ada',
+	);
+	assert.match(desc, /^1 exercise · 2 sets/);
 });
 
 test('buildWorkoutShareCanonical — absolute share/workout URL, slash-normalised', () => {

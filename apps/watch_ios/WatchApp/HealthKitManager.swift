@@ -102,6 +102,90 @@ enum HeartRateCoverage {
     }
 }
 
+/// The coverage measurement itself, as a value: how many of the run's active
+/// seconds the sensor was delivering for.
+///
+/// Lifted out of `HealthKitManager` because the manager's copy of this state
+/// was reachable only through a live `HKWorkoutSession`, and one cannot be
+/// constructed in the test host — so the glue between a sample's timestamp
+/// and `creditedStep` had never executed anywhere, on any machine, while
+/// already deciding whether shipped runs keep their `avg_bpm`. § 1156
+/// extracted the arithmetic for exactly that reason and stopped at the state
+/// it runs over; this carries the extraction the rest of the way
+/// (decisions § 1299).
+///
+/// A value type rather than another object: the manager owns exactly one, the
+/// recorder drives it, and nothing else may hold a reference to a
+/// half-advanced measurement.
+struct HeartRateCoverageAccumulator {
+    /// Active seconds credited so far, or nil when nothing is measuring.
+    ///
+    /// Nil is **unmeasured, not zero** — see `HeartRateCoverage.claim`. It
+    /// becomes zero at `begin()`, which is the moment a sensor exists to have
+    /// a duty cycle, and a zero from then on is a real answer.
+    private(set) var coveredSeconds: TimeInterval?
+
+    /// The active clock reading the last credit was measured to.
+    private var lastTickSeconds: TimeInterval = 0
+
+    /// `timeIntervalSinceReferenceDate` of the newest usable sample, 0 for
+    /// none yet.
+    ///
+    /// A bare `TimeInterval` with a sentinel rather than an `Optional`,
+    /// deliberately: this is the one field written from HealthKit's own
+    /// delivery queue while the recorder's ticker reads it on the main one,
+    /// and a single word is the shape that race was accepted in. An
+    /// `Optional<Double>` is a word plus a tag, and a torn read of THAT is a
+    /// plausible-looking age rather than a wrong one by a fraction.
+    private var lastSampleAtEpoch: TimeInterval = 0
+
+    /// The session started: from here a zero is a measurement.
+    mutating func begin() {
+        coveredSeconds = 0
+        lastTickSeconds = 0
+        lastSampleAtEpoch = 0
+    }
+
+    /// Back to nothing measuring. Not the same as `begin()`: a run that never
+    /// starts a session must claim nothing rather than claim zero.
+    mutating func reset() {
+        coveredSeconds = nil
+        lastTickSeconds = 0
+        lastSampleAtEpoch = 0
+    }
+
+    /// A usable sample arrived, stamped with the SAMPLE's own time.
+    ///
+    /// Recorded even before `begin()` so the ordering of the two callbacks
+    /// cannot matter; nothing is credited until a measurement is running.
+    mutating func noteSample(atEpoch epoch: TimeInterval) {
+        lastSampleAtEpoch = epoch
+    }
+
+    /// Credit the tick's active seconds when the newest sample is still fresh
+    /// at `nowEpoch`.
+    ///
+    /// `nowEpoch` is passed rather than read, which is the whole point of the
+    /// type: a test can walk a whole run through this in a millisecond, and
+    /// the freshness decision it makes is the shipped one.
+    mutating func advance(activeElapsedSeconds: TimeInterval, nowEpoch: TimeInterval) {
+        guard let covered = coveredSeconds else { return }
+        let age: TimeInterval? = lastSampleAtEpoch > 0
+            ? nowEpoch - lastSampleAtEpoch
+            : nil
+        let step = HeartRateCoverage.creditedStep(
+            activeElapsedSeconds: activeElapsedSeconds,
+            lastTickSeconds: lastTickSeconds,
+            sampleAgeSeconds: age
+        )
+        // Advanced even on a tick that credits nothing, so a silence is
+        // charged to the run exactly once rather than re-credited the moment
+        // the sensor comes back.
+        if activeElapsedSeconds.isFinite { lastTickSeconds = activeElapsedSeconds }
+        coveredSeconds = covered + step
+    }
+}
+
 /// Live heart-rate readings during a run. Apple Watch only samples HR
 /// continuously inside an active `HKWorkoutSession`, so we start one
 /// alongside the `CLLocationManager`-based recording even though GPS
@@ -128,23 +212,13 @@ class HealthKitManager: NSObject, ObservableObject {
 
     private let hrUnit = HKUnit.count().unitDivided(by: .minute())
 
-    /// `timeIntervalSinceReferenceDate` of the newest usable heart-rate
-    /// sample, 0 for none yet. A bare `Double` rather than a `Date?` because
-    /// `didCollectDataOf` arrives on whatever queue HealthKit pleases while
-    /// the recorder's ticker reads this on the main one — the same
-    /// cross-queue shape `sessionDidFail` above already carries, and the same
-    /// one Wear's `lastHrSampleAtMs` has.
-    private var lastSampleAtEpoch: TimeInterval = 0
-
-    /// Active seconds credited to heart-rate coverage, and the tick they were
-    /// last credited at.
+    /// How much of the run the sensor has been delivering for.
     ///
-    /// Nil is **unmeasured**: the workout session never started, so there is
-    /// no sensor whose duty cycle this could be. Set to zero the moment the
-    /// session does start, which is when a run of zero coverage becomes a
-    /// real answer rather than a missing one.
-    private var coveredSeconds: TimeInterval?
-    private var lastCoverageTick: TimeInterval = 0
+    /// Its `noteSample` runs on whatever queue HealthKit pleases while the
+    /// recorder's ticker drives `advance` on the main one — the same
+    /// cross-queue shape `sessionDidFail` above already carries, and the same
+    /// one Wear's `lastHrSampleAtMs` has. The two touch disjoint fields.
+    private var coverage = HeartRateCoverageAccumulator()
 
     func requestAuthorization() async {
         guard HKHealthStore.isHealthDataAvailable() else { return }
@@ -175,8 +249,7 @@ class HealthKitManager: NSObject, ObservableObject {
             builder.beginCollection(withStart: startDate) { _, _ in }
             // From here a zero is a real measurement. Before it — and in the
             // catch below — there is no sensor to have a duty cycle.
-            coveredSeconds = 0
-            lastCoverageTick = 0
+            coverage.begin()
         } catch {
             // HealthKit unavailable (simulator edge cases, missing entitlement).
             // HR display stays at "—"; the rest of the run records normally.
@@ -195,21 +268,26 @@ class HealthKitManager: NSObject, ObservableObject {
         guard let session, let builder else { return }
         let endDate = Date()
         session.end()
-        builder.endCollection(withEnd: endDate) { [weak self] _, _ in
-            builder.finishWorkout { _, _ in
-                DispatchQueue.main.async {
-                    self?.session = nil
-                    self?.builder = nil
-                }
-            }
+        // Dropped HERE, not in the completion below. `startWorkout()` refuses
+        // to open a session while one is held, and until this ran the release
+        // was chained behind `finishWorkout` — a save that can take seconds
+        // and need never call back at all. So a runner who finished one run
+        // and began the next before it returned recorded that run with no
+        // heart rate, no coverage figure, and no `heartRateUnavailable`
+        // notice saying why; a `finishWorkout` that never completed cost
+        // every remaining run of the launch the same way. The locals keep
+        // both objects alive for the completion chain, which needs neither
+        // property (decisions § 1300).
+        self.session = nil
+        self.builder = nil
+        builder.endCollection(withEnd: endDate) { _, _ in
+            builder.finishWorkout { _, _ in }
         }
     }
 
     func reset() {
         sessionDidFail = false
-        lastSampleAtEpoch = 0
-        coveredSeconds = nil
-        lastCoverageTick = 0
+        coverage.reset()
         DispatchQueue.main.async {
             self.currentBPM = nil
             self.averageBPM = nil
@@ -275,20 +353,10 @@ class HealthKitManager: NSObject, ObservableObject {
     /// advance while paused, the step is the difference between two of its
     /// readings, and `pauseSession()` stops the sensor anyway.
     func advanceCoverage(activeElapsedSeconds: TimeInterval) {
-        guard let covered = coveredSeconds else { return }
-        let age: TimeInterval? = lastSampleAtEpoch > 0
-            ? Date().timeIntervalSinceReferenceDate - lastSampleAtEpoch
-            : nil
-        let step = HeartRateCoverage.creditedStep(
+        coverage.advance(
             activeElapsedSeconds: activeElapsedSeconds,
-            lastTickSeconds: lastCoverageTick,
-            sampleAgeSeconds: age
+            nowEpoch: Date().timeIntervalSinceReferenceDate
         )
-        // Advanced even on a tick that credits nothing, so a silence is
-        // charged to the run exactly once rather than re-credited the moment
-        // the sensor comes back.
-        if activeElapsedSeconds.isFinite { lastCoverageTick = activeElapsedSeconds }
-        coveredSeconds = covered + step
     }
 
     /// What a run ending now may claim about its heart rate. The one way a
@@ -296,7 +364,7 @@ class HealthKitManager: NSObject, ObservableObject {
     func heartRateClaim(activeElapsedSeconds: TimeInterval) -> HeartRateClaim {
         HeartRateCoverage.claim(
             mean: summaryAverageBPM,
-            coveredSeconds: coveredSeconds,
+            coveredSeconds: coverage.coveredSeconds,
             activeElapsedSeconds: activeElapsedSeconds
         )
     }
@@ -337,6 +405,12 @@ extension HealthKitManager: HKWorkoutSessionDelegate {
     }
 
     func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
+        // Only the session this run is holding. A failure reported by the
+        // PREVIOUS run's session — still delegating here while its workout
+        // saves — would otherwise tear down the heart rate of the run now
+        // recording and raise "heart rate unavailable" over a sensor that is
+        // working (decisions § 1300).
+        guard workoutSession === session else { return }
         // The runner is told the heart rate is gone; the reason is only ever
         // useful to us, and nothing else records it.
         print("HealthKitManager: workout session failed: \(error)")
@@ -352,8 +426,13 @@ extension HealthKitManager: HKLiveWorkoutBuilderDelegate {
         didCollectDataOf collectedTypes: Set<HKSampleType>
     ) {
         // A sample arriving after the session failed would put a number back
-        // on a screen that has already told the runner it has none.
-        guard !sessionDidFail else { return }
+        // on a screen that has already told the runner it has none — and one
+        // from the previous run's builder, which keeps delegating here until
+        // its workout has saved, would stamp that run's reading and freshness
+        // onto this one. Coverage is measured against the newest sample's
+        // age, so an inherited stamp reads as a sensor delivering for a run
+        // it never touched (decisions § 1300).
+        guard !sessionDidFail, workoutBuilder === builder else { return }
         let hrType = HKQuantityType(.heartRate)
         guard collectedTypes.contains(hrType),
               let stats = workoutBuilder.statistics(for: hrType) else { return }
@@ -373,9 +452,11 @@ extension HealthKitManager: HKLiveWorkoutBuilderDelegate {
             // delivering NOW, and the other reading would drive coverage
             // to zero and suppress a good average on every run rather
             // than on the runs this measures (decisions § 1156).
-            lastSampleAtEpoch = stats.mostRecentQuantityDateInterval()?.end
-                .timeIntervalSinceReferenceDate
-                ?? Date().timeIntervalSinceReferenceDate
+            coverage.noteSample(
+                atEpoch: stats.mostRecentQuantityDateInterval()?.end
+                    .timeIntervalSinceReferenceDate
+                    ?? Date().timeIntervalSinceReferenceDate
+            )
         }
 
         DispatchQueue.main.async {

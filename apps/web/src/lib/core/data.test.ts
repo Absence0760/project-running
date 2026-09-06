@@ -216,34 +216,30 @@ test('fetchRoutesWithError selects a narrowed column set, never geom, for the ro
 	// must enumerate ROUTE_LIST_COLS (base table) / PUBLIC_ROUTE_LIST_COLS (view)
 	// — omitting geom + start_point but covering every column the "My routes" list
 	// AND the route pickers (RunEditor / EventEditor / club transfer) read.
+	//
+	// The COLUMN SET itself is no longer declared here: `routes/route_list_columns.ts`
+	// owns it and derives both the select string and `RouteListItem` from one
+	// tuple, and its own suite pins the contents — including a compile-time
+	// proof that `publicRouteListFill` covers exactly the difference between
+	// the two lists. What this guard still owns is the QUERIES: that they
+	// enumerate those constants rather than reaching for `select('*')` again.
 	const source = read('src/lib/core/data.ts');
 
-	const listCols = source.match(/const ROUTE_LIST_COLS\s*=\s*\n?\s*'([^']*)'/);
-	assert.ok(listCols, 'Could not locate the ROUTE_LIST_COLS constant — rename?');
-	const cols = listCols![1].split(',').map((c) => c.trim());
-	assert.ok(!cols.includes('geom'), 'ROUTE_LIST_COLS must not select geom — server-spatial-only, doubles the wire payload.');
-	assert.ok(!cols.includes('start_point'), 'ROUTE_LIST_COLS must not select start_point — no client reader.');
-	// Every column a consumer of fetchRoutes / fetchRoutesWithError reads:
-	// the /routes list, plus the RunEditor / EventEditor / club-transfer pickers.
-	for (const needed of [
-		'id',
-		'user_id',
-		'club_id',
-		'name',
-		'distance_m',
-		'elevation_m',
-		'surface',
-		'waypoints',
-		'is_starred',
-		'run_count',
-		'created_at',
-	]) {
-		assert.ok(cols.includes(needed), `ROUTE_LIST_COLS must include ${needed} — a routes-list/picker consumer reads it.`);
-	}
+	assert.match(
+		source,
+		/import \{[^;]*\bROUTE_LIST_COLS\b[^;]*\bPUBLIC_ROUTE_LIST_COLS\b[^;]*\} from '\.\.\/routes\/route_list_columns'/,
+		'core/data.ts must take both column lists from routes/route_list_columns — a local copy is the drift the module exists to close.',
+	);
 
-	const fnMatch = source.match(/export async function fetchRoutesWithError[\s\S]*?\n}/);
-	assert.ok(fnMatch, 'Could not locate fetchRoutesWithError — rename?');
-	const body = fnMatch![0];
+	// Anchored on the NEXT top-level export rather than on the first `\n}`,
+	// which is the idiom the guards further down this file use. The lazy
+	// brace form read the whole body until the return type became a
+	// multi-line object literal, at which point `\n}> {` closed the match on
+	// the SIGNATURE and every assertion below was made against it.
+	const start = source.indexOf('export async function fetchRoutesWithError(');
+	assert.ok(start >= 0, 'Could not locate fetchRoutesWithError — rename?');
+	const next = source.indexOf('\nexport ', start + 1);
+	const body = source.slice(start, next > start ? next : undefined);
 	assert.doesNotMatch(
 		body,
 		/\.select\('\*'\)/,
@@ -1486,4 +1482,35 @@ test('the exact tallies are counted by the database, never by a page of rows', (
 			`${fn} must scope the participants read to the caller`,
 		);
 	}
+});
+
+test('the club slug is derived by the shared helper, never re-spelled here', () => {
+	// Reason: `clubs.slug` is persisted and becomes the club's public URL, and
+	// the phone derives it too. When both rails spelled out "lower-case, then
+	// [^a-z0-9]+ to -" they read as one expression while being two functions —
+	// the runtimes' `toLowerCase` disagree at U+0130 — so `İzmir` minted
+	// `i-zmir` here and `izmir` on the phone (decisions § 1251 + § 1279). The
+	// derivation must stay in `social/club_slug.ts`, whose mirror suite is what
+	// pins the two platforms to one answer.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	assert.match(
+		source,
+		/import \{[^}]*\bclubSlug\b[^}]*\} from '\.\.\/social\/club_slug'/,
+		'core/data.ts must import the shared clubSlug derivation.',
+	);
+	assert.match(
+		source,
+		/clubSlug\(input\.name\) \|\| CLUB_SLUG_FALLBACK/,
+		'the empty-slug substitute is the shared literal, not a copy of it here.',
+	);
+	assert.doesNotMatch(
+		source,
+		/\[\^a-z0-9\]/,
+		'core/data.ts must not re-spell the slug character class — call clubSlug.',
+	);
+	assert.doesNotMatch(
+		source,
+		/toLowerCase\(\)[\s\S]{0,80}?replace\(/,
+		'a lower-case feeding a strip is the slug derivation re-grown; call clubSlug.',
+	);
 });

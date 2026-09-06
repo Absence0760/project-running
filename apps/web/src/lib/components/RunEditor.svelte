@@ -10,6 +10,7 @@
 	import { ACTIVITY_TYPES } from '$lib/runs/activity_type';
 	import { activityTypeLabel } from '$lib/runs/activity_type.svelte';
 	import type { ActivityType, Route } from '$lib/types';
+	import type { RouteListItem } from '$lib/routes/route_list_columns';
 	import { trackDirty } from '$lib/core/form_dirty';
 	import UnsavedChangesGuard from './UnsavedChangesGuard.svelte';
 
@@ -35,7 +36,7 @@
 	let activityType = $state<ActivityType>('run');
 	let notes = $state('');
 	let routeId = $state('');
-	let routes = $state<Route[]>([]);
+	let routes = $state<RouteListItem[]>([]);
 	let submitting = $state(false);
 	// Seeded from the user's privacy_default on mount so the toggle reflects
 	// their standing preference; a per-run change overrides it for this run.

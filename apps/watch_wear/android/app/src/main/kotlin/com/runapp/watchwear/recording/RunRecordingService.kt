@@ -706,7 +706,16 @@ class RunRecordingService : Service() {
         }
         try {
             vibrator.vibrate(effect)
-        } catch (_: Throwable) { /* watch without a vibrator — rare */ }
+        } catch (e: Throwable) {
+            // A watch with no vibrator is rare; a MISSING `VIBRATE`
+            // declaration looks identical from here and is not rare at all —
+            // it was the state of this manifest, so the haptic half of the
+            // pace alert had never fired on any watch and the silence read as
+            // hardware (decisions § 1302). Logged rather than swallowed: the
+            // alert is L4, so the run is untouched either way, but a cue that
+            // silently does not exist must leave a trace.
+            android.util.Log.w(TAG, "pace-alert haptic refused", e)
+        }
         tts?.announcePaceAlert(tooSlow)
     }
 

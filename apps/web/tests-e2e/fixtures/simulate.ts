@@ -128,16 +128,78 @@ export async function insertRun(opts: {
 	return runId;
 }
 
+/**
+ * Plant the map-matched line for a run: the gzipped object the job worker
+ * would have written, plus the `run_matched_tracks` row that points at it.
+ *
+ * The path is derived here rather than passed in because
+ * `run_matched_tracks_matched_track_url_shape` (migration 20260719_001)
+ * pins it to `{user_id}/{run_id}.matched.json.gz` — a caller free to name it
+ * would be free to name something the column refuses. Upsert, not insert:
+ * `insertRun`'s own `track_url` write fires `runs_enqueue_match_job_trigger`,
+ * which has already left a `pending` row for this run.
+ *
+ * Returns the planted object's path, or null for a status that carries none.
+ */
+export async function insertMatchedTrack(opts: {
+	run_id: string;
+	user_id: string;
+	/** Omit for a `failed` / `skipped` / `pending` row — no object is written. */
+	track?: TrackPoint[];
+	status?: 'pending' | 'matched' | 'failed' | 'skipped';
+	algorithm?: string;
+	algorithm_version?: string;
+}): Promise<string | null> {
+	const admin = getAdminClient();
+	const status = opts.status ?? 'matched';
+	let path: string | null = null;
+
+	if (opts.track && opts.track.length > 0) {
+		path = `${opts.user_id}/${opts.run_id}.matched.json.gz`;
+		const gzipped = gzipSync(Buffer.from(JSON.stringify(opts.track), 'utf-8'));
+		const { error: upErr } = await admin.storage
+			.from('runs')
+			.upload(path, gzipped, { contentType: 'application/octet-stream', upsert: true });
+		if (upErr) {
+			throw new Error(`simulate.insertMatchedTrack upload failed: ${upErr.message}`);
+		}
+	}
+
+	const { error } = await admin.from('run_matched_tracks').upsert(
+		{
+			run_id: opts.run_id,
+			status,
+			matched_track_url: path,
+			matched_at: status === 'matched' ? new Date().toISOString() : null,
+			algorithm: opts.algorithm ?? 'osrm',
+			algorithm_version: opts.algorithm_version ?? 'e2e'
+		},
+		{ onConflict: 'run_id' }
+	);
+	if (error) {
+		throw new Error(`simulate.insertMatchedTrack row upsert failed: ${error.message}`);
+	}
+	return path;
+}
+
 export async function deleteRun(runId: string): Promise<void> {
 	const admin = getAdminClient();
 	// Try to remove the gzipped track from Storage too, if any. List
-	// the user folder by reading the row first.
+	// the user folder by reading the row first. The matched line is a
+	// third object under the same folder, and the row naming it is about
+	// to go with the run's own cascade — so read it before the delete or
+	// the object is orphaned with nothing left pointing at it.
 	const { data: row } = await admin
 		.from('runs')
 		.select('track_url, hr_series_url')
 		.eq('id', runId)
 		.maybeSingle();
-	const paths = [row?.track_url, row?.hr_series_url].filter(
+	const { data: matched } = await admin
+		.from('run_matched_tracks')
+		.select('matched_track_url')
+		.eq('run_id', runId)
+		.maybeSingle();
+	const paths = [row?.track_url, row?.hr_series_url, matched?.matched_track_url].filter(
 		(p): p is string => !!p,
 	);
 	if (paths.length > 0) {

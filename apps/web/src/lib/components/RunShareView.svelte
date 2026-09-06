@@ -9,6 +9,7 @@
 	import RunSocial from '$lib/components/RunSocial.svelte';
 	import RunPhotos from '$lib/components/RunPhotos.svelte';
 	import RunGearChips from '$lib/components/RunGearChips.svelte';
+	import FundraiserSection from '$lib/components/FundraiserSection.svelte';
 	import ReportDialog from '$lib/components/ReportDialog.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { resolveTrackOwnership } from '$lib/runs/track_ownership';
@@ -203,6 +204,8 @@
 			/>
 		</section>
 	{/if}
+
+	<FundraiserSection runId={run.id} isOwner={false} />
 
 	<RunGearChips runId={run.id} runOwnerId={run.user_id} />
 

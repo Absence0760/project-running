@@ -34,6 +34,8 @@ import {
 	destructiveButtons,
 	methodBody,
 	functionBody,
+	bodyOfSignatureContaining,
+	depthOf,
 	normalizeKey,
 	parseFlatPlist,
 	phoneEnvelopeKeys,
@@ -63,6 +65,7 @@ const STAGED_ROUTE_BRIDGE = 'apple_watch_route_bridge.dart';
 const ARMED = join('WatchApp', 'ArmedRoute.swift');
 const DIRECT = join('WatchApp', 'SupabaseService.swift');
 const PBX = join('WatchApp.xcodeproj', 'project.pbxproj');
+const HK = join('WatchApp', 'HealthKitManager.swift');
 
 /** Copy only the files the guard reads into a throwaway tree. */
 function stage() {
@@ -119,6 +122,113 @@ test('the shipped apps/watch_ios tree satisfies every claim', () => {
 	const { errors, ok } = check(WATCH_IOS, INGEST_ABS, ROUTE_BRIDGE_ABS);
 	assert.deepEqual(errors, []);
 	assert.ok(ok.length >= 13, `only ${ok.length} claims were exercised`);
+});
+
+// --- claim 11: the session a delegate acts on, and when it is released ------
+
+test('releasing the session inside the finishWorkout completion is refused', () => {
+	// The shape this claim was written against: `startWorkout()` refuses to
+	// open a session while one is held, so a release chained behind the save
+	// leaves the next run of the launch with no heart rate at all.
+	const { errors } = runMutated((dir) => {
+		edit(dir, HK, (s) =>
+			s.replace(
+				'        self.session = nil\n        self.builder = nil\n        builder.endCollection(withEnd: endDate) { _, _ in\n            builder.finishWorkout { _, _ in }\n        }',
+				'        builder.endCollection(withEnd: endDate) { [weak self] _, _ in\n' +
+					'            builder.finishWorkout { _, _ in\n' +
+					'                self?.session = nil\n' +
+					'                self?.builder = nil\n' +
+					'            }\n        }',
+			),
+		);
+	});
+	assert.equal(matched(errors, /stopWorkout` does not release/).length, 1, errors.join('\n'));
+});
+
+test('dropping the release from stopWorkout altogether is refused', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, HK, (s) => s.replace('        self.session = nil\n', ''));
+	});
+	assert.equal(matched(errors, /stopWorkout` does not release/).length, 1, errors.join('\n'));
+});
+
+test('a delegate that tears down the heart rate without checking identity is refused', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, HK, (s) => s.replace('        guard workoutSession === session else { return }\n', ''));
+	});
+	assert.equal(
+		matched(errors, /didFailWithError` reaches `handleSessionFailure\(` without/).length,
+		1,
+		errors.join('\n'),
+	);
+});
+
+test('an identity gate placed BELOW the mutation it gates is refused', () => {
+	// Present-but-useless is the shape a `contains` check would pass. The claim
+	// is about order, so the gate has to precede the write.
+	const { errors } = runMutated((dir) => {
+		edit(dir, HK, (s) =>
+			s.replace(
+				'        guard workoutSession === session else { return }\n',
+				'',
+			).replace(
+				'        handleSessionFailure()\n',
+				'        handleSessionFailure()\n        guard workoutSession === session else { return }\n',
+			),
+		);
+	});
+	assert.equal(
+		matched(errors, /didFailWithError` reaches `handleSessionFailure\(` without/).length,
+		1,
+		errors.join('\n'),
+	);
+});
+
+test('a collect callback that stamps a sample age with no identity check is refused', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, HK, (s) =>
+			s.replace('guard !sessionDidFail, workoutBuilder === builder else { return }', 'guard !sessionDidFail else { return }'),
+		);
+	});
+	assert.equal(
+		matched(errors, /didCollectDataOf` reaches `coverage\.noteSample\(` without/).length,
+		1,
+		errors.join('\n'),
+	);
+});
+
+test('a delegate that no longer writes what the gate names fails loudly rather than passing', () => {
+	// The claim reads the mutation to decide where the gate must sit. Rename
+	// the write and it can no longer answer — which must be an error, not a
+	// vacuous pass.
+	const { errors } = runMutated((dir) => {
+		edit(dir, HK, (s) => s.replace('        handleSessionFailure()\n', '        selfDestruct()\n'));
+	});
+	assert.equal(
+		matched(errors, /no longer calls `handleSessionFailure\(`/).length,
+		1,
+		errors.join('\n'),
+	);
+});
+
+test('depthOf counts the body brace as one and a closure as deeper', () => {
+	const body = '{\n  let a = 1\n  f { inner = 2 }\n  outer = 3\n}';
+	assert.equal(depthOf(body, 'let a'), 1);
+	assert.equal(depthOf(body, 'inner'), 2);
+	assert.equal(depthOf(body, 'outer'), 1);
+	assert.equal(depthOf(body, 'absent'), -1);
+});
+
+test('depthOf does not count a brace inside a string literal', () => {
+	assert.equal(depthOf('{\n  log("{{{")\n  x = 1\n}', 'x = 1'), 1);
+});
+
+test('bodyOfSignatureContaining selects by argument label, not by method name', () => {
+	const src = 'func workoutSession(_ s: S, didChangeTo t: T) { first() }\n' +
+		'func workoutSession(_ s: S, didFailWithError e: E) { second() }';
+	assert.ok(bodyOfSignatureContaining(src, 'didChangeTo')?.includes('first()'));
+	assert.ok(bodyOfSignatureContaining(src, 'didFailWithError')?.includes('second()'));
+	assert.equal(bodyOfSignatureContaining(src, 'didNotHappen'), null);
 });
 
 // --- claim 1: a localizing literal with no catalog entry --------------------

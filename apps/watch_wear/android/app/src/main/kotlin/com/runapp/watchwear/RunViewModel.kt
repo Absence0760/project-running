@@ -670,6 +670,9 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     ///   - the upload queue + its on-disk track files (`store`) — see
     ///     `LocalRunStore.clear` for why this is fail-closed against
     ///     cross-user upload
+    ///   - the crash checkpoint + its track file (`checkpoints`), which is
+    ///     the SAME payload on a parallel path and used to outlive the
+    ///     queue wipe entirely
     ///   - cached map tiles (`TileSource`)
     private suspend fun tearDownSession() {
         supabase.clearCredentials()
@@ -678,6 +681,25 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         // Drop unsynced runs (+ their track files) so they can't upload
         // under the next user's credentials. See LocalRunStore.clear.
         store.clear()
+        // And the crash checkpoint, on exactly the same reasoning. It is the
+        // same run payload — distance, start, laps, steps, privacy default and
+        // a track file — reached by a different door, and it survived the wipe
+        // above: `sweepOrphanTracks` deliberately KEEPS the file a checkpoint
+        // names, so after a sign-out `gradeRecovery` still graded `Offer` (no
+        // live recording, nothing queued, the file present) and the next user
+        // to sign in was shown a prompt carrying the previous user's distance.
+        // Accepting it queued that run and drained it under the NEW
+        // credentials — user A's GPS trace into user B's account and Storage
+        // prefix, public if A's privacy default was public. Fail-closed, at
+        // the cost of a crashed run that is never recovered because the runner
+        // signed out before recovering it (decisions § 1301).
+        val stranded = checkpoints.current()
+        checkpoints.clear()
+        if (stranded != null) {
+            withContext(Dispatchers.IO) {
+                runCatching { File(stranded.trackFilePath).delete() }
+            }
+        }
         // Drop cached map tiles too — prefetched route tiles reveal where
         // the signed-out user runs, so they don't carry over to the next
         // user on this watch.
@@ -696,6 +718,11 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             stage = Stage.PreRun,
             routes = emptyList(),
             selectedRoute = null,
+            // The prompt may already be on screen — `checkRecovery` runs from
+            // `init` — and it outlived the checkpoint it was raised for, so a
+            // tap after sign-out would have queued a run the store above just
+            // dropped.
+            pendingRecovery = null,
         )
     }
 
@@ -1190,7 +1217,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
 
     /// Called from the recording observer when the service publishes a
     /// `Finished` state. Persists the run to LocalRunStore + drains.
-    private fun handleFinishedRun(m: RecordingRepository.Metrics) {
+    private suspend fun handleFinishedRun(m: RecordingRepository.Metrics) {
         val runId = m.runId ?: return
         val trackPath = m.trackFilePath ?: return
         val durationS = (m.elapsedMs / 1000).toInt()
@@ -1533,7 +1560,6 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /// Turn the service's raw lap list (cumulative marks) into split-per-lap
     /// Read the just-finished track JSON off disk so the post-run
     /// screen can render a preview thumbnail. Decimates to ≤ 256
     /// points (geometric every-other halving, same shape-preserving
@@ -1541,13 +1567,24 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     /// thousands of points still draws cheaply on a 96 dp canvas.
     /// Returns empty on any failure — caller treats that as
     /// "indoor / no track to preview".
-    private fun readTrackForPreview(
+    ///
+    /// On `Dispatchers.IO`, like every other disk touch in this class. It was
+    /// the one that was not, and it is the largest: `handleFinishedRun` runs
+    /// in the `RecordingRepository.metrics` collect body, which is
+    /// `Dispatchers.Main.immediate`, so a 100-hour ultra's ~36,000-record,
+    /// ~2.8 MB track was read AND fully materialised as a `JsonArray` on the
+    /// UI thread between the runner pressing Stop and the post-run screen
+    /// appearing (decisions § 1302). The decimation runs here too — it is
+    /// the parse that is expensive, and there is nothing to hand back until
+    /// it is done.
+    private suspend fun readTrackForPreview(
         path: String,
-    ): List<com.runapp.watchwear.recording.RouteMath.LatLng> {
-        return try {
-            val raw = File(path).takeIf { it.exists() }?.readText() ?: return emptyList()
+    ): List<com.runapp.watchwear.recording.RouteMath.LatLng> = withContext(Dispatchers.IO) {
+        try {
+            val raw = File(path).takeIf { it.exists() }?.readText()
+                ?: return@withContext emptyList()
             val arr = (kotlinx.serialization.json.Json.parseToJsonElement(raw)
-                as? kotlinx.serialization.json.JsonArray) ?: return emptyList()
+                as? kotlinx.serialization.json.JsonArray) ?: return@withContext emptyList()
             val all = arr.mapNotNull { el ->
                 val obj = el as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
                 val lat = (obj["lat"] as? kotlinx.serialization.json.JsonPrimitive)
@@ -1565,6 +1602,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /// Turn the service's raw lap list (cumulative marks) into split-per-lap
     /// rows suitable for the post-run table. The final "bonus" row is the
     /// partial between the last lap mark and the stop — only included when
     /// it's non-trivial (≥ 1s and ≥ 1m).

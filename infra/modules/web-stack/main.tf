@@ -2538,13 +2538,21 @@ resource "aws_cloudfront_distribution" "this" {
     }
   }
 
-  # SPA fallback — SvelteKit static fallback is index.html.
+  # SPA fallback — adapter-static's fallback is build/200.html, and the
+  # mapping below is what serves it. It was index.html until § 1268 moved
+  # the shell so the prerendered landing page could take that name; this
+  # line said `index.html` for a day after the move, contradicting the
+  # paragraph 30 lines down that states the opposite outright.
   #
   # These apply to EVERY origin on the distribution, not just S3.
   # CloudFront models custom error responses per DISTRIBUTION; there is no
   # per-cache-behaviour form, so a 403 returned by any of the eight Lambda
-  # origins above is rewritten to the shell at 200 as well, and a 404 to the
-  # shell at 404 (the status half of that was 200 too until § 1022). The comment
+  # origins above is rewritten to the shell at 200 as well — which is the
+  # subject of an open followup, because it reaches an API caller as a
+  # 200 text/html body where a refusal was sent. 404 is NOT mapped: § 1022
+  # added one and § 1084 removed it again, so the sentence that used to sit
+  # here describing "a 404 to the shell at 404" outlived its own mapping and
+  # disagreed with the block immediately below. The comment
   # here used to claim the opposite — that a Lambda's own 404 surfaced as a real
   # 404 because its behaviour ran first — and the `cloudfront_invoke_function`
   # block above records the measurement that disproves it: with only one of the
@@ -2583,7 +2591,9 @@ resource "aws_cloudfront_distribution" "this" {
   #
   # Changing this value has a deploy order: /200.html must exist in the bucket
   # BEFORE the apply, or every deep link resolves to a missing error page. See
-  # docs/features/seo.md § Deploying a change to the shell filename.
+  # docs/features/seo.md § Deploying a change to the shell filename, and
+  # docs/ops/deployment.md § One-off: the SPA-shell cutover for the operator
+  # sequence with its rollback.
   custom_error_response {
     error_code         = 403
     response_code      = 200

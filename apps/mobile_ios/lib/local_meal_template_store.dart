@@ -96,10 +96,7 @@ class StoredMealTemplate implements SyncEntry {
                 StoredMealTemplateItem.fromJson(Map<String, dynamic>.from(it as Map)))
             .toList(),
         syncState: syncStateFromWire(json['sync_state'] as String?),
-        lastModifiedAt:
-            DateTime.tryParse(json['last_modified_at'] as String? ?? '')
-                    ?.toUtc() ??
-                DateTime.now().toUtc(),
+        lastModifiedAt: storedClockOrNow(json['last_modified_at']),
       );
 }
 
@@ -249,7 +246,7 @@ class LocalMealTemplateStore extends OfflineSyncStore<StoredMealTemplate> {
         continue;
       }
       final local = syncedLocal[id];
-      final serverTs = _parseTs(t.template['last_modified_at']);
+      final serverTs = parseServerTimestamp(t.template['last_modified_at']);
       if (local != null &&
           serverTs != null &&
           local.lastModifiedAt.isAfter(serverTs)) {
@@ -266,11 +263,6 @@ class LocalMealTemplateStore extends OfflineSyncStore<StoredMealTemplate> {
     rowsById.addAll(preserved);
     await rewriteAll();
     notifyListeners();
-  }
-
-  static DateTime? _parseTs(dynamic v) {
-    if (v is String && v.isNotEmpty) return DateTime.tryParse(v)?.toUtc();
-    return null;
   }
 
   @override
