@@ -26620,3 +26620,47 @@ Nothing under `tests-e2e/` had ever planted a `run_matched_tracks.matched_track_
 `runs/matched-track-render.spec.ts` closes it with a pair: a run whose recorded trace sits at 100–105 m and whose matched line sits at 500–505 m, asserted through the elevation chart's corner pills (the one projection of `baseTrack` with numbers in the DOM — the map is a canvas), plus the `failed` case beside it as the control, since both tracks are renderable and a page that ignored the matched line entirely would still draw *a* profile. `insertMatchedTrack` derives the object path rather than taking it, because `run_matched_tracks_matched_track_url_shape` (migration `20260719_001`) pins it; it upserts, because `runs_enqueue_match_job_trigger` has already left a `pending` row; and `deleteRun` now removes that third object before the run's cascade takes the row naming it.
 
 **The assertion had to be rewritten before it meant anything.** `await expect(page.locator('.extreme-text')).toHaveText([/505\s*m/, /500\s*m/])` passed — and so did the same line asking for `[/105\s*m/, /100\s*m/]`, the *other* track's band, on the same page. `extreme-text` is an SVG `<text>`, and `innerText` is an `HTMLElement` property: Playwright reads undefined off it, so the matcher's verdict does not depend on what the element says. It was measured passing against the wrong band on one run and failing against the same band on the next. The spec reads `textContent` instead, through `expect.poll` so it still waits for the chart, and both mutations then fail: expecting the recorded band, and planting no matched object. Nothing else in `tests-e2e/` asserts text against an SVG element today — checked — but the shape is worth knowing: **`toHaveText` and `toContainText` are HTML-element assertions; against SVG they neither pass nor fail on the text.**
+
+---
+
+## 1342. An unknown clock must lose, not win: the offline stores' fallback moves from `now` to the epoch
+
+**Decided 2026-09-06.** [§ 1290](#1290-a-record-is-not-worth-less-than-its-clock) made a
+wrong-TYPED `last_modified_at` behave like an absent one instead of discarding the whole
+record, and deliberately left the fallback VALUE alone. This closes that: `storedClockOrNow`
+is `storedClockOrEpoch`, and the four inputs it covers — absent, empty, unparseable,
+wrong-type — now read as `DateTime.utc(1970)` rather than as `DateTime.now().toUtc()`.
+
+`now` is not a neutral default; it is the single most favourable value the field can hold.
+Every `replaceFromServer` in the family decides with `local.lastModifiedAt.isAfter(serverTs)`,
+and `serverTs` is a stamp the server wrote in the past, so a `synced` row handed `now` wins
+that comparison against every stamp the server will ever have. `rewriteAll` then persists the
+winning clock, so the next cold load parses a perfectly valid timestamp that is still ahead of
+the server, and the row goes on winning across launches — the server copy can never reach it
+again. That is worse than the throw § 1290 removed, which at least let the next refresh re-add
+the row and self-heal. Three surfaces have a second symptom: `local_routine_store`,
+`local_recipe_store` and `local_meal_template_store` each order their library
+`b.lastModifiedAt.compareTo(a.lastModifiedAt)`, so an unreadable record claimed the head of
+the most-recently-used list — presented as the freshest thing the user owns.
+
+The epoch loses every comparison there is, which is the honest answer in both directions and
+costs nothing that matters. `replaceFromServer` sorts every non-`synced` row into `preserved`
+BEFORE the newer-wins comparison runs, so an unsent create/update/delete is still kept and
+still pushed whatever its clock says; only a `synced` row is affected, and a `synced` row
+losing to the server is the correct resolution when the local clock is unknown. In
+`local_routine_store`'s windowed variant the epoch reads as "older than anything the fetch
+could have returned", so the row is preserved rather than clobbered — also correct. The one
+place the value is now visibly different is the sort, where an undatable record goes last
+instead of first.
+
+The name moved with the behaviour. A helper called `storedClockOrNow` that returns the epoch
+is the class of stale name this tree keeps paying for, and renaming forced every one of the
+seven `fromJson` call sites to be re-read. `kUnknownStoredClock` is exported so the tests and
+the readers share one spelling of the sentinel instead of each writing `DateTime.utc(1970)`.
+
+Pinned by four tests in `offline_sync_timestamps_test.dart`: the four unusable inputs all
+equal `kUnknownStoredClock`; the sentinel loses `isAfter` against three server stamps
+including one a second past the epoch, with the old fallback's winning comparison asserted
+beside it as the control; and the sentinel sorts last under the library comparator. The
+`local_food_store` restore test that asserted the old `now` behaviour now asserts the epoch,
+with the reason it does not matter to a restored (pendingCreate) record stated in place.

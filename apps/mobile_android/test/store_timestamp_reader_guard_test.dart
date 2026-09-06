@@ -94,14 +94,14 @@ void main() {
   test('the shared readers exist and the family actually uses them', () {
     final shared = File(_shared).readAsStringSync();
     expect(shared.contains('DateTime? parseServerTimestamp(dynamic v) {'), isTrue);
-    expect(shared.contains('DateTime storedClockOrNow(dynamic v) =>'), isTrue);
+    expect(shared.contains('DateTime storedClockOrEpoch(dynamic v) =>'), isTrue);
 
     var timestampSites = 0;
     var clockSites = 0;
     for (final file in _familyFiles()) {
       final code = blankNonCode(file.readAsStringSync());
       timestampSites += 'parseServerTimestamp('.allMatches(code).length;
-      clockSites += 'storedClockOrNow('.allMatches(code).length;
+      clockSites += 'storedClockOrEpoch('.allMatches(code).length;
     }
     // Declarations included: 16 timestamp reads + 1 declaration, 7 clock reads
     // + 1 declaration when this landed. A drop to the declarations alone means

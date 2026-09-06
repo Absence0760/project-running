@@ -78,10 +78,10 @@ void main() {
     });
   });
 
-  group('storedClockOrNow', () {
+  group('storedClockOrEpoch', () {
     test('a readable clock is the record own clock, in UTC', () {
-      expect(storedClockOrNow('2026-03-12T06:00:00Z'), DateTime.utc(2026, 3, 12, 6));
-      expect(storedClockOrNow('2026-03-12T08:00:00+02:00'),
+      expect(storedClockOrEpoch('2026-03-12T06:00:00Z'), DateTime.utc(2026, 3, 12, 6));
+      expect(storedClockOrEpoch('2026-03-12T08:00:00+02:00'),
           DateTime.utc(2026, 3, 12, 6));
     });
 
@@ -90,28 +90,53 @@ void main() {
       // walk and the backup restore catch — so a record whose clock field was
       // a number was discarded whole, payload and all, while the same record
       // with NO clock field was kept.
-      final before = DateTime.now().toUtc();
-      final at = storedClockOrNow(1757116800000);
-      final after = DateTime.now().toUtc();
-      expect(at.isUtc, isTrue);
-      expect(at.isBefore(before), isFalse);
-      expect(at.isAfter(after), isFalse);
+      expect(storedClockOrEpoch(1757116800000), kUnknownStoredClock);
+      expect(storedClockOrEpoch(1757116800000).isUtc, isTrue);
     });
 
-    test('an absent, empty or unparseable clock all read as now', () {
+    test('an absent, empty or unusable clock is the EPOCH, not now', () {
+      // It was `now` until § 1342. `now` is later than every
+      // `last_modified_at` the server will ever stamp, so the record won
+      // newer-wins for good; the epoch loses it, which is what an unknown
+      // clock is entitled to.
       for (final raw in <dynamic>[null, '', 'not a date', 1, 2.5, true, <int>[]]) {
-        final before = DateTime.now().toUtc();
-        final at = storedClockOrNow(raw);
-        final after = DateTime.now().toUtc();
-        expect(at.isUtc, isTrue, reason: '$raw');
-        expect(at.isBefore(before), isFalse, reason: '$raw');
-        expect(at.isAfter(after), isFalse, reason: '$raw');
+        expect(storedClockOrEpoch(raw), kUnknownStoredClock, reason: '$raw');
       }
+    });
+
+    test('the unknown clock loses newer-wins against any server stamp', () {
+      // The comparison every `replaceFromServer` in the family runs. A clock
+      // that wins this freezes the row against the server, because
+      // `rewriteAll` persists the winning value and the next launch compares
+      // it again.
+      for (final serverTs in [
+        DateTime.utc(1970, 1, 1, 0, 0, 1),
+        DateTime.utc(2026, 3, 12, 6),
+        DateTime.now().toUtc(),
+      ]) {
+        expect(storedClockOrEpoch(null).isAfter(serverTs), isFalse,
+            reason: '$serverTs');
+      }
+      expect(DateTime.now().toUtc().isAfter(DateTime.utc(2026, 3, 12, 6)), isTrue,
+          reason: 'the old fallback won this comparison, which is the defect');
+    });
+
+    test('the unknown clock sorts LAST in a most-recently-modified list', () {
+      // `local_routine_store` / `local_recipe_store` / `local_meal_template_store`
+      // all order their library with `b.lastModifiedAt.compareTo(a.…)`. Under
+      // the old `now` fallback an unreadable record claimed the head of that
+      // list — the freshest thing the user owns.
+      final clocks = [
+        DateTime.utc(2026, 3, 12, 6),
+        storedClockOrEpoch(null),
+        DateTime.utc(2025, 1, 1),
+      ]..sort((a, b) => b.compareTo(a));
+      expect(clocks.last, kUnknownStoredClock);
     });
 
     test('a zone-less stored clock keeps its instant', () {
       final wall = DateTime(2026, 3, 12, 9);
-      final at = storedClockOrNow(wall.toIso8601String());
+      final at = storedClockOrEpoch(wall.toIso8601String());
       expect(at.isAtSameMomentAs(wall), isTrue);
       expect(at.isUtc, isTrue);
     });

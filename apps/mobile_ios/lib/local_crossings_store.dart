@@ -40,7 +40,7 @@ class StoredCrossing implements SyncEntry {
   factory StoredCrossing.fromJson(Map<String, dynamic> json) => StoredCrossing(
         row: Map<String, dynamic>.from(json['row'] as Map),
         syncState: syncStateFromWire(json['sync_state'] as String?),
-        lastModifiedAt: storedClockOrNow(json['last_modified_at']),
+        lastModifiedAt: storedClockOrEpoch(json['last_modified_at']),
       );
 }
 

@@ -102,18 +102,38 @@ DateTime? parseServerTimestamp(dynamic v) {
   return null;
 }
 
-/// The modification clock a stored record carries, or `now` when it carries
-/// none this build can read.
+/// The clock a record gets when it carries none this build can read.
+///
+/// The epoch, because the one thing an UNKNOWN clock must not do is win
+/// (decisions § 1342). It loses every `isAfter` comparison there is, which is
+/// the honest answer in both directions.
+final DateTime kUnknownStoredClock = DateTime.utc(1970);
+
+/// The modification clock a stored record carries, or [kUnknownStoredClock]
+/// when it carries none this build can read.
 ///
 /// Seven `fromJson` factories spelled this out, each casting the field with
 /// `as String?` before parsing it. So an absent clock, an empty one and an
-/// unparseable one all fell back to now, while a clock of the wrong TYPE threw
-/// — and the load and restore paths both catch, so the whole record was
+/// unparseable one all fell back to a value, while a clock of the wrong TYPE
+/// threw — and the load and restore paths both catch, so the whole record was
 /// discarded instead. Nothing chose that: a record is not worth less than its
 /// clock, and on the restore path the record came out of a backup archive
 /// carrying work that exists nowhere else (decisions § 1290).
-DateTime storedClockOrNow(dynamic v) =>
-    parseServerTimestamp(v) ?? DateTime.now().toUtc();
+///
+/// The value that fallback yields was `now`, which is a confident wrong
+/// answer rather than an absent one. `now` is later than every
+/// `last_modified_at` the server will ever have stamped, so a `synced` row
+/// handed it wins `local.lastModifiedAt.isAfter(serverTs)` in every
+/// subsequent `replaceFromServer`; `rewriteAll` then persists that clock, so
+/// the row goes on winning across launches and the server copy can never
+/// reach it. It also sorts such a record to the HEAD of the three
+/// most-recently-modified lists (routines, recipes, meal templates), claiming
+/// it is the freshest thing the user owns. The epoch loses both, and loses
+/// nothing that matters: `replaceFromServer` preserves every non-`synced` row
+/// before the comparison runs, so unsent work is still kept and still pushed
+/// (decisions § 1342).
+DateTime storedClockOrEpoch(dynamic v) =>
+    parseServerTimestamp(v) ?? kUnknownStoredClock;
 
 /// Disk-backed per-row sync-state machine shared by the gear / gym / food
 /// stores (decisions §73 + §122). One JSON file per row under

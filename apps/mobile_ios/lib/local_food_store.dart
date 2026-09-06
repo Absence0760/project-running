@@ -44,7 +44,7 @@ class StoredFood implements SyncEntry {
   factory StoredFood.fromJson(Map<String, dynamic> json) => StoredFood(
         row: Map<String, dynamic>.from(json['row'] as Map),
         syncState: syncStateFromWire(json['sync_state'] as String?),
-        lastModifiedAt: storedClockOrNow(json['last_modified_at']),
+        lastModifiedAt: storedClockOrEpoch(json['last_modified_at']),
       );
 }
 

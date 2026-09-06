@@ -40,7 +40,7 @@ class StoredGear implements SyncEntry {
   factory StoredGear.fromJson(Map<String, dynamic> json) => StoredGear(
         row: Map<String, dynamic>.from(json['row'] as Map),
         syncState: syncStateFromWire(json['sync_state'] as String?),
-        lastModifiedAt: storedClockOrNow(json['last_modified_at']),
+        lastModifiedAt: storedClockOrEpoch(json['last_modified_at']),
       );
 }
 
