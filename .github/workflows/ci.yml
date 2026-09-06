@@ -297,6 +297,27 @@ jobs:
             echo "Reproduce with: node --test scripts/check_root_scripts.test.mjs scripts/shell_lex.test.mjs (stdlib only, no install needed)."
             exit 1
           fi
+      # CodeQL scopes a compiled language's scan to whatever the build steps
+      # compile, so security.yml's build steps ARE the scope — and a database
+      # holding one Go module looks exactly like one holding both. That went
+      # unnoticed on the Go leg for the whole life of apps/graph_cycle (§ 1304)
+      # and on the Kotlin leg for 11 platform-channel bridges (§ 1352). This
+      # lifts each build step's own `find` out of security.yml and RUNS it,
+      # comparing the answer with an independent walk — so a step that goes back
+      # to a hardcoded path fails, and so does one whose walk quietly stopped
+      # matching. A lint on a workflow file, hence here.
+      - name: CodeQL builds every tree it claims to scan
+        run: |
+          if ! node scripts/check_codeql_coverage.mjs; then
+            echo "::error::A compiled-language CodeQL leg does not build every tree the repo holds, so it reports clean over source it never read — a Go module or Gradle project the build step's own walk misses, an exclusion that has outlived its directory, or an exclusion list that has grown to cover everything. Nothing here is about workflow syntax, the toolchain pins or the CI diagnoses; those are other checks in this job."
+            echo "The failing line above names the language, the job and the tree. decisions § 1352 is why the build steps enumerate from the filesystem rather than naming paths."
+            exit 1
+          fi
+          if ! node --test scripts/check_codeql_coverage.test.mjs; then
+            echo "::error::The CodeQL build-coverage guard's own unit tests failed. The workflows themselves are fine — the check above just passed — so this is a defect in scripts/check_codeql_coverage.mjs, not a scan that misses a tree."
+            echo "Reproduce with: node --test scripts/check_codeql_coverage.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
       # `npx <bin>` runs whatever node_modules/.bin provides — and when nothing
       # provides it, downloads the newest thing the registry answers with and
       # executes it against this checkout. The web unit suite ran that way for
