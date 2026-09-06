@@ -161,10 +161,7 @@ class StoredRoutine implements SyncEntry {
                 StoredRoutineExercise.fromJson(Map<String, dynamic>.from(e as Map)))
             .toList(),
         syncState: syncStateFromWire(json['sync_state'] as String?),
-        lastModifiedAt:
-            DateTime.tryParse(json['last_modified_at'] as String? ?? '')
-                    ?.toUtc() ??
-                DateTime.now().toUtc(),
+        lastModifiedAt: storedClockOrNow(json['last_modified_at']),
       );
 }
 
@@ -321,7 +318,7 @@ class LocalRoutineStore extends OfflineSyncStore<StoredRoutine> {
     if (id is! String) return;
     final existing = rowsById[id];
     if (existing != null && existing.syncState != SyncState.synced) return;
-    final serverTs = _parseTs(routine['last_modified_at']);
+    final serverTs = parseServerTimestamp(routine['last_modified_at']);
     if (existing != null &&
         serverTs != null &&
         existing.lastModifiedAt.isAfter(serverTs)) {
@@ -357,7 +354,7 @@ class LocalRoutineStore extends OfflineSyncStore<StoredRoutine> {
     DateTime? windowStart;
     if (fetchLimit != null && serverRoutines.length >= fetchLimit) {
       for (final r in serverRoutines) {
-        final ts = _parseTs(r.routine['last_modified_at']);
+        final ts = parseServerTimestamp(r.routine['last_modified_at']);
         if (ts != null && (windowStart == null || ts.isBefore(windowStart))) {
           windowStart = ts;
         }
@@ -383,7 +380,7 @@ class LocalRoutineStore extends OfflineSyncStore<StoredRoutine> {
         continue;
       }
       final local = syncedLocal[id];
-      final serverTs = _parseTs(r.routine['last_modified_at']);
+      final serverTs = parseServerTimestamp(r.routine['last_modified_at']);
       if (local != null &&
           serverTs != null &&
           local.lastModifiedAt.isAfter(serverTs)) {
@@ -400,11 +397,6 @@ class LocalRoutineStore extends OfflineSyncStore<StoredRoutine> {
     rowsById.addAll(preserved);
     await rewriteAll();
     notifyListeners();
-  }
-
-  static DateTime? _parseTs(dynamic v) {
-    if (v is String && v.isNotEmpty) return DateTime.tryParse(v)?.toUtc();
-    return null;
   }
 
   @override

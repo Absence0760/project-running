@@ -40,10 +40,7 @@ class StoredGear implements SyncEntry {
   factory StoredGear.fromJson(Map<String, dynamic> json) => StoredGear(
         row: Map<String, dynamic>.from(json['row'] as Map),
         syncState: syncStateFromWire(json['sync_state'] as String?),
-        lastModifiedAt: DateTime.tryParse(
-                json['last_modified_at'] as String? ?? '')
-                ?.toUtc() ??
-            DateTime.now().toUtc(),
+        lastModifiedAt: storedClockOrNow(json['last_modified_at']),
       );
 }
 
@@ -237,8 +234,9 @@ class LocalGearStore extends OfflineSyncStore<StoredGear> {
       // join and moves without any gear-row update, so discarding an
       // equal-stamped fetch would freeze a shoe's mileage.
       final local = syncedLocal[id];
-      final serverTs = _parseTs(row['updated_at']);
-      final localTs = local == null ? null : _parseTs(local.row['updated_at']);
+      final serverTs = parseServerTimestamp(row['updated_at']);
+      final localTs =
+          local == null ? null : parseServerTimestamp(local.row['updated_at']);
       if (local != null &&
           serverTs != null &&
           localTs != null &&
@@ -251,11 +249,6 @@ class LocalGearStore extends OfflineSyncStore<StoredGear> {
     rowsById.addAll(preserved);
     await rewriteAll();
     notifyListeners();
-  }
-
-  static DateTime? _parseTs(dynamic v) {
-    if (v is String && v.isNotEmpty) return DateTime.tryParse(v)?.toUtc();
-    return null;
   }
 
   @override
@@ -287,7 +280,14 @@ class LocalGearStore extends OfflineSyncStore<StoredGear> {
   Future<void> pushDelete(ApiClient api, StoredGear stored) =>
       api.deleteGear(stored.id);
 
+  // Deliberately NOT [parseServerTimestamp]. `purchased_at` / `retired_at` are
+  // `date` columns, so their zone-less text is a calendar DAY rather than an
+  // instant: it parses to local midnight, and normalising THAT to UTC would
+  // move the day itself for every device west of Greenwich — a shoe bought on
+  // the 3rd would read as bought on the 2nd, and `gearBackfillCandidates`
+  // would then drop the purchase day's own runs (decisions § 1289).
   static DateTime? _parseDate(dynamic v) {
+    // zone-verbatim: a `date` column is a calendar day, not an instant.
     if (v is String && v.isNotEmpty) return DateTime.tryParse(v);
     return null;
   }
