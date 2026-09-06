@@ -133,7 +133,15 @@ export function cataloguePickerView<E extends CatalogueEntry>(
 
 	if (key === '') return { matches, canCreate: false, hiddenExact: null };
 
-	const exact = entries.filter((e) => normaliseExerciseName(e.name) === key);
+	// Sorted, not in catalogue order: `exercises`' two uniques are partial, so
+	// an owner custom may shadow a seeded global under one folded key
+	// (`api_database.md`) and this can hold more than one row. `hiddenExact`
+	// then names whichever the fetch happened to return first — and
+	// `fetchExerciseCatalogue` orders by `name` with no id tiebreak, so two
+	// rows spelled identically are an unspecified tie and the sentence can
+	// name a different category on the next reload. Ordering them by the same
+	// comparator the list uses points the reader at the row they will find.
+	const exact = entries.filter((e) => normaliseExerciseName(e.name) === key).sort(byName);
 	const shown = exact.find(inCategory);
 	return {
 		matches,

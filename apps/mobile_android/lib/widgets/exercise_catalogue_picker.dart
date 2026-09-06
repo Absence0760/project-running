@@ -136,18 +136,29 @@ class _ExerciseCataloguePickerScreenState
     return out;
   }
 
-  /// Every catalogue entry the query names EXACTLY, category filter ignored.
+  /// Every catalogue entry the query names EXACTLY, category filter ignored,
+  /// in the same order the result list would show them.
   ///
   /// Scanning the whole catalogue is what [_canCreate] needs: `exercises` is
   /// keyed on the folded name, so a second row under a key the catalogue
   /// already holds is a duplicate whichever category it claims. Narrowing this
   /// to the visible set would trade the dead end below for a duplicate write.
+  ///
+  /// It can hold MORE THAN ONE row, and that is by design rather than by
+  /// accident: `exercises`' two uniques are partial, so an owner custom may
+  /// shadow a seeded global under one folded key (`api_database.md`). Ordering
+  /// them here rather than reading the catalogue's own order is what makes
+  /// [_hiddenExact] name the same entry every time — the fetch orders by
+  /// `(name, id)` on this platform and by `name` alone on web, where two rows
+  /// spelled identically are then an unspecified tie.
   List<GymCatalogueEntry> get _exact {
     final key = normaliseExerciseName(_query);
     if (key.isEmpty) return const [];
-    return _entries
+    final out = _entries
         .where((e) => normaliseExerciseName(e.name) == key)
         .toList(growable: false);
+    out.sort(_byName);
+    return out;
   }
 
   /// The entry the query names exactly while the category filter hides it,

@@ -321,6 +321,39 @@ void main() {
     expect(find.byType(OutlinedButton), findsNothing);
   });
 
+  // Two rows under one folded key, filed under different categories — the
+  // shadow `exercises`' partial uniques allow by design. The catalogue fetch
+  // orders by `(name, id)` here and by `name` alone on web, so two rows
+  // spelled identically are an unspecified tie there; without an order of its
+  // own the explanation names whichever the server happened to return first.
+  // Both cases must name the same one. A fresh `testWidgets` per order rather
+  // than a loop, because re-pumping the host leaves the pushed picker route on
+  // the navigator and the second open never happens.
+  final shadowCustom = _entry('e9', 'Bench\u00A0Press', 'arms', authorId: 'me');
+
+  Future<void> expectShadowExplained(
+    WidgetTester tester,
+    List<GymCatalogueEntry> catalogue,
+  ) async {
+    await _open(tester, catalogue: catalogue, api: _ScriptedApi());
+    await _selectCategory(tester, 'Legs');
+    await _type(tester, 'bench press');
+    expect(
+      find.text('\u201CBench Press\u201D is already in the catalogue, under Chest.'),
+      findsOneWidget,
+    );
+  }
+
+  testWidgets('a shadowed name is explained by the row the list shows first',
+      (tester) async {
+    await expectShadowExplained(tester, [_bench, shadowCustom, _squat]);
+  });
+
+  testWidgets('a shadowed name is explained the same way in the other order',
+      (tester) async {
+    await expectShadowExplained(tester, [shadowCustom, _bench, _squat]);
+  });
+
   testWidgets('tapping a row pops with that entry', (tester) async {
     final picked = await _open(tester, catalogue: _catalogue, api: _ScriptedApi());
     await tester.tap(find.text('Walking Lunge'));

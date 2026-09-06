@@ -77,6 +77,27 @@ test('the hidden-exact report folds too', () => {
 	assert.equal(view.hiddenExact?.id, 'e9');
 });
 
+test('a shadowed name reports the same entry whichever order the fetch returned', () => {
+	// `exercises` allows an owner custom to shadow a seeded global under one
+	// folded key, so two rows can match exactly. `fetchExerciseCatalogue`
+	// orders by `name` with no id tiebreak, so their relative order is an
+	// unspecified tie — without the sort here the sentence names a different
+	// category on the next reload.
+	const global = entry('e1', 'Bench Press', 'chest');
+	const custom = entry('e9', 'Bench Press', 'arms');
+	const forward = cataloguePickerView([global, custom, SQUAT], {
+		query: 'bench press',
+		category: 'legs',
+	});
+	const reversed = cataloguePickerView([custom, global, SQUAT], {
+		query: 'bench press',
+		category: 'legs',
+	});
+	assert.equal(forward.hiddenExact?.id, 'e1');
+	assert.equal(reversed.hiddenExact?.id, forward.hiddenExact?.id);
+	assert.equal(forward.canCreate, false, 'the key is taken twice over');
+});
+
 test('an exact match the filter does not hide is not reported as hidden', () => {
 	const view = cataloguePickerView(CATALOGUE, { query: 'bench press', category: 'chest' });
 	assert.deepEqual(
