@@ -91,7 +91,6 @@ import { auth } from '../stores/auth.svelte';
 import { compareLeaderboard } from '../runs/race_leaderboard';
 import { readRankRows } from '../segments/effort_rank';
 import type { RecapPeriodKind } from '../types';
-import { normaliseExerciseName } from '../gym/gym_prs';
 import { GYM_SESSION_DRAFT_KEY, hasSessionDraft } from '../gym/gym_session_draft';
 import type { RoutineHistoryAggregate, RoutineSessionRow } from '../gym/routine_history';
 import type { YearInRunningRecap } from '../runs/recap';
@@ -9551,10 +9550,14 @@ export async function fetchExerciseCatalogue(): Promise<Exercise[]> {
 	return (data ?? []) as Exercise[];
 }
 
-/// Create an owner-scoped custom exercise. name_key is the normalised name so
-/// it binds to logged sets the same way gym_prs / gym_routine_exercises key.
+/// Create an owner-scoped custom exercise. `name_key` is NOT sent: the
+/// `exercises_stamp_name_key` trigger derives it from `name` on every insert
+/// and update (migration 20270711000001), so a client value is overwritten
+/// rather than used, and computing one here would be a fourth rail that can
+/// drift from the fold the two partial unique indexes are actually built on.
 /// RLS rejects an insert with any author_id other than the caller. Returns the
-/// created row, or null on conflict/error (e.g. a duplicate name_key).
+/// created row, or null on conflict/error (e.g. a duplicate name_key -- the
+/// conflict is decided on the SERVER's fold).
 export async function createCustomExercise(input: {
 	name: string;
 	category?: ExerciseCategory;
@@ -9570,7 +9573,6 @@ export async function createCustomExercise(input: {
 		.insert({
 			author_id: userId,
 			name,
-			name_key: normaliseExerciseName(name),
 			category: input.category ?? 'other',
 			modality: input.modality ?? 'weight_reps',
 			last_modified_at: nowIso,
@@ -9958,7 +9960,9 @@ export async function createGymRoutine(input: GymRoutineInput): Promise<GymRouti
 		return {
 			routine_id: routine.id,
 			exercise_name: ex.exercise_name.trim(),
-			exercise_key: ex.exercise_key,
+			// exercise_key is NOT sent: gym_routine_exercises_stamp_exercise_key
+			// derives it from exercise_name on every write (20270711000001). The
+			// caller still carries one for its own plan-to-log matching.
 			position: ex.position,
 			superset_group: supersetGroup,
 			superset_order: supersetGroup == null ? null : ex.superset_order ?? 0,

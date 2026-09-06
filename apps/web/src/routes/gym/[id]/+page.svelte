@@ -242,8 +242,9 @@
 		const out: { name: string; key: string; sets: GymSet[] }[] = [];
 		for (const s of data?.sets ?? []) {
 			const last = out[out.length - 1];
-			if (last && last.name === s.exercise_name) last.sets.push(s);
-			else out.push({ name: s.exercise_name, key: normaliseExerciseName(s.exercise_name), sets: [s] });
+			const key = normaliseExerciseName(s.exercise_name);
+			if (last && last.key === key) last.sets.push(s);
+			else out.push({ name: s.exercise_name, key, sets: [s] });
 		}
 		return out;
 	});

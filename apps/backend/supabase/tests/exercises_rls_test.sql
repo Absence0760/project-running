@@ -45,12 +45,17 @@ select is(
   (select count(*)::int from exercises where author_id = '88888888-0000-0000-0000-00000000e001'),
   1, 'owner reads their own custom entry');
 
+-- `name_key` is deliberately not supplied: `exercises_stamp_name_key_trigger`
+-- assigns it before the row is checked (20270711000001), so a value here would
+-- never reach the constraint and would leave this assertion passing against a
+-- server that had stopped deriving the key at all (decisions 1324). The RLS
+-- policy is the claim, and the policy does not read the key.
 select lives_ok(
-  $$ insert into exercises (author_id, name, name_key) values ('88888888-0000-0000-0000-00000000e001', 'My Hack Squat', 'my hack squat') $$,
+  $$ insert into exercises (author_id, name) values ('88888888-0000-0000-0000-00000000e001', 'My Hack Squat') $$,
   'owner inserts their own custom entry');
 
 select throws_ok(
-  $$ insert into exercises (author_id, name, name_key) values (null, 'Forged Global', 'forged global') $$,
+  $$ insert into exercises (author_id, name) values (null, 'Forged Global') $$,
   '42501',
   null,
   'owner cannot create a seeded-global (author_id null) row');
