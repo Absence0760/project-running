@@ -323,6 +323,27 @@ jobs:
             echo "Reproduce with: node --test scripts/check_codeql_coverage.test.mjs (stdlib only, no install needed)."
             exit 1
           fi
+      # The same shape one layer over: a suite nothing runs. `build-watch-wear`
+      # runs `./gradlew assembleDebug testDebugUnitTest` at a hardcoded path,
+      # and deleting the second task would stop 767 assertions while the job
+      # kept its name and kept building the app. This walks the tree for Gradle
+      # projects holding a `src/test` source set and reads every workflow for
+      # the invocation that runs them — the task list, not the job name — so a
+      # project nothing tests is either wired up or declared in GRADLE_UNTESTED
+      # with a reason this re-measures against the tree. It reads YAML and
+      # source paths as text, so it belongs in this install-free job.
+      - name: Every committed Gradle test suite is run by some job
+        run: |
+          if ! node scripts/check_gradle_test_coverage.mjs; then
+            echo "::error::A Gradle project's committed unit tests are executed by nothing — a project no workflow invokes Gradle in, an invocation that builds it without handing Gradle a test task, or a GRADLE_UNTESTED entry that has outlived its project, its tests or its reason. Nothing here is about workflow syntax, the toolchain pins, the CI diagnoses or the CodeQL scan scope; those are the other checks in this job."
+            echo "The failing line above names the project and how many test source files run nowhere. decisions § 1393 is why the excuse is a declared value the job echoes rather than a note in a document."
+            exit 1
+          fi
+          if ! node --test scripts/check_gradle_test_coverage.test.mjs; then
+            echo "::error::The Gradle test-coverage guard's own unit tests failed. The workflows themselves are fine — the check above just passed — so this is a defect in scripts/check_gradle_test_coverage.mjs, not a suite that stopped running."
+            echo "Reproduce with: node --test scripts/check_gradle_test_coverage.test.mjs (stdlib only, no install needed; the last case runs the workflow's own echo shell under bash)."
+            exit 1
+          fi
       # `npx <bin>` runs whatever node_modules/.bin provides — and when nothing
       # provides it, downloads the newest thing the registry answers with and
       # executes it against this checkout. The web unit suite ran that way for
@@ -1736,6 +1757,28 @@ jobs:
           key: gradle-watch-wear-${{ hashFiles('apps/watch_wear/android/**/*.gradle*', 'apps/watch_wear/android/gradle/wrapper/gradle-wrapper.properties') }}
       - working-directory: apps/watch_wear/android
         run: ./gradlew assembleDebug testDebugUnitTest --no-daemon
+      # A Gradle project whose committed unit tests NOTHING runs is declared
+      # here, `<path>=<reason>`, one per line — and echoed, so the gap is in
+      # every run's log instead of in a document. `scripts/check_gradle_test_
+      # coverage.mjs` in the `workflow-lint` job walks the tree for Gradle
+      # projects holding a `src/test` source set and fails the PR on one that
+      # is neither run nor named here, on an entry that has outlived its
+      # project or its tests, and on one bought with a placeholder reason. It
+      # also fails when an invocation that DOES exist stops handing Gradle a
+      # test task — deleting `testDebugUnitTest` from the line above would
+      # otherwise stop 767 assertions with every check still green
+      # (decisions § 1393).
+      - name: Gradle unit tests nothing runs
+        env:
+          GRADLE_UNTESTED: |
+            apps/mobile_android/android=the Flutter Gradle host. build-mobile-android COMPILES it on every PR (flutter build apk --release configures and assembles the whole host, plugin subprojects included), so an AGP / KGP / plugin break is covered - but assembleRelease has no dependency on a test task, and this project ships no gradlew wrapper, so running its 32 @Test methods needs a wrapper committed plus the pinned Flutter SDK and melos bootstrap that only build-mobile-android sets up. Until that trade is taken, HealthRoutePermissionBridgeTest, WearAuthBridgeArgsTest and WearRoutesBridgeArgsTest are executed by nothing (decisions § 1393).
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            echo "::warning::${line%%=*} holds unit tests that no job runs: ${line#*=}"
+          done <<< "$GRADLE_UNTESTED"
 
   build-firmware:
     needs: changes
