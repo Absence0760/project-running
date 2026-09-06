@@ -198,11 +198,23 @@ num? _numericOrNull(Object? v) {
 }
 
 /// Promote a logged session's sets into a routine draft. Sets are grouped into
-/// exercise blocks by *consecutive* equal `exerciseName`. Each logged set
-/// becomes a planned `working` set with its reps/weight/RPE as the target.
-/// Blank-named sets are dropped. `exerciseKey` is stamped via
-/// `normaliseExerciseName` at promotion time. The title defaults to the
-/// workout's title, else `fallbackTitle`.
+/// exercise blocks by *consecutive* equal CANONICAL KEY. Each logged set
+/// becomes a planned `working` set with its reps/weight/RPE as the target. The
+/// title defaults to the workout's title, else `fallbackTitle`.
+///
+/// Adjacency is measured on [normaliseExerciseName], not on the display
+/// spelling. Adjacency itself is load-bearing and must stay — a superset
+/// alternates A/B/A and has to render as three blocks — but comparing the raw
+/// string split one lift logged under two spellings ("Bench Press" then
+/// "bench press", or either against a U+00A0 / U+0130 variant) into two blocks
+/// carrying the SAME `exercise_key`, which nothing refuses: the column has no
+/// unique index, deliberately (decisions § 1286). Keying the test merges the
+/// two without merging across an interleaved lift. The first spelling wins as
+/// the block's display name.
+///
+/// A set is dropped when its canonical KEY is empty, not when its trimmed name
+/// is — the two differ on exactly one code point and the difference was a
+/// silent web/Dart divergence (decisions § 1322).
 RoutineDraft routineFromWorkout(
   String? workoutTitle,
   List<LoggedSet> sets, {
@@ -211,19 +223,20 @@ RoutineDraft routineFromWorkout(
   final exercises = <_MutableExercise>[];
   for (final s in sets) {
     final name = s.exerciseName.trim();
-    if (name == '') continue;
+    final key = normaliseExerciseName(name);
+    if (key == '') continue;
     final reps = _numericOrNull(s.reps);
     final weight = _numericOrNull(s.weightKg);
     final rpe = _numericOrNull(s.rpe);
 
     final last = exercises.isNotEmpty ? exercises.last : null;
     final _MutableExercise block;
-    if (last != null && last.exerciseName == name) {
+    if (last != null && last.exerciseKey == key) {
       block = last;
     } else {
       block = _MutableExercise(
         exerciseName: name,
-        exerciseKey: normaliseExerciseName(name),
+        exerciseKey: key,
         position: exercises.length,
       );
       exercises.add(block);
