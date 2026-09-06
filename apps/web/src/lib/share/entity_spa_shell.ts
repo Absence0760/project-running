@@ -7,7 +7,7 @@
 /// injector serves every entity type the shared Lambda dispatches.
 ///
 /// The strategy is the same as the per-type shells: at deploy time the
-/// Lambda's bundler embeds `apps/web/build/index.html` as a string, and per
+/// Lambda's bundler embeds `apps/web/build/200.html` as a string, and per
 /// request the Lambda strips the shell's stale signals and splices the
 /// per-entity tags in before `</head>`. The strip/splice steps themselves live
 /// once, in head_splice.ts.
@@ -32,15 +32,17 @@ export function injectEntityHead(spaShellHtml: string, headTags: string): string
 ///
 /// Every share Lambda used to answer its own hand-written sentence here --
 /// `<p>This link isn't available.</p>`, unstyled, unlocalized, no navigation,
-/// five slightly different spellings of it. A reader never saw one because the
-/// distribution replaces every 4xx body with `/index.html` (decisions § 1022),
-/// which is the SPA shell -- so the designed `.notfound-card` rendered and the
+/// five slightly different spellings of it. A reader never saw one, because the
+/// distribution then carried a `custom_error_response` mapping 404 to the SPA
+/// shell (decisions § 1022) -- so the designed `.notfound-card` rendered and the
 /// `noindex` these handlers send was thrown away with the body.
 ///
-/// Returning the shell HERE makes the handler and the edge agree: the reader
-/// gets the same designed, localized card either way, and the `noindex`
-/// survives, at which point the distribution's 404 mapping is redundant rather
-/// than load-bearing (filed for the infra tree).
+/// Returning the shell HERE is what made that mapping redundant, and § 1084
+/// then removed it: the distribution maps only 403 today, and
+/// `scripts/check_infra_error_responses.mjs` fails the PR if a 404 mapping
+/// comes back. So this function is now the ONLY thing that puts a designed,
+/// localized card in front of a reader who follows a dead share link, and the
+/// `noindex` survives because nothing rewrites the body any more.
 ///
 /// `title` stays per-surface and stays English: it is the tab title before
 /// hydration, exactly like every other prerendered page's, and the app sets its
