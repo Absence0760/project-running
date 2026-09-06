@@ -1,0 +1,117 @@
+import { expect, test } from '@playwright/test';
+
+import { deleteRun, insertMatchedTrack, insertRun } from '../fixtures/simulate';
+import { USER_A } from '../fixtures/users';
+
+/**
+ * /runs/[id] — when the map-match worker has produced a line, THAT line is
+ * what the page draws.
+ *
+ * `baseTrack` prefers `matchInfo.track` over `run.track` and is the single
+ * value the map, the elevation profile and the direction scrubber all read,
+ * so which of the two tracks it resolves to is a real rendering decision made
+ * on every owner's run detail. Nothing under `tests-e2e/` had ever planted a
+ * `matched_track_url` with a Storage object behind it, so the whole path —
+ * the owner-gated `run_matched_tracks` read, the lazy download of a SECOND
+ * gzipped object out of the `runs` bucket, and the preference itself — ran
+ * only in production.
+ *
+ * The elevation profile is what the assertions read, because it is the one
+ * projection of `baseTrack` with numbers in the DOM: the map is a MapLibre
+ * canvas. The two tracks are given disjoint elevation bands so the extremes
+ * name which track was drawn and cannot be reached from the other.
+ *
+ * Those extremes are SVG `<text>`, which has no `innerText` — so
+ * `toHaveText` reads undefined off them and its verdict does not depend on
+ * what they say. It was measured passing against the OTHER track's band, and
+ * then failing against the same band on the next run. `extremeLabels` reads
+ * `textContent` instead, polled so the assertion still waits for the chart.
+ *
+ * The `failed` case beside it is the control. Both tracks are renderable, so
+ * a page that ignored the matched line entirely would still show a profile,
+ * a map and a full set of stats — the pair is what separates "the matched
+ * line rendered" from "a line rendered".
+ */
+const RAW_BASE_ELE = 100;
+const MATCHED_BASE_ELE = 500;
+const POINTS = 6;
+
+/** The recorded trace: a straight run, elevations 100..105. */
+const rawTrack = Array.from({ length: POINTS }, (_, i) => ({
+	lat: 51.46 + i * 0.0005,
+	lng: -0.3,
+	ele: RAW_BASE_ELE + i,
+	t: new Date(Date.UTC(2026, 0, 1, 9, i)).toISOString(),
+}));
+
+/** What the worker would write back: the same run snapped a little west,
+ *  elevations 500..505 — a band the recorded trace never enters. */
+const matchedTrack = Array.from({ length: POINTS }, (_, i) => ({
+	lat: 51.46 + i * 0.0005,
+	lng: -0.3001,
+	ele: MATCHED_BASE_ELE + i,
+	t: new Date(Date.UTC(2026, 0, 1, 9, i)).toISOString(),
+}));
+
+/** The chart's max-then-min corner pills, whitespace-normalised. */
+function extremeLabels(page: import('@playwright/test').Page): Promise<string[]> {
+	return page
+		.locator('.extreme-text')
+		.allTextContents()
+		.then((all) => all.map((t) => t.replace(/\s+/g, ' ').trim()));
+}
+
+test.describe('/runs/[id] — the matched line is what renders', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	let runId = '';
+
+	test.beforeEach(async () => {
+		runId = await insertRun({
+			user_id: USER_A.id,
+			distance_m: 3_000,
+			duration_s: 900,
+			track: rawTrack,
+		});
+	});
+
+	test.afterEach(async () => {
+		if (runId) await deleteRun(runId);
+		runId = '';
+	});
+
+	test('a matched run draws the matched elevations, not the recorded ones', async ({ page }) => {
+		await insertMatchedTrack({ run_id: runId, user_id: USER_A.id, track: matchedTrack });
+
+		await page.goto(`/runs/${runId}`);
+		await expect(page.getByRole('heading', { name: 'Elevation Profile' })).toBeVisible({
+			timeout: 15_000,
+		});
+
+		// Max pill then min pill, in document order. Both come off the matched
+		// band; neither value exists anywhere in the recorded trace.
+		await expect.poll(() => extremeLabels(page), { timeout: 15_000 }).toEqual([
+			'\u25b2 505 m',
+			'\u25bc 500 m',
+		]);
+
+		// `matched` is the one status the pill stays silent for — the cleaner
+		// line is the message. Its absence is therefore part of the claim.
+		await expect(page.locator('.match-pill')).toHaveCount(0);
+	});
+
+	test('a failed match falls back to the recorded track', async ({ page }) => {
+		await insertMatchedTrack({ run_id: runId, user_id: USER_A.id, status: 'failed' });
+
+		await page.goto(`/runs/${runId}`);
+		await expect(page.getByRole('heading', { name: 'Elevation Profile' })).toBeVisible({
+			timeout: 15_000,
+		});
+
+		await expect.poll(() => extremeLabels(page), { timeout: 15_000 }).toEqual([
+			'\u25b2 105 m',
+			'\u25bc 100 m',
+		]);
+		await expect(page.locator('.match-pill')).toContainText('Snap failed');
+	});
+});
