@@ -1067,6 +1067,15 @@ export function check(
 	/** @param {string} rel */
 	const read = (rel) => readFileSync(join(watchRoot, rel), 'utf8');
 
+	// Every `ok:` line below is one claim's verdict on ITSELF, so a claim that
+	// reports one has to count its own pushes — `const before = errors.length`
+	// at the top of its block, or a local counter where it already keeps one.
+	// Reading `errors.length === 0` reads the whole file's error list, which
+	// silently withdrew three later claims' success lines the moment anything
+	// above them failed: a reader triaging a red run then sees a shorter `ok`
+	// list than the truth and concludes a passing claim failed too
+	// (decisions § 1387).
+
 	/** @type {{ rel: string, src: string }[]} */
 	const swift = [];
 	for (const dir of SWIFT_DIRS) {
@@ -1354,6 +1363,7 @@ export function check(
 
 	// (8) No destructive control ends a run on one tap.
 	{
+		const before = errors.length;
 		const src = stripSwiftComments(read(SYNC_SITE));
 		const spans = confirmationDialogSpans(src);
 		const buttons = destructiveButtons(src);
@@ -1405,7 +1415,7 @@ export function check(
 						'button to take that label inherits it. Delete the entry.',
 				);
 			}
-			if (armedFlags.length > 0 && errors.length === 0) {
+			if (armedFlags.length > 0 && errors.length === before) {
 				const exempt = buttons.filter((b) => b.label in UNGUARDED_DESTRUCTIVE).length;
 				ok.push(
 					`every run-ending control in ${SYNC_SITE} is confirmed: ${armedFlags.length} ` +
@@ -1418,6 +1428,7 @@ export function check(
 
 	// (9) The DEBUG direct path sends what the WCSession envelope sends.
 	{
+		const before = errors.length;
 		const direct = stripSwiftComments(read(DIRECT_SITE));
 		const sent = watchEnvelopeKeys(stripSwiftComments(read(SYNC_SITE)));
 		const columns = swiftStructFields(direct, 'RunPayload');
@@ -1465,7 +1476,7 @@ export function check(
 						'inherits it. Delete the entry.',
 				);
 			}
-			if (errors.length === 0) {
+			if (errors.length === before) {
 				ok.push(
 					`all ${sent.size} WCSession run fields are also written by the DEBUG direct path ` +
 						`(${Object.keys(DIRECT_ONLY_FIELDS).length} phone-supplied fields exempt)`,
@@ -1477,6 +1488,7 @@ export function check(
 	// (10) Info.plist keys live in the Info.plist, and the companion
 	// declaration is internally consistent.
 	{
+		const before = errors.length;
 		const blocks = buildSettingsBlocks(read(PBXPROJ));
 		if (blocks.length === 0) {
 			errors.push(
@@ -1564,7 +1576,7 @@ export function check(
 								'the "move the lie" outcome § 1256 refused: do the embed, then flip the ' +
 								'key.',
 						);
-					} else if (errors.length === 0) {
+					} else if (errors.length === before) {
 						ok.push(
 							`${WATCH_PLIST} owns its own keys (no inert INFOPLIST_KEY_* on the ` +
 								'manual-plist target) and its companion declaration matches the build' +
@@ -1574,7 +1586,7 @@ export function check(
 									: ''),
 						);
 					}
-				} else if (errors.length === 0) {
+				} else if (errors.length === before) {
 					ok.push(
 						`${WATCH_PLIST} owns its own keys (no inert INFOPLIST_KEY_* on the manual-plist ` +
 							'target) and its companion declaration is self-consistent',

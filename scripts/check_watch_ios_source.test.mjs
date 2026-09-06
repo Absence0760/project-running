@@ -143,6 +143,55 @@ test('the shipped apps/watch_ios tree satisfies every claim', () => {
 	assert.ok(ok.length >= 13, `only ${ok.length} claims were exercised`);
 });
 
+// --- the ok list is per-claim, not per-file ---------------------------------
+
+test('a failing claim withholds its own ok line and no other', () => {
+	// Four `ok:` lines used to be gated on `errors.length === 0` — the array
+	// that holds EVERY claim's errors — so one failure anywhere above them
+	// deleted three later claims' success lines from the report a human reads
+	// to triage a red run, and a claim that held read as one that had failed
+	// silently (decisions § 1387).
+	//
+	// Anchored on the OUTPUT rather than on the gate's spelling: a claim added
+	// later that reads the global count fails this the same way, and no rename
+	// of the counter can make it vacuous. The first case breaks the FIRST
+	// claim, so every claim after it is under test.
+	const clean = runMutated(() => {});
+	assert.deepEqual(clean.errors, []);
+
+	/** @type {{ what: string, mutate: (dir: string) => void, own: RegExp }[]} */
+	const cases = [
+		{
+			what: 'claim (1), the first claim in the file',
+			mutate: (dir) => edit(dir, COPY, (s) => s.replace('Text("RUNNING")', 'Text("Still going")')),
+			own: /^(every localizing literal|all \d+ String Catalog entries)/,
+		},
+		{
+			what: 'claim (5), in the middle of the run',
+			mutate: (dir) =>
+				edit(dir, README, (s) =>
+					s.replaceAll('group.com.threkir.app.activerun', 'group.com.threkir.app.other'),
+				),
+			own: /^App Group /,
+		},
+	];
+
+	for (const { what, mutate, own } of cases) {
+		const { errors, ok } = runMutated(mutate);
+		assert.ok(errors.length > 0, `${what}: the mutation raised nothing`);
+		const lost = clean.ok.filter((line) => !ok.includes(line));
+		assert.ok(
+			lost.some((line) => own.test(line)),
+			`${what}: the broken claim still reported ok — ${lost.join(' | ')}`,
+		);
+		assert.deepEqual(
+			lost.filter((line) => !own.test(line)),
+			[],
+			`${what}: these claims still hold and stopped saying so`,
+		);
+	}
+});
+
 // --- claim 11: the session a delegate acts on, and when it is released ------
 
 test('releasing the session inside the finishWorkout completion is refused', () => {
