@@ -24,7 +24,8 @@ import {
 	ROUTE_LIST_COLS,
 	PUBLIC_ROUTE_LIST_COLS,
 	type RouteListItem,
-	type PublicRouteListRow
+	type PublicRouteListRow,
+	type PublicRouteSummary
 } from '../routes/route_list_columns';
 import type {
 	Run,
@@ -1460,12 +1461,16 @@ export async function deleteRouteReview(routeId: string): Promise<void> {
 
 // --- Routes ---
 
+/// The public-route catalogue near a point. `nearby_routes` is declared
+/// `setof public_routes`, so what comes back is the view's fifteen columns and
+/// not a `routes` row — `PublicRouteSummary` says so rather than casting past
+/// it to a `Route` the RPC cannot produce (§ 1328).
 export async function nearbyPublicRoutes(options: {
 	lat: number;
 	lng: number;
 	radiusM?: number;
 	limit?: number;
-}): Promise<Route[]> {
+}): Promise<PublicRouteSummary[]> {
 	const { lat, lng, radiusM = 50000, limit = 50 } = options;
 	const { data, error } = await supabase.rpc('nearby_routes', {
 		lat,
@@ -1474,7 +1479,7 @@ export async function nearbyPublicRoutes(options: {
 		max_results: limit,
 	});
 	if (error || !data) return [];
-	return data as Route[];
+	return data as PublicRouteSummary[];
 }
 
 export async function searchPublicRoutes(options?: {
@@ -1487,7 +1492,7 @@ export async function searchPublicRoutes(options?: {
 	sort?: 'newest' | 'popular' | 'featured';
 	limit?: number;
 	offset?: number;
-}): Promise<Route[]> {
+}): Promise<PublicRouteSummary[]> {
 	const {
 		query,
 		minDistanceM,
@@ -1522,7 +1527,7 @@ export async function searchPublicRoutes(options?: {
 	// legitimately empty result so it can show a retry affordance instead
 	// of a misleading "no matches" empty state.
 	if (error) throw error;
-	return (data ?? []) as Route[];
+	return (data ?? []) as PublicRouteSummary[];
 }
 
 /// The set of tags currently used across any public route, ordered by

@@ -17,12 +17,14 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { publicRouteListFill } from '../core/data_normalise';
 import type { Route } from '../types';
+import type { Database } from '../database.types';
 import {
 	PUBLIC_ROUTE_LIST_COLS,
 	PUBLIC_ROUTE_LIST_COLUMNS,
 	ROUTE_LIST_COLS,
 	ROUTE_LIST_COLUMNS,
 	type PublicRouteListRow,
+	type PublicRouteSummary,
 	type RouteListItem,
 } from './route_list_columns';
 
@@ -82,6 +84,56 @@ export const withheldReadsDoNotCompile = (r: RouteListItem) => [
 	// @ts-expect-error — leaks the run start location
 	r.start_point,
 ];
+
+/// `PublicRouteSummary` is the intersection of the generated `public_routes`
+/// row with `Route`, so a view column `Route` does not have would be dropped
+/// silently — the type would still compile and still be wrong. This is the one
+/// direction the intersection cannot state for itself.
+export type PublicViewNamesNothingRouteDoesNot = AssertNever<
+	Exclude<keyof Database['public']['Views']['public_routes']['Row'], keyof Route>
+>;
+
+/// The catalogue RPCs serve the view, not the table, so the seven columns
+/// `public_routes` withholds must not be readable off their result. `waypoints`
+/// is the one that mattered: it is `TrackPoint[]`, non-nullable, and a caller
+/// that mapped over it got `undefined.map` — § 1229 — under a `Route` cast.
+export const viewWithheldReadsDoNotCompile = (r: PublicRouteSummary) => [
+	// @ts-expect-error — served only through clip_route_for_viewer (§ 33)
+	r.waypoints,
+	// @ts-expect-error — the owner's own flag, not a property of a public route
+	r.is_starred,
+	// @ts-expect-error — server-spatial only
+	r.geom,
+	// @ts-expect-error — server-spatial only
+	r.geom_public,
+	// @ts-expect-error — leaks the route start location
+	r.start_point,
+	// @ts-expect-error — server-owned moderation column (§ 1327)
+	r.shadow_hidden,
+];
+
+/// The catalogue card reads these nine off every row, so they have to survive
+/// the narrowing or the RouteExplorer stops compiling instead of the type
+/// stopping being a lie.
+export const catalogueReadsCompile = (r: PublicRouteSummary) => [
+	r.id,
+	r.user_id,
+	r.name,
+	r.distance_m,
+	r.elevation_m,
+	r.surface,
+	r.run_count,
+	r.is_featured,
+	r.tags,
+];
+
+/// The saved-route half of the list reads the same view, so its tuple is a
+/// subset of what the view serves — not merely of what `routes` has, which is
+/// what the column check further down proves and is not the same claim: adding
+/// `waypoints` to the public tuple passes that one and 400s at runtime.
+export type PublicListIsAViewSubset = AssertNever<
+	Exclude<keyof PublicRouteListRow, keyof PublicRouteSummary>
+>;
 
 /// Every column the list DOES read has to stay readable, or the narrowing has
 /// gone too far and the pin above would be the only thing left passing.

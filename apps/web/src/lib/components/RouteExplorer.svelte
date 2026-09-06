@@ -9,7 +9,7 @@
 		bookmarkRoute,
 		unbookmarkRoute,
 	} from '$lib/core/data';
-	import type { Route } from '$lib/types';
+	import type { PublicRouteSummary } from '$lib/routes/route_list_columns';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { supabase } from '$lib/core/supabase';
@@ -17,7 +17,7 @@
 	import { routeSurfaceLabel } from '$lib/i18n/enum_labels.svelte';
 	import RouteTrackPreview from './RouteTrackPreview.svelte';
 
-	let routes = $state<Route[]>([]);
+	let routes = $state<PublicRouteSummary[]>([]);
 	let loading = $state(true);
 	let hasMore = $state(true);
 	let searchError = $state(false);
@@ -133,7 +133,7 @@
 	/// guards.
 	let bookmarkBusy = $state(new Set<string>());
 
-	async function toggleBookmark(route: Route) {
+	async function toggleBookmark(route: PublicRouteSummary) {
 		if (!auth.loggedIn) return;
 		if (bookmarkBusy.has(route.id)) return;
 		bookmarkBusy = new Set([...bookmarkBusy, route.id]);
