@@ -943,9 +943,9 @@ jobs:
       - name: Assert the built artifact's head signals + structured data
         working-directory: apps/web
         run: |
-          if ! npx tsx --test src/lib/share/spa_shell_head_signals.test.ts src/lib/seo/document_title.test.ts src/lib/seo/learn_structured_data.test.ts; then
+          if ! npx tsx --test src/lib/share/spa_shell_head_signals.test.ts src/lib/seo/document_title.test.ts src/lib/seo/learn_structured_data.test.ts src/lib/seo/prerendered_head_contract.test.ts; then
             echo "::error::The built apps/web artifact does not carry the head signals or the JSON-LD these guards claim. The compile gate and the bundle budget above both passed, so this is not about whether the app builds or how big it is — it is about what the emitted HTML says."
-            echo "Reproduce with: npm ci && npm run build --workspace=apps/web && cd apps/web && npx tsx --test src/lib/share/spa_shell_head_signals.test.ts src/lib/seo/document_title.test.ts src/lib/seo/learn_structured_data.test.ts"
+            echo "Reproduce with: npm ci && npm run build --workspace=apps/web && cd apps/web && npx tsx --test src/lib/share/spa_shell_head_signals.test.ts src/lib/seo/document_title.test.ts src/lib/seo/learn_structured_data.test.ts src/lib/seo/prerendered_head_contract.test.ts"
             exit 1
           fi
 
