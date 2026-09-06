@@ -240,6 +240,60 @@ Until step 4 lands, treat the secret as compromised-if-logs-are: the channel is 
 
 ---
 
+## Merge gates — what protects `main`, and the one scanner that does not
+
+Every deploy starts with a merge, so the merge gate is the first production
+control. Branch protection on `main` requires **exactly one status context**:
+`CI gate`, the aggregator job in `.github/workflows/ci.yml`. It waits on the
+other 34 jobs in that file and fails if any of them reports anything but
+success or skipped.
+
+A `needs:` entry is scoped to its own workflow, so a job in a sibling workflow
+file can never be waited on directly. Two workflows reach the gate anyway by
+being **called instead of triggered** -- `terraform.yml` ([decisions
+§ 1149](../architecture/decisions.md)) and `gitleaks.yml` ([§
+1264](../architecture/decisions.md)) are `on: workflow_call`, and `ci.yml` has
+a one-line job for each. A called workflow's job results fan into the calling
+job, so one `needs:` entry covers every job those files hold today and every
+one they gain later.
+
+### CodeQL is the exception, and it is a repo setting
+
+`security.yml`'s four CodeQL analyses and two Trivy jobs are **not** in the
+gate, so a CodeQL alert on a pull request does not block its merge today. The
+call trick above does not fix it, for a reason measured rather than assumed:
+`github/codeql-action/analyze` at the pinned SHA declares 18 inputs and not one
+of them is a severity threshold (re-read against the action's own `action.yml`
+2026-09-06). An alert never turns the job red, so calling `security.yml` from
+`ci.yml` would gate on the analysis **completing**, not on what it found -- and
+it would re-key every analysis in the Security tab, because the action derives
+its analysis key from the *run's* workflow path.
+
+What actually gates a CodeQL finding is a repo setting, and only a repo
+setting. In **Settings -> Rules -> Rulesets** (or Branch protection) on `main`,
+enable the **code scanning results** requirement and add the `CodeQL` tool at
+the alert threshold you want. Leave the required *status check* set at exactly
+`CI gate`; do **not** add the four `analyze` job names to it as a substitute,
+because that gates on the scan running rather than on what it found. Adding
+them is still worth doing if the worry is a scanner that silently stops
+working -- a broken extractor or a bad `queries:` value fails those jobs, and
+nothing else in CI would notice -- but it is a different guarantee, not a
+weaker version of the same one.
+
+Two things to do at the same time as the setting, because nothing in the repo
+can observe it:
+
+- The required set stops being exactly one context. The root `CLAUDE.md`
+  ("must pass the single required **CI gate** status check") and this section
+  both say it is, and both become wrong the moment the rule is enabled.
+- Trivy stays advisory on purpose and is not part of this. Both container jobs
+  run at `exit-code: '0'` and report to the Security tab; that is a deliberate
+  call recorded in `security.yml`, not an oversight to sweep up here.
+
+Nothing in this repository can read, set, or verify any of the above -- branch
+protection is not readable by the workflow token -- so this section is the only
+record that the state was ever intended.
+
 ## Release vs deploy
 
 Two orthogonal axes. **Release** is "we cut a tagged version of the product"; **deploy** is "those bytes are now serving traffic". They overlap in different ways per service. Every `release-*.yml` deploy is **triggered by publishing a GitHub Release** for the tag below (a bare tag push no longer deploys — the published Release is the gate; see [releasing.md](releasing.md)):
