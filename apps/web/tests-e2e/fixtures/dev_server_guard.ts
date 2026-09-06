@@ -180,14 +180,25 @@ async function servedRaw(url: string): Promise<{ status: number; content: string
 
 /**
  * Vite's `?raw` module is `export default <JSON string>` — one line, since
- * JSON.stringify escapes every newline — optionally followed by a sourcemap
- * comment.
+ * every newline is escaped — optionally followed by a sourcemap comment.
+ *
+ * It is not, however, `JSON.stringify` output: a literal TAB survives
+ * unescaped, and `JSON.parse` rejects a raw control character inside a string
+ * literal. This repo indents with tabs, so every real probe threw and the
+ * guard degraded to its "could not compare" warning — inert against exactly
+ * the stale cross-worktree server it exists to catch, on a clean tree and a
+ * dirty one alike. The escape below is applied to the whole literal, which is
+ * safe because no C0 character can appear in it for any other reason.
  */
 export function extractRawDefault(body: string): string | null {
 	const line = body.split('\n').find((l) => l.startsWith('export default "'));
 	if (!line) return null;
+	const literal = line
+		.slice('export default '.length)
+		.replace(/;$/, '')
+		.replace(/[\u0000-\u001f]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
 	try {
-		return JSON.parse(line.slice('export default '.length).replace(/;$/, ''));
+		return JSON.parse(literal);
 	} catch {
 		return null;
 	}

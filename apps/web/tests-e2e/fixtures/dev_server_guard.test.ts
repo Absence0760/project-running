@@ -125,6 +125,19 @@ test('extractRawDefault reads the payload, sourcemap comment or not', () => {
 	assert.equal(extractRawDefault('export default "unterminated'), null);
 });
 
+test('extractRawDefault reads a payload Vite left a literal tab in', () => {
+	// `raw()` above builds the body with JSON.stringify, which escapes tabs.
+	// Vite does not: it escapes newlines, quotes and backslashes and emits a
+	// TAB raw, which JSON.parse refuses as a control character in a string
+	// literal. This repo indents with tabs, so the synthetic fixture was the
+	// only shape the guard ever parsed and every real probe silently fell
+	// through to "could not compare" — a guard that passed by doing nothing.
+	const content = 'function f() {\n\treturn 1;\n}\n';
+	const viteBody = `export default ${JSON.stringify(content).replace(/\\t/g, '\t')};\n`;
+	assert.ok(viteBody.includes('\t'), 'the fixture must carry a raw tab');
+	assert.equal(extractRawDefault(viteBody), content);
+});
+
 test('changedWebSources reports modified, staged and untracked web sources', () => {
 	const root = mkdtempSync(join(tmpdir(), 'dev-guard-repo-'));
 	cleanups.push(() => rmSync(root, { recursive: true, force: true }));

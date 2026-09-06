@@ -27,33 +27,31 @@ import { USER_A } from '../fixtures/users';
 test.describe('/gym/[id] — two spellings of one lift', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
-	// `gym-log` RESUMES an in-flight session -- the draft lives on a
-	// `gym_workouts` row under `metadata.gym_session_draft`, not in the browser
-	// -- so a row left behind by an earlier failed run of this spec is picked up
-	// instead of a fresh sheet, and the second workout is then never created.
-	// That is why this spec passed alone and failed after its siblings. Clearing
-	// this account's leftovers makes it independent of run order.
+	// Housekeeping only: the stamp makes each run's titles unique, so an orphan
+	// from an earlier failed run cannot be mistaken for this run's -- but this
+	// account is shared with every other gym spec and the rows would otherwise
+	// accumulate forever. (`gym-log` opens a fresh editor modal; the in-flight
+	// `metadata.gym_session_draft` resume is a separate card on the same page,
+	// `gym-session-draft-card`, which these steps never touch.)
 	test.beforeEach(async () => {
 		const admin = getAdminClient();
 		await admin.from('gym_workouts').delete().eq('user_id', USER_A.id).like('title', 'E2E%Fold%');
 	});
 
-	// UNRESOLVED at round-40 integration, and left visible rather than deleted.
-	// It PASSES run alone and FAILS run after its sibling specs, always the same
-	// way: only one of the two workouts the UI steps create is found, so the
-	// spec never reaches the chip assertions that are its point. Tried and ruled
-	// out: leftover `metadata.gym_session_draft` rows on this account (the
-	// beforeEach above deletes them and the failure is unchanged), and stamp
-	// collision with orphans (the LIKE is stamped per run). The behaviour itself
-	// is covered and passing at the unit level -- the fold now runs through
-	// `normaliseExerciseName` on every surface, pinned by the gym suite -- so
-	// what is missing here is the end-to-end proof, not the fix.
-	test.fixme('both blocks keep their PR chips and the header counts one exercise', async ({ page }) => {
+	// The two session titles must not be prefixes of one another. `hasText` is a
+	// SUBSTRING match, so while the second was `... pr` and the first `... prior`
+	// the post-save wait matched the row session 1 had already put on the page
+	// and returned instantly -- the assertion passed without the second workout
+	// existing, and the service-role read below then raced the insert and found
+	// one row. That is what made this look order-dependent: nothing here waited
+	// for the second save at all, so whether it had landed was a matter of how
+	// loaded the machine was.
+	test('both blocks keep their PR chips and the header counts one exercise', async ({ page }) => {
 		const admin = getAdminClient();
 		const stamp = Date.now();
 		const single = `E2E Fold ${stamp}`;
 		const doubled = `E2E  Fold ${stamp}`;
-		const titles = [`${single} prior`, `${single} pr`];
+		const titles = [`${single} sessionA`, `${single} sessionB`];
 		const workoutIds: Record<string, string> = {};
 
 		// Session 1 establishes a prior best under the single-spaced spelling.
