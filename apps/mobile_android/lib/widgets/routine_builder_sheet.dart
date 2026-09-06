@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../gym_prs.dart' show normaliseExerciseName;
+import '../gym_prs.dart' show namesAnExercise, normaliseExerciseName;
 import '../l10n/gen/app_localizations.dart';
 import '../local_routine_store.dart';
 import '../preferences.dart';
@@ -242,7 +242,11 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
   List<StoredRoutineExercise> _buildExercises() {
     // Drop blank-named exercises first so superset linking only sees real rows
     // (a blank row between two flagged blocks must not bridge them).
-    final named = _exercises.where((e) => e.name.text.trim().isNotEmpty).toList();
+    // Blank on the KEY: gym_routine_exercises.exercise_key carries
+    // `length(...) between 1 and 120`, so a name the canonical fold empties is
+    // a 23514 rather than a dropped row.
+    final named =
+        _exercises.where((e) => namesAnExercise(e.name.text)).toList();
     if (named.isEmpty) return const [];
     final groups = assignSupersetGroups([for (final e in named) e.supersetWithNext]);
 

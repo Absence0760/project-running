@@ -359,7 +359,11 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
     final out = <GymSetInput>[];
     for (final ex in _exercises) {
       final name = ex.name.text.trim();
-      if (name.isEmpty) continue;
+      // Blank on the KEY, never on the trim. This runtime's trim() happens to
+      // strip exactly the folded class, so the two agree here -- and the web
+      // twin's does not, which is the whole reason the test has a name
+      // (decisions 1367).
+      if (!namesAnExercise(name)) continue;
       // Bind to a catalogue entry when the typed name matches by normalised
       // key; otherwise stay free-text (exerciseId null).
       final exerciseId = _catalogueByKey[normaliseExerciseName(name)];

@@ -244,6 +244,24 @@ int distinctExerciseCount(Iterable<String> exerciseNames) {
 bool sameExerciseName(String? a, String? b) =>
     normaliseExerciseName(a ?? '') == normaliseExerciseName(b ?? '');
 
+/// Does this free-text spelling name an exercise at all?
+///
+/// The one blankness test every surface that PERSISTS an exercise name must
+/// make, and the companion to [sameExerciseName]: identity and emptiness are
+/// both properties of the KEY, and a surface that reads either off the display
+/// spelling disagrees with every surface that reads it off the key.
+///
+/// This rail answered correctly before it named the test, and that is the
+/// reason it now names it. `String.trim()` strips the whole Unicode
+/// `White_Space` set plus U+FEFF, which is [kExerciseWhitespace] exactly — so
+/// `name.trim().isEmpty` was right by coincidence of the runtime, the precise
+/// dependency the spelled-out class exists to remove. The web twin's `trim()`
+/// is a narrower set that leaves U+0085 (NEL) in place, so the same guard there
+/// SAVED a set whose server-stamped `exercise_key` is `''` and passed a name to
+/// two columns whose key CHECK is `length(...) between 1 and 120`
+/// (decisions 1367). One name for one rule, on both rails.
+bool namesAnExercise(String? name) => normaliseExerciseName(name ?? '') != '';
+
 class WorkoutPrResult {
   /// The grouping key — [normaliseExerciseName] of the exercise. Carried so a
   /// caller keying a lookup on the result never re-derives it from
