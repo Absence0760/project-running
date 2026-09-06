@@ -153,6 +153,13 @@ import {
 /// derived from. `satisfies RunColumns` on a literal refuses a name that is not
 /// a column, so a migration that drops one fails to compile at the declaration
 /// rather than asking PostgREST for nothing.
+///
+/// The wire string is `join`ed from the tuple, which is `string` rather than a
+/// literal type. That costs nothing today — the browser client is constructed
+/// without the `Database` generic, so supabase-js infers no row shape from any
+/// select in this file — but whoever types that client has to convert these
+/// joins back to literals, and `route_list_columns.ts` already carries the
+/// `Join<T, D>` template-literal type that does it.
 export type RunColumns = readonly (keyof Run)[];
 
 export interface FetchRunsOptions<C extends RunColumns = RunColumns> {
