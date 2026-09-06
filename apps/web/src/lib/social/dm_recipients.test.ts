@@ -129,7 +129,7 @@ test('filterDmRecipients: the search is not sigma-sensitive', () => {
 	// reconciles them, so `οδοσ` did not reach `ΟΔΟΣ` — the one sigma-sensitive
 	// search key left in the product (decisions § 1340).
 	const list = [
-		{ id: 'a', displayName: 'ΟΔΟΣ', avatarUrl: null, relation: 'follower' as const }
+		{ id: 'a', displayName: 'ΟΔΟΣ', avatarUrl: null, relation: 'follows_you' as const }
 	];
 	assert.equal(filterDmRecipients(list, 'οδοσ').length, 1);
 	assert.equal(filterDmRecipients(list, 'οδος').length, 1);
@@ -137,7 +137,7 @@ test('filterDmRecipients: the search is not sigma-sensitive', () => {
 
 test('filterDmRecipients: the search folds accents, like every other search key', () => {
 	const list = [
-		{ id: 'a', displayName: 'Zoë Müller', avatarUrl: null, relation: 'following' as const }
+		{ id: 'a', displayName: 'Zoë Müller', avatarUrl: null, relation: 'you_follow' as const }
 	];
 	assert.equal(filterDmRecipients(list, 'zoe muller').length, 1);
 });
