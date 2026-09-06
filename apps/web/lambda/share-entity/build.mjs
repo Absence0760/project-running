@@ -9,7 +9,7 @@
 // inlined. Unlike share-run/route/badge/recap this Lambda serves HTML
 // ONLY (no per-entity og:image PNG), so there is NO native @resvg addon
 // to keep external + copy — the whole handler bundles cleanly. The
-// SPA-shell index.html is read from apps/web/build/index.html (built by
+// SPA shell 200.html is read from apps/web/build/200.html (built by
 // `npm run build`) and substituted in as the __SPA_SHELL_HTML__ constant.
 
 import { build } from 'esbuild';
@@ -21,12 +21,12 @@ import { execSync } from 'node:child_process';
 const here = dirname(fileURLToPath(import.meta.url));
 const webRoot = resolve(here, '..', '..');
 const distDir = resolve(here, 'dist');
-const spaShellPath = resolve(webRoot, 'build', 'index.html');
+const spaShellPath = resolve(webRoot, 'build', '200.html');
 
 if (!existsSync(spaShellPath)) {
 	console.error(
 		`[share-entity build] missing SPA shell at ${spaShellPath}. ` +
-			`Run \`npm run build\` (from apps/web/) first so the index.html template exists.`,
+			`Run \`npm run build\` (from apps/web/) first so the 200.html shell exists.`,
 	);
 	process.exit(1);
 }

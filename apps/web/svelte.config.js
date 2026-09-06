@@ -19,7 +19,28 @@ function defineConfig() {
 		kit: {
 			// See https://kit.svelte.dev/docs/adapters for more information about adapters.
 			adapter: adapter({
-				fallback: "index.html",
+				// The SPA shell, and deliberately NOT `index.html`.
+				// adapter-static writes the prerendered pages first and then
+				// generates the fallback, to whatever name it is given and
+				// over whatever is already there -- so while this said
+				// `index.html` the prerendered landing page (`+page.ts`,
+				// `prerender = true`) was written to that path and then
+				// replaced by a component-less shell carrying no title, no
+				// canonical, no description and no JSON-LD. Measured: the
+				// prerendered `/` is 14,875 bytes with all four, the shell
+				// 5,784 with none.
+				//
+				// Three consumers name this file and all of them must name
+				// THIS one, or the shell and the landing page get swapped:
+				// the five share Lambdas' `build.mjs` embed it, and
+				// CloudFront's 403 -> shell mapping
+				// (`infra/modules/web-stack/main.tf`) serves it for every deep
+				// link. `src/lib/seo/spa_shell_filename.test.ts` reads all
+				// three rails and fails when they disagree. Changing the name
+				// here is therefore a cross-tree change with a deploy order --
+				// docs/features/seo.md § Deploying a change to the shell
+				// filename. decisions § 1268, § 1269.
+				fallback: "200.html",
 			}),
 			paths: {
 				base: basePath(),

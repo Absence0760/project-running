@@ -240,10 +240,6 @@ void main() {
       expect(tester.widget<PopupMenuItem<int>>(row('Make private')).enabled,
           isTrue);
       await closeOverflow();
-
-      // Drain the "made public" banner timer.
-      await tester.pump(const Duration(seconds: 4));
-      await tester.pump();
     });
 
     testWidgets(
@@ -362,11 +358,6 @@ void main() {
           matching: find.byType(IconButton)));
       expect(pinBtnAfter.onPressed, isNotNull,
           reason: 'control re-enables once the pin completes');
-
-      // The completed pin fires a "Saved offline" top banner, which leaves a
-      // pending auto-dismiss timer — drain it so the framework doesn't trip.
-      await tester.pump(const Duration(seconds: 4));
-      await tester.pump();
     });
 
     testWidgets('delete button is visible when isOwner is true and apiClient has userId',

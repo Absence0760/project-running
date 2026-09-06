@@ -25,7 +25,7 @@ fallback PNG (an unfurl must never show a broken image).
 
 ```bash
 cd apps/web
-npm run build                 # produces build/index.html (the SPA shell)
+npm run build                 # produces build/200.html (the SPA shell)
 node lambda/share-recap/build.mjs
 # → apps/web/lambda/share-recap/dist/share-recap.zip
 ```

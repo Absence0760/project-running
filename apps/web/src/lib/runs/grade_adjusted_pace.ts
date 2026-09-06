@@ -123,12 +123,26 @@ export function gradeAdjustedPaceSecPerKm(track: TrackPoint[] | null | undefined
 		const dtMs = a.ts && b.ts ? Date.parse(b.ts) - Date.parse(a.ts) : NaN;
 		if (Number.isFinite(dtMs) && dtMs > 0) {
 			let factor = 1;
+			let measuredGrade = false;
 			if (a.ele != null && b.ele != null) {
-				sawEle = true;
+				measuredGrade = true;
 				factor = gradeFactor((b.ele - a.ele) / segHoriz);
 			}
-			adjDistM += segHoriz * factor;
-			timeS += dtMs / 1000;
+			// A segment whose equivalent-flat distance is not a number is
+			// unusable in exactly the way a segment with no timestamps is, and
+			// is skipped the same way. It reaches here when a track point
+			// carries a non-finite lat/lng (`segHoriz` goes NaN, and
+			// `NaN < MIN_SEGMENT_M` is false so the walk never resets) or a
+			// non-finite altitude. Poisoning `adjDistM` instead used to erase
+			// the GAP of a three-hour ultra over one bad fix — and did it by
+			// returning NaN out of a `number | null`, which the Dart twin's
+			// `.round()` threw on, from inside a widget build (§ 1226).
+			const adj = segHoriz * factor;
+			if (Number.isFinite(adj)) {
+				if (measuredGrade) sawEle = true;
+				adjDistM += adj;
+				timeS += dtMs / 1000;
+			}
 		}
 		// Advance the anchor whether or not the segment was usable — a chunk
 		// without timestamps shouldn't wedge the walk forever.
@@ -136,6 +150,6 @@ export function gradeAdjustedPaceSecPerKm(track: TrackPoint[] | null | undefined
 		segHoriz = 0;
 	}
 
-	if (!sawEle || adjDistM <= 0 || timeS <= 0) return null;
+	if (!sawEle || !(adjDistM > 0) || !(timeS > 0)) return null;
 	return Math.round(timeS / (adjDistM / 1000));
 }

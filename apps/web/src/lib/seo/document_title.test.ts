@@ -16,11 +16,13 @@
 // that sets its own replaces it and one that sets none still has one.
 //
 // The deliberate consequence, which this guard states so it cannot be
-// rediscovered: adapter-static's SPA fallback renders no components, so
-// `build/index.html` now carries NO title in its raw HTML. That is the same
-// artifact `src/lib/share/spa_shell_head_signals.test.ts` measures; if that
-// file still pins `title: 1`, it is pinning the state this change left, not
-// the one the tree is in.
+// rediscovered: adapter-static's SPA fallback renders no components, so it
+// carries NO title in its raw HTML. That was `build/index.html` and cost the
+// site root its title; § 1268 prerendered the landing page onto that filename
+// and moved the fallback to `build/200.html`, so the untitled document is now
+// only the deep-link body. `src/lib/share/spa_shell_head_signals.test.ts`
+// measures that file's four head signals; this one counts titles across every
+// built page, the landing page included.
 //
 // Invocation:
 //   npx tsx --test src/lib/seo/document_title.test.ts

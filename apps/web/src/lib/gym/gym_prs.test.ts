@@ -4,6 +4,7 @@ import {
 	estimatedOneRepMax,
 	normaliseExerciseName,
 	computeExercisePrs,
+	distinctExerciseCount,
 	workoutPrs,
 	RunningPrTracker,
 	kE1rmMaxReps,
@@ -146,6 +147,43 @@ test('workoutPrs: case-insensitive history match prevents a false PR', () => {
 	const prior = [set('Bench Press', 5, 100)];
 	const prs = workoutPrs(prior, [set('bench press', 5, 95)]);
 	assert.deepEqual(prs, []);
+});
+
+test('workoutPrs: the result carries the grouping key, not a re-derivable display string', () => {
+	// The name carries BOTH collapses the naive fold misses, because the two
+	// runtimes miss DIFFERENT ones and the intersection is empty: measured over
+	// all 1,488 table entries, Node 24 (Unicode 17.0) disagrees with the frozen
+	// table at exactly U+0130 and Dart 3.12 disagrees at 465 others, none of
+	// them U+0130. The internal whitespace run is the witness that holds on
+	// both, so this test and its Dart mirror take the same input.
+	//
+	// A caller that keys a lookup on `exerciseName.trim().toLowerCase()` stores
+	// a key no block spelled `incline press` can ever hit, and the exercise's
+	// chips vanish with no error anywhere (§ 1248). An ASCII single-spaced name
+	// would pass either way.
+	const prs = workoutPrs([], [set('\u0130ncline  Press', 5, 100)]);
+	assert.equal(prs.length, 1);
+	assert.equal(prs[0].key, 'incline press');
+	assert.equal(prs[0].exerciseName, '\u0130ncline  Press');
+	assert.notEqual(prs[0].key, prs[0].exerciseName.trim().toLowerCase());
+	assert.equal(prs[0].key, normaliseExerciseName('incline press'));
+});
+
+test('distinctExerciseCount: spellings the canonical fold merges count once', () => {
+	// Each pair is one lift under two spellings that `trim().toLowerCase()`
+	// keeps apart: an internal whitespace run, a non-breaking space, and a
+	// code point the runtimes disagree about.
+	assert.equal(distinctExerciseCount(['Bench  Press', 'Bench Press']), 1);
+	assert.equal(distinctExerciseCount(['Bench\u00a0Press', 'bench press']), 1);
+	assert.equal(distinctExerciseCount(['\u0130ncline Press', 'incline press']), 1);
+	assert.equal(distinctExerciseCount(['Bench Press', 'Back Squat']), 2);
+});
+
+test('distinctExerciseCount: blank and whitespace-only names contribute nothing', () => {
+	// Matches computeExercisePrs, which drops a blank-named set outright — a
+	// count that included it disagreed with every keyed surface.
+	assert.equal(distinctExerciseCount(['', '   ', '\u00a0', 'Bench Press']), 1);
+	assert.equal(distinctExerciseCount([]), 0);
 });
 
 test('RunningPrTracker.judge matches workoutPrs walked over growing prior', () => {

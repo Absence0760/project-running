@@ -40,7 +40,7 @@ Read code through the Western-States-sweep/medical/SAR lens:
 7. **Last-known-position when a runner goes fully dark.** Audit what the tracker shows for a runner with zero recent pings (canyon, hours dark). Does it retain and clearly label the **last confirmed station + time**, or does the row blank out / drop so the runner effectively disappears from the operational picture? A vanished row is an unaccounted runner the system forgot — flag.
 8. **Operational load + freshness under the worst moment.** Audit the snapshot/subscribe path and ping ingest. The moment a runner's in trouble in the heat is exactly when comms is hammering the tracker — does it stay fresh and responsive for ~380 runners over 30h, or does the snapshot replay full history / lag exactly when it matters?
 9. **Batched / stale ingest from no-cell relays.** Audit ingest ordering. Safety decisions ride on knowing the *actual* last-seen time; if a relayed ping is stamped with ingest time, "time since last seen" is wrong and an overdue runner looks fine (or a fine runner looks overdue) — flag.
-10. **Privacy vs safety on the operational view.** Audit whether the safety/ops view can see precise positions (it legitimately needs to, unlike the public tracker via `clipTrackForUser`). Note any case where the operational need for exact position conflicts with the privacy-zone clipping applied elsewhere — a clipped track on the SAR view would hide where a runner actually is.
+10. **Privacy vs safety on the operational view.** Audit whether the safety/ops view can see precise positions (it legitimately needs to, unlike the public tracker via `fetchClippedTrackForRun`). Note any case where the operational need for exact position conflicts with the privacy-zone clipping applied elsewhere — a clipped track on the SAR view would hide where a runner actually is.
 
 Cross-reference `apps/web/tests-e2e/` — don't re-report pinned bugs.
 
@@ -81,4 +81,4 @@ Cap at **5 findings**. The bar: when a runner is unaccounted for in a 105°F can
 
 ## Output → `reviews/`
 
-Persist your triage findings to `reviews/persona-ws100-sweep-medical-sar.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only as chat output. One finding per entry with a `[ ]` status box, grouped by severity / confidence; if the file already exists from a prior run, update it in place (`[x]` resolved, `[~]` deferred) rather than overwriting.
+Persist your triage findings to `reviews/persona-ws100-sweep-medical-sar.md` (gitignored working notes — see [`reviews/README.md`](../../../../../reviews/README.md)), not only as chat output. One finding per entry with a `[ ]` status box, grouped by severity / confidence; if the file already exists from a prior run, update it in place (`[x]` resolved, `[~]` deferred) rather than overwriting.

@@ -9,7 +9,7 @@ hosting, §147 event-meet-point privacy, §161 learn prerendering).
 ## The core problem
 
 `apps/web` is a statically-prerendered SPA (`@sveltejs/adapter-static`).
-Any route rendered **client-side** serves the empty `index.html` shell to:
+Any route rendered **client-side** serves the empty `200.html` shell to:
 
 - **Non-Google crawlers + every social link-unfurler** (Slack, iMessage,
   WhatsApp, Facebook, LinkedIn, X) — they run **no JS**, so they only ever
@@ -25,7 +25,7 @@ indexed anyway).
 
 | Surface | Mode | `<head>` owner | Structured data |
 |---|---|---|---|
-| `/` landing | prerendered **(intended — see the note below; the artifact is the SPA shell today)** | `SeoHead.svelte` + `+page.ts` | `Organization` + `WebSite` |
+| `/` landing | prerendered | `SeoHead.svelte` + `+page.ts` | `Organization` + `WebSite` |
 | `/learn/[slug]` | prerendered (`entries()`) | inline `<svelte:head>` + `buildGuideJsonLd` | `Article` (with an embedded `BreadcrumbList`) |
 | `/learn` | prerendered | inline `<svelte:head>` + `buildLearnCollectionJsonLd` | `CollectionPage` (with an embedded `BreadcrumbList` + an `ItemList` of the guides listed) |
 | `/learn/category/[category]` | prerendered (`entries()`) | inline `<svelte:head>` + `buildLearnCollectionJsonLd` | `CollectionPage` (with an embedded `BreadcrumbList` + an `ItemList` of the guides listed) |
@@ -46,22 +46,25 @@ indexed anyway).
 | `/clubs/[slug]`, `/clubs/[slug]/events/[id]`, `/events/[id]`, `/live/[id]`, `/recap/[year]` | CSR (app shell) | generic shell + canonical | — (anon-reachable, shell-only) |
 | dashboard / feed / settings / … | CSR (app shell) | generic shell | — (auth-gated) |
 
-**The `/` row states the intent, not the artifact.** Measured on a production
-build 2026-09-05: `build/index.html` is adapter-static's SPA *fallback* — no
+**The `/` row is measured, not intended.** It was intent for as long as the
+surface existed: `build/index.html` was adapter-static's SPA *fallback* — no
 `<title>` (since [§ 1167](../architecture/decisions.md) moved the default into
 the root layout, where a fallback rendering no components cannot reach it), no
 canonical, no `og:`/`twitter:`/`description`, no `Organization`/`WebSite`
-JSON-LD — because `src/routes/+page.ts` exports no
-`prerender` and there is no root `+layout.ts` to set one, so `/` is a
-client-rendered route. It is NOT a prerendered page being overwritten: there is
-no `index.html` in `.svelte-kit/output/prerendered/pages/` at all. Closing it is
-four coordinated changes across three trees (`+page.ts`, `svelte.config.js`, the
-five `lambda/*/build.mjs`, and the CloudFront 403 mapping) and doing fewer than
-all four either changes nothing or takes the site down — see
-[decisions § 1116](../architecture/decisions.md) and the open box in
-[followups.md](../product/followups.md). `share/spa_shell_head_signals.test.ts`
-reads the built artifact and fails the day this changes, so the flip will be a
-stated event.
+JSON-LD. Two things were wrong at once and each hid the other: `+page.ts`
+exported no `prerender`, so nothing was ever written to that path; and the
+adapter's fallback was *named* `index.html`, so switching prerendering on alone
+would have written the landing page and then replaced it. Both are closed by
+[§ 1268](../architecture/decisions.md) — `/` prerenders, and the shell moved to
+`build/200.html`.
+
+`src/lib/seo/prerendered_head_contract.test.ts` asserts the row against the
+emitted HTML: the landing page's title, canonical, description, `og:`/
+`twitter:` set and both JSON-LD types, plus — for every prerendered page,
+`/learn` included — a canonical naming the path that page is actually served
+at. `src/lib/share/spa_shell_head_signals.test.ts` measures the shell's four
+head signals, all still zero, so the four strips in the share injectors are
+still acting on nothing.
 
 Two rows above are easy to misread, and both were wrong in this table before:
 
@@ -93,17 +96,19 @@ Two rows above are easy to misread, and both were wrong in this table before:
 
 ### What the SPA shell carries in its `<head>`
 
-The five share Lambdas each embed `apps/web/build/index.html` at bundle time and
+The five share Lambdas each embed `apps/web/build/200.html` at bundle time and
 splice their own head into it per request, stripping whatever stale signals the
 shell carries first. Which signals those are is a fact about the artifact, so it
 is measured rather than asserted: `share/spa_shell_head_signals.test.ts` pins the
 counts (`{title: 0, social: 0, canonical: 0, jsonLd: 0}` as of 2026-09-05)
-against `src/app.html` unconditionally, and against `build/index.html` whenever a
+against `src/app.html` unconditionally, and against `build/200.html` whenever a
 build is present. All four strips therefore act on nothing today; they
-stay because a single `og:` default added to `app.html`, or the landing page
-above reaching this filename, makes all four load-bearing in one edit — and
-`injectEntityHead` also serves `notFoundShell`, where nothing about the entity
-may survive onto a page that says it is gone.
+stay because a single `og:` default added to `app.html`, or a Lambda left
+embedding `build/index.html` — the prerendered landing page since
+[§ 1268](../architecture/decisions.md), which carries all four — makes them
+load-bearing again in one edit; and `injectEntityHead` also serves
+`notFoundShell`, where nothing about the entity may survive onto a page that
+says it is gone.
 
 The strip and splice steps live once, in `share/head_splice.ts`. It takes a
 signal LIST rather than doing everything, because two heads emit no JSON-LD
@@ -121,6 +126,42 @@ shipped broken only because the shell carries none today, and the list above is
 what says that state is provisional. The rule is per-HEAD, and for the run
 injector per-CALL, because `ShareRunMeta.jsonLd` is optional
 ([§ 1190](../architecture/decisions.md)).
+
+### Deploying a change to the shell filename
+
+The shell's filename is named in three trees, and
+`src/lib/seo/spa_shell_filename.test.ts` fails the PR when they disagree:
+
+| Tree | Rail |
+|---|---|
+| `apps/web/svelte.config.js` | the adapter's `fallback` — writes the file |
+| `apps/web/lambda/*/build.mjs` | `spaShellPath` — embeds it in each share Lambda at bundle time |
+| `infra/modules/web-stack/main.tf` | the 403 `custom_error_response`'s `response_page_path` — the body of every deep link |
+
+Those three agreeing is a repo property. Getting from one filename to another
+in a LIVE distribution is not: the CloudFront apply and the artifact deploy are
+separate acts, and each order leaves a window where the 403 body is wrong.
+Deploy first and the bucket holds the landing page at `index.html` while the
+live 403 still points there, so every deep link serves it — with its asset URLs
+(`./_app/…`) resolved against the deep link's own directory, so nothing loads.
+Apply first and the 403 points at a `200.html` that is not in the bucket yet.
+
+A one-off bucket pre-seed closes the window, because the two files are
+byte-identical at the moment it runs:
+
+1. `aws s3 cp s3://<bucket>/index.html s3://<bucket>/200.html` — the live
+   object is still the shell, so this adds a duplicate and changes nothing for
+   anyone.
+2. `terraform apply` the 403 → `/200.html`. Deep links now read the copy, which
+   is the same bytes they were reading a moment ago.
+3. Deploy the tag. `index.html` becomes the landing page and `200.html` is
+   overwritten with the fresh shell; deep links never stop resolving.
+
+Step 1 survives step 3's `aws s3 sync --delete` because that sync excludes
+`*.html` (`.github/workflows/release-web.yml`), and an excluded destination key
+is not a deletion candidate. **This sequence has never been executed against
+AWS** — no CI lane holds credentials — so confirm each step at the edge before
+taking the next. See [decisions § 1269](../architecture/decisions.md).
 
 ## Canonical consolidation (in-app → share twin)
 
@@ -223,7 +264,9 @@ missing / deleted entity returns **404 HTML with `noindex`**, never a 5xx.
 **What a crawler actually receives is the distribution's answer, not the
 Lambda's.** `custom_error_response` is modelled per DISTRIBUTION on CloudFront,
 so the SPA fallback in `infra/modules/web-stack/main.tf` replaces the BODY of
-every origin's 4xx with `/index.html`. Until [decisions § 1022](../architecture/decisions.md)
+every origin's 4xx with the shell (`/200.html` since
+[§ 1268](../architecture/decisions.md); `/index.html` before it, when that
+filename was the shell rather than the landing page). Until [decisions § 1022](../architecture/decisions.md)
 it also replaced the 404 STATUS with **200**, which made all ten
 `/share/{run,route,recap,badge,event,profile,club,race,session,workout}/<id>`
 paths soft 404s for a private, deleted or never-existing entity: a generic shell

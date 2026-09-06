@@ -1,8 +1,15 @@
 ---
-description: Verify every non-owner surface routes tracks/waypoints through clipTrackForUser
+description: Verify every non-owner surface routes tracks/waypoints through the server-side clipping path
 ---
 
-Audit every surface that renders a track or polyline owned by another user. Every one must route through `clipTrackForUser` (decisions §33) — or have a documented reason not to.
+Audit every surface that renders a track or polyline owned by another user. Every one must route through the SERVER-SIDE clipping path (decisions §33) — or have a documented reason not to.
+
+**There are two such paths, and they are not the same call.** No client holds a `clipTrackForUser` method; the client-side "fetch the blob then clip the points" pattern was removed by migration `20260619_001`, and `20270521_001` then withdrew `clip_track_for_user` from `authenticated` outright, because a caller who can run it can binary-search the owner's zone centres. What a client has today is:
+
+- **A run's track** — `fetchClippedTrackForRun(runId)`, on both clients (`apps/web/src/lib/core/data.ts`, `packages/api_client/lib/src/api_client.dart`). It invokes the `clip-public-track` Edge Function, which downloads the gzipped track with the service role and passes the points through the SQL `clip_track_for_user`.
+- **A route's waypoints** — web `fetchClippedRouteForViewer(routeId)`, mobile `ApiClient.clipRouteForViewer(routeId)`. Routes carry their waypoints inline as a jsonb column, so this is a straight `clip_route_for_viewer` RPC with no Edge Function and no Storage indirection.
+
+An audit whose acceptance criterion names a symbol the tree does not have reports a clean result having checked nothing, so check for THESE two, per surface kind.
 
 ## Goal
 
@@ -22,7 +29,7 @@ We've fixed three of these — the web feed thumbnail (eb02194), the bound thumb
    isOwner = viewerId != null && viewerId == ownerId
    ```
    A `viewerId == ownerId` comparison without the null-check is a bug — anon viewers compare `null == null` and are treated as owner.
-4. **Verify fail-closed.** `clipTrackForUser` returns `[]` on RPC error. Owner-callsites that always need the unclipped track should bypass the RPC, not call it and fall through on `[]` — otherwise a transient outage blanks the owner's own map.
+4. **Verify fail-closed, and know which way each helper fails.** They are not uniform, so a finding has to name the one it is about. `fetchClippedRouteForViewer` (web) and `clipRouteForViewer` (mobile) both swallow the failure and return `[]`. `fetchClippedTrackForRun` THROWS on web (an `error` from `functions.invoke`, or a payload with no `points` array) and returns `[]` on mobile for a malformed payload while letting an invoke failure propagate. In every case the answer to a failure is an empty polyline or an error — never the unclipped input. Owner call sites that always need the unclipped track should bypass the clipping path entirely rather than call it and fall through on `[]`, or a transient outage blanks the owner's own map.
 5. **Cache key prefix.** When a thumbnail caches the result, the key must include a `raw:` vs `clip:` prefix so an owner viewing their own card and a follower viewing the same card don't pollute each other's session cache.
 
 ## Report
@@ -36,6 +43,8 @@ For each: file:line, the missing call or the broken gate, the surface it affects
 ## Useful starting points
 
 - `docs/architecture/decisions.md` §33 — the canonical contract
+- `apps/web/src/lib/core/data.ts` — both web helpers, with the migration history in their doc comments
+- `packages/api_client/lib/src/api_client.dart` — both mobile helpers
 - `apps/web/src/lib/components/RunTrackPreview.svelte` — reference web implementation
 - `apps/mobile_android/lib/widgets/run_track_preview.dart` — reference mobile implementation
 - `apps/mobile_android/lib/screens/public_run_screen.dart` + `public_route_screen.dart` — the most recent fix

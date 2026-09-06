@@ -18,7 +18,7 @@ Recorded as [decisions § 377](../architecture/decisions.md), and amended by
 [§ 378](../architecture/decisions.md), which closed the largest gap this page
 opened with: **there is now a user-reachable factory erase** — a guarded
 settings-menu row, reachable on the device alone. See
-[*The erase*](#the-erase-378) below.
+[*The erase*](#the-erase--378) below.
 
 ## What the watch holds
 
@@ -181,8 +181,8 @@ no account identity to match against, which is a property worth keeping.
 
 ## Why `privacy.rs` is dormant, and what would wire it
 
-`core/src/privacy.rs` is a faithful port of the web zone-clipping helper, with
-nine host tests. **It has zero callers.** That is correct, and it should stay
+`core/src/privacy.rs` is a faithful port of the web zone-clipping
+helper, with eight host tests. **It has zero callers.** That is correct, and it should stay
 that way at tier 1.
 
 Clipping in this product is a **read-time, viewer-keyed** transform, not a
@@ -251,7 +251,7 @@ deleting.
 
 1. ~~**No user-reachable erase — the largest gap on this page.**~~ **Closed
    2026-07-31 by [§ 378](../architecture/decisions.md)** — see
-   [*The erase*](#the-erase-378) above. What is left of it is one bench item
+   [*The erase*](#the-erase--378) above. What is left of it is one bench item
    (that the page erase really returns the slots to `0xFF`, which Renode cannot
    settle) and one bounded limit (a live BLE connection is not torn down; the
    durable bond is). Kept as item 1 rather than deleted, because the two items

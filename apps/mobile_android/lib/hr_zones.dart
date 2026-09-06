@@ -63,11 +63,27 @@ List<HrZoneBucket> hrZoneBreakdown(
   });
 }
 
+/// The range a stored `max_hr_bpm` has to fall in to be used as one. It is a
+/// jsonb prefs key with no column and therefore no CHECK, so every reader
+/// carries this bound itself; a value outside it is ignored rather than
+/// trusted, and the derivation falls through to age or to the legacy ladder.
+const int kMaxHrBpmMin = 80;
+const int kMaxHrBpmMax = 240;
+
+/// The age range Tanaka is applied over, for the same reason.
+const int kTanakaAgeMin = 5;
+const int kTanakaAgeMax = 120;
+
 /// Tanaka (2001) age-predicted maximal heart rate: 208 − 0.7 × age.
 /// More accurate for masters runners than the classic 220 − age, which
 /// systematically overestimates HR-max past ~40 and pushed older
-/// runners into falsely-low zones (persona-hunt Older #8). Kept in
-/// lockstep with `apps/web/src/lib/training/hr_zones.ts` (`tanakaMaxHr`).
+/// runners into falsely-low zones (persona-hunt Older #8). The Dart twin of
+/// `apps/web/src/lib/training/hr_zones.ts` (`tanakaMaxHr`), which also has a
+/// THIRD rail outside the enforced pair: the Wear OS `resolveZoneCutoffs` in
+/// `apps/watch_wear/android/app/src/main/kotlin/com/runapp/watchwear/SupabaseClient.kt`.
+/// All three share the derivation and the input range; the watch alone returns
+/// null rather than the legacy 190 ladder when there is no usable signal, which
+/// is deliberate and stated on all three rails (decisions § 1245).
 int tanakaMaxHr(int ageYears) => (208 - 0.7 * ageYears).round();
 
 /// Zone upper bounds (Z1..Z5) at 60/70/80/90/100 % of a max HR.
@@ -79,10 +95,10 @@ List<int> zoneCutoffsFromMaxHr(int maxHr) =>
 /// the legacy 190-bpm fallback (`zoneCutoffsFromMaxHr(190)` ==
 /// `[114, 133, 152, 171, 190]`). Mirrors the TS `defaultZoneCutoffs`.
 List<int> defaultZoneCutoffs({int? maxHrBpm, int? ageYears}) {
-  if (maxHrBpm != null && maxHrBpm >= 80 && maxHrBpm <= 240) {
+  if (maxHrBpm != null && maxHrBpm >= kMaxHrBpmMin && maxHrBpm <= kMaxHrBpmMax) {
     return zoneCutoffsFromMaxHr(maxHrBpm);
   }
-  if (ageYears != null && ageYears >= 5 && ageYears <= 120) {
+  if (ageYears != null && ageYears >= kTanakaAgeMin && ageYears <= kTanakaAgeMax) {
     return zoneCutoffsFromMaxHr(tanakaMaxHr(ageYears));
   }
   return zoneCutoffsFromMaxHr(190);

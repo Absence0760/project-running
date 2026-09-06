@@ -178,4 +178,47 @@ void main() {
     // checkpoint — the runner is still racing, not finished.
     expect(p.status, RunnerStatus.racing);
   });
+
+  test('a crossing with a non-finite elapsed time is not a crossing', () {
+    // The board derives elapsed from a parsed wall-clock stamp less the race
+    // start, so an unparseable stamp arrives here as NaN. It used to be
+    // admitted: the runner read as REACHED at that checkpoint, both cutoff
+    // comparisons answered false, and the ladder's terminal branch told a race
+    // director `safe` about a crossing nothing could time.
+    final p = projectRunner(cps, [
+      const ProjectionCrossing(checkpointId: 'b', elapsedS: double.nan),
+    ]);
+    final b = p.legs.firstWhere((l) => l.checkpointId == 'b');
+    expect(b.reached, isFalse);
+    expect(b.cutoff, isNull);
+    expect(p.lastCheckpointId, isNull);
+    expect(p.lastElapsedS, isNull);
+    expect(p.paceSPerM, isNull);
+    expect(p.status, RunnerStatus.racing);
+  });
+
+  test('an unusable stamp on the last checkpoint does not read as finished', () {
+    final p = projectRunner(cps, [
+      const ProjectionCrossing(checkpointId: 'c', elapsedS: double.infinity),
+    ]);
+    expect(p.status, RunnerStatus.racing);
+    expect(p.legs.every((l) => !l.reached), isTrue);
+    expect(p.legs.every((l) => l.cutoff == null), isTrue);
+  });
+
+  test('an unusable stamp does not mask a usable one at the same checkpoint', () {
+    final p = projectRunner(cps, [
+      const ProjectionCrossing(checkpointId: 'b', elapsedS: double.nan),
+      const ProjectionCrossing(checkpointId: 'b', elapsedS: 6000),
+    ]);
+    expect(p.lastElapsedS, 6000);
+    expect(
+      p.legs.firstWhere((l) => l.checkpointId == 'b').cutoff!.status,
+      CutoffStatus.tight,
+    );
+  });
+
+  // The web twin carries one further case -- a `cutoffElapsedS` that is not a
+  // number -- which has no analogue here: [ProjectionCheckpoint.cutoffElapsedS]
+  // is a Dart `int?`, so an unusable cutoff cannot reach the grader at all.
 }

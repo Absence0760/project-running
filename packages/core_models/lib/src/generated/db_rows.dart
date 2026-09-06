@@ -1573,6 +1573,7 @@ class FitnessSnapshotRow {
   static const String colSource = 'source';
   static const String colNotes = 'notes';
   static const String colCreatedAt = 'created_at';
+  static const String colSnapshotDay = 'snapshot_day';
 
   final String id;
   final String userId;
@@ -1586,6 +1587,7 @@ class FitnessSnapshotRow {
   final String source;
   final String? notes;
   final DateTime createdAt;
+  final DateTime? snapshotDay;
 
   const FitnessSnapshotRow({
     required this.id,
@@ -1600,6 +1602,7 @@ class FitnessSnapshotRow {
     required this.source,
     this.notes,
     required this.createdAt,
+    this.snapshotDay,
   });
 
   factory FitnessSnapshotRow.fromJson(Map<String, dynamic> json) => FitnessSnapshotRow(
@@ -1615,6 +1618,7 @@ class FitnessSnapshotRow {
     source: json['source'] as String,
     notes: json['notes'] as String?,
     createdAt: DateTime.parse(json['created_at'] as String),
+    snapshotDay: json['snapshot_day'] == null ? null : DateTime.parse(json['snapshot_day'] as String),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1630,6 +1634,7 @@ class FitnessSnapshotRow {
     colSource: source,
     colNotes: notes,
     colCreatedAt: createdAt.toIso8601String(),
+    colSnapshotDay: snapshotDay?.toIso8601String(),
   };
 }
 

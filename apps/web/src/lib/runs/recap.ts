@@ -163,7 +163,23 @@ function isWithinYear(d: Date, year: number): boolean {
 	return d.getFullYear() === year;
 }
 
-/** Monday of the local week as a YYYY-MM-DD string. */
+/**
+ * Monday of the local week as a YYYY-MM-DD string.
+ *
+ * Deliberately ISO-8601 Monday-anchored and NOT the runner's `week_start`
+ * preference, which `training/current_week.ts` does honour over the same runs.
+ * The two answer different questions in different frames: the dashboard strip
+ * says what the runner has done THIS week, which is their own calendar; the
+ * recap is a snapshot PUBLISHED to `public_recaps` and re-rendered by
+ * `/recap/share/[id]` and the OG image for readers who are not the runner, and
+ * whose Dart producer (`recapSnapshotJson`) writes the same field shape from a
+ * different device. A week boundary that varied with a preference would make
+ * one artifact mean two things with nothing in the payload saying which.
+ *
+ * Changing it would be a signature change through both halves of a registered
+ * pair and a re-interpretation of every snapshot already published, so it is
+ * recorded as a decision here rather than left as an accidental difference.
+ */
 function mondayOf(d: Date): string {
 	const local = new Date(d.getFullYear(), d.getMonth(), d.getDate());
 	const dow = (local.getDay() + 6) % 7; // 0=Mon, 6=Sun
@@ -172,6 +188,22 @@ function mondayOf(d: Date): string {
 	const m = String(local.getMonth() + 1).padStart(2, '0');
 	const day = String(local.getDate()).padStart(2, '0');
 	return `${y}-${m}-${day}`;
+}
+
+/**
+ * A count off the caller-supplied `RecapExtras`, as a non-negative integer.
+ *
+ * `Math.max(0, Math.trunc(x ?? 0))` does not floor a NaN — `Math.trunc(NaN)` is
+ * NaN and `Math.max(0, NaN)` is NaN — so a non-numeric count from
+ * `fetchRecapExtras` landed as NaN in the recap object, in the badge
+ * thresholds it feeds, and in every published snapshot. The Dart twin needs no
+ * equivalent: `RecapExtras.photoCount` is an `int` there, so the value cannot
+ * be non-finite in the first place.
+ */
+function extraCount(value: number | undefined): number {
+	if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+	const n = Math.trunc(value);
+	return n > 0 ? n : 0;
 }
 
 function hhmm(d: Date): string {
@@ -319,8 +351,8 @@ export function buildYearInRunningRecap(
 		new Date(year, 0, 1),
 	);
 
-	const photoCount = Math.max(0, Math.trunc(extras.photoCount ?? 0));
-	const personalRecordCount = Math.max(0, Math.trunc(extras.personalRecordCount ?? 0));
+	const photoCount = extraCount(extras.photoCount);
+	const personalRecordCount = extraCount(extras.personalRecordCount);
 	const earliestStartLocal = earliestRun ? hhmm(earliestRun) : null;
 	const latestStartLocal = latestRun ? hhmm(latestRun) : null;
 
@@ -455,8 +487,8 @@ export function buildMonthInRunningRecap(
 		new Date(year, month - 1, 1),
 	);
 
-	const photoCount = Math.max(0, Math.trunc(extras.photoCount ?? 0));
-	const personalRecordCount = Math.max(0, Math.trunc(extras.personalRecordCount ?? 0));
+	const photoCount = extraCount(extras.photoCount);
+	const personalRecordCount = extraCount(extras.personalRecordCount);
 	const earliestStartLocal = earliestRun ? hhmm(earliestRun) : null;
 	const latestStartLocal = latestRun ? hhmm(latestRun) : null;
 
@@ -507,4 +539,4 @@ export function recapHeadline(recap: YearInRunningRecap, kmOrMi: 'km' | 'mi'): s
 	return `${recap.year}: ${total} across ${recap.runCount} runs.`;
 }
 
-export const __TEST_ONLY__ = { mondayOf, MS_PER_DAY };
+export const __TEST_ONLY__ = { mondayOf, extraCount, MS_PER_DAY };

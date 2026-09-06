@@ -8,8 +8,8 @@ import 'plan_adaptive_replan.dart';
 const String kAdaptiveFitnessGateEnvKey = 'ADAPTIVE_FITNESS_GATE';
 
 /// The plan-generator-v2 P2 fitness-direction gate as the surfaces read it —
-/// the mobile twin of web's `training/adaptive_fitness_flag.ts`, keeping the
-/// env binding out of the `plan_adaptive_replan` parity pair.
+/// the Dart twin of `apps/web/src/lib/training/adaptive_fitness_flag.ts`,
+/// keeping the env binding out of the `plan_adaptive_replan` parity pair.
 ///
 /// The read is guarded because `dotenv.env` throws `NotInitializedError` until
 /// something has loaded it, and a gate that throws is a gate whose answer

@@ -27,11 +27,19 @@ ${blocks}
 }
 `;
 
+/// The shell filename is read off the contract rather than spelled here: it
+/// moved from /index.html to /200.html when the landing page was prerendered
+/// onto index.html (decisions § 1268), and a fixture that keeps the old
+/// spelling stops exercising the shape it was written for. The one test that
+/// DOES spell a filename is the page-mismatch case below, which must name a
+/// wrong one to be about anything.
+const SHELL = REQUIRED_MAPPING.page;
+
 const SPA_403 = `
   custom_error_response {
     error_code         = 403
     response_code      = 200
-    response_page_path = "/index.html"
+    response_page_path = "${SHELL}"
   }
 `;
 
@@ -55,10 +63,10 @@ const handlers = (source) => [{ name: 'share-run', source }];
 // ─────────────────────────────── the parser ───────────────────────────────
 
 test('reads every custom_error_response on the distribution', () => {
-  const parsed = parseErrorResponses(distribution(`${SPA_403}\n  custom_error_response {\n    error_code = 404\n    response_code = 404\n    response_page_path = "/index.html"\n  }`));
+  const parsed = parseErrorResponses(distribution(`${SPA_403}\n  custom_error_response {\n    error_code = 404\n    response_code = 404\n    response_page_path = "${SHELL}"\n  }`));
   assert.deepEqual(parsed, [
-    { errorCode: '403', responseCode: '200', page: '/index.html' },
-    { errorCode: '404', responseCode: '404', page: '/index.html' },
+    { errorCode: '403', responseCode: '200', page: SHELL },
+    { errorCode: '404', responseCode: '404', page: SHELL },
   ]);
 });
 
@@ -68,7 +76,7 @@ test('a commented-out block is not a block', () => {
   const parsed = parseErrorResponses(
     distribution(`${SPA_403}\n  # custom_error_response {\n  #   error_code = 404\n  # }`),
   );
-  assert.deepEqual(parsed, [{ errorCode: '403', responseCode: '200', page: '/index.html' }]);
+  assert.deepEqual(parsed, [{ errorCode: '403', responseCode: '200', page: SHELL }]);
 });
 
 test('a source with no distribution reads null, not an empty set', () => {
@@ -96,8 +104,8 @@ test('the shipped tree is what the guard claims it read', () => {
 test('a returning 404 mapping fails, and the message says why it is not needed', () => {
   const { errors } = checkErrorResponses(
     [
-      { errorCode: '403', responseCode: '200', page: '/index.html' },
-      { errorCode: '404', responseCode: '404', page: '/index.html' },
+      { errorCode: '403', responseCode: '200', page: SHELL },
+      { errorCode: '404', responseCode: '404', page: SHELL },
     ],
     handlers(SHELL_404_OBJECT),
   );
@@ -116,11 +124,23 @@ test('the 403 mapping may not answer 403', () => {
   // The opposite failure to the one § 1022 fixed: an honest status here breaks
   // every dynamic client route.
   const { errors } = checkErrorResponses(
-    [{ errorCode: '403', responseCode: '403', page: '/index.html' }],
+    [{ errorCode: '403', responseCode: '403', page: SHELL }],
     handlers(SHELL_404_OBJECT),
   );
   assert.equal(errors.length, 1);
   assert.match(errors[0], /answers 403/);
+});
+
+test('the 403 mapping may not point at the prerendered landing page', () => {
+  // The regression decisions § 1268 makes possible: index.html is the landing
+  // page now, whose relative asset URLs resolve under the deep link's own
+  // directory. Serving it here loads nothing at all on /runs/<id>.
+  const { errors } = checkErrorResponses(
+    [{ errorCode: '403', responseCode: '200', page: '/index.html' }],
+    handlers(SHELL_404_OBJECT),
+  );
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /\/index\.html/);
 });
 
 test('a null parse is reported rather than passing every claim', () => {
@@ -145,7 +165,7 @@ test('a shell returned at 200 is not a 404 answer', () => {
 
 test('a handler that stops returning the shell fails, because the mapping is gone', () => {
   const { errors } = checkErrorResponses(
-    [{ errorCode: '403', responseCode: '200', page: '/index.html' }],
+    [{ errorCode: '403', responseCode: '200', page: SHELL }],
     [
       { name: 'share-run', source: SHELL_404_OBJECT },
       { name: 'share-badge', source: "return { statusCode: 404, body: '<p>gone</p>' };" },
@@ -158,7 +178,7 @@ test('a handler that stops returning the shell fails, because the mapping is gon
 
 test('an empty handler set is reported, not read as clean', () => {
   const { errors } = checkErrorResponses(
-    [{ errorCode: '403', responseCode: '200', page: '/index.html' }],
+    [{ errorCode: '403', responseCode: '200', page: SHELL }],
     [],
   );
   assert.equal(errors.length, 1);

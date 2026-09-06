@@ -8,9 +8,11 @@
  * with each day's logged-activity distance + count folded in.
  *
  * Pure: no Supabase, no DOM, no rune state — so it unit-tests under
- * `tsx --test` and mirrors a byte-identical Dart twin
- * (`apps/mobile_android/lib/widgets/current_week.dart`). Keep the
- * algorithm, edge cases, outputs, and test counts in lockstep.
+ * `tsx --test`, and it is the web half of a registered parity pair with the
+ * Dart twin `apps/mobile_android/lib/current_week.dart`. Keep the algorithm,
+ * edge cases, outputs, and test counts in lockstep. (The WIDGET that renders
+ * it is `apps/mobile_android/lib/widgets/current_week_strip.dart`, which is
+ * not a twin of anything.)
  */
 
 export type WeekStart = 'monday' | 'sunday';

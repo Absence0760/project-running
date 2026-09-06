@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { buildYearInRunningRecap, buildMonthInRunningRecap, recapHeadline } from './recap';
+import {
+	buildYearInRunningRecap,
+	buildMonthInRunningRecap,
+	recapHeadline,
+	__TEST_ONLY__,
+} from './recap';
 import type { Run } from '../types';
 
 function mkRun(opts: {
@@ -579,4 +584,34 @@ test('buildMonthInRunningRecap: the month the streak ran in still reports it', (
 	const r = buildMonthInRunningRecap(staleStreakRuns(), 2026, 3);
 	assert.equal(r.runCount, 3);
 	assert.equal(r.bestStreakDays, 3);
+});
+
+test('a non-numeric extras count is floored to 0, not propagated as NaN', () => {
+	// `Math.max(0, Math.trunc(x ?? 0))` does not floor a NaN — `Math.trunc(NaN)`
+	// is NaN and `Math.max(0, NaN)` is NaN — so a non-numeric count from
+	// `fetchRecapExtras` reached the recap object, the badge thresholds it
+	// feeds, and every snapshot published to `public_recaps`.
+	const bad = { photoCount: NaN, personalRecordCount: Infinity };
+	const y = buildYearInRunningRecap([], 2026, bad);
+	assert.equal(y.photoCount, 0);
+	assert.equal(y.personalRecordCount, 0);
+	const mth = buildMonthInRunningRecap([], 2026, 3, bad);
+	assert.equal(mth.photoCount, 0);
+	assert.equal(mth.personalRecordCount, 0);
+	// A count that IS a number still survives the same path.
+	assert.equal(buildYearInRunningRecap([], 2026, { photoCount: 7.9 }).photoCount, 7);
+});
+
+test('the recap week is ISO Monday-anchored, deliberately unlike the dashboard strip', () => {
+	// `training/current_week.ts` honours the runner's `week_start` over the same
+	// runs; this does not, and the difference is a decision rather than drift. A
+	// recap is PUBLISHED to `public_recaps` and re-rendered by /recap/share/[id]
+	// and the OG image for readers who are not the runner, from a payload whose
+	// Dart producer writes the same field shape from another device — a week
+	// boundary that varied with a preference would make one artifact mean two
+	// things with nothing in it saying which.
+	const { mondayOf } = __TEST_ONLY__;
+	// 2026-03-08 is a Sunday; a Sunday-first reading would open a week there.
+	assert.equal(mondayOf(new Date(2026, 2, 8)), '2026-03-02');
+	assert.equal(mondayOf(new Date(2026, 2, 9)), '2026-03-09');
 });

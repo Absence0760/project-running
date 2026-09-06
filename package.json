@@ -108,6 +108,8 @@
     "check:script-types": "tsc -p tsconfig.scripts.json",
     "check:cloudfront-types": "tsc -p tsconfig.cloudfront.json",
     "check:tsconfig-coverage": "node --test scripts/tsconfig_coverage.test.mjs",
+    "check:doc-links": "node scripts/check_doc_links.mjs",
+    "check:test-inventory": "node scripts/check_test_inventory_counts.mjs",
 
     "//-- test --": "Test suites per surface; test:scripts validates this file's script targets.",
     "test:web:unit": "pnpm -C apps/web test:unit",

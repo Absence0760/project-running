@@ -13,10 +13,9 @@ import '../training_load.dart';
 /// a recovery-advice line. Returns nothing when the user has no
 /// qualifying runs (otherwise the card is all "—" and noise).
 ///
-/// Mirrors the web `/fitness` summary so the same numbers appear on
-/// every surface — tweak `fitness.dart` (the Dart port of
-/// `apps/web/src/lib/training/fitness.ts`) and you'll get the matching change
-/// here.
+/// Renders the same numbers as the web `/fitness` summary. The lockstep is
+/// not this widget's: it belongs to the registered `fitness` pair, whose Dart
+/// half is `fitness.dart` — edit there and the matching change appears here.
 class FitnessCard extends StatelessWidget {
   final List<Run> runs;
   final DateTime now;

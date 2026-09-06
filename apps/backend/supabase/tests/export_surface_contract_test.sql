@@ -37,7 +37,7 @@
 
 begin;
 
-select plan(21);
+select plan(33);
 
 -- ── the exports bucket ──────────────────────────────────────────────────────
 
@@ -308,6 +308,190 @@ select is(
 
 drop trigger zzz_pgtap_skip_object_delete on storage.objects;
 drop function public.pgtap_skip_object_delete();
+
+
+-- ── the enqueue, which is the half that is actually scheduled ───────────────
+-- 20270709000001 took `cleanup-stale-export-blobs` off the clock ([§ 1172]) and
+-- left `enqueue_export_blob_reap()` as the ONLY scheduled half of Art 20
+-- retention. It shipped with no pgtap coverage at all: neither the function nor
+-- the `export_blob_reap` kind was named anywhere under `supabase/tests/`, and
+-- what it does is not a one-liner — it derives a worklist from
+-- `storage.objects`, deduplicates it per user, and guards on the PAYLOAD rather
+-- than the kind. Its author verified it against a throwaway container with the
+-- surrounding objects stubbed, which cannot see a `jobs` CHECK or an RLS
+-- interaction; these drive the real schema.
+
+insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
+values ('e8000000-0000-0000-0000-0000000000a3', 'authenticated', 'authenticated',
+        'reap-legacy-two@dsar.local', '', now(), now()),
+       ('e8000000-0000-0000-0000-0000000000a4', 'authenticated', 'authenticated',
+        'reap-legacy-one@dsar.local', '', now(), now()),
+       ('e8000000-0000-0000-0000-0000000000a5', 'authenticated', 'authenticated',
+        'reap-no-legacy@dsar.local', '', now(), now());
+
+-- a3 holds TWO legacy archives (one job, not two), a4 holds one, and a5 holds
+-- only a track in the same bucket — the object the prefix filter must not
+-- mistake for an export.
+insert into storage.objects (bucket_id, name, created_at) values
+  ('runs',    'e8000000-0000-0000-0000-0000000000a3/exports/one.zip', now() - interval '9 days'),
+  ('runs',    'e8000000-0000-0000-0000-0000000000a3/exports/two.zip', now() - interval '8 days'),
+  ('runs',    'e8000000-0000-0000-0000-0000000000a4/exports/only.zip', now() - interval '8 days'),
+  ('runs',    'e8000000-0000-0000-0000-0000000000a5/track.json.gz', now() - interval '9 days'),
+  ('exports', 'e8000000-0000-0000-0000-0000000000a5/archive.zip', now() - interval '9 days');
+
+-- A `ready` row past the window, for the composition assertion below. Its
+-- object lives in the `exports` bucket, which the default payload covers.
+insert into data_export_jobs (id, user_id, format, status, object_path, finished_at)
+values ('e8000000-0000-0000-0000-0000000000d4', 'e8000000-0000-0000-0000-0000000000a5',
+        'backup', 'ready', 'e8000000-0000-0000-0000-0000000000a5/archive.zip',
+        now() - interval '9 days');
+
+-- (18) Nothing has queued a reap yet, so what follows is this call's work and
+-- not the seed's. Every assertion below reads only this kind.
+select is(
+  (select count(*)::int from jobs where kind = 'export_blob_reap'),
+  0,
+  'no reap is queued before the enqueue runs');
+
+select lives_ok(
+  $$ select enqueue_export_blob_reap() $$,
+  'the enqueue runs against the real schema — the jobs CHECK admits the kind it writes');
+
+-- (19) The worklist, named. One job for the `exports` bucket at its default
+-- window, one per USER still holding a legacy `runs/{uid}/exports/*` archive —
+-- a3 holds two archives and gets one job — and none for a5, whose only object
+-- in that bucket is a track. A whole-`runs` walk would be O(users) list calls,
+-- which is why the prefix set is derived from the rows that exist.
+select is(
+  (select coalesce(string_agg(payload::text, ' | ' order by payload::text), '')
+     from jobs where kind = 'export_blob_reap'),
+  '{"bucket": "runs", "prefix": "e8000000-0000-0000-0000-0000000000a3/exports/"} | '
+  '{"bucket": "runs", "prefix": "e8000000-0000-0000-0000-0000000000a4/exports/"} | {}',
+  'one job for the exports bucket plus one per user with a legacy archive, deduplicated, and none for a plain track object in the same bucket');
+
+-- (20) `max_attempts` 3 rather than the table default of 5. A reap re-lists, so
+-- a retry cannot re-erase; three failures is an outage rather than a blip, and
+-- the next night re-derives the same worklist anyway.
+select is(
+  (select coalesce(string_agg(distinct max_attempts::text, ', '), '')
+     from jobs where kind = 'export_blob_reap'),
+  '3',
+  'every queued reap carries max_attempts 3, not the table default of 5');
+
+-- (21) The composition, which is the half that runs whether or not a worker
+-- ever claims the job: `expire_stale_export_jobs()` is called by the ENQUEUE,
+-- so reachability is removed on the pg_cron tick rather than on the worker's.
+-- Dropping the `perform` leaves the worker's own tests green while a subject is
+-- handed a signed path to an archive the reaper is about to erase.
+select results_eq(
+  $$ select status, object_path from data_export_jobs
+      where id = 'e8000000-0000-0000-0000-0000000000d4' $$,
+  $$ values ('expired', null::text) $$,
+  'the enqueue expired the ready row itself — reachability goes first, erasure second, on the scheduled path');
+
+-- (22) The singleton guard. A week of nights with the worker down must leave
+-- one job per worklist, not seven: the second call re-derives the same
+-- payloads and finds each already queued.
+select lives_ok(
+  $$ select enqueue_export_blob_reap() $$,
+  'a second enqueue over the same worklist runs');
+
+select is(
+  (select count(*)::int from jobs where kind = 'export_blob_reap'),
+  3,
+  'and adds nothing — the guard is per payload, so a night the worker was down cannot stack identical sweeps');
+
+-- (23) And it is per PAYLOAD rather than per KIND, which is what stops the
+-- `exports` job from suppressing the legacy ones every night. Drain the default
+-- job alone; the next call re-emits that payload and still suppresses the two
+-- that are queued.
+update jobs set status = 'done', finished_at = now()
+ where kind = 'export_blob_reap' and payload = '{}'::jsonb;
+
+do $reap$ begin perform enqueue_export_blob_reap(); end $reap$;
+
+select is(
+  (select coalesce(string_agg(payload::text || ' ' || status, ' | ' order by payload::text, status), '')
+     from jobs where kind = 'export_blob_reap'),
+  '{"bucket": "runs", "prefix": "e8000000-0000-0000-0000-0000000000a3/exports/"} queued | '
+  '{"bucket": "runs", "prefix": "e8000000-0000-0000-0000-0000000000a4/exports/"} queued | '
+  '{} done | {} queued',
+  'a drained payload is re-queued while the two still in flight are not — a kind-wide guard would have let the first payload inserted suppress the others every night');
+
+
+
+-- ── the retention overrun, which is the condition and not the cause ────────
+-- `jobs_backlog_summary` (20270710000004) catches a reap nobody claimed. It
+-- cannot catch a reap that WAS claimed, ran, and whose Go handler erased
+-- nothing: that job is `done` and the queue is drained while the archives stay
+-- readable. Only a count over `storage.objects` can tell, and § 1172 left
+-- nothing counting -- `cleanup_stale_export_blobs`'s own post-condition raise
+-- fires only when something calls it, and nothing calls it any more.
+--
+-- The storage fixture is reset first. Everything above left objects behind on
+-- purpose (the sweep's survivors, the blocked one, the legacy prefixes the
+-- enqueue derives from), and `export_retention_overrun` counts the whole
+-- bucket -- so the assertions below would be about that debris plus whatever
+-- this block files. The GUC is storage-api's `protect_delete()` escape, set
+-- transaction-locally exactly as the sweep sets it.
+do $reset$
+begin
+  perform set_config('storage.allow_delete_query', 'true', true);
+  delete from storage.objects
+   where (bucket_id = 'runs' and name like '%/exports/%') or bucket_id = 'exports';
+end
+$reset$;
+
+insert into storage.objects (bucket_id, name, created_at) values
+  ('exports', 'e8000000-0000-0000-0000-0000000000a3/way-past.zip', now() - interval '30 days'),
+  ('runs',    'e8000000-0000-0000-0000-0000000000a3/exports/legacy-past.zip', now() - interval '12 days'),
+  ('exports', 'e8000000-0000-0000-0000-0000000000a3/inside-grace.zip', now() - interval '7 days 6 hours'),
+  ('exports', 'e8000000-0000-0000-0000-0000000000a3/fresh.zip', now() - interval '1 day'),
+  ('runs',    'e8000000-0000-0000-0000-0000000000a3/track.json.gz', now() - interval '30 days');
+
+-- (24) Both archive prefixes count, the object inside the grace day does not,
+-- and a track in the same bucket is not an export artifact. The predicate is
+-- the sweep's own, so the alert and the reaper cannot disagree about what they
+-- are talking about.
+select results_eq(
+  $$ select (export_retention_overrun() ->> 'overrun_count')::int,
+            (export_retention_overrun() -> 'by_bucket') $$,
+  $$ values (2, '{"runs": 1, "exports": 1}'::jsonb) $$,
+  'the overrun counts stale archives in both the exports bucket and the legacy prefix, and nothing else');
+
+-- (25) The grace day is the whole reason this can be scheduled. Objects cross
+-- the 7-day line continuously and the reap runs once a night, so at any instant
+-- up to a day of archives are legitimately waiting. Without the grace this
+-- would fire every day forever, which is the same as not alerting.
+select is(
+  (select (export_retention_overrun('0 seconds'::interval) ->> 'overrun_count')::int),
+  3,
+  'and without the grace the object waiting for tonight''s reap would be reported too');
+
+-- (26) The oldest age is reported, so a scraper can alert on how long the
+-- overrun has lasted rather than on the fact of one.
+select cmp_ok(
+  (export_retention_overrun() ->> 'oldest_age_s')::int,
+  '>=',
+  30 * 86400,
+  'the age of the oldest survivor is reported alongside the count');
+
+-- (27) And a clean bucket reports zero rather than null, so a scraper routing
+-- on `overrun_count > 0` is not comparing against null on every healthy day.
+do $clean$
+begin
+  perform set_config('storage.allow_delete_query', 'true', true);
+  delete from storage.objects
+   where (bucket_id = 'runs' and name like '%/exports/%') or bucket_id = 'exports';
+end
+$clean$;
+
+select results_eq(
+  $$ select (export_retention_overrun() ->> 'overrun_count')::int,
+            (export_retention_overrun() ->> 'oldest_age_s')::int,
+            (export_retention_overrun() -> 'by_bucket') $$,
+  $$ values (0, 0, '{}'::jsonb) $$,
+  'a bucket inside its retention window reports zero and an empty breakdown, never null');
 
 select * from finish();
 

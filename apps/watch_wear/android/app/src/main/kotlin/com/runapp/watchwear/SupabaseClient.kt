@@ -112,8 +112,11 @@ internal fun humanErrorMessage(code: Int, body: String): String {
 ///     fallback inputs `maxHrBpm` and `dateOfBirth` feed the live
 ///     "Z3" badge next to BPM on the RunningScreen. The
 ///     `resolveZoneCutoffs` precedence is: explicit hr_zones >
-///     60/70/80/90/100% of max_hr_bpm > 60/70/80/90/100% of
-///     (Tanaka 208 − 0.7×age from DOB) > null (no zone display).
+///     60/70/80/90/100% of an IN-RANGE max_hr_bpm > 60/70/80/90/100% of
+///     (Tanaka 208 − 0.7×age from DOB) > null (no zone display). The web
+///     and Dart rails end that ladder at the legacy 190 cutoffs instead;
+///     this one shows nothing rather than a stranger's zones, which is the
+///     one place the three rails differ (decisions § 1245).
 data class UniversalSettings(
     val defaultActivityType: String?,
     val privacyDefault: String?,
@@ -250,14 +253,23 @@ internal fun hrZoneOf(bpm: Int, cutoffs: List<Int>?): Int? {
 }
 
 /// Pick zone cutoffs in priority order: explicit `hr_zones` >
-/// 60/70/80/90/100% of `max_hr_bpm` > 60/70/80/90/100% of
+/// 60/70/80/90/100% of an IN-RANGE `max_hr_bpm` > 60/70/80/90/100% of
 /// (Tanaka 208 − 0.7×age from `date_of_birth`) > null.
 ///
 /// `nowMs` is injected so tests can pin the age calculation —
 /// production callers pass `System.currentTimeMillis()`.
 internal fun resolveZoneCutoffs(s: UniversalSettings, nowMs: Long): List<Int>? {
     s.hrZones?.let { return it }
-    val maxHr = s.maxHrBpm ?: ageBasedMaxHr(s.dateOfBirth, nowMs)
+    // `max_hr_bpm` is a jsonb prefs key with no column and therefore no CHECK,
+    // and the web preferences page writes it as a bare parseInt, so a stored
+    // 300 or 0 reaches every reader. Web and Dart have always ignored one
+    // outside 80..240 and fallen through to age; this rail applied it flat,
+    // which turned a mistyped 300 into a [180, 210, 240, 270, 300] ladder that
+    // parks every real sample in Z1 while the phone showed the same run in
+    // sensible zones -- and a stored 0 into an all-zero ladder that puts every
+    // sample above Z5. decisions § 1245.
+    val maxHr = s.maxHrBpm?.takeIf { it in MAX_HR_BPM_RANGE }
+        ?: ageBasedMaxHr(s.dateOfBirth, nowMs)
     if (maxHr == null) return null
     // 60/70/80/90/100% — matches the Dart `zoneCutoffsFromMaxHr`
     // ladder (60% × 190 = 114, etc.) and the web inferred path.
@@ -270,6 +282,13 @@ internal fun resolveZoneCutoffs(s: UniversalSettings, nowMs: Long): List<Int>? {
         maxHr,
     )
 }
+
+/// The range a stored `max_hr_bpm` has to fall in to be used as one, and the
+/// age range Tanaka is applied over. Both mirror `MAX_HR_BPM_MIN` /
+/// `MAX_HR_BPM_MAX` and `TANAKA_AGE_MIN` / `TANAKA_AGE_MAX` in the web
+/// `hr_zones.ts` and their `k`-prefixed Dart twins.
+internal val MAX_HR_BPM_RANGE = 80..240
+internal val TANAKA_AGE_RANGE = 5..120
 
 /// Tanaka (2001) age-predicted maximal heart rate: 208 − 0.7 × age.
 /// More accurate for masters runners than the classic 220 − age, which
@@ -285,7 +304,7 @@ private fun ageBasedMaxHr(dob: String?, nowMs: Long): Int? {
             .atZone(java.time.ZoneOffset.UTC).toLocalDate()
         val born = java.time.LocalDate.of(year, month, day)
         val age = java.time.Period.between(born, now).years
-        if (age in 5..120) Math.round(208 - 0.7 * age).toInt() else null
+        if (age in TANAKA_AGE_RANGE) Math.round(208 - 0.7 * age).toInt() else null
     } catch (_: Throwable) {
         null
     }

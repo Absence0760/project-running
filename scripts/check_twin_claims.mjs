@@ -74,13 +74,27 @@ export const SOURCE_ROOTS = [
 /// parity pair. `Mirrors` is included because four Dart halves are written that
 /// way; `in lockstep with` deliberately is NOT — it is the phrase this repo uses
 /// for every kind of coupling, including a client and an SQL CHECK.
+///
+/// Three forms found in the tree were unreadable until decisions § 1243: a
+/// backticked path carrying a `:symbol` suffix (`run_stats.ts` names
+/// `…/run_stats.dart:movingTimeOf`), a path written with NO backticks at all
+/// (`workout_kind_color.ts`), and `Dart twin` / `ported from` / `Dart port of`
+/// in place of the `… of` verbs. The path stays anchored to a repo root: a
+/// relative counterpart (`web's \`training/x.ts\``) is a fourth form and is
+/// deliberately still unread, because resolving one means guessing a root and
+/// the guess reaches non-pairs — see the followups entry.
 export const DECLARATION =
-	/(Dart twin of|TS twin of|Dart mirror of|TS.?.?Dart parity pair(?:\s*(?:with|:))?|Mirrors|[Tt]win of)[^`]{0,60}`((?:apps|packages)\/[A-Za-z0-9_./-]+\.(?:ts|dart))`/g;
+	/(?:[Dd]art twin(?: of)?|TS twin(?: of)?|[Dd]art mirror of|TS.?.?Dart parity pair(?:\s*(?:with|:))?|[Mm]irrors|[Tt]win of|[Pp]orted from|[Dd]art port of|TS port of)[^`]{0,60}`?((?:apps|packages)\/[A-Za-z0-9_./-]+\.(?:ts|dart))(?::[A-Za-z0-9_]+)?`?/g;
 
 /// A floor under the census. A reworded header convention, or a header-block
 /// scanner that stops recognising `///`, would otherwise report zero
 /// declarations as zero violations.
-export const MIN_DECLARATIONS = 60;
+///
+/// It is only a floor worth having if it sits near the real count. At 60
+/// against a census of 106 it had 46 of slack, so the 25 % of the tree the
+/// reader could not see (decisions § 1243) passed it unremarked — the guard's
+/// own failure mode, undetected by the check written for it.
+export const MIN_DECLARATIONS = 155;
 
 /**
  * @typedef {{ file: string, counterpart: string, reason: string }} KnownGap
@@ -90,13 +104,21 @@ export const MIN_DECLARATIONS = 60;
 /// Declarations that violate a property today. Each is a defect with a home
 /// somewhere this guard cannot reach.
 /** @type {readonly KnownGap[]} */
-export const KNOWN_GAPS = [
-];
+export const KNOWN_GAPS = /** @type {KnownGap[]} */ ([]);
+
+/// Lines that may sit between the top of a file and the block that documents
+/// it. A module puts its imports above its doc comment far more often than
+/// below it, and a scanner that stops at the first non-comment line therefore
+/// read an EMPTY header for every such file — 37 of them carrying a
+/// twin-shaped claim the guard never saw at all, `run_stats.ts` and
+/// `elevation.dart` among them. decisions § 1243.
+const PROLOGUE = /^(?:import\b|export\s.+\bfrom\b|library\b|part\b|@JS\b|['"]use strict['"])/;
 
 /**
- * The header comment block of a source file: every line up to the first that is
- * neither blank nor a comment, folded onto one line so a declaration split over
- * a wrap still reads as one.
+ * The header comment of a source file: every comment line above the first line
+ * of real code, folded onto one line so a declaration split over a wrap still
+ * reads as one. Imports and blank lines are stepped over rather than treated as
+ * code, so a doc block below an import prologue is still the header.
  *
  * @param {string} text
  * @returns {string}
@@ -110,6 +132,7 @@ export function headerComment(text) {
 			head.push(line);
 			continue;
 		}
+		if (PROLOGUE.test(t)) continue;
 		break;
 	}
 	return head.join('\n').replace(/\n\s*(?:\/\/\/?|\*)\s?/g, ' ');
@@ -162,7 +185,7 @@ export function collectDeclarations(sources, registered, exists = (p) => existsS
 	for (const { path, text } of sources) {
 		const isWeb = path.startsWith('apps/web/');
 		for (const m of headerComment(text).matchAll(DECLARATION)) {
-			const counterpart = m[2];
+			const counterpart = m[1];
 			// Same-platform: a reference, not a twin. A web file naming another
 			// `.ts` is talking about a sibling.
 			if (isWeb === counterpart.endsWith('.ts')) continue;

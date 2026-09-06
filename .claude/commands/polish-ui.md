@@ -36,7 +36,7 @@ Anything else (`apps/backend/`, `apps/job_worker/`, `packages/`, `infra/`, `docs
 - Detail screens with already-rich UI (`/runs/[id]` web, `RunDetailScreen` Flutter, `PostRunScreen` Wear, `PostRunView` watchOS).
 - Feature requests masquerading as polish ("add a graph of weekly distance").
 - Blanket sweeps — pick one and tell the user to re-invoke for the next.
-- Anything that crosses an invariant: privacy zones (clipTrackForUser), paywall gates (ProGate / `effectiveTier`), the L0–L4 recording layering contract on `run_screen.dart` / `run_recorder/` / `live_run_map.dart`, or RLS / SECURITY DEFINER plumbing. Switch to `/safe-edit` for those.
+- Anything that crosses an invariant: privacy zones (`fetchClippedTrackForRun` / `clipRouteForViewer`), paywall gates (ProGate / `effectiveTier`), the L0–L4 recording layering contract on `run_screen.dart` / `run_recorder/` / `live_run_map.dart`, or RLS / SECURITY DEFINER plumbing. Switch to `/safe-edit` for those.
 
 ## Resolving the target
 

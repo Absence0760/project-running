@@ -51,6 +51,7 @@
 	import { computeElevationGain } from '$lib/routes/route_simplify';
 	import {
 		cadenceSpm,
+		elevationSeries,
 		elevationSourceTrack,
 		stepCount,
 		storedElevationGainM,
@@ -517,8 +518,21 @@
 				return s.rep_index && s.rep_total
 					? m('runDetail.stepRecoveryNumbered', { index: s.rep_index, total: s.rep_total })
 					: m('runDetail.stepRecovery');
+			case 'walk':
+				// The rest step of a walk-run, which is what the beginner
+				// generator the onboarding wizard seeds produces. It carries the
+				// same reduced total a recovery does.
+				return s.rep_index && s.rep_total
+					? m('runDetail.stepWalkNumbered', { index: s.rep_index, total: s.rep_total })
+					: m('runDetail.stepWalk');
 			default:
-				return s.kind;
+				// `kind` comes off a schemaless jsonb bag written by a phone
+				// that ships independently of this build, so a kind from a newer
+				// recorder can arrive here. A generic translated word beats a
+				// bare lowercase English slug in a Japanese UI; the guard in
+				// `workout_review_guard.test.ts` keeps every kind the recorder
+				// can currently emit out of this branch.
+				return m('runDetail.stepOther');
 		}
 	}
 
@@ -833,6 +847,14 @@
 	/** Derived from the GPS track rather than stored, matching mobile. */
 	let movingSeconds = $derived(run?.track ? movingTimeSeconds(run.track) : 0);
 
+	/** The seconds every whole-run pace and speed on this page divides by.
+	 *  Moving time when the track yielded one, elapsed otherwise. One value
+	 *  rather than one expression per surface: the share card carried its own
+	 *  `run.duration_s` and so advertised a slower pace than the page it was
+	 *  generated from -- 6:00 /km on the PNG against 5:00 /km on screen for a
+	 *  10 km with ten minutes of traffic lights (decisions § 1223). */
+	let paceSeconds = $derived(movingSeconds > 0 ? movingSeconds : (run?.duration_s ?? 0));
+
 	/** The track the climb is measured over, or null when no point on it
 	 *  carried an altitude. A manual entry and a summary import have no track
 	 *  at all, and a track with no `ele` sums to 0 exactly as a flat run does,
@@ -868,8 +890,7 @@
 	 *  cell is just noise. 2 s/km threshold. */
 	let showGradeAdjustedPace = $derived.by(() => {
 		if (gradeAdjustedPace == null || !run || run.distance_m <= 0) return false;
-		const secs = movingSeconds > 0 ? movingSeconds : run.duration_s;
-		const rawPaceSecPerKm = secs / (run.distance_m / 1000);
+		const rawPaceSecPerKm = paceSeconds / (run.distance_m / 1000);
 		return Math.abs(gradeAdjustedPace - rawPaceSecPerKm) >= 2;
 	});
 
@@ -935,7 +956,6 @@
 	/// the estimate was unusable or the pref was off (decisions § 1164).
 	let keyStats = $derived.by<{ label: string; value: string }[]>(() => {
 		if (!run) return [];
-		const paceSeconds = movingSeconds > 0 ? movingSeconds : run.duration_s;
 		const cells: { label: string; value: string }[] = [
 			{ label: m('runDetail.distance'), value: formatDistance(run.distance_m) },
 			{ label: m('runDetail.time'), value: formatDuration(run.duration_s) },
@@ -1157,12 +1177,16 @@
 			: run?.track ?? [],
 	);
 	let hasMapTrack = $derived(baseTrack.length >= 2);
-	let elevations = $derived(baseTrack.map((p) => p.ele ?? 0));
-	// Gate the elevation chart on real samples. Without any `ele` the
-	// array is all-zero and the chart renders as a deceptive flat line
-	// (a Health Connect / summary import reads as a genuinely flat route).
-	// Mirrors mobile's `_hasElevation`.
-	let hasElevation = $derived(baseTrack.some((p) => p.ele != null));
+	// Gate the elevation chart on real samples, and carry the line across
+	// the ones that are missing rather than plotting them at sea level.
+	// Without any `ele` the array used to be all-zero and the chart rendered
+	// as a deceptive flat line (a Health Connect / summary import reads as a
+	// genuinely flat route); with an intermittent `ele` it fell to 0 m at
+	// every dropout. Null when too few points carry an altitude to draw a
+	// profile at all.
+	let elevationSamples = $derived(elevationSeries(baseTrack));
+	let elevations = $derived(elevationSamples ?? []);
+	let hasElevation = $derived(elevationSamples !== null);
 
 	/// Linked-cursor index — fed by ElevationProfile's onhover, consumed
 	/// by RunMap's hoverIdx. Null when the pointer is off the chart.
@@ -2231,14 +2255,20 @@
 				<div class="share-stat-label">{m('runDetail.distance')}</div>
 				<div class="share-stat-value">{formatDistance(run.distance_m)}</div>
 			</div>
+			<!-- Time and pace are the SAME clock. The card is read without the
+				 page beside it, so a reader who divides the two must land on the
+				 pace printed under them; pairing elapsed time with the page's
+				 moving pace would not survive that division. -->
 			<div class="share-stat">
-				<div class="share-stat-label">{m('runDetail.time')}</div>
-				<div class="share-stat-value">{formatDuration(run.duration_s)}</div>
+				<div class="share-stat-label">
+					{movingSeconds > 0 ? m('runDetail.moving') : m('runDetail.time')}
+				</div>
+				<div class="share-stat-value">{formatDuration(paceSeconds)}</div>
 			</div>
 			<div class="share-stat">
 				<div class="share-stat-label">{m('runDetail.pace')}</div>
 				<div class="share-stat-value">
-					{formatPace(run.duration_s, run.distance_m)}
+					{formatPace(paceSeconds, run.distance_m)}
 				</div>
 			</div>
 		</div>

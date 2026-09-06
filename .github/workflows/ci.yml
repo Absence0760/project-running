@@ -943,9 +943,9 @@ jobs:
       - name: Assert the built artifact's head signals + structured data
         working-directory: apps/web
         run: |
-          if ! npx tsx --test src/lib/share/spa_shell_head_signals.test.ts src/lib/seo/document_title.test.ts src/lib/seo/learn_structured_data.test.ts; then
+          if ! npx tsx --test src/lib/share/spa_shell_head_signals.test.ts src/lib/seo/document_title.test.ts src/lib/seo/learn_structured_data.test.ts src/lib/seo/prerendered_head_contract.test.ts; then
             echo "::error::The built apps/web artifact does not carry the head signals or the JSON-LD these guards claim. The compile gate and the bundle budget above both passed, so this is not about whether the app builds or how big it is — it is about what the emitted HTML says."
-            echo "Reproduce with: npm ci && npm run build --workspace=apps/web && cd apps/web && npx tsx --test src/lib/share/spa_shell_head_signals.test.ts src/lib/seo/document_title.test.ts src/lib/seo/learn_structured_data.test.ts"
+            echo "Reproduce with: npm ci && npm run build --workspace=apps/web && cd apps/web && npx tsx --test src/lib/share/spa_shell_head_signals.test.ts src/lib/seo/document_title.test.ts src/lib/seo/learn_structured_data.test.ts src/lib/seo/prerendered_head_contract.test.ts"
             exit 1
           fi
 
@@ -1067,7 +1067,7 @@ jobs:
           echo "Clean."
 
   parity-matrix:
-    name: Doc registry drift (parity matrix, iOS column, TS↔Dart pairs, checkboxes, watch counts)
+    name: Doc registry drift (parity matrix, iOS column, TS↔Dart pairs, checkboxes, watch counts, doc links, test counts)
     # Lightweight markdown audits of the registries that describe what ships
     # where, which helpers must move together, and how a doc says a thing is
     # only half done.
@@ -1100,15 +1100,23 @@ jobs:
     #     it is here rather than in the code-gated `watch-wire-vectors` job:
     #     the doc half of its input is exactly what the `changes` filter calls
     #     a docs-only diff.
+    #   check_doc_links.mjs            — every relative markdown link in the
+    #     repo resolves to a file that exists, and every `#anchor` on one
+    #     resolves to a heading that file generates. A doc that moves leaves
+    #     every link to it dead and still valid-looking.
+    #   check_test_inventory_counts.mjs — a per-file test count stated in
+    #     docs/testing/test_inventory.md is re-derived from the suite it
+    #     describes, so the inventory cannot claim coverage the tree does not
+    #     have. Reads docs AND the suites, like the guard above it.
     #
-    # Five unrelated registries under one job name, so the name cannot say
+    # Seven unrelated registries under one job name, so the name cannot say
     # which drifted and every step says it for itself — the rule
     # scripts/check_ci_diagnostics.mjs derives for any job running more than
-    # one guard (decisions § 764). Bundled rather than split into four jobs
-    # deliberately: four runners and four checkout+setup pairs to save nothing
-    # a per-step diagnosis does not already say, and each split job would need
-    # its own line in the CI gate's `needs:` list, where an omission makes a
-    # failure invisible rather than merely unlabelled.
+    # one guard (decisions § 764). Bundled rather than split into seven
+    # jobs deliberately: seven runners and seven checkout+setup pairs to save
+    # nothing a per-step diagnosis does not already say, and each split job
+    # would need its own line in the CI gate's `needs:` list, where an
+    # omission makes a failure invisible rather than merely unlabelled.
     #
     # Deliberately NOT gated on `needs.changes.outputs.code`. Every file these
     # guards read is markdown — docs/product/parity.md, CLAUDE.md,
@@ -1116,7 +1124,7 @@ jobs:
     # classifies `docs/`, `.claude/` and `*.md` as a docs-only diff. So the
     # gate skipped this job on exactly the edits it exists to police, and the
     # CI gate counts a skip as a pass. The registry drift § 604 records
-    # arrived that way. The three Node scripts are seconds of work; the Flutter
+    # arrived that way. The Node scripts are seconds of work; the Flutter
     # setup is the only real cost, and it is worth paying on a docs PR that can
     # silently invalidate a registry.
     runs-on: ubuntu-latest
@@ -1197,6 +1205,37 @@ jobs:
           if ! node --test scripts/check_watch_doc_counts.test.mjs; then
             echo "::error::The watch-doc-count guard's own unit tests failed. The docs themselves agree with the firmware — the check above just passed — so this is a defect in scripts/check_watch_doc_counts.mjs, not count drift."
             echo "Reproduce with: node --test scripts/check_watch_doc_counts.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
+      # Both guards read markdown that no other job's guards read, and both
+      # are stdlib-only, so they land here for the reason this job's header
+      # already gives: `check_doc_links.mjs` resolves relative links and
+      # heading anchors across every `.md` in the repo, and
+      # `check_test_inventory_counts.mjs` re-derives every per-file test count
+      # docs/testing/test_inventory.md states. A docs-only diff is exactly the
+      # diff that breaks either, and every gated job skips on one.
+      - name: Relative doc links and heading anchors resolve
+        run: |
+          if ! node scripts/check_doc_links.mjs; then
+            echo "::error::A relative markdown link points at a file that does not exist, or at a heading anchor no heading in the target file generates. Nothing here is about the parity registries, the doc checkboxes, the watch counts or the test-inventory numbers — those are the other guards in this job."
+            echo "The failing line above names the source file, the line and the target it could not resolve. Fix the link, or add the heading it names. Reproduce with: node scripts/check_doc_links.mjs."
+            exit 1
+          fi
+          if ! node --test scripts/check_doc_links.test.mjs; then
+            echo "::error::The doc-link guard's own unit tests failed. The links themselves resolve — the check above just passed — so this is a defect in scripts/check_doc_links.mjs, not a broken link."
+            echo "Reproduce with: node --test scripts/check_doc_links.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
+      - name: test_inventory.md counts match the suites they describe
+        run: |
+          if ! node scripts/check_test_inventory_counts.mjs; then
+            echo "::error::A per-file test count stated in docs/testing/test_inventory.md is not the count that file's suite actually declares. Nothing here is about relative doc links, the parity registries, the doc checkboxes or the watch counts — those are the other guards in this job."
+            echo "The failing line above names the entry, the number it states and the number re-derived from the suite. The suite declares the number; the inventory restates it, so fix the inventory. Reproduce with: node scripts/check_test_inventory_counts.mjs."
+            exit 1
+          fi
+          if ! node --test scripts/check_test_inventory_counts.test.mjs; then
+            echo "::error::The test-inventory-count guard's own unit tests failed. The inventory itself agrees with the suites — the check above just passed — so this is a defect in scripts/check_test_inventory_counts.mjs, not count drift."
+            echo "Reproduce with: node --test scripts/check_test_inventory_counts.test.mjs (stdlib only, no install needed)."
             exit 1
           fi
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.21.0
@@ -1623,6 +1662,33 @@ jobs:
       # granted here as well as declared there.
       security-events: write
     uses: ./.github/workflows/terraform.yml
+
+  # The secret scan, CALLED rather than triggered — the same fix § 1149
+  # applied to terraform.yml, for the same reason. gitleaks.yml ran on its own
+  # `push` + `pull_request` triggers, where its red could never block a merge:
+  # branch protection requires exactly one context, the `CI gate` aggregator
+  # below, and a `needs:` entry is scoped to its own workflow. So a committed
+  # AWS key produced a red row on a mergeable PR (decisions § 1264).
+  #
+  # UNGATED deliberately, like `parity-matrix`. A pasted credential arrives in
+  # a markdown file as readily as in code — a `.env` snippet in a runbook, a
+  # curl example in an ADR — and the `changes` filter calls that a docs-only
+  # diff, on which every code-gated job skips and the gate counts a skip as a
+  # pass. The measured cost of not gating it is 18 s (run 33955515670).
+  #
+  # The action's own exit status is the whole signal: read at the pinned SHA,
+  # gitleaks-action posts no SARIF anywhere — it writes a job summary and
+  # exits 1 on a detection. Nothing else about the scan reaches a reader.
+  gitleaks:
+    name: Secret scan (gitleaks)
+    permissions:
+      contents: read
+      # The action lists a PR's existing review comments before deciding
+      # whether to add one. It cannot add one — that needs `write` — so the
+      # called workflow turns the comment path off; the read stays because it
+      # is what the scan's own event handling reads.
+      pull-requests: read
+    uses: ./.github/workflows/gitleaks.yml
 
   build-watch-wear:
     needs: changes
@@ -2809,6 +2875,20 @@ jobs:
       # Retry + port-cleanup rationale lives in the composite action.
       - name: Start local Supabase stack
         uses: ./.github/actions/start-supabase
+      - name: Check the server_only registry matches the migrations
+        run: |
+          if ! node apps/backend/scripts/check_server_only_registry.mjs; then
+            echo "::error::A routine some migration revokes from authenticated is missing from anon_execute_contract_test.sql's server_only fixture (or vice versa). The fixture is a hand-kept list of what must never be callable by a signed-in user; a routine absent from it is one the contract test never asks about."
+            echo "Reproduce with: node apps/backend/scripts/check_server_only_registry.mjs"
+            exit 1
+          fi
+      - name: Validate the server_only registry guard
+        run: |
+          if ! node --test apps/backend/scripts/check_server_only_registry.test.mjs; then
+            echo "::error::The server_only registry guard's own tests fail, so its green means nothing."
+            echo "Fix apps/backend/scripts/check_server_only_registry.mjs (or its tests) first."
+            exit 1
+          fi
       - name: Run pgtap RLS suite
         working-directory: apps/backend
         run: |
@@ -3441,6 +3521,7 @@ jobs:
       - lambda-alias-coverage
       - infra-guards
       - terraform
+      - gitleaks
       - build-watch-wear
       - build-firmware
       - sim-firmware

@@ -116,14 +116,27 @@ int? gradeAdjustedPaceSecPerKm(List<Waypoint> track) {
     final dtMs = (at != null && bt != null) ? bt.difference(at).inMilliseconds : -1;
     if (dtMs > 0) {
       var factor = 1.0;
+      var measuredGrade = false;
       final ae = a.elevationMetres;
       final be = b.elevationMetres;
       if (ae != null && be != null) {
-        sawEle = true;
+        measuredGrade = true;
         factor = gradeFactor((be - ae) / segHoriz);
       }
-      adjDistM += segHoriz * factor;
-      timeS += dtMs / 1000;
+      // A segment whose equivalent-flat distance is not a number is unusable
+      // in exactly the way a segment with no timestamps is, and is skipped the
+      // same way. It reaches here when a track point carries a non-finite
+      // lat/lng (`segHoriz` goes NaN, and `NaN < minSegmentM` is false so the
+      // walk never resets) or a non-finite altitude. Poisoning [adjDistM]
+      // instead used to erase the GAP of a three-hour ultra over one bad fix —
+      // and here it THREW: `.round()` on a non-finite double is an
+      // UnsupportedError, raised from inside a widget build (§ 1226).
+      final adj = segHoriz * factor;
+      if (adj.isFinite) {
+        if (measuredGrade) sawEle = true;
+        adjDistM += adj;
+        timeS += dtMs / 1000;
+      }
     }
     // Advance the anchor whether or not the segment was usable — a chunk
     // without timestamps shouldn't wedge the walk forever.
@@ -131,6 +144,6 @@ int? gradeAdjustedPaceSecPerKm(List<Waypoint> track) {
     segHoriz = 0.0;
   }
 
-  if (!sawEle || adjDistM <= 0 || timeS <= 0) return null;
+  if (!sawEle || !(adjDistM > 0) || !(timeS > 0)) return null;
   return (timeS / (adjDistM / 1000)).round();
 }

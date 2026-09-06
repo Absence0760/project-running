@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { formatPace, formatDistance, sourceLabel } from '$lib/core/mock-data';
-	import { sourceColor, sourceInk } from '$lib/runs/source_badge';
+	import { RUN_SOURCES, sourceColor, sourceInk } from '$lib/runs/source_badge';
 	import { formatDate, formatDuration } from '$lib/format/time';
 	import { fetchRunsWithError, deleteRuns } from '$lib/core/data';
 	import { loadSettings, effective } from '$lib/settings/settings';
@@ -299,29 +299,70 @@
 		fetchMode === 'full' ? filteredRuns.slice(0, renderLimit) : filteredRuns,
 	);
 
+	/// The filter/sort set the current render window belongs to. Keyed rather
+	/// than one-shot-flagged: a back-nav restore ASSIGNS the filters, which is
+	/// a change of those signals like any other, so a reset effect that fired
+	/// on any write threw the restored window away and re-collapsed 200 cards
+	/// to 50 — leaving the document a quarter of its captured height, so the
+	/// scroll the restore then re-applied clamped to near the top. Comparing
+	/// the set means a restore that lands on the same filters is not a change,
+	/// while a genuine change afterwards still resets, with no ordering
+	/// assumption about when `restore` runs relative to the effect.
+	///
+	/// Plain `let`, not `$state`: the effect below both reads and writes it,
+	/// and a reactive read there would make the effect depend on its own write.
+	let renderWindowKey = '';
+	function renderWindowSignature(): string {
+		return [
+			sourceFilter,
+			activityFilter,
+			dateRange,
+			sortKey,
+			customFrom,
+			customTo,
+		].join('\u0000');
+	}
+
 	$effect(() => {
 		// Reset the render window whenever the filter / sort set changes, so
 		// narrowing a list never carries a previously-expanded window into a
-		// smaller result. Reading the signals registers the dependencies;
-		// renderLimit is written but not read here, so there's no loop.
-		void sourceFilter;
-		void activityFilter;
-		void dateRange;
-		void sortKey;
-		void customFrom;
-		void customTo;
+		// smaller result. Reading the signals through the signature registers
+		// the dependencies; renderLimit is written but not read here, so
+		// there's no loop.
+		const key = renderWindowSignature();
+		if (key === renderWindowKey) return;
+		renderWindowKey = key;
 		renderLimit = PAGE_SIZE;
 	});
 
-	// $derived (not plain const) so the m() labels recompute when the locale
-	// changes — a top-level const would call m() once at init, capture the
-	// pre-load locale, and never update (the live-switch + async-chunk race).
+	/// One entry per value `runs_source_check` allows. A `Record<RunSource, _>`
+	/// so tsc refuses an incomplete map, and the ORDER comes from
+	/// `RUN_SOURCES` rather than from a second hand-written list — the
+	/// dropdown used to enumerate four of the eight, so a Wear OS runner saw a
+	/// "Watch" badge on every card and no Watch option to filter by, and the
+	/// same held for a Garmin ZIP import, a Health Connect sync and imported
+	/// race results. Deriving it means the next value added to the CHECK
+	/// cannot reach the union (which `check_constraint_unions.mjs` holds
+	/// against it) without failing this map's exhaustiveness.
+	///
+	/// Brand marks stay untranslated; the two generic sources carry keys.
+	///
+	/// $derived (not plain const) so the m() labels recompute when the locale
+	/// changes — a top-level const would call m() once at init, capture the
+	/// pre-load locale, and never update (the live-switch + async-chunk race).
+	const sourceFilterLabels = $derived<Record<RunSource, string>>({
+		app: m('runs.sourceRecorded'),
+		watch: m('runs.sourceWatch'),
+		healthkit: 'HealthKit',
+		healthconnect: 'Health Connect',
+		strava: 'Strava',
+		garmin: 'Garmin',
+		parkrun: 'parkrun',
+		race: m('runs.sourceRace'),
+	});
 	const sources = $derived<{ value: RunSource | 'all'; label: string }[]>([
 		{ value: 'all', label: m('runs.sourceAll') },
-		{ value: 'app', label: m('runs.sourceRecorded') },
-		{ value: 'strava', label: 'Strava' },
-		{ value: 'parkrun', label: 'parkrun' },
-		{ value: 'healthkit', label: 'HealthKit' },
+		...RUN_SOURCES.map((v) => ({ value: v, label: sourceFilterLabels[v] })),
 	]);
 
 	const activities = $derived<{ value: string; label: string; icon: string }[]>([
@@ -454,6 +495,7 @@
 		dateRange: DateRange;
 		customFrom: string;
 		customTo: string;
+		renderLimit: number;
 		scrollY: number;
 	}> = {
 		capture: () => ({
@@ -466,6 +508,7 @@
 			dateRange,
 			customFrom,
 			customTo,
+			renderLimit,
 			scrollY: typeof window === 'undefined' ? 0 : window.scrollY,
 		}),
 		restore: (s) => {
@@ -483,6 +526,11 @@
 			dateRange = s.dateRange;
 			customFrom = s.customFrom;
 			customTo = s.customTo;
+			// After the filters, so the signature is taken over the restored
+			// set — and before the paint, so the captured window is what the
+			// scroll below is re-applied against.
+			renderLimit = s.renderLimit ?? PAGE_SIZE;
+			renderWindowKey = renderWindowSignature();
 			filtersHydrated = true;
 			loading = false;
 			// SvelteKit's auto scroll-restoration runs before our list

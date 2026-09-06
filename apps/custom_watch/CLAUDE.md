@@ -104,5 +104,24 @@ no longer applies.
 | Tier-1 active parts list / shopping checklist (incl. the BTN5 external momentary on P0.02 — the DK has four onboard buttons, the §350 grammar uses five) | [../../docs/custom_watch/parts.md](../../docs/custom_watch/parts.md) |
 | § 88 Layer-1 vendor findings (ANT+ program state, NDA-gated datasheets) — contradicts two assumptions still recorded in `bom.md` | [../../docs/custom_watch/vendor_research.md](../../docs/custom_watch/vendor_research.md) |
 
+## Host tests — the current figure, and where NOT to read one
+
+`watch_core` carries **2428 host tests in `watch_core`** today: the `#[test]`
+fns across the 111 modules `core/src/lib.rs` declares. That is the number
+`check_watch_doc_counts.mjs` re-derives on every PR, so it is the one to quote.
+Re-measure the runtime figure with
+`cd apps/custom_watch && cargo test --target "$(rustc -vV | sed -n 's|host: ||p')" -p watch_core`
+— its lib line reads `running <n> tests`, and it agrees with the guard's count
+exactly (both 2428 on 2026-09-05), which is what makes the static derivation
+trustworthy. The whole-workspace sweep is a different, larger population:
+`bin/watch-test.sh` (2,868 passed / 0 ignored, measured 2026-09-05), and no
+guard holds that one — it needs cargo.
+
+**Do not take a count out of a dated batch note.** `README.md`'s chronology and
+`docs/custom_watch/tier1_log.md` record what was true on the day of each batch
+and are deliberately excluded from the doc-count guard ([decisions § 793](../../docs/architecture/decisions.md)):
+rewriting them would misdescribe the batch they describe. Their figures are
+as-of, not current.
+
 For status + next-steps + the active workspace layout, see
 [`README.md`](README.md) in this directory.

@@ -307,11 +307,6 @@ void main() {
           1,
           reason: 'A tap on the pill itself is absorbed, not passed through.',
         );
-
-        // Drain the auto-dismiss timer so no pending timer outlives the
-        // test (the showTopBanner-leaves-a-timer gotcha).
-        await tester.pump(kTopBannerMaxDuration);
-        await tester.pump();
       },
     );
   });

@@ -7,7 +7,7 @@
 // Same strategy as lambda/share-run/build.mjs: esbuild bundles src/index.ts
 // (+ everything it imports from $lib/*) into one index.mjs; supabase-js is
 // inlined; @resvg/resvg-js is a native addon kept external and copied into
-// the zip's node_modules; the SPA-shell index.html is substituted in as
+// the zip's node_modules; the SPA shell 200.html is substituted in as
 // __SPA_SHELL_HTML__. See lambda/share-run/README.md for the rationale.
 
 import { build } from 'esbuild';
@@ -20,7 +20,7 @@ import { createRequire } from 'node:module';
 const here = dirname(fileURLToPath(import.meta.url));
 const webRoot = resolve(here, '..', '..');
 const distDir = resolve(here, 'dist');
-const spaShellPath = resolve(webRoot, 'build', 'index.html');
+const spaShellPath = resolve(webRoot, 'build', '200.html');
 
 const RESVG_LOADER = '@resvg/resvg-js';
 const RESVG_ARM64 = '@resvg/resvg-js-linux-arm64-gnu';
@@ -29,7 +29,7 @@ const RESVG_EXTERNAL = [RESVG_LOADER, RESVG_ARM64];
 if (!existsSync(spaShellPath)) {
 	console.error(
 		`[share-recap build] missing SPA shell at ${spaShellPath}. ` +
-			`Run \`npm run build\` (from apps/web/) first so the index.html template exists.`,
+			`Run \`npm run build\` (from apps/web/) first so the 200.html shell exists.`,
 	);
 	process.exit(1);
 }

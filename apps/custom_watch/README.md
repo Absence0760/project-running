@@ -37,6 +37,16 @@ The watch's developer inner loop is `bin/watch-flash.sh` from the repo root (or 
 
 ## Next steps
 
+> **Every count below is as-of its own dated batch note, and none of them is
+> re-measured.** This section is a chronology: a test count, a page count or a
+> module count inside a dated entry records what that batch delivered on that
+> day, and rewriting one would misdescribe the batch it describes — which is why
+> `scripts/check_watch_doc_counts.mjs` deliberately does not read this file
+> ([decisions § 793](../../docs/architecture/decisions.md), § 1257). For the
+> CURRENT `watch_core` host-test figure and the command that re-derives it, read
+> [`CLAUDE.md` § Host tests](CLAUDE.md); for current status read
+> [`docs/custom_watch/roadmap.md`](../../docs/custom_watch/roadmap.md).
+
 1. **Order parts** — see [`docs/custom_watch/parts.md`](../../docs/custom_watch/parts.md). Total ~$300 for the MCU + sensor breakouts + battery + breadboard, plus ~$200–$900 in bench tools depending on which soldering iron / multimeter / logic analyzer tier you pick.
 2. **Scaffold the Cargo workspace** — **DONE (2026-05-28).** `Cargo.toml`, `rust-toolchain.toml`, `.cargo/config.toml` with probe-rs runner, `app/` crate with Embassy executor + blink-LED stub task, stub modules for each subsystem, driver crates (`sharp_mip`, `ublox_nmea`, `max86177`) as `no_std` stubs, board crate (`nrf52840_dk`) with DK pin assignments, VS Code launch + tasks for in-IDE debug. `nrf-softdevice` was **not** in deps at scaffold time — it arrived with step 6 as planned, and is now an optional dep behind the `ble` feature (`app/Cargo.toml`), with `build.rs` swapping in `memory-ble.x` to leave room for the SoftDevice. First flash pending parts arrival.
 3. **GNSS bring-up** — **CODE DONE, SIM-VERIFIED (2026-07-08, re-verified 2026-08-19); bench verification pending parts.** `ublox_nmea` streaming parser (RMC/GGA, checksummed, 10 host tests) + the `gps` task reading UARTE0, publishing merged fixes through `watch_core::fix` into an embassy-sync `Watch`. The Renode sim feeds `sim/nmea/bench_jog.nmea` and fixes flow end-to-end. The receiver is driven by **`BufferedUarte` over a 2048-byte ring** since 2026-08-19 ([§ 698](../../docs/architecture/decisions.md)) rather than a re-armed 32-byte read, so a CPU halt cannot leave it disarmed; that needed a second sim model (`sim/NRF52840_UARTE_Events.cs`) because Renode 1.16.1's UART publishes no events to the PPI matrix. **What is still not verified is the thing the change is for**: Renode models no NVMC, so no simulator run has ever put an 85 ms page erase next to the GPS stream.

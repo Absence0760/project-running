@@ -63,7 +63,7 @@ the Lambda standing up.
 ```
 src/index.ts      Lambda Function URL handler (HTML + PNG routing).
 build.mjs         esbuild bundler — produces dist/index.mjs + share-run.zip.
-                  Reads apps/web/build/index.html (built by `npm run build`)
+                  Reads apps/web/build/200.html (built by `npm run build`)
                   and embeds the SPA shell as a string constant so the
                   Lambda can inject OG tags + serve the same bundle the
                   static-rendered routes load. Copies the @resvg loader +

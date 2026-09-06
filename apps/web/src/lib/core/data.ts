@@ -3,6 +3,8 @@
  */
 import { supabase } from './supabase';
 import { edgeFunctionErrorCode, edgeFunctionErrorMessage } from './edge_function_error';
+import { isDuplicateKeyError, supabaseErrorFields } from './supabase_error';
+import { singleEmbed, fitnessSnapshotDue, publicRouteListFill } from './data_normalise';
 import { TABLES, BUCKETS, METADATA_KEYS } from './schema';
 import { isEntityId } from './entity_id';
 import { probeSaysConfigured } from './provider_probe';
@@ -16,6 +18,7 @@ import { logInputFromRecipe } from '../nutrition/recipe';
 import { challengesToRecomputeForRun } from '../social/challenge_progress';
 import { mergeMyProgress } from '../social/challenge_list';
 import { selectEffectivePricing } from '../social/event_instance';
+import { planHeadCopyFields, planWeekCopyRows, planWorkoutCopyRows } from './plan_copy';
 import type {
 	Run,
 	Route,
@@ -979,11 +982,20 @@ export async function setRunPublic(id: string, isPublic: boolean): Promise<void>
 	if (error) throw error;
 }
 
-/// Upsert a fitness snapshot for the signed-in user. The dashboard
-/// call path computes the snapshot on every open (cheap — pure math
-/// over the run list the dashboard already fetched) and persists so
-/// the trend chart has a history to draw. Returns the id of the
-/// inserted row.
+/// Persist at most one fitness snapshot per user per UTC day. The dashboard
+/// call path computes the snapshot on every open (cheap — pure math over the
+/// run list the dashboard already fetched) and persists so the trend chart has
+/// a history to draw; without the per-day gate a runner who opens /dashboard
+/// three times a day fills the chart's 60-point window with same-day
+/// duplicates inside about two and a half weeks.
+///
+/// Read-then-insert rather than an upsert, deliberately. `fitness_snapshots`
+/// carries self SELECT / INSERT / DELETE policies and no UPDATE one, so
+/// PostgREST's `ON CONFLICT DO UPDATE` would be refused by RLS; and the
+/// conflict target is a derived day, which `on_conflict=` cannot name. This
+/// shape is correct on a database with no uniqueness constraint at all, and
+/// once `fitness_snapshots_user_day_uniq` exists a second tab racing the read
+/// gets a 23505 — the state we wanted, not a failure.
 export async function insertFitnessSnapshot(input: {
 	vdot: number | null;
 	vo2Max: number | null;
@@ -1005,7 +1017,21 @@ export async function insertFitnessSnapshot(input: {
 	) {
 		return;
 	}
-	await supabase.from(TABLES.fitness_snapshots).insert({
+	const { data: latest, error: latestErr } = await supabase
+		.from(TABLES.fitness_snapshots)
+		.select('computed_at')
+		.eq('user_id', userId)
+		.order('computed_at', { ascending: false })
+		.limit(1)
+		.maybeSingle();
+	if (latestErr) {
+		console.warn('insertFitnessSnapshot: latest-snapshot read failed', supabaseErrorFields(latestErr));
+		return;
+	}
+	if (!fitnessSnapshotDue((latest as { computed_at: string } | null)?.computed_at, new Date())) {
+		return;
+	}
+	const { error } = await supabase.from(TABLES.fitness_snapshots).insert({
 		user_id: userId,
 		vdot: input.vdot,
 		vo2_max: input.vo2Max,
@@ -1015,6 +1041,11 @@ export async function insertFitnessSnapshot(input: {
 		qualifying_run_count: input.qualifyingRunCount,
 		source: 'client',
 	});
+	// A PostgREST error resolves rather than throws, so the caller's catch
+	// cannot see this one — the write used to fail entirely silently.
+	if (error && !isDuplicateKeyError(error)) {
+		console.warn('insertFitnessSnapshot failed', supabaseErrorFields(error));
+	}
 }
 
 export interface FitnessSnapshotRow {
@@ -1249,7 +1280,7 @@ export async function saveRun(input: {
 			const encoded = new TextEncoder().encode(JSON.stringify(input.track));
 			const gzipped = await gzipBytes(encoded);
 			const { error: upErr } = await supabase.storage
-				.from(TABLES.runs)
+				.from(BUCKETS.runs)
 				.upload(path, new Blob([gzipped as BlobPart], { type: 'application/gzip' }), {
 					contentType: 'application/gzip',
 					upsert: true,
@@ -1292,7 +1323,7 @@ export async function saveRun(input: {
 			const encoded = new TextEncoder().encode(JSON.stringify(input.hrSeries));
 			const gzipped = await gzipBytes(encoded);
 			const { error: upErr } = await supabase.storage
-				.from(TABLES.runs)
+				.from(BUCKETS.runs)
 				.upload(path, new Blob([gzipped as BlobPart], { type: 'application/gzip' }), {
 					contentType: 'application/gzip',
 					upsert: true,
@@ -1636,7 +1667,9 @@ export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: 
 		const byId = new Map<string, Route>();
 		for (const r of [
 			...((savedBaseRes.data ?? []) as unknown as Route[]),
-			...((savedPublicRes.data ?? []) as unknown as Route[]),
+			...((savedPublicRes.data ?? []) as unknown as Omit<Route, 'waypoints' | 'is_starred'>[]).map(
+				(r) => ({ ...r, ...publicRouteListFill() }) as Route,
+			),
 		]) {
 			if (!byId.has(r.id)) byId.set(r.id, r);
 		}
@@ -1682,7 +1715,7 @@ export async function bookmarkRoute(routeId: string): Promise<void> {
 		.from('saved_routes')
 		.insert({ user_id: userId, route_id: routeId });
 	// Treat duplicate (already saved) as a no-op.
-	if (error && error.code !== '23505') throw error;
+	if (error && !isDuplicateKeyError(error)) throw error;
 }
 
 export async function unbookmarkRoute(routeId: string): Promise<void> {
@@ -2629,27 +2662,34 @@ async function enrichClubs(
 				.eq('user_id', userId)
 		: { data: [] as { club_id: string; role: string; status: string }[], error: null };
 
-	if (rolesRes.error) {
-		console.error('enrichClubs (viewer membership) failed', rolesRes.error);
-		return { clubs: [], error: describeReadError(rolesRes.error) };
-	}
-
 	const roles = new Map<string, ClubRole>();
 	const statuses = new Map<string, MembershipStatus>();
-	for (const row of (rolesRes.data ?? []) as { club_id: string; role: string; status: string }[]) {
-		if (row.status === 'active') roles.set(row.club_id, row.role as ClubRole);
-		statuses.set(row.club_id, row.status as MembershipStatus);
-	}
-	return {
-		clubs: clubs.map((c) => ({
+	const withMembership = (): ClubWithMeta[] =>
+		clubs.map((c) => ({
 			...c,
 			join_policy: (c.join_policy ?? 'open') as JoinPolicy,
 			member_count: c.member_count ?? 0,
 			viewer_role: roles.get(c.id) ?? null,
 			viewer_status: statuses.get(c.id) ?? null
-		})),
-		error: null
-	};
+		}));
+
+	// A failed membership read is not non-membership — but it is not a failure
+	// to read the CLUBS either, and discarding rows the caller already has
+	// turns a blip into "you are in no clubs". Hand the rows back with every
+	// role and status null and the error alongside, and let each surface say
+	// membership is unknown rather than render the list as an error. The
+	// single-club reader (fetchClubBySlug) deliberately still fails: an
+	// unknown role there silently downgrades an owner to the member view.
+	if (rolesRes.error) {
+		console.error('enrichClubs (viewer membership) failed', rolesRes.error);
+		return { clubs: withMembership(), error: describeReadError(rolesRes.error) };
+	}
+
+	for (const row of (rolesRes.data ?? []) as { club_id: string; role: string; status: string }[]) {
+		if (row.status === 'active') roles.set(row.club_id, row.role as ClubRole);
+		statuses.set(row.club_id, row.status as MembershipStatus);
+	}
+	return { clubs: withMembership(), error: null };
 }
 
 export async function createClub(input: {
@@ -2717,7 +2757,7 @@ export async function createClub(input: {
 		// migration 20260907_001) bubbles. The rate-limit branch is
 		// converted to a friendlier 'wait N minutes' message rather than
 		// the raw `rate limit exceeded for create_club, retry in Ns`.
-		if (error && error.code !== '23505') {
+		if (error && !isDuplicateKeyError(error)) {
 			const friendly = rateLimitErrorMessage(m, error);
 			if (friendly) throw new Error(friendly);
 			throw error;
@@ -2798,7 +2838,7 @@ export async function joinClub(
 		// (persona #45); null when the club doesn't require a waiver.
 		activity_waiver_ack_at: ackWaiver ? new Date().toISOString() : null,
 	});
-	if (error && error.code !== '23505') throw error;
+	if (error && !isDuplicateKeyError(error)) throw error;
 	return status;
 }
 
@@ -3021,13 +3061,21 @@ export async function fetchNextRsvpedEvent(
 		const instanceStart = row.instance_start as string;
 		if (isOccurrenceCancelled(cancelled.get(eventId) ?? [], instanceStart)) continue;
 		const ev = row.events as
-			| { title: string; meet_label: string | null; clubs: { slug: string } }
+			| {
+					title: string;
+					meet_label: string | null;
+					clubs: { slug: string } | { slug: string }[] | null;
+			  }
 			| null;
 		if (!ev) continue;
+		// The card's whole job is to deep-link the club. A missing slug would
+		// route it at /clubs/undefined, so skip the candidate and try the next.
+		const clubSlug = singleEmbed(ev.clubs)?.slug;
+		if (!clubSlug) continue;
 		return {
 			event_id: eventId,
 			instance_start: instanceStart,
-			club_slug: ev.clubs.slug,
+			club_slug: clubSlug,
 			title: ev.title,
 			meet_label: ev.meet_label ?? null,
 		};
@@ -3103,7 +3151,7 @@ export async function fetchEventClubSlug(eventId: string): Promise<string | null
 		.maybeSingle();
 	if (!data) return null;
 	const clubs = (data as { clubs: { slug: string } | { slug: string }[] | null }).clubs;
-	const club = Array.isArray(clubs) ? clubs[0] ?? null : clubs;
+	const club = singleEmbed(clubs);
 	return club?.slug ?? null;
 }
 
@@ -4592,18 +4640,12 @@ export async function publishPlanToLibrary(sourcePlanId: string): Promise<string
 	const { data: tmpl, error: planErr } = await supabase
 		.from('training_plans')
 		.insert({
+			...planHeadCopyFields(src),
 			user_id: userId,
-			name: src.name,
-			goal_event: src.goal_event,
-			goal_distance_m: src.goal_distance_m,
-			goal_time_seconds: src.goal_time_seconds,
-			start_date: src.start_date,
-			end_date: src.end_date,
-			days_per_week: src.days_per_week,
 			vdot: null,
 			current_5k_seconds: null,
-			status: 'completed',
 			notes: null,
+			status: 'completed',
 			is_template: true,
 			is_public_template: true,
 			club_id: null,
@@ -4616,13 +4658,7 @@ export async function publishPlanToLibrary(sourcePlanId: string): Promise<string
 
 	if (source.weeks.length === 0) return newPlanId;
 
-	const weekRows = source.weeks.map((w) => ({
-		plan_id: newPlanId,
-		week_index: w.week_index,
-		phase: w.phase,
-		target_volume_m: w.target_volume_m,
-		notes: w.notes,
-	}));
+	const weekRows = planWeekCopyRows(source.weeks, newPlanId);
 	const { data: weekRes, error: weekErr } = await supabase
 		.from('plan_weeks')
 		.insert(weekRows)
@@ -4639,23 +4675,7 @@ export async function publishPlanToLibrary(sourcePlanId: string): Promise<string
 		if (newId) oldToNew.set(old.id, newId);
 	}
 
-	const workoutRows = source.workouts
-		.map((w) => {
-			const newWeekId = oldToNew.get(w.week_id);
-			if (!newWeekId) return null;
-			return {
-				week_id: newWeekId,
-				scheduled_date: w.scheduled_date,
-				kind: w.kind,
-				target_distance_m: w.target_distance_m,
-				target_duration_seconds: w.target_duration_seconds,
-				target_pace_sec_per_km: w.target_pace_sec_per_km,
-				target_pace_tolerance_sec: w.target_pace_tolerance_sec,
-				structure: w.structure,
-				notes: w.notes,
-			};
-		})
-		.filter((r): r is NonNullable<typeof r> => r != null);
+	const workoutRows = planWorkoutCopyRows(source.workouts, oldToNew);
 	if (workoutRows.length > 0) {
 		const { error: woErr } = await supabase.from('plan_workouts').insert(workoutRows);
 		if (woErr) throw woErr;
@@ -4725,20 +4745,12 @@ export async function publishPlanAsTemplate(
 	const { data: tmpl, error: planErr } = await supabase
 		.from('training_plans')
 		.insert({
+			...planHeadCopyFields(src),
 			user_id: userId,
-			name: src.name,
-			goal_event: src.goal_event,
-			goal_distance_m: src.goal_distance_m,
-			goal_time_seconds: src.goal_time_seconds,
-			start_date: src.start_date,
-			end_date: src.end_date,
-			days_per_week: src.days_per_week,
 			vdot: null,
 			current_5k_seconds: null,
-			status: 'completed',
-			source: src.source ?? 'manual',
 			notes: null,
-			rules: src.rules,
+			status: 'completed',
 			is_template: true,
 			club_id: clubId,
 			parent_template_id: null,
@@ -4750,13 +4762,7 @@ export async function publishPlanAsTemplate(
 
 	if (source.weeks.length === 0) return newPlanId;
 
-	const weekRows = source.weeks.map((w) => ({
-		plan_id: newPlanId,
-		week_index: w.week_index,
-		phase: w.phase,
-		target_volume_m: w.target_volume_m,
-		notes: w.notes,
-	}));
+	const weekRows = planWeekCopyRows(source.weeks, newPlanId);
 	const { data: weekRes, error: weekErr } = await supabase
 		.from('plan_weeks')
 		.insert(weekRows)
@@ -4773,25 +4779,7 @@ export async function publishPlanAsTemplate(
 		if (newId) oldToNew.set(old.id, newId);
 	}
 
-	const workoutRows = source.workouts
-		.map((w) => {
-			const newWeekId = oldToNew.get(w.week_id);
-			if (!newWeekId) return null;
-			return {
-				week_id: newWeekId,
-				scheduled_date: w.scheduled_date,
-				kind: w.kind,
-				target_distance_m: w.target_distance_m,
-				target_duration_seconds: w.target_duration_seconds,
-				target_pace_sec_per_km: w.target_pace_sec_per_km,
-				target_pace_end_sec_per_km: w.target_pace_end_sec_per_km,
-				target_pace_tolerance_sec: w.target_pace_tolerance_sec,
-				pace_zone: w.pace_zone,
-				structure: w.structure,
-				notes: w.notes,
-			};
-		})
-		.filter((r): r is NonNullable<typeof r> => r != null);
+	const workoutRows = planWorkoutCopyRows(source.workouts, oldToNew);
 	if (workoutRows.length > 0) {
 		const { error: woErr } = await supabase.from('plan_workouts').insert(workoutRows);
 		if (woErr) throw woErr;
@@ -5390,7 +5378,7 @@ export async function followUser(targetUserId: string): Promise<void> {
 		.from('user_follows')
 		.insert({ follower_id: userId, followee_id: targetUserId });
 	// Treat duplicate (already following) as a no-op.
-	if (error && error.code !== '23505') throw error;
+	if (error && !isDuplicateKeyError(error)) throw error;
 }
 
 export async function unfollowUser(targetUserId: string): Promise<void> {
@@ -6224,7 +6212,7 @@ export async function giveKudos(runId: string): Promise<boolean> {
 		.from(TABLES.run_kudos)
 		.insert({ user_id: userId, run_id: runId });
 	if (error) {
-		if (error.code === '23505') return false;
+		if (isDuplicateKeyError(error)) return false;
 		throw error;
 	}
 	return true;
@@ -8517,7 +8505,7 @@ export async function fetchNotificationsWithError(
 	}
 	const eventBy = new Map<string, { title: string; club_slug: string | null }>();
 	for (const e of (events.data ?? []) as { id: string; title: string; clubs: { slug: string } | { slug: string }[] | null }[]) {
-		const club = Array.isArray(e.clubs) ? e.clubs[0] ?? null : e.clubs;
+		const club = singleEmbed(e.clubs);
 		eventBy.set(e.id, { title: e.title, club_slug: club?.slug ?? null });
 	}
 	const clubBy = new Map<string, { name: string; slug: string }>();
@@ -8630,7 +8618,7 @@ export async function submitReport(input: {
 		// friendly messages. The PostgREST envelope surfaces the
 		// SQLSTATE / hint exactly as raised in the migration; we
 		// don't lean on the raw text because that string can change.
-		if (error.code === '23505') {
+		if (isDuplicateKeyError(error)) {
 			throw new Error('You already have a pending report against this content.');
 		}
 		// The `create_report` bucket goes through the same
@@ -9382,7 +9370,7 @@ export async function fetchGymSetHistoryWithError(opts?: {
 			set_type: string | null;
 			gym_workouts: { started_at: string } | { started_at: string }[];
 		};
-		const w = Array.isArray(r.gym_workouts) ? r.gym_workouts[0] : r.gym_workouts;
+		const w = singleEmbed(r.gym_workouts);
 		return {
 			workout_id: r.workout_id,
 			started_at: w?.started_at ?? '',
@@ -11811,7 +11799,10 @@ export async function joinChallenge(id: string, teamClubId?: string | null): Pro
 	const { error } = await supabase
 		.from(TABLES.challenge_participants)
 		.insert({ challenge_id: id, user_id: userId, team_club_id: teamClubId ?? null });
-	if (error) throw error;
+	// The (challenge_id, user_id) primary key makes a double-tap — or a tap on
+	// a list whose `joined` flag was computed before another tab wrote the row
+	// — a duplicate, which is this call's own success condition restated.
+	if (error && !isDuplicateKeyError(error)) throw error;
 }
 
 export async function leaveChallenge(id: string): Promise<void> {

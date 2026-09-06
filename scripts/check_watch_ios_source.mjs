@@ -69,6 +69,28 @@
 //       (`<flag> = true`, bound to some `confirmationDialog(isPresented:)`) or
 //       BE the confirming action inside one.
 //
+//   (9) The DEBUG direct-to-Supabase path sends every field the WCSession
+//       envelope sends. Two transports, one run, two hand-written field lists
+//       — the § 1254 shape — and the DEBUG one is the path a watch-sim-alone
+//       developer watches a row land on, so a field missing there sends them
+//       to debug the wrong tier. It stayed missing because `RunPayload.metadata`
+//       was typed `[String: String]`, which made the two numeric keys
+//       unsendable rather than merely unsent; nothing failed, the row just
+//       arrived short.
+//
+//  (10) The watch target's Info.plist is the only place its Info.plist keys
+//       live. `GENERATE_INFOPLIST_FILE = NO` means Xcode uses the committed
+//       file AS IS rather than merging the `INFOPLIST_KEY_*` build settings
+//       into it, so every such setting on that target is INERT while reading
+//       exactly like a declaration — which is how this app shipped with
+//       `INFOPLIST_KEY_CFBundleDisplayName = "Threkir"` set on both
+//       configurations and no `CFBundleDisplayName` in the plist at all,
+//       leaving the watch app named by its target (`WatchApp`) on the wrist.
+//       The same claim carries Apple's documented mutual exclusivity:
+//       `WKWatchOnly` says the app has no iOS companion and cannot coexist
+//       with `WKCompanionAppBundleIdentifier`, so a session resolving the
+//       companion question must remove one while adding the other.
+//
 // WHAT THIS GUARD DOES NOT PROVE. It parses text. It does not compile Swift,
 // does not run it, and cannot see anything a type-checker would: claim (1)
 // matches a catalog key on the SHAPE of its interpolation, not on the type of
@@ -479,6 +501,110 @@ export function phoneEnvelopeKeys(src) {
 	}
 	for (const m of src.matchAll(/\bmetadata\s*\[\s*"([^"\\\n]+)"\s*\]/g)) keys.add(m[1]);
 	return keys;
+}
+
+/** The watch target's Xcode project, claim (10)'s second rail. */
+export const PBXPROJ = join('WatchApp.xcodeproj', 'project.pbxproj');
+
+/** The watch app's committed Info.plist, read by claims (3) and (10). */
+export const WATCH_PLIST = join('WatchApp', 'Info.plist');
+
+/**
+ * Every `buildSettings { … }` block in a pbxproj, as raw text.
+ *
+ * Returns an empty array when none parse, which claim (10) treats as an error
+ * rather than as a clean tree.
+ * @param {string} src
+ * @returns {string[]}
+ */
+export function buildSettingsBlocks(src) {
+	/** @type {string[]} */
+	const out = [];
+	const re = /buildSettings\s*=\s*\{/g;
+	let m;
+	while ((m = re.exec(src)) !== null) {
+		const open = m.index + m[0].length - 1;
+		let depth = 0;
+		for (let i = open; i < src.length; i += 1) {
+			if (src[i] === '{') depth += 1;
+			else if (src[i] === '}') {
+				depth -= 1;
+				if (depth === 0) {
+					out.push(src.slice(open, i + 1));
+					break;
+				}
+			}
+		}
+	}
+	return out;
+}
+
+/** The DEBUG-only direct-to-Supabase writer, claim (9)'s other rail. */
+export const DIRECT_SITE = join('WatchApp', 'SupabaseService.swift');
+
+/**
+ * Fields the DEBUG direct path sends that the WCSession envelope does not, and
+ * why each is one-sided. Both are supplied BY THE PHONE on the envelope path,
+ * so the watch has no business putting them in the hand-off: `user_id` comes
+ * from the phone's authenticated session and `track_url` from the phone's own
+ * Storage upload. An entry matching no field FAILS, for the reason
+ * `UNGUARDED_DESTRUCTIVE` does: the next field to take that name inherits the
+ * exemption.
+ * @type {Record<string, string>}
+ */
+export const DIRECT_ONLY_FIELDS = {
+	user_id: "the phone supplies it from its own session on the WCSession path",
+	track_url: 'the phone uploads the track and owns the object path',
+};
+
+/**
+ * The stored-property names of a Swift `struct <name>: …` declaration, in
+ * order. Used to read the DEBUG payload's two field lists without compiling
+ * Swift.
+ *
+ * Returns null when the declaration is not there to read — the honest answer
+ * rather than "no fields", because an empty set would let claim (9) report
+ * that a payload nobody sends agrees with the envelope.
+ * @param {string} src comment-stripped Swift
+ * @param {string} name
+ * @returns {string[] | null}
+ */
+export function swiftStructFields(src, name) {
+	const at = src.search(new RegExp(`\\bstruct\\s+${name}\\b`));
+	if (at === -1) return null;
+	const open = src.indexOf('{', at);
+	if (open === -1) return null;
+	let depth = 0;
+	let end = -1;
+	for (let i = open; i < src.length; i += 1) {
+		if (src[i] === '{') depth += 1;
+		else if (src[i] === '}') {
+			depth -= 1;
+			if (depth === 0) {
+				end = i;
+				break;
+			}
+		}
+	}
+	if (end === -1) return null;
+	/** @type {string[]} */
+	const fields = [];
+	// Walk the body line by line tracking brace depth, and take `let <name>:` /
+	// `var <name>:` only at the struct's OWN level. Depth is what excludes a
+	// local inside a method; the "no brace on the line" test is what excludes a
+	// computed property, which is a getter rather than a field on the wire.
+	// Both exclusions can only ever UNDER-count, and an under-count reports a
+	// field as missing rather than passing a missing one.
+	let inner = 0;
+	for (const line of src.slice(open + 1, end).split('\n')) {
+		const decl = /^\s*(?:let|var)\s+([A-Za-z_]\w*)\s*:/.exec(line);
+		if (decl !== null && inner === 0 && !line.includes('{')) fields.push(decl[1]);
+		for (const ch of line) {
+			if (ch === '{') inner += 1;
+			else if (ch === '}') inner -= 1;
+		}
+	}
+	return fields.length === 0 ? null : fields;
 }
 
 /**
@@ -1022,6 +1148,130 @@ export function check(watchRoot, ingestPath = null, routeBridgePath = null) {
 						`arm a confirmationDialog, ${buttons.length - armedFlags.length - exempt} are ` +
 						`a dialog's own action, ${exempt} exempt`,
 				);
+			}
+		}
+	}
+
+	// (9) The DEBUG direct path sends what the WCSession envelope sends.
+	{
+		const direct = stripSwiftComments(read(DIRECT_SITE));
+		const sent = watchEnvelopeKeys(stripSwiftComments(read(SYNC_SITE)));
+		const columns = swiftStructFields(direct, 'RunPayload');
+		const meta = swiftStructFields(direct, 'RunMetadata');
+		if (
+			sent === null ||
+			sent.size === 0 ||
+			columns === null ||
+			meta === null ||
+			!columns.includes('metadata')
+		) {
+			errors.push(
+				`Parsed no fields out of one end of the two run-write paths — claim (9) would pass ` +
+					`vacuously. Either the metadata literal in ${SYNC_SITE} or one of RunPayload / ` +
+					`RunMetadata in ${DIRECT_SITE} changed shape; RunPayload must still carry the ` +
+					'`metadata` bag, or the fields read out of RunMetadata reach no row.',
+			);
+		} else {
+			// `metadata` is the BAG, not a datum: its contents are `meta`, which
+			// is already in the union. Counting the container as a field would
+			// demand the envelope carry a key called `metadata`.
+			const carried = new Set([...columns.filter((f) => f !== 'metadata'), ...meta]);
+			for (const key of [...sent].filter((k) => !carried.has(k)).sort()) {
+				errors.push(
+					`The watch sends \`${key}\` over WCSession and ${DIRECT_SITE} sends it on neither ` +
+						'the row nor the metadata bag, so the DEBUG direct upload lands a row one field ' +
+						'short of the one the same run produces through the phone. That is the path a ' +
+						'watch-sim-alone developer reads the row on, which is exactly who a silent ' +
+						'omission sends to debug the wrong tier.',
+				);
+			}
+			for (const field of [...carried].filter((f) => !sent.has(f)).sort()) {
+				if (field in DIRECT_ONLY_FIELDS) continue;
+				errors.push(
+					`${DIRECT_SITE} sends \`${field}\` and the WCSession envelope does not. Either the ` +
+						'envelope is missing a field the row wants, or this one is phone-supplied and ' +
+						'belongs in DIRECT_ONLY_FIELDS with the reason written down.',
+				);
+			}
+			for (const field of Object.keys(DIRECT_ONLY_FIELDS)) {
+				if (carried.has(field)) continue;
+				errors.push(
+					`DIRECT_ONLY_FIELDS exempts \`${field}\`, which ${DIRECT_SITE} no longer sends. A ` +
+						'stale exemption is a hole nobody can see: the next field to take that name ' +
+						'inherits it. Delete the entry.',
+				);
+			}
+			if (errors.length === 0) {
+				ok.push(
+					`all ${sent.size} WCSession run fields are also written by the DEBUG direct path ` +
+						`(${Object.keys(DIRECT_ONLY_FIELDS).length} phone-supplied fields exempt)`,
+				);
+			}
+		}
+	}
+
+	// (10) Info.plist keys live in the Info.plist, and the companion
+	// declaration is internally consistent.
+	{
+		const blocks = buildSettingsBlocks(read(PBXPROJ));
+		if (blocks.length === 0) {
+			errors.push(
+				`Parsed no buildSettings blocks out of ${PBXPROJ} — claim (10) would pass vacuously.`,
+			);
+		} else {
+			let manual = 0;
+			for (const b of blocks) {
+				// The condition is read off the setting that CAUSES the inertness,
+				// so a target that switches to a generated plist correctly stops
+				// being subject to this and its INFOPLIST_KEY_* become live.
+				if (!/\bGENERATE_INFOPLIST_FILE\s*=\s*NO\s*;/.test(b)) continue;
+				manual += 1;
+				for (const m of b.matchAll(/\b(INFOPLIST_KEY_\w+)\s*=/g)) {
+					errors.push(
+						`${PBXPROJ} sets \`${m[1]}\` on a target whose GENERATE_INFOPLIST_FILE is NO. ` +
+							'Xcode merges INFOPLIST_KEY_* settings only into a plist it GENERATES, so on ' +
+							'this target the setting is inert while reading exactly like a declaration — ' +
+							'which is how the watch app came to ship with a display name set here, none ' +
+							`in ${WATCH_PLIST}, and the target's own name (\`WatchApp\`) on the wrist. ` +
+							`Put the key in ${WATCH_PLIST} and delete the setting.`,
+					);
+				}
+			}
+			if (manual === 0) {
+				errors.push(
+					`No target in ${PBXPROJ} sets GENERATE_INFOPLIST_FILE = NO — claim (10)'s first ` +
+						'half read nothing. Either the watch target now generates its plist (in which ' +
+						'case this check no longer applies and should be removed) or the setting moved.',
+				);
+			}
+
+			const plist = parseFlatPlist(read(WATCH_PLIST));
+			if (plist.size === 0) {
+				errors.push(`${WATCH_PLIST} parsed to zero keys — claim (10) would pass vacuously.`);
+			} else {
+				if (!plist.has('CFBundleDisplayName')) {
+					errors.push(
+						`${WATCH_PLIST} declares no \`CFBundleDisplayName\`, so the watch app is named ` +
+							"by `CFBundleName` — which is `$(PRODUCT_NAME)`, the Xcode TARGET name. A " +
+							'build setting cannot supply it here: see the first half of this claim.',
+					);
+				}
+				if (plist.get('WKWatchOnly') === true && plist.has('WKCompanionAppBundleIdentifier')) {
+					errors.push(
+						`${WATCH_PLIST} declares both \`WKWatchOnly\` and ` +
+							'`WKCompanionAppBundleIdentifier`. Apple documents these as mutually ' +
+							'exclusive: the first says the app has no iOS companion, the second names ' +
+							'one. Whichever is right, the other has to go — and this app syncs over ' +
+							'`WCSession` to a counterpart, which is a companion relationship ' +
+							'(decisions § 1256).',
+					);
+				}
+				if (errors.length === 0) {
+					ok.push(
+						`${WATCH_PLIST} owns its own keys (no inert INFOPLIST_KEY_* on the manual-plist ` +
+							'target) and its companion declaration is self-consistent',
+					);
+				}
 			}
 		}
 	}

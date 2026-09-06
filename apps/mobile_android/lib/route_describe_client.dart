@@ -21,7 +21,7 @@ import 'route_description.dart';
 /// (or a thrown request) as a hard error and keep the locally-rendered
 /// baseline.
 ///
-/// Twin of `apps/web/src/lib/routes/route_describe_client.ts` — keep the
+/// The web counterpart is the module of the same name under `routes/`; the two are network glue rather than a lockstep parity pair, and the PURE half they both call is the registered `route_description` pair — keep the
 /// request body shape, the single 401 refresh-and-replay, and the
 /// `source`/`upgrade` parsing in lockstep.
 

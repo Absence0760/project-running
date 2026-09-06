@@ -10,8 +10,8 @@
 // inlined. @resvg/resvg-js is a NATIVE addon — esbuild can't inline a
 // `.node` binary, so the loader package + its arm64 binary are marked
 // external and copied into the zip's node_modules instead (see
-// RESVG_EXTERNAL + copyResvgPackages below). The SPA-shell index.html
-// is read from apps/web/build/index.html (built by `npm run build`)
+// RESVG_EXTERNAL + copyResvgPackages below). The SPA shell 200.html
+// is read from apps/web/build/200.html (built by `npm run build`)
 // and substituted in as the __SPA_SHELL_HTML__ constant via esbuild's
 // `define`.
 //
@@ -41,7 +41,7 @@ import { createRequire } from 'node:module';
 const here = dirname(fileURLToPath(import.meta.url));
 const webRoot = resolve(here, '..', '..');
 const distDir = resolve(here, 'dist');
-const spaShellPath = resolve(webRoot, 'build', 'index.html');
+const spaShellPath = resolve(webRoot, 'build', '200.html');
 
 // The native PNG rasteriser. The arm64 binary package must ship in the
 // zip; the JS loader (`@resvg/resvg-js`) require()s it at runtime by
@@ -53,7 +53,7 @@ const RESVG_EXTERNAL = [RESVG_LOADER, RESVG_ARM64];
 if (!existsSync(spaShellPath)) {
 	console.error(
 		`[share-badge build] missing SPA shell at ${spaShellPath}. ` +
-			`Run \`npm run build\` (from apps/web/) first so the index.html template exists.`,
+			`Run \`npm run build\` (from apps/web/) first so the 200.html shell exists.`,
 	);
 	process.exit(1);
 }

@@ -102,8 +102,18 @@ class RunnerProjection {
   });
 }
 
-CutoffVerdict _gradeCutoff(int cutoffS, double arrivalS) {
+/// Grade one arrival against one cutoff, or null when the margin is not a
+/// number.
+///
+/// The ladder is `marginS < 0 ? miss : marginS < tight ? tight : safe`, and a
+/// NaN margin fails BOTH comparisons and lands on the optimistic terminal
+/// branch -- so a crossing nothing could time was reported to a race director
+/// as `safe`, with a NaN margin beside it (decisions § 1225). On a cutoff
+/// board the only honest answer about an ungradeable crossing is no answer:
+/// [ProjectionLeg.cutoff] is already nullable.
+CutoffVerdict? _gradeCutoff(int cutoffS, double arrivalS) {
   final marginS = cutoffS - arrivalS;
+  if (!marginS.isFinite) return null;
   return CutoffVerdict(
     marginS: marginS,
     status: marginS < 0
@@ -148,6 +158,12 @@ RunnerProjection projectRunner(
 
   final byId = <String, double>{};
   for (final x in crossings) {
+    // A crossing whose elapsed time is not a number is not a crossing this
+    // module can say anything about -- the same sanitisation [positionM] gets
+    // one block up. Admitting it made the runner `reached` at that checkpoint
+    // and every comparison downstream answered false, which the cutoff ladder
+    // reads as `safe`.
+    if (!x.elapsedS.isFinite) continue;
     final prev = byId[x.checkpointId];
     if (prev == null || x.elapsedS < prev) byId[x.checkpointId] = x.elapsedS;
   }
@@ -190,7 +206,7 @@ RunnerProjection projectRunner(
       final arrival = reached ? actual : projected;
       if (arrival != null) {
         cutoff = _gradeCutoff(c.cutoffElapsedS!, arrival);
-        if (reached && cutoff.status == CutoffStatus.miss) blownCutoff = true;
+        if (reached && cutoff?.status == CutoffStatus.miss) blownCutoff = true;
       }
     }
 

@@ -214,6 +214,73 @@ void main() {
       final run = ApiClient.debugRunFromRow(minimalRow());
       expect(run.routeId, isNull);
     });
+
+    // decisions § 1240. `run_row_shape_test.dart` guards the WRITE direction
+    // ("runRowFromRun fills every declared column") and nothing guarded the
+    // read one, which is how `elevation_gain_m` came to be the one promoted
+    // column `_runFromRow` never surfaced back onto the bag. A `Run` carries
+    // only `metadata`, so a column this read drops is a column no Dart reader
+    // can ever see.
+    group('every promoted column is surfaced back onto the bag', () {
+      // A row value per declared column. Keyed on the column so a newly
+      // promoted one fails the coverage check below rather than being skipped.
+      const sample = <String, Object>{
+        RunRow.colActivityType: 'walk',
+        RunRow.colIsDnf: true,
+        RunRow.colFastest5kS: 1200,
+        RunRow.colFastest10kS: 2500,
+        RunRow.colFastestHalfMarathonS: 5400,
+        RunRow.colFastestMarathonS: 11400,
+        RunRow.colTrackUrl: 'user-1/run-1.json.gz',
+        RunRow.colHrSeriesUrl: 'user-1/run-1.hr.json.gz',
+        RunRow.colElevationGainM: 312.5,
+      };
+      final declared = <String, String>{
+        ...kRunPromotedMetadataColumns,
+        ...kRunMirroredMetadataColumns,
+      };
+
+      test('every declared column has a sample value', () {
+        expect(declared.values.toSet().difference(sample.keys.toSet()), isEmpty,
+            reason: 'a migration promoted a column and this suite cannot '
+                'exercise it — add a row value for it to `sample`');
+      });
+
+      test('the read surfaces each one under its metadata key', () {
+        final row = minimalRow();
+        for (final entry in declared.entries) {
+          row[entry.value] = sample[entry.value];
+        }
+        final meta = ApiClient.debugRunFromRow(row).metadata;
+        for (final entry in declared.entries) {
+          expect(meta?[entry.key], sample[entry.value],
+              reason: '${entry.value} is authoritative and a Run carries no '
+                  'column, so dropping it here hides it from every Dart '
+                  'reader of metadata.${entry.key}');
+        }
+      });
+
+      test('an absent column leaves its key absent rather than nulled', () {
+        // The bag's own semantics: a key that is not there means "not
+        // recorded". Stashing an explicit null would make every reader that
+        // tests `containsKey` claim a reading nobody took.
+        final meta = ApiClient.debugRunFromRow(minimalRow()).metadata;
+        expect(meta?.containsKey(MetadataKeys.elevationM), isFalse);
+        expect(meta?.containsKey(MetadataKeys.fastest5kS), isFalse);
+        expect(meta?.containsKey(MetadataKeys.trackUrl), isFalse);
+      });
+
+      test('the column wins over a disagreeing bag copy', () {
+        // elevation_m is a MIRRORED key: writers populate the column and the
+        // bag, so both arrive. The column is authoritative (§ 1187), which is
+        // what the web half's `storedElevationGainM` reads first.
+        final row = minimalRow(
+            metadata: <String, dynamic>{MetadataKeys.elevationM: 250});
+        row[RunRow.colElevationGainM] = 312.5;
+        final meta = ApiClient.debugRunFromRow(row).metadata;
+        expect(meta?[MetadataKeys.elevationM], 312.5);
+      });
+    });
   });
 
   group('debugRouteFromRow', () {

@@ -141,3 +141,56 @@ test('two fully-tied runners hold a deterministic order regardless of fetch orde
 	assert.deepEqual(forward, reversed); // identical on every client / refresh
 	assert.deepEqual(forward, ['aaa', 'zzz']); // ordered by the stable key tie-break
 });
+
+test('an unparseable in_time is dropped, not graded safe', () => {
+	// `Math.max(0, NaN)` is NaN, so the clamp that was meant to floor a bad
+	// stamp passed it through and the board told a race director the runner was
+	// safely through a checkpoint nothing could time.
+	const board = buildBoard(
+		checkpoints,
+		[{ checkpointId: 'cp1', userId: 'u1', bib: null, runnerName: 'Ann', inTime: 'not a time' }],
+		START
+	);
+	assert.equal(board.length, 1);
+	const cp1 = board[0].projection.legs.find((l) => l.checkpointId === 'cp1');
+	assert.equal(cp1?.reached, false);
+	assert.equal(cp1?.cutoff, null);
+	assert.equal(board[0].projection.coveredM, 0);
+	assert.equal(board[0].projection.status, 'racing');
+	assert.ok(
+		board[0].projection.legs.every((l) => l.cutoff === null || Number.isFinite(l.cutoff.marginS)),
+		'no leg may carry a NaN margin'
+	);
+});
+
+test('a crossing stamped before the race start is dropped, not clamped to zero', () => {
+	// A volunteer tablet running fast, or the RD firing Go after a start-area
+	// checkpoint already scanned. Clamping it to elapsed 0 graded the leg
+	// `safe` with the full cutoff as its margin.
+	const board = buildBoard(
+		checkpoints,
+		[
+			{ checkpointId: 'cp1', userId: 'u1', bib: null, runnerName: 'Ann', inTime: atElapsed(-90) },
+			{ checkpointId: 'cp2', userId: 'u1', bib: null, runnerName: 'Ann', inTime: atElapsed(6000) }
+		],
+		START
+	);
+	const legs = board[0].projection.legs;
+	assert.equal(legs.find((l) => l.checkpointId === 'cp1')?.reached, false);
+	assert.equal(legs.find((l) => l.checkpointId === 'cp1')?.cutoff, null);
+	// The usable stamp still counts, and still sets the pace.
+	assert.equal(board[0].projection.lastCheckpointId, 'cp2');
+	assert.equal(board[0].projection.paceSPerM, 6000 / 20_000);
+});
+
+test('a runner whose only stamps are unusable sorts behind one who is running', () => {
+	const board = buildBoard(
+		checkpoints,
+		[
+			{ checkpointId: 'cp2', userId: 'u1', bib: null, runnerName: 'Ann', inTime: '' },
+			{ checkpointId: 'cp1', userId: 'u2', bib: null, runnerName: 'Bob', inTime: atElapsed(1800) }
+		],
+		START
+	);
+	assert.deepEqual(board.map((r) => r.key), ['u2', 'u1']);
+});
