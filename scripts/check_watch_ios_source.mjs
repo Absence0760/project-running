@@ -113,6 +113,18 @@
 //       is here, the way `check_shared_constants.mjs` carries the rails that
 //       are not two clients of one registry (decisions § 1348).
 //
+//  (13) Every Swift file in the tree is a member of some target. A file
+//       Xcode never compiles is not a build error and not a red test — it is
+//       simply absent, and a TEST file that is absent takes its coverage with
+//       it while still reading as coverage in the repo. That has already
+//       happened once here: `Complications/ActiveRunComplication.swift` is in
+//       no target, which is why claim (4) exists at all — `ComplicationFormatterTests`
+//       links the OTHER copy of the formatters and passing proves nothing
+//       about the one the widget runs. The same slip on
+//       `HealthKitFailureTests.swift` would leave the `test-watch-ios` job
+//       green having never run the accumulator that decides whether a shipped
+//       run keeps its `avg_bpm` (decisions § 1350).
+//
 // WHAT THIS GUARD DOES NOT PROVE. It parses text. It does not compile Swift,
 // does not run it, and cannot see anything a type-checker would: claim (1)
 // matches a catalog key on the SHAPE of its interpolation, not on the type of
@@ -129,8 +141,32 @@ import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
+/**
+ * A file's contents, or null when it is not there.
+ *
+ * Used where absence is a state the guard should REPORT rather than crash on.
+ * @param {string} abs
+ */
+export function readIfPresent(abs) {
+	try {
+		return readFileSync(abs, 'utf8');
+	} catch {
+		return null;
+	}
+}
+
 /** Swift source directories, relative to the `apps/watch_ios` root. */
 export const SWIFT_DIRS = ['WatchApp', 'Complications'];
+
+/**
+ * Every directory claim (13) holds against the project's target membership.
+ *
+ * A superset of `SWIFT_DIRS` on purpose: the TEST directory is the one where
+ * an orphaned file costs the most — a suite green having never run it — and
+ * the narrower list exists for the String Catalog claims, which have nothing
+ * to say about a test file's literals.
+ */
+export const TARGET_MEMBER_DIRS = [...SWIFT_DIRS, 'WatchAppTests'];
 
 /**
  * APIs whose FIRST positional string literal is a `LocalizedStringKey` (or a
@@ -553,6 +589,20 @@ export const DELEGATE_IDENTITY_GATES = [
  * for the companion relationship to exist as a build rather than only as a
  * runtime `WCSession` conversation.
  */
+/**
+ * Swift files deliberately in no target, each with the reason. An entry that
+ * goes stale — the file gains a target, or stops existing — fails, so the
+ * exemption cannot outlive what it excuses.
+ * @type {Record<string, string>}
+ */
+export const UNBUILT_SWIFT = {
+	'Complications/ActiveRunComplication.swift':
+		'the Widget Extension target it belongs in does not exist in this project yet — ' +
+		'Complications/README.md is the instruction for adding it in Xcode. This is the ' +
+		'exemption claim (4) exists because of: the formatters are duplicated precisely ' +
+		'so the suite can link a copy it CAN build.',
+};
+
 export const PHONE_PBXPROJ = join(
 	'apps', 'mobile_ios', 'ios', 'Runner.xcodeproj', 'project.pbxproj',
 );
@@ -1157,9 +1207,26 @@ export function check(
 	}
 
 	// (4) The duplicated complication formatters.
-	const originSrc = read(FORMATTER_ORIGIN);
-	const copySrc = read(FORMATTER_COPY);
+	//
+	//     Read defensively: a deleted copy is a real state (the Widget
+	//     Extension finally landing would move these) and a guard that throws
+	//     an ENOENT stack instead of naming the file is one a reader cannot
+	//     act on — which is the whole complaint this file exists to make about
+	//     silent watchOS failures.
+	const originSrc = readIfPresent(join(watchRoot, FORMATTER_ORIGIN));
+	const copySrc = readIfPresent(join(watchRoot, FORMATTER_COPY));
 	let diverged = 0;
+	for (const [rel, src] of [[FORMATTER_ORIGIN, originSrc], [FORMATTER_COPY, copySrc]]) {
+		if (src !== null) continue;
+		diverged += 1;
+		errors.push(
+			`${rel} is gone. Claim (4) holds the complication's copy of the pure formatters ` +
+				'against the app\'s, and it cannot read one of them.',
+		);
+	}
+	if (originSrc === null || copySrc === null) {
+		// Fall through to the remaining claims rather than comparing null.
+	} else {
 	for (const name of DUPLICATED_FORMATTERS) {
 		const a = functionBody(originSrc, name);
 		const b = functionBody(copySrc, name);
@@ -1180,6 +1247,7 @@ export function check(
 				'the first, so a divergence means the watch face and the run screen round the same run ' +
 				'differently and every test still passes.',
 		);
+	}
 	}
 	if (diverged === 0) {
 		ok.push(`${DUPLICATED_FORMATTERS.length} duplicated complication formatters are byte-identical`);
@@ -1513,6 +1581,66 @@ export function check(
 					);
 				}
 			}
+		}
+	}
+
+	// (13) Every Swift file is a member of some target.
+	//
+	//      A file Xcode never compiles is absent rather than broken, and an
+	//      absent TEST file takes its coverage with it while still reading as
+	//      coverage in the repo — `test-watch-ios` goes green having never run
+	//      it. Read off the `in Sources */` build-file entries, which is what
+	//      membership IS in this format; a file reference alone puts it in the
+	//      navigator and in no build (decisions § 1350).
+	{
+		const pbx = read(PBXPROJ);
+		/** @type {string[]} */ const members = [];
+		for (const dir of TARGET_MEMBER_DIRS) {
+			for (const name of readdirSync(join(watchRoot, dir)).sort()) {
+				if (name.endsWith('.swift')) members.push(join(dir, name));
+			}
+		}
+		if (members.length === 0) {
+			errors.push('Found no Swift files at all — claim (13) would pass vacuously.');
+		}
+		/** @type {string[]} */ const orphans = [];
+		for (const rel of members) {
+			const name = rel.split('/').pop();
+			if (pbx.includes(`${name} in Sources */`)) {
+				if (rel in UNBUILT_SWIFT) {
+					errors.push(
+						`${rel} is exempted from claim (13) but IS now a target member. ` +
+							`The exemption said: ${UNBUILT_SWIFT[rel]} Delete the entry — and if ` +
+							'this is the complication finally getting its Widget Extension, claim (4)' +
+							"'s duplicated formatters may be able to go with it.",
+					);
+				}
+				continue;
+			}
+			if (rel in UNBUILT_SWIFT) continue;
+			orphans.push(rel);
+		}
+		for (const rel of orphans) {
+			errors.push(
+				`${rel} is in no target: ${PBXPROJ} has no \`… in Sources */\` entry for it, so ` +
+					'Xcode never compiles it. Nothing fails — the file is simply absent from the ' +
+					'build, and if it is a test file the suite is green having never run it. Add it ' +
+					`to a target, or declare it in UNBUILT_SWIFT with the reason.`,
+			);
+		}
+		for (const rel of Object.keys(UNBUILT_SWIFT)) {
+			if (!members.includes(rel)) {
+				errors.push(
+					`UNBUILT_SWIFT names ${rel}, which this tree no longer has. A stale exemption ` +
+						'is a hole nobody can see: delete it.',
+				);
+			}
+		}
+		if (orphans.length === 0 && members.length > 0) {
+			ok.push(
+				`all ${members.length - Object.keys(UNBUILT_SWIFT).length} Swift files are target ` +
+					`members (${Object.keys(UNBUILT_SWIFT).length} declared unbuilt)`,
+			);
 		}
 	}
 

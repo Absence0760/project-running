@@ -82,7 +82,7 @@ const HK = join('WatchApp', 'HealthKitManager.swift');
 function stage() {
 	const dir = mkdtempSync(join(tmpdir(), 'watch-ios-source-'));
 	const rels = [CATALOG, PLIST, ENTS, README, PBX];
-	for (const sub of ['WatchApp', 'Complications']) {
+	for (const sub of ['WatchApp', 'Complications', 'WatchAppTests']) {
 		for (const name of readdirSync(join(WATCH_IOS, sub))) {
 			if (name.endsWith('.swift')) rels.push(join(sub, name));
 		}
@@ -1067,4 +1067,54 @@ test('watchBundleIdentifiers drops the test target and dedupes', () => {
 	].join('\n');
 	assert.deepEqual(watchBundleIdentifiers(src), ['com.threkir.app.watchapp']);
 	assert.deepEqual(watchBundleIdentifiers('nothing here'), []);
+});
+
+// ───────── claim (13): a Swift file Xcode never compiles ─────────
+
+test('claim (13) refuses a test file that is in no target', () => {
+	// The § 1156 class, on the directory where it costs the most: an orphaned
+	// test file is not a red, it is an absence, and `test-watch-ios` goes green
+	// having never run it.
+	const { errors } = runMutated((dir) => {
+		edit(dir, PBX, (s) =>
+			s.replaceAll('HealthKitFailureTests.swift in Sources */', 'Orphaned.swift in Sources */'),
+		);
+	});
+	assert.ok(
+		errors.some(
+			(e) => e.includes('HealthKitFailureTests.swift') && e.includes('is in no target'),
+		),
+		errors.join('\n'),
+	);
+});
+
+test('claim (13) fails when an unbuilt exemption goes stale', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, PBX, (s) =>
+			s.replace(
+				'\tobjects = {',
+				'\tobjects = {\n\t\tAAAA /* ActiveRunComplication.swift in Sources */ = {isa = PBXBuildFile; };',
+			),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('exempted from claim (13) but IS now a target member')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (13) fails when an unbuilt exemption names a file that is gone', () => {
+	const { errors } = runMutated((dir) => {
+		rmSync(join(dir, 'Complications', 'ActiveRunComplication.swift'));
+	});
+	assert.ok(
+		errors.some((e) => e.includes('which this tree no longer has')),
+		errors.join('\n'),
+	);
+	// …and claim (4), which reads the same file, must NAME it rather than
+	// throwing an ENOENT stack a reader cannot act on.
+	assert.ok(
+		errors.some((e) => e.includes('ActiveRunComplication.swift is gone')),
+		errors.join('\n'),
+	);
 });
