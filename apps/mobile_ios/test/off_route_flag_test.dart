@@ -74,8 +74,14 @@ void main() {
         reason: 'an off-route distance needs a route, so no route means no detector');
     // Fail-closed: the else branch must clear it rather than leave a detector
     // armed from a previous recording.
-    expect(screen.substring(at).startsWith(
-        '_offRouteAlertDetector = OffRouteAlertDetector();\n    } else {\n      _offRouteAlertDetector = null;'),
+    // Whitespace-insensitive on purpose: the claim is that the else branch
+    // nulls the detector, not that run_screen.dart is indented a particular
+    // way. Pinning the indentation would fail a reformat whose behaviour is
+    // identical -- a guard anchored to a spelling rather than to a decision.
+    final tail = screen.substring(at).replaceAll(RegExp(r'\s+'), ' ');
+    expect(
+        tail.startsWith(
+            '_offRouteAlertDetector = OffRouteAlertDetector(); } else { _offRouteAlertDetector = null;'),
         true,
         reason: 'a gate that is off must null the detector, not leave the last one armed');
   });
