@@ -47,14 +47,25 @@
 -- family. Any signed-up account holds the same create-time grant anon does, so
 -- on Cloud a logged-in user could drain the queue; and a sweep that revoked
 -- EXECUTE from every role would close that while breaking pg_cron's operator
--- hook, which (6) is here to fail on. The rest of the swept set needs no
--- literal registry here: 264 pgtap files exercise those functions as
+-- hook, which (6) is here to fail on. The over-revoke direction needs no
+-- literal registry: 264 pgtap files exercise those functions as
 -- `authenticated`, so an over-broad revoke fails in the suite that covers the
--- feature rather than in a list that has to be maintained twice.
+-- feature.
+--
+-- (7) and (8) close the hole (5) cannot. (5) is exactly as complete as the
+-- `server_only` fixture, and the fixture is derived from what the repo SAYS —
+-- so a new cron routine whose migration simply forgets `authenticated` is in
+-- nobody's list and is asserted by nothing. (7) derives its population from
+-- `cron.job` instead: a routine pg_cron runs on a schedule is server-only by
+-- construction, because cron executes it as `postgres` and needs no grant, and
+-- the requirement cannot be removed without unscheduling the job. (8) is (7)'s
+-- own control — the same population read a second, independent way — because a
+-- name-matching predicate that quietly matched nothing would leave (7) green
+-- over an empty set.
 
 begin;
 
-select plan(6);
+select plan(8);
 
 -- Every `public` non-trigger function an anonymous caller may execute, and the
 -- logged-out surface that needs it.
@@ -96,28 +107,76 @@ insert into anon_callable (fn, why) values
   ('search_race_listings',            'logged-out search'),
   ('segment_effort_ranks',            'public segment board');
 
--- The cron and job-queue family: withheld from anon AND authenticated by
--- 20270626000001 (and cleanup_stale_rate_limits by 20270625000001), kept for
--- service_role where an operator may invoke it by hand. pg_cron runs them as
--- `postgres` and needs no grant at all.
+-- The routines this repo STATES are withheld from `authenticated` as well as
+-- anon — the cron and job-queue family (20270626000001, and
+-- cleanup_stale_rate_limits by 20270625000001), the privacy oracles
+-- (20270521_001), the derived-cache refreshers, and the secret deleters. Kept
+-- for service_role where an operator or an Edge Function invokes it by hand.
+-- pg_cron runs its own as `postgres` and needs no grant at all.
+--
+-- **This list is derived, not hand-kept**, and
+-- `apps/backend/scripts/check_server_only_registry.mjs` is what makes that
+-- true: it replays every migration and fails the PR when a routine some
+-- migration revokes from `authenticated` is missing here, when a row here
+-- names a routine no migration revokes, or when `keeps_service_role`
+-- disagrees with the grant the migrations state. It was hand-kept until
+-- 20270710, and it had drifted — 42 non-trigger `public` routines carried
+-- such a revoke and 26 were listed, two of the sixteen missing
+-- (`enqueue_safety_overdue_emails`, `sweep_challenge_completions`) sitting in
+-- the very cron family this fixture is the positive control for.
+--
+-- The derivation reads the migration TEXT and the assertions below read the
+-- CATALOGUE, which is the whole point: deriving the list from `proacl` would
+-- make (5) assert that routines without the privilege do not have the
+-- privilege. `keeps_service_role` comes from the same replay rather than from
+-- a catalogue reading, because on the CI image every fresh routine arrives
+-- with a service_role entry by name and a `true` read off it would say
+-- nothing.
 create temporary table server_only (fn name, keeps_service_role boolean);
 
 insert into server_only (fn, keeps_service_role) values
-  ('claim_next_job', true), ('finish_job', true), ('defer_job', true),
-  ('find_failed_jobs', true), ('find_stuck_jobs', true),
-  ('jobs_failed_summary', true), ('jobs_stuck_summary', true),
-  ('cron_schedule_status', true),
-  ('cleanup_stale_live_run_pings', true), ('cleanup_stale_race_pings', true),
-  ('cleanup_stale_user_coach_usage', true), ('cleanup_stale_rate_limits', true),
-  ('cleanup_stale_export_blobs', true),
-  ('enqueue_data_export', true), ('expire_stale_export_jobs', true),
-  ('enqueue_export_blob_reap', true),
-  ('enqueue_event_reminders', true), ('enqueue_lifecycle_drip', true),
-  ('enqueue_weekly_digests', true),
-  ('clear_device_token', true), ('clear_push_subscription', true),
+  ('_privacy_downsample', false),
+  ('auto_hide_target', false),
+  ('award_achievements_for_user', false),
+  ('claim_next_job', true),
   ('cleanup_account_deletion_receipts', false),
-  ('auto_hide_target', false), ('enforce_create_rate_limit', false),
-  ('_privacy_downsample', false), ('privacy_coarsen_coord', false);
+  ('cleanup_stale_export_blobs', true),
+  ('cleanup_stale_live_run_pings', true),
+  ('cleanup_stale_race_pings', true),
+  ('cleanup_stale_rate_limits', true),
+  ('cleanup_stale_user_coach_usage', true),
+  ('clear_device_token', true),
+  ('clear_push_subscription', true),
+  ('clip_track_for_user', true),
+  ('cron_schedule_status', true),
+  ('defer_job', true),
+  ('delete_user_integration_secrets', true),
+  ('delete_user_provider_secrets', true),
+  ('enforce_create_rate_limit', false),
+  ('enqueue_data_export', true),
+  ('enqueue_event_reminders', true),
+  ('enqueue_export_blob_reap', true),
+  ('enqueue_lifecycle_drip', true),
+  ('enqueue_safety_overdue_emails', false),
+  ('enqueue_weekly_digests', true),
+  ('expire_stale_export_jobs', true),
+  ('find_failed_jobs', true),
+  ('find_stuck_jobs', true),
+  ('finish_job', true),
+  ('jobs_failed_summary', true),
+  ('jobs_stuck_summary', true),
+  ('notify_data_export_ready', true),
+  ('privacy_aware_route_geom', false),
+  ('privacy_aware_start_point', false),
+  ('privacy_coarsen_coord', false),
+  ('privacy_distance_m', false),
+  ('privacy_in_any_zone', false),
+  ('recompute_event_ranks', false),
+  ('refresh_club_member_count', false),
+  ('refresh_gym_workout_totals', false),
+  ('refresh_route_run_count', false),
+  ('sweep_challenge_completions', false),
+  ('try_consume_strava_quota', true);
 
 -- (1) The literal reading. On CI this is the contract in full: a function added
 -- without a revoke arrives anon-granted by name and lands here.
@@ -201,6 +260,51 @@ select is(
   '',
   'each server-only function service_role was kept for is still executable by it'
 );
+
+
+-- (7) Every `public` routine pg_cron runs on a schedule is withheld from BOTH
+-- client roles. Derived from `cron.job`, which is neither the fixture above nor
+-- the ACL being graded: a migration that schedules a routine and forgets the
+-- revoke lands here, and the only way to make the requirement go away is to
+-- stop scheduling the job.
+select is(
+  (select coalesce(string_agg(p.proname || ' (' || r.role || ')', ', ' order by p.proname, r.role), '')
+     from pg_proc p
+     join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
+     cross join (values ('anon'::name), ('authenticated'::name)) r(role)
+    where p.prorettype <> 'trigger'::regtype
+      and exists (select 1 from cron.job j
+                   where j.command ~ ('\m' || p.proname || '\M\s*\('))
+      and has_function_privilege(r.role, p.oid, 'EXECUTE')),
+  '',
+  'no scheduled function is executable by anon or by a signed-in account');
+
+-- (8) The control on (7). Its predicate walks every `public` routine name
+-- against every cron command; if that ever matched nothing — a regex flavour
+-- change, an empty `cron.job` on some image — (7) would pass over an empty set
+-- and report a contract it never checked. This reads the same population from
+-- the other end, per JOB rather than per routine: every scheduled command of
+-- the form `select <fn>()` naming a `public` routine must be one (7) found.
+-- The captured name is lowercased and this reader is case-insensitive where
+-- (7)'s `~` is not, deliberately: a command written `SELECT ENQUEUE_...()`
+-- names a routine (7) silently skips, and a control that skipped it too would
+-- agree with (7) about a function neither of them had looked at.
+select is(
+  (select coalesce(string_agg(c.fn, ', ' order by c.fn), '')
+     from cron.job j
+     cross join lateral (select lower((regexp_match(j.command, '^\s*select\s+(?:public\.)?([a-z_0-9]+)\s*\(', 'i'))[1]) as fn) c
+    where c.fn is not null
+      and exists (select 1 from pg_proc p
+                   join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
+                  where p.proname = c.fn and p.prorettype <> 'trigger'::regtype)
+      and not exists (select 1 from pg_proc p
+                       join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
+                      where p.proname = c.fn
+                        and p.prorettype <> 'trigger'::regtype
+                        and exists (select 1 from cron.job k
+                                     where k.command ~ ('\m' || p.proname || '\M\s*\(')))),
+  '',
+  'and the scheduled set (7) reads is the same one the schedule itself names');
 
 select * from finish();
 rollback;

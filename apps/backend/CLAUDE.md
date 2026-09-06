@@ -310,6 +310,40 @@ is withheld, so a column added after a lockdown (deny-by-default, since a
 re-grant is cumulative) or a table-wide `grant select` landing on a locked
 table both fail the pgtap job.
 
+### A lockdown that withholds `authenticated` must reach the `server_only` fixture
+
+`revoke execute ... from public, anon` is the house form (above). When a routine
+should reach no client role at all — the cron and job-queue family, the privacy
+oracles, the derived-cache refreshers, the secret deleters — `authenticated`
+goes on the revoke list too, and the pgtap suite's claim about that lives in the
+`server_only` fixture at the top of
+`apps/backend/supabase/tests/anon_execute_contract_test.sql`. Assertions (5) and
+(6) there are exactly as complete as that list: a routine it omits is a routine
+nothing asserts anything about.
+
+**It is derived now, so you do not edit it by hand — you run the guard and paste
+what it asks for.** `apps/backend/scripts/check_server_only_registry.mjs`
+replays every migration and fails the PR when a routine some migration revokes
+from `authenticated` is missing from the fixture, when a row names a routine no
+migration revokes, or when `keeps_service_role` disagrees with the grant the
+migrations state. It was hand-kept until `20270710` and had drifted to 26 rows
+against a family of 42, two of the missing sixteen sitting in the cron family
+the fixture is the positive control for (decisions § 1233).
+
+The derivation reads the migration TEXT and the pgtap assertions read the
+CATALOGUE, deliberately: a fixture derived from `pg_proc.proacl` would make (5)
+assert that routines without the privilege do not have the privilege.
+`keeps_service_role` comes from the replay for the same reason — on the CI image
+every fresh routine arrives with a `service_role` entry by name, so a `true`
+read off the catalogue there would say nothing.
+
+What the guard cannot demand is a revoke no migration wrote. That half is
+assertions (7) and (8) in the same file: every `public` routine `cron.job`
+schedules must be withheld from both client roles, with the population read off
+the schedule rather than off any list, so a new cron routine whose migration
+forgets `authenticated` fails even though nothing in the repo states it should
+be withheld.
+
 ### Every new function must pin `search_path`
 
 `create function` / `create or replace function` bodies must carry `set search_path = public` (add `, extensions` if the body references postgis/pg_trgm objects) — for SECURITY DEFINER functions it's a hijack defence, for plain invoker functions it silences the Supabase security advisor's "Function Search Path Mutable" lint and keeps resolution independent of the caller's session. The backfill was `20270415_001` (via `ALTER FUNCTION … SET`, never a body rewrite); `function_search_path_test.sql` is a pg_proc catch-all that fails the pgtap suite on any unpinned public function. The eight `public_*` views the same advisor flags as "Security Definer View" are intentional and stay definer — see decisions.md §244 before "fixing" them.
