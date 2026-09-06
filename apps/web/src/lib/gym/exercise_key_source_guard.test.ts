@@ -44,15 +44,14 @@ const NAMES_AN_EXERCISE = /exercise/i;
 const BROAD_MODULES = ['lib/core/data.ts'];
 
 /// Files that still fold an exercise name, with why the fix is not in this
-/// change. Each is a real instance of the same defect, in a tree this change
-/// does not own. The staleness test below fails when one of these stops
-/// matching, so an exemption cannot outlive the site it excuses.
-const PENDING: { path: string; why: string }[] = [
-	{
-		path: 'lib/components/ExerciseCataloguePicker.svelte',
-		why: 'the catalogue search + sort, the web half of a fold the mobile pickers now take canonically. followups.md, owner tree apps/web/src/lib/components/.',
-	},
-];
+/// change. Each entry is a real instance of the same defect, in a tree the
+/// change that added it does not own. The staleness test below fails when one
+/// stops matching, so an exemption cannot outlive the site it excuses.
+///
+/// Empty since § 1274-1276 closed the last three (the share-workout meta
+/// count, the coach prompt's per-workout tally and the catalogue picker's
+/// search), which is the state the Dart half has been in since § 1250.
+const PENDING: { path: string; why: string }[] = [];
 
 /// A runtime case fold, however it is spelled. Only the LOWER half is
 /// bannable file-wide: upper-casing is a presentation transform, never a key
