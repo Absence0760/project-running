@@ -16,15 +16,19 @@ import test from 'node:test';
 
 import {
   BACKEND_DIR,
+  declaredCases,
   escapeForFilter,
   filterFor,
   GATEWAY_STATUSES,
   MUTATIONS,
   phantomKills,
   satisfies,
+  staleExemptions,
   statusOf,
   TEST_FILE,
   unmeasuredCases,
+  unnamedDeclaredCases,
+  UNMEASURED_CASES,
   validateMutations,
 } from './check_served_envelope_mutations.mjs';
 
@@ -220,4 +224,108 @@ test('filterFor matches the named cases exactly and nothing else', () => {
 test('escapeForFilter neutralises every metacharacter a case name carries', () => {
   const raw = 'a.b*c+d?e^f$g{h}i(j)k|l[m]n\\o-p';
   assert.ok(new RegExp(`^${escapeForFilter(raw)}$`).test(raw));
+});
+
+// ── the source-side census ────────────────────────────────────────────
+// The runtime half enumerates the cases that RAN. That set is strictly
+// smaller than the set the file DECLARES, because `parseJunit` drops deno's
+// `<skipped/>` entries: a case whose `ignore:` gate is never false in CI is
+// missing from `ran`, so `unmeasuredCases` (which filters `ran`) cannot see
+// it, and `phantomKills` sees it only if some mutation happens to name it. A
+// declared case that never runs and that nothing names asserts nothing and
+// reads as green — the shape § 815 closed one layer out. These pin the third
+// edge, `declared ⊆ kills`, which makes the three sets one.
+
+const TEST_SRC = readFileSync(join(BACKEND_DIR, TEST_FILE), 'utf8');
+
+test('declaredCases reads every Deno.test the shipped file carries', () => {
+  const declared = declaredCases(TEST_SRC);
+  // A positive control on the census itself: a parser that quietly returned
+  // nothing, or that stopped at the first name written across two literals,
+  // would make every assertion below vacuously true.
+  assert.equal(declared.length, TEST_SRC.split('Deno.test(').length - 1);
+  assert.ok(declared.length >= 26, `only ${declared.length} cases parsed`);
+  const names = declared.map((d) => d.name);
+  // A single-literal name, a name written across two adjacent literals, a name
+  // carrying a literal ` + ` (which splitting on `+` would cut in half), and
+  // one carrying an escaped quote.
+  assert.ok(names.includes('refresh-tokens: 403 on wrong CRON_SECRET'));
+  assert.ok(names.includes('revenuecat-webhook: 401 missing_signature when no x-revenuecat-hmac header'));
+  assert.ok(names.includes('revenuecat-webhook: 200 on valid HMAC + fresh anonymous event'));
+  assert.ok(
+    names.includes(
+      "auth-email: a correctly signed signup hook renders in the recipient's locale and " +
+        'delivers over SMTP',
+    ),
+  );
+  // Every name deno will report is exactly what a --filter has to match.
+  for (const n of names) assert.equal(n.trim(), n, `name carries edge whitespace: ${n}`);
+});
+
+test('declaredCases refuses a form it cannot read rather than skipping it', () => {
+  assert.throws(
+    () => declaredCases("Deno.test('a name', () => {});"),
+    /object form/,
+    'the positional form must refuse, not parse to nothing',
+  );
+  assert.throws(() => declaredCases('Deno.test({ ignore: SKIP, name: "x" });'), /not `name:`/);
+  assert.throws(() => declaredCases('Deno.test({ name: `a ${x}`, fn: () => {} });'), /string literal/);
+});
+
+test('declaredCases records the gate each case is ignored on', () => {
+  const src = [
+    "Deno.test({ name: 'always', fn: () => {} });",
+    "Deno.test({\n  name: 'gated',\n  ignore: SKIP_DB,\n  fn: () => {},\n});",
+    "Deno.test({\n  name: 'never',\n  ignore: true,\n  fn: () => {},\n});",
+  ].join('\n');
+  assert.deepEqual(declaredCases(src), [
+    { name: 'always', ignore: '' },
+    { name: 'gated', ignore: 'SKIP_DB' },
+    { name: 'never', ignore: 'true' },
+  ]);
+});
+
+test('every case the shipped file declares is measured or declared unmeasured', () => {
+  const unnamed = unnamedDeclaredCases(declaredCases(TEST_SRC), MUTATIONS);
+  assert.deepEqual(
+    unnamed,
+    [],
+    'these cases are declared in ' +
+      TEST_FILE +
+      ' and no mutation kills them. A case that never runs is invisible to the runtime half, so ' +
+      'it would read as green while asserting nothing: add a mutation that opens the gate it ' +
+      'names, or an UNMEASURED_CASES entry saying why one is not owed.',
+  );
+});
+
+test('no UNMEASURED_CASES entry has stopped describing the file', () => {
+  assert.deepEqual(staleExemptions(declaredCases(TEST_SRC), MUTATIONS), []);
+  assert.ok(UNMEASURED_CASES.length > 0, 'the exemption list is the thing being staleness-checked');
+});
+
+test('the census fires on a declared case nothing measures', () => {
+  const declared = [{ name: 'case one', ignore: 'SKIP' }, { name: 'case two', ignore: 'SKIP_DB' }];
+  assert.deepEqual(unnamedDeclaredCases(declared, [mut()], []), ['case two']);
+  // …and an exemption is the other way to satisfy it.
+  assert.deepEqual(
+    unnamedDeclaredCases(declared, [mut()], [{ name: 'case two', reason: 'because' }]),
+    [],
+  );
+});
+
+test('staleExemptions catches a gone case, a spent excuse and an empty reason', () => {
+  const declared = [{ name: 'case one', ignore: 'SKIP' }, { name: 'case two', ignore: 'true' }];
+  assert.deepEqual(
+    staleExemptions(declared, [mut()], [{ name: 'case three', reason: 'r' }]),
+    [{ name: 'case three', why: 'the test file no longer declares a case of that name' }],
+  );
+  assert.deepEqual(
+    staleExemptions(declared, [mut()], [{ name: 'case one', reason: 'r' }]),
+    [{ name: 'case one', why: 'a mutation now measures it, so the exemption is spent' }],
+  );
+  assert.deepEqual(
+    staleExemptions(declared, [mut()], [{ name: 'case two', reason: '  ' }]),
+    [{ name: 'case two', why: 'carries no reason, so nothing says why it is not owed one' }],
+  );
+  assert.deepEqual(staleExemptions(declared, [mut()], [{ name: 'case two', reason: 'r' }]), []);
 });
