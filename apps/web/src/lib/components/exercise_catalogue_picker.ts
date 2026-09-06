@@ -16,11 +16,13 @@
  * The picker has a THIRD state that neither `matches` nor `canCreate` can
  * express on its own: a query naming an entry the category filter is hiding.
  *
- * Pure module — no Svelte, no i18n, no Supabase. Entries are matched
- * structurally, so the caller's row type needs no relationship to this file.
+ * Pure module — no Svelte, no runes, no Supabase, and it resolves no
+ * user-facing string. Entries are matched structurally, so the caller's row
+ * type needs no relationship to this file.
  */
 
 import { normaliseExerciseName } from '../gym/gym_prs';
+import { compareFoldedNames } from '../segments/catalogue_browse';
 
 /// The three fields the picker's decisions read. Declared structurally rather
 /// than as `$lib/types`' `Exercise`, so this module stays importable by the
@@ -63,18 +65,48 @@ export interface CataloguePickerView<E extends CatalogueEntry> {
 /**
  * Total order on display names.
  *
- * Compares with `localeCompare` over the DISPLAY name, not with the folded
- * key: ordering a human-facing list is not keying it, and a code-unit compare
- * over folded keys files every accented name after `z` (§ 1276). Ties break on
- * `id` so the answer is a total order — `localeCompare` reports 0 for names a
- * collation considers equivalent, and resolving those by input order makes the
- * list depend on the order the server happened to return.
+ * Delegates to `catalogue_browse`'s `compareFoldedNames`, the one comparator
+ * the product orders a name list with — the famous-segment catalogue, the
+ * routes list on both platforms (§ 1337) and the mobile twin of this very
+ * picker (§ 1334) already read it. This module was the last name list still
+ * collating.
+ *
+ * § 1276 chose `localeCompare` here on the grounds that ordering a
+ * human-facing list is not keying it, which is true and is not what decided
+ * it. A collation is answered by the HOST's ICU data, so the web picker's
+ * order is a property of the reader's browser; `compareFoldedNames` is
+ * answered by a table committed beside the code, so it is a property of the
+ * catalogue. Measured over the 43 seeded globals exactly as
+ * `20270222_001` inserts them the two instruments are indistinguishable —
+ * identical order, zero discordant pairs, and identical under every one of
+ * ten host locales. They part the moment a user creates a custom with a
+ * letter outside ASCII: over those 43 plus nine plausible non-English
+ * customs, 118 of 1,326 pairs are ordered oppositely and the FIRST row of the
+ * list differs, while the collation itself then disagrees with itself across
+ * `sv-SE`, `da-DK`, `tr-TR` and `pl-PL`. So the choice is not between a right
+ * order and a wrong one but between one order and per-reader orders, and a
+ * catalogue holding names from several languages has no locale that is
+ * correct for all of them anyway.
+ *
+ * Here that is more than a consistency preference, because this list's order
+ * has a persisted consequence. A user may shadow a seeded global with a
+ * custom of the same folded name (`api_database.md`, the two partial
+ * uniques), and `GymEditor`'s `catalogueByKey` resolves a typed name to ONE
+ * `exercises.id` by walking the catalogue — so which row a logged set binds
+ * to follows from list order. An order that differs between the phone and the
+ * browser is then two answers to that question.
+ *
+ * The residual is the one § 1334 states: a fold is not a collation, so the
+ * letters with no canonical decomposition (`ø`, `đ`, `ł`, `ß`, `æ`) still file
+ * after `z` where ICU interleaves them. That is deliberate and is the same
+ * trade `catalogue_browse` took.
+ *
+ * Ties break on `id` inside the shared comparator, so the answer is a total
+ * order — the fold calls two spellings of one name equal, and resolving those
+ * by input order makes the list depend on the order the server returned.
  */
 function byName<E extends CatalogueEntry>(a: E, b: E): number {
-	const c = a.name.localeCompare(b.name);
-	if (c !== 0) return c < 0 ? -1 : 1;
-	if (a.id !== b.id) return a.id < b.id ? -1 : 1;
-	return 0;
+	return compareFoldedNames(a.name, a.id, b.name, b.id);
 }
 
 /**

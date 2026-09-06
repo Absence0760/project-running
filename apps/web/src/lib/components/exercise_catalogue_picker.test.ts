@@ -107,9 +107,10 @@ test('a whitespace-only query is treated as blank', () => {
 	assert.equal(view.matches.length, CATALOGUE.length);
 });
 
-test('the list is ordered by collation, so an accented name is not filed after z', () => {
+test('an accented name is not filed after z', () => {
 	// The divergence § 1276 measured: a code-unit compare over folded keys
-	// puts every accented name after "Zercher Squat"; a collation does not.
+	// puts every accented name after "Zercher Squat". The fold does not —
+	// which is the whole reason § 1334 could put the phone on it.
 	const accented = [
 		entry('a', 'Zercher Squat', 'legs'),
 		entry('b', 'Élévation latérale', 'shoulders'),
@@ -125,7 +126,59 @@ test('the list is ordered by collation, so an accented name is not filed after z
 	);
 });
 
-test('names a collation calls equal are ordered by id, not by input order', () => {
+test('the order is the phone\'s order, not the host collation\'s', () => {
+	// The case that separates the two instruments. `Æ` has no canonical
+	// decomposition, so the fold leaves it at U+00E6 and files it after `z`;
+	// ICU interleaves it with `A` and puts it FIRST. Both are defensible
+	// orderings of one name; what is not defensible is the browser answering
+	// one and the phone the other, because `GymEditor`'s `catalogueByKey`
+	// resolves a shadowed name to an `exercises.id` by walking this list.
+	//
+	// Mutation: restoring `a.name.localeCompare(b.name)` fails this case and
+	// only this one — measured, the two agree on all 43 seeded globals and on
+	// § 1334's eight-name list, and part only once a custom carries a letter
+	// outside ASCII.
+	const mixed = [
+		entry('a', 'Æbleplukning', 'other'),
+		entry('b', 'Back Squat', 'legs'),
+		entry('c', 'Øvre ryg', 'back'),
+	];
+	assert.deepEqual(
+		cataloguePickerView(mixed, { query: '', category: 'all' }).matches.map((e) => e.name),
+		['Back Squat', 'Æbleplukning', 'Øvre ryg'],
+	);
+});
+
+test('§ 1334\'s measured list orders identically on both platforms', () => {
+	// The eight names the mobile twin's widget test asserts, verbatim. The
+	// two suites now pin one order rather than two that happen to agree.
+	const names = [
+		'Zercher Squat',
+		'Überzug',
+		'źcisk',
+		'Row',
+		'Overhead Press',
+		'Élévation latérale',
+		'Bench Press',
+		'Ab Wheel',
+	];
+	const view = cataloguePickerView(
+		names.map((n, i) => entry(`e${i}`, n, 'other')),
+		{ query: '', category: 'all' },
+	);
+	assert.deepEqual(view.matches.map((e) => e.name), [
+		'Ab Wheel',
+		'Bench Press',
+		'Élévation latérale',
+		'Overhead Press',
+		'Row',
+		'Überzug',
+		'źcisk',
+		'Zercher Squat',
+	]);
+});
+
+test('names the fold calls equal are ordered by id, not by input order', () => {
 	const dupes = [entry('z', 'Row', 'back'), entry('a', 'Row', 'back')];
 	const forward = cataloguePickerView(dupes, { query: '', category: 'all' });
 	const reversed = cataloguePickerView([...dupes].reverse(), { query: '', category: 'all' });
