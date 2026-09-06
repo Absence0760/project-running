@@ -291,6 +291,24 @@ export async function fetchRunsWithError(
 /// Reports the read error: almost every card on /dashboard derives from this
 /// one set, so degrading to `[]` rendered a complete, convincing brand-new
 /// account — zero runs, no PRs, an empty week — to a runner mid-outage.
+export const DASHBOARD_RUN_COLUMNS = [
+	'id',
+	'user_id',
+	'started_at',
+	'distance_m',
+	'duration_s',
+	'source',
+	'activity_type',
+	'is_dnf',
+	'elevation_gain_m',
+	'metadata',
+] as const satisfies RunColumns;
+
+/// What the dashboard read actually carries. Exported, and deliberately not yet
+/// what `fetchRunsForDashboard` declares: the widening below is stated at the
+/// one line where it happens and the remaining step is filed (§ 1330).
+export type DashboardRun = Pick<Run, (typeof DASHBOARD_RUN_COLUMNS)[number]>;
+
 export async function fetchRunsForDashboard(): Promise<{
 	runs: Run[];
 	error: string | null;
@@ -300,20 +318,25 @@ export async function fetchRunsForDashboard(): Promise<{
 	const windowStart = dashboardRunsWindowStart(new Date());
 	const { data, error } = await supabase
 		.from(TABLES.runs)
-		.select(
-			'id, user_id, started_at, distance_m, duration_s, source, activity_type, is_dnf, elevation_gain_m, metadata',
-		)
+		.select(DASHBOARD_RUN_COLUMNS.join(', '))
 		.eq('user_id', userId)
 		.gte('started_at', windowStart.toISOString())
 		.order('started_at', { ascending: false });
 	if (error) return { runs: [], error: error.message };
 	if (!data) return { runs: [], error: null };
 	return {
+		// Widened, like `fetchRunsForRecap`'s, and for the same reason: every
+		// card on /dashboard feeds these rows into `computeRunStreaks`,
+		// `buildYearInRunningRecap`'s siblings in `training/` and the race
+		// predictor, whose `Run[]` parameters are halves of registered TS<->Dart
+		// pairs. `DashboardRun` above is what the ten columns really are; making
+		// it the declared type is a one-line change once those parameters take a
+		// structural bound (§ 1330).
 		runs: data.map((r: any) => ({
 			...r,
 			source: parseRunSource(r.source),
 			track: null,
-		})) as Run[],
+		})) as unknown as Run[],
 		error: null,
 	};
 }

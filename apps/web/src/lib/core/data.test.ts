@@ -50,9 +50,21 @@ test('fetchRunsForDashboard is bounded + column-narrowed, not the unbounded sele
 	);
 	assert.match(
 		body,
-		/\.select\(\s*['"`][^'"`]*started_at[^'"`]*distance_m/,
-		'fetchRunsForDashboard must select the explicit consumer columns (started_at, distance_m, …).',
+		/\.select\(DASHBOARD_RUN_COLUMNS\.join\(/,
+		'fetchRunsForDashboard must project the declared tuple, not a second column list.',
 	);
+	// Anchored on the tuple's CONTENTS, not on the identifier: since § 1330 the
+	// select string is joined from `DASHBOARD_RUN_COLUMNS`, so naming it proves
+	// nothing about which columns it holds.
+	const dashTuple = /const DASHBOARD_RUN_COLUMNS = \[([^\]]*)\]/.exec(source);
+	assert.ok(dashTuple, 'DASHBOARD_RUN_COLUMNS must be a column tuple — re-anchor.');
+	for (const c of ['started_at', 'distance_m', 'duration_s', 'source', 'activity_type']) {
+		assert.match(
+			dashTuple[1],
+			new RegExp(`'${c}'`),
+			`DASHBOARD_RUN_COLUMNS must carry ${c} — every card on /dashboard derives from it.`,
+		);
+	}
 	// The dashboard page must call the bounded reader, not the unbounded one.
 	const page = read('src/routes/dashboard/+page.svelte');
 	assert.match(
