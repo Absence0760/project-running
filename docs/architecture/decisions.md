@@ -25561,3 +25561,130 @@ The test extension caught its own vacuity, which is the part worth recording. Si
 **And that same assertion is why the entry is not a suppression.** The guard's worry about a zero read from a definer relation is that it may be satisfied by a relation that returned nothing at all. In this file it cannot be: (1) and (2) are positives naming the rows the function *does* return in the same rolled-back transaction, so a `find_backlogged_jobs` that had gone silent fails there, two assertions before the first zero is read. That is a stronger footing than either existing entry stands on — both of those record an assertion as permanently unmeasurable and rely on the reason alone — and it is recorded in the entry rather than left to be rediscovered.
 
 **Verification.** `--validate-operators` green, and it re-derives the unreplaced set from the suite, so it confirms the declared list is now exactly the three relations the suite reads. The guard's own 29 unit tests pass, including the one asserting every entry still names a live assertion description and that no entry has a replacement as well. The full mutation run: 179 refusal assertions across 287 files, 5 survivors, all 5 expected — the same survivor set as before, so nothing joined it.
+
+## 1289. Six identical `_parseTs`, and the seventh reader whose missing `.toUtc()` is the load-bearing part
+
+[§ 1242](#1242-three-copies-of-the-prune-predicate-and-the-argument-for-extracting-a-five-line-function) filed this while extracting `outsideFetchWindow`: `_parseTs` is a
+byte-identical private static in six stores. The claim was checked before
+anything was moved and it holds exactly — `local_food_store.dart`,
+`local_gear_store.dart`, `local_gym_store.dart`,
+`local_meal_template_store.dart`, `local_recipe_store.dart` and
+`local_routine_store.dart` hash the same over the whole four-line body. So the
+interesting finding is not among those six. It is that the same read exists
+**nineteen times in the family, in five behaviourally distinct spellings**, and
+one of the other four is a different function wearing a similar name.
+
+Beside the six: `local_crossings_store.dart`'s `_parseTime` and the inline
+`StoredFood.startedAt` / `StoredGymWorkout.startedAt` getters drop the
+`.toUtc()`; `LocalFoodStore.entriesForRange` and `OfflineSyncStore._idsInWindow`
+open-code it again; seven `fromJson` factories read the record's own clock with
+a seventh spelling ([§ 1290](#1290-a-record-is-not-worth-less-than-its-clock));
+and `local_gear_store.dart`'s `_parseDate` drops the `.toUtc()` **because it
+must**. `gear.purchased_at` and `gear.retired_at` are `date` columns. Their
+zone-less text is a calendar DAY, it parses to local midnight, and normalising
+that to UTC moves the day itself for every device west of Greenwich — a shoe
+bought on the 3rd reads as bought on the 2nd, and `gearBackfillCandidates`,
+which the app's own convention says resolves `purchased_at` at LOCAL midnight
+so a purchase-day morning run is not dropped, would then drop exactly those
+runs. Folding `_parseDate` into the shared reader is the obvious next step and
+it is a bug; the entry exists partly to stop the next reader taking it.
+
+The reason the UTC step belongs in one place, rather than being the harmless
+no-op it looks like: `DateTime.tryParse` answers with a LOCAL `DateTime`
+whenever the text carries no zone designator, and Dart's `toIso8601String()`
+then writes no designator either. The next reader re-anchors that wall clock in
+whatever zone it is in, and Postgres is one such reader — it resolves a
+zone-less literal in the session's own TimeZone. Every writer in the family
+happens to stamp `Z` today, so nothing is wrong right now; the value of the
+shared reader is that the next one does not have to.
+
+`parseServerTimestamp` lives in `offline_sync_store.dart` beside
+`outsideFetchWindow`, a top-level function for the reason § 1242 gives, and
+every store already imports the file. `store_timestamp_reader_guard_test.dart`
+**derives** the family from `extends OfflineSyncStore<` rather than listing it,
+so an eighth store is covered the day it lands, and refuses any other
+`DateTime.parse` / `tryParse` in those files unless the site states a
+`zone-verbatim:` reason on its own line or the line above. The marker is local
+rather than a file allowlist because two of these files carry both shapes, and
+an allowlist keyed on the file would have gone on covering whatever was added
+to it next. Five mutations were planted and each was caught: a re-planted
+private `_parseTs`, a stripped `zone-verbatim` marker, a renamed shared reader
+(which fails the vacuity claim as well as the scan), a dropped `.toUtc()`, and
+a restored throwing cast.
+
+Ten direct cases ship with it, since the six suites only ever reached the
+predicate through a whole `replaceFromServer`. One pins something surprising
+enough to be worth stating: **`DateTime.tryParse` rolls out-of-range components
+over rather than refusing them** — `2026-13-45T99:99:99Z` parses, to
+2027-02-18T04:40:39Z. A corrupt column therefore yields a confident wrong
+answer, not a null, so no caller may read a non-null return as evidence the
+column was sane. None does today; they compare it or store it.
+
+## 1290. A record is not worth less than its clock
+
+Seven `fromJson` factories in the same family read the stored modification
+clock as `DateTime.tryParse(json['last_modified_at'] as String? ?? '')?.toUtc()
+?? DateTime.now().toUtc()`, byte for byte but for gear's line wrapping. Three
+kinds of unusable value fell back to now — an absent field, an empty string,
+and an unparseable one — and a fourth, a field of the wrong TYPE, threw on the
+`as String?` cast instead.
+
+Both callers of `entryFromJson` catch per record. The cold-load walk logs
+`corrupt row` and moves on; `_restoreFromBackup` logs `restore skipped a
+record` and moves on. So a record whose clock was a number was discarded
+whole, payload and all, while the same record with no clock field at all
+loaded fine. Nothing chose that: `as String?` was written to satisfy the type
+checker, and the three-way fallback beside it is the evident intent. The
+restore path is the one that matters — the record came out of a backup archive,
+which is where a user's unsynced work goes when it exists nowhere else, and a
+hand-edited or third-party archive is exactly where a mistyped field comes
+from.
+
+`storedClockOrNow` makes the fourth input behave like the other three. What it
+deliberately does NOT settle is whether `now` is the right fallback at all. It
+is not obviously right: a `synced` row handed `now` wins the newer-wins gate in
+every `replaceFromServer` from then on, so a server copy can never overwrite it
+— where the throw, by dropping the row, let the next refresh re-add it and
+self-heal. That trade already applied to the three inputs that fell back to now
+before this change, so it is a property of the fallback rather than of the fix,
+and moving it (to the epoch, which loses every comparison and is therefore
+right in both directions) is a separate change with its own blast radius.
+Filed, not smuggled in here.
+
+## 1291. A checkpoint crossing is filed under an `instance_start` that depends on the reader's timezone, and one store is the wrong place to fix it
+
+`local_crossings_store.dart` was the one file in the family left holding a
+`DateTime.parse` after § 1289, on `pushCreate`'s `instance_start`. Normalising
+it looked like the same one-line hardening as the rest. It is not, and tracing
+why found a defect a good deal larger than the store.
+
+`recurrence.dart` sets `useUtc = e.timezone != null`, so a recurring event with
+no declared timezone has its occurrences built with the unnamed `DateTime(...)`
+constructor — LOCAL instants, whose wall clock is the reader's. That value
+becomes `EventView.nextInstanceStart`, then `_activeInstance`, and
+`api_client` serialises it with a bare `.toIso8601String()` at every one of its
+`instance_start` sites: the RSVP write and read, `fetchEventResults`,
+`fetchRaceSession`, the run-photo query and `upsertCheckpointCrossing`. Dart
+writes no zone designator for a local `DateTime`, and the server matches
+`instance_start` with `=`. So mobile files every one of those rows under the
+reader's wall clock re-anchored in the database's TimeZone, and two readers in
+different zones write two different keys for the same occurrence.
+
+Web does not. `recurrence.ts` keeps the same `event.timezone` branch, but a JS
+`Date` is an instant and `toISOString()` always emits `Z`, so web writes the
+true instant. For a recurring event with no timezone the two platforms
+therefore key the same occurrence differently, and a phone RSVP does not appear
+in the web attendee list for it. This is read-derived, not executed — no run
+was made against a live occurrence — and the precondition is narrow (recurring,
+`timezone` null, reader not at UTC), but the mechanism is legible in all four
+files.
+
+The one thing that was clearly wrong was to fix it here. Every other writer of
+`instance_start` sends the unnormalised value, so normalising the crossing
+alone would file it under an instance no other surface writes — turning a
+consistent-but-wrong key into an inconsistent one, and hiding the crossings
+from the very reads that look for them. The site keeps a `zone-verbatim:`
+marker naming that, and the defect is filed against the boundary that owns it:
+either `api_client` normalises every `instance_start`, moving all consumers
+together, or `recurrence.dart` stops minting local instants. Both are one
+change in one place; neither is this lane's.
