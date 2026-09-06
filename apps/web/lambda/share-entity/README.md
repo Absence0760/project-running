@@ -43,7 +43,7 @@ one-per-type pattern this deliberately diverges from.
 ## Build
 
 Run from `apps/web/` **after** `npm run build` (the bundler embeds
-`build/index.html` as the SPA shell):
+`build/200.html` as the SPA shell):
 
 ```
 node lambda/share-entity/build.mjs

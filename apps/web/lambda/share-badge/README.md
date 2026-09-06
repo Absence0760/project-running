@@ -21,7 +21,7 @@ exposes a numeric milestone + a date, never any track/location data.
 Run from `apps/web/`:
 
 ```bash
-npm run build               # produces build/index.html (the SPA shell)
+npm run build               # produces build/200.html (the SPA shell)
 node lambda/share-badge/build.mjs
 ```
 

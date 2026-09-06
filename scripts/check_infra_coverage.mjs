@@ -888,7 +888,7 @@ export function compareSources(
     }
     errors.push(
       `aws_lambda_function.${fn} has no ${missing.join(' and no ')} alarm. A Lambda-origin failure ` +
-        "on this distribution is invisible — CloudFront's per-distribution 4xx → /index.html " +
+        "on this distribution is invisible — CloudFront's per-distribution 4xx → SPA-shell " +
         'fallback replaces the body with the shell (and, for a 403, the status with a 200) — so ' +
         'the alarm is the only signal it has.',
     );

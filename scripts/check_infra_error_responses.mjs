@@ -58,7 +58,11 @@ export const LAMBDA_DIR = join(REPO_ROOT, 'apps', 'web', 'lambda');
 /// 403 and 404 are NOT symmetric: 403 must be laundered to 200 or the SPA is
 /// broken, 404 must not be touched at all or the handlers' `noindex` is thrown
 /// away.
-export const REQUIRED_MAPPING = { errorCode: '403', responseCode: '200', page: '/index.html' };
+/// The page is `/200.html`, adapter-static's SPA fallback, and not
+/// `/index.html`: since decisions § 1268 that filename holds the prerendered
+/// landing page, whose relative asset URLs and route-"/" hydration payload
+/// make it unusable as a deep-link body.
+export const REQUIRED_MAPPING = { errorCode: '403', responseCode: '200', page: '/200.html' };
 
 /// Statuses no `custom_error_response` may claim, with the reason each is
 /// owned elsewhere. An entry nothing violates is the normal state; an entry
