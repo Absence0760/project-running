@@ -431,13 +431,33 @@ export type NotificationKind =
 export type Club = Omit<ClubRow, 'join_policy' | 'invite_token' | 'location_point'> & {
 	join_policy: JoinPolicy;
 };
-export type ClubMember = Omit<ClubMemberRow, 'role' | 'status'> & {
+// `activity_waiver_ack_at` is omitted for the same reason `Route` omits
+// `shadow_hidden` (§ 1327): both roster reads enumerate columns precisely to
+// leave it out — on a public club anyone may read the member list, and when a
+// member signed the liability waiver is their own business — so the type must
+// not promise it on every row it can never arrive on. The `joinClub` insert
+// still writes it; that is an object literal against the row's Insert shape,
+// not this read overlay.
+export type ClubMember = Omit<ClubMemberRow, 'role' | 'status' | 'activity_waiver_ack_at'> & {
 	role: ClubRole;
 	status: MembershipStatus;
 };
+// `host_user_id`, `meet_lat` and `meet_lng` are omitted, not narrowed: all
+// three are revoked from the `authenticated` and `anon` column grants on
+// `events` (migration 20270818_001's enumerated `grant select`, reaffirmed for
+// `host_user_id` by 20261230_001), so a client select naming one raises 42501.
+// A read type must not promise a column the reader is not allowed to fetch
+// (§ 1329). The precise meet point is reachable only through the member-gated
+// `get_event_meet_point` RPC, which returns its own row shape.
 export type Event = Omit<
 	EventRow,
-	'recurrence_freq' | 'recurrence_byday' | 'category' | 'gym_template'
+	| 'recurrence_freq'
+	| 'recurrence_byday'
+	| 'category'
+	| 'gym_template'
+	| 'host_user_id'
+	| 'meet_lat'
+	| 'meet_lng'
 > & {
 	recurrence_freq: RecurrenceFreq | null;
 	recurrence_byday: Weekday[] | null;
