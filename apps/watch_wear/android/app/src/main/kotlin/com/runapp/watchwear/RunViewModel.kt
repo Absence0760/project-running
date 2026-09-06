@@ -1574,7 +1574,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     /// `Dispatchers.Main.immediate`, so a 100-hour ultra's ~36,000-record,
     /// ~2.8 MB track was read AND fully materialised as a `JsonArray` on the
     /// UI thread between the runner pressing Stop and the post-run screen
-    /// appearing (decisions § 1303). The decimation runs here too — it is
+    /// appearing (decisions § 1302). The decimation runs here too — it is
     /// the parse that is expensive, and there is nothing to hand back until
     /// it is done.
     private suspend fun readTrackForPreview(
