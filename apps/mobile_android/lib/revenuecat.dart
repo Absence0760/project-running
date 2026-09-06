@@ -5,9 +5,11 @@ import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 
-/// Dart port of `apps/web/src/lib/billing/revenuecat.ts` — RevenueCat native
-/// SDK wrapper for the in-app Pro purchase sheet. The wrapper has
-/// three jobs:
+/// RevenueCat native-SDK wrapper for the in-app Pro purchase sheet. Its web
+/// counterpart under `billing/` drives a different SDK against a different
+/// store, so the two are NOT a lockstep parity pair and neither registry
+/// carries them; what they share is the not-configured sentinel contract
+/// below. The wrapper has three jobs:
 ///
 /// 1. **Stay compilable on unconfigured builds.** When the platform-
 ///    appropriate API key isn't in `dotenv.env`, every entry point

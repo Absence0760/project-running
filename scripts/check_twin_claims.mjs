@@ -106,64 +106,9 @@ export const MIN_DECLARATIONS = 155;
 /** @type {readonly KnownGap[]} */
 export const KNOWN_GAPS = [
 	{
-		file: 'apps/web/src/lib/core/auth_errors.ts',
-		counterpart: 'apps/mobile_android/lib/auth_error.dart',
-		reason: 'the auth-error classification is a genuine pair with mirror suites on both sides; owed a row in both registries',
-	},
-	{
-		file: 'apps/mobile_android/lib/auth_error.dart',
-		counterpart: 'apps/web/src/lib/core/auth_errors.ts',
-		reason: 'the other half of the same unregistered auth-error pair',
-	},
-	{
 		file: 'apps/web/src/lib/core/auth_gates.ts',
 		counterpart: 'apps/mobile_android/lib/screens/sign_up_screen.dart',
 		reason: 'not a pair and cannot become one: the counterpart is a SCREEN, and the syncer row already records that mobile keeps those gates inline there. The header is what needs rewording, and `apps/web/src/lib/core` is another lane\'s tree',
-	},
-	{
-		file: 'apps/mobile_android/lib/food_search.dart',
-		counterpart: 'apps/web/src/lib/nutrition/food_search.ts',
-		reason: 'a genuine pair with mirror suites on both sides; owed a row in both registries',
-	},
-	{
-		file: 'apps/mobile_android/lib/nutrition_totals.dart',
-		counterpart: 'apps/web/src/lib/nutrition/nutrition_totals.ts',
-		reason: 'a genuine pair with mirror suites on both sides; owed a row in both registries',
-	},
-	{
-		file: 'apps/mobile_android/lib/payload_hash.dart',
-		counterpart: 'apps/web/src/lib/util/payload_hash.ts',
-		reason: 'a genuine pair with mirror suites on both sides; owed a row in both registries',
-	},
-	{
-		file: 'apps/mobile_android/lib/race_match.dart',
-		counterpart: 'apps/web/src/lib/integrations/race_match.ts',
-		reason: 'a genuine pair with mirror suites on both sides; owed a row in both registries',
-	},
-	{
-		file: 'apps/mobile_android/lib/revenuecat.dart',
-		counterpart: 'apps/web/src/lib/billing/revenuecat.ts',
-		reason: 'the web half has no suite of its own, so whether the two are a lockstep pair or a one-way port has to be settled before a row can claim either',
-	},
-	{
-		file: 'apps/mobile_android/lib/route_describe_client.dart',
-		counterpart: 'apps/web/src/lib/routes/route_describe_client.ts',
-		reason: 'neither half has a suite, so a row would claim a lockstep nothing measures',
-	},
-	{
-		file: 'apps/mobile_android/lib/strava.dart',
-		counterpart: 'apps/web/src/lib/integrations/strava.ts',
-		reason: 'the web half has no suite of its own; same question as `revenuecat`',
-	},
-	{
-		file: 'apps/mobile_android/lib/training_labels.dart',
-		counterpart: 'apps/web/src/lib/training/workout_labels.ts',
-		reason: 'a genuine pair whose two halves are named differently; owed a row in both registries',
-	},
-	{
-		file: 'apps/mobile_android/lib/widgets/fitness_card.dart',
-		counterpart: 'apps/web/src/lib/training/fitness.ts',
-		reason: 'not a pair: `fitness` is already registered and its Dart half is `lib/fitness.dart`. The WIDGET that renders it claims to be the port, which is the header to reword',
 	},
 ];
 
