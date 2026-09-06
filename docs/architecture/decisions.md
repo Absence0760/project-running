@@ -26664,3 +26664,64 @@ including one a second past the epoch, with the old fallback's winning compariso
 beside it as the control; and the sentinel sorts last under the library comparator. The
 `local_food_store` restore test that asserted the old `now` behaviour now asserts the epoch,
 with the reason it does not matter to a restored (pendingCreate) record stated in place.
+
+---
+
+## 1343. `instance_start` is normalised at the one boundary that serialises it, not at the one that mints it
+
+**Decided 2026-09-06.** [§ 1291](#1291-a-checkpoint-crossing-is-filed-under-an-instance_start-that-depends-on-the-readers-timezone-and-one-store-is-the-wrong-place-to-fix-it)
+traced a recurring occurrence being filed under the reader's wall clock on mobile and under
+the true instant on web, and left the choice open: either `api_client` normalises every
+`instance_start`, or `recurrence.dart` stops minting local instants. It is the first, and
+measuring the tree said so more clearly than the trace did.
+
+`expandInstances` is not wrong. For an event declaring no timezone it builds a LOCAL
+`DateTime`, which names exactly the absolute instant web's `new Date(y, m, d, h, mi, s)`
+names — the two platforms compute the same occurrence. The divergence is entirely in
+serialisation: a JS `Date` IS an instant and `toISOString()` always emits `Z`, while Dart's
+`toIso8601String()` writes no designator at all for a local `DateTime`, and Postgres then
+resolves the zone-less literal in the session's own TimeZone. So changing `recurrence.dart`
+would move one half of a registered parity pair away from a twin that is not wrong, to fix a
+defect that is not there.
+
+**The tree had already decided this and only api_client had missed it.** `social_service.dart`
+writes `instance_start` at eleven sites — the RSVP upsert, the going-count filters, the
+attendee delete, the results RPC, the race-session reads, the photo tag — and every one of
+them is already `instance.toUtc().toIso8601String()`. `race_controller.dart` persists its
+active race the same way. `api_client.dart` was the only writer that did not, at six sites:
+the run-photo insert and its gallery filter, `setEventRsvp` and `fetchEventAttendees`, the
+crossings filter and the `upsert_checkpoint_crossing` RPC. Two of those six sit on opposite
+ends of one feature — a photo is TAGGED to an occurrence through `social_service` (normalised)
+and READ BACK through `addRunPhoto`'s sibling filter in `api_client` (not), so an event gallery
+could fail to list the photos that same phone had just uploaded to it.
+
+All six now go through `instanceStartKey(DateTime) → at.toUtc().toIso8601String()`, with
+`instanceStartKeyOrNull` for the nullable photo tag (a photo attached to no occurrence stays
+null; it does not acquire an epoch). A no-op for a timezoned event and for a one-off's
+`startsAt`; only legacy zone-less recurring rows move, and they move onto the value web has
+been writing all along.
+
+**The store half is a second defect the same shape.** `local_crossings_store` compared
+`instance_start` as a STRING — `row['instance_start'] == instanceStart.toIso8601String()` — in
+both `rowsForCheckpoint` and `replaceFromServer`'s scope test. One occurrence has at least
+three spellings in that store: PostgREST answers `2026-06-14T07:00:00+00:00`,
+`CheckpointCrossingRow.toJson` re-serialises it as `…T07:00:00.000Z`, and a row the store
+wrote itself carries whatever `toIso8601String()` produced. So a server-fetched crossing did
+not match the instance the screen was asking about, and "who has already been stamped here" —
+the whole reason the offline store exists — listed only the stamps this phone had made. Both
+sites now compare instants through `sameInstance`, which is immune to spelling and to rows
+written before this change; `createLocal` stores the normalised key, and `pushCreate` reads
+it back through `parseServerTimestamp` rather than the raw `DateTime.parse` § 1291 had to
+leave marked, REFUSING a crossing whose stored instance is unreadable rather than filing it
+under a guessed occurrence (the drain isolates that per row and the stamp stays pending).
+
+Pinned by eight tests in `instance_start_key_test.dart` — five on the helper plus a
+source guard anchored on the COUNT of `instance_start` sites, so deleting the normalisation
+cannot delete its own requirement — and seven in `local_crossings_store_test.dart`, including
+all four spellings matching one occurrence and a control that a different occurrence of the
+same series is still excluded. Mutation-tested three ways: removing the `.toUtc()` from the
+helper fails four assertions, reverting one call site to a bare `toIso8601String()` fails the
+guard by name, and restoring the string equality fails the spelling test.
+
+Web needs no change and gets none. This is one-sided by construction: the platform that was
+already correct is the one the other is being brought onto.

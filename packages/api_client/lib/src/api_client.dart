@@ -43,6 +43,31 @@ String safeErrorLabel(Object e) {
   return e.runtimeType.toString();
 }
 
+/// The wire form of an `instance_start` — the recurring-occurrence KEY the
+/// server matches with `=`.
+///
+/// Always UTC-normalised first, and that is the whole point of the function
+/// existing (decisions § 1343). `expandInstances` builds a LOCAL `DateTime`
+/// for an event that declares no timezone, and Dart's `toIso8601String()`
+/// writes no zone designator for one — so the six writers of this key used to
+/// send a bare wall clock, which Postgres re-anchors in the session's own
+/// TimeZone. Two phones in different zones filed the same occurrence under two
+/// different keys, and neither matched what the web app writes: a JS `Date` is
+/// an instant and `toISOString()` always emits `Z`, so web has always sent the
+/// true instant. A phone RSVP therefore did not appear in the web attendee
+/// list for that occurrence.
+///
+/// A no-op for an event that DOES declare a timezone (`expandInstances`
+/// already anchors those in UTC) and for a one-off event's `startsAt`, which
+/// is parsed from a `+00:00` string. Only the legacy zone-less recurring rows
+/// move, and they move onto the value web has been writing all along.
+String instanceStartKey(DateTime at) => at.toUtc().toIso8601String();
+
+/// [instanceStartKey] for a nullable occurrence — `null` stays `null` (a photo
+/// tagged to no event instance), it does not become an epoch.
+String? instanceStartKeyOrNull(DateTime? at) =>
+    at == null ? null : instanceStartKey(at);
+
 /// Typed client for the Supabase REST API.
 ///
 /// Must call [initialize] before using any methods.
@@ -3386,7 +3411,7 @@ class ApiClient {
           RunPhotoRow.colPositionIdx: positionIdx,
           RunPhotoRow.colEventId: eventId,
           RunPhotoRow.colEventInstanceStart:
-              eventInstanceStart?.toIso8601String(),
+              instanceStartKeyOrNull(eventInstanceStart),
         })
         .select()
         .single();
@@ -3459,7 +3484,7 @@ class ApiClient {
             'position_idx, created_at, event_id, event_instance_start',
           )
           .eq(RunPhotoRow.colEventId, eventId)
-          .eq(RunPhotoRow.colEventInstanceStart, instanceStart.toIso8601String())
+          .eq(RunPhotoRow.colEventInstanceStart, instanceStartKey(instanceStart))
           .order(RunPhotoRow.colCreatedAt, ascending: true)
           .limit(limit);
       if (rows.isEmpty) return const [];
@@ -4908,7 +4933,7 @@ class ApiClient {
         EventAttendeeRow.colEventId: eventId,
         EventAttendeeRow.colUserId: viewerId,
         EventAttendeeRow.colStatus: status,
-        EventAttendeeRow.colInstanceStart: instanceStart.toIso8601String(),
+        EventAttendeeRow.colInstanceStart: instanceStartKey(instanceStart),
       },
       onConflict:
           '${EventAttendeeRow.colEventId},${EventAttendeeRow.colUserId},${EventAttendeeRow.colInstanceStart}',
@@ -4925,7 +4950,7 @@ class ApiClient {
           .from(EventAttendeeRow.table)
           .select()
           .eq(EventAttendeeRow.colEventId, eventId)
-          .eq(EventAttendeeRow.colInstanceStart, instanceStart.toIso8601String())
+          .eq(EventAttendeeRow.colInstanceStart, instanceStartKey(instanceStart))
           // The table has no id; user_id is unique inside this filter (the PK
           // is (event_id, user_id, instance_start)) so it totally orders a page.
           .order(EventAttendeeRow.colUserId, ascending: true)
@@ -4969,7 +4994,7 @@ class ApiClient {
           )
           .eq(CheckpointCrossingRow.colEventId, eventId)
           .eq(CheckpointCrossingRow.colInstanceStart,
-              instanceStart.toIso8601String())
+              instanceStartKey(instanceStart))
           .order(CheckpointCrossingRow.colId, ascending: true)
           .range(from, to);
       return (data as List)
@@ -5005,7 +5030,7 @@ class ApiClient {
     await _client.rpc('upsert_checkpoint_crossing', params: {
       'p_event_id': eventId,
       'p_checkpoint_id': checkpointId,
-      'p_instance_start': instanceStart.toIso8601String(),
+      'p_instance_start': instanceStartKey(instanceStart),
       'p_user_id': userId,
       'p_bib': bib,
       'p_runner_name': runnerName,
