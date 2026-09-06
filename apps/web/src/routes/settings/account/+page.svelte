@@ -57,6 +57,7 @@
 	import { m } from '$lib/i18n/store.svelte';
 	import PasswordInput from '$lib/components/PasswordInput.svelte';
 	import { isCyclePlansEnabled } from '$lib/training/cycle_plan_flag';
+	import { MAX_HR_BPM_MIN, MAX_HR_BPM_MAX, isUsableMaxHrBpm } from '$lib/training/hr_zones';
 	import {
 		MIN_CYCLE_LENGTH_DAYS,
 		MAX_CYCLE_LENGTH_DAYS,
@@ -78,6 +79,15 @@
 	let dateOfBirth = $state('');
 	let restingHr = $state('');
 	let maxHr = $state('');
+	// This card has no <form> element at all, so `min`/`max` on the max-HR
+	// input never trigger constraint validation — it saves from a button's
+	// onclick. `max_hr_bpm` is a jsonb prefs key with no column and therefore
+	// no CHECK, so this is the only gate anywhere on the write side; without
+	// it a typed 300 is stored and then silently ignored by every one of the
+	// three readers that derive zones from it (decisions § 1407).
+	const maxHrParsed = $derived(maxHr.trim() === '' ? null : Number.parseInt(maxHr, 10));
+	const maxHrOutOfRange = $derived(maxHrParsed !== null && !isUsableMaxHrBpm(maxHrParsed));
+	const maxHrBounds = { min: MAX_HR_BPM_MIN, max: MAX_HR_BPM_MAX };
 	// Cycle/pregnancy-aware training inputs (persona runner-woman, decisions
 	// §231). Art 9 reproductive-health data — persistence is gated on the
 	// SAME health-data consent as DOB below, AND the whole section is hidden
@@ -500,6 +510,12 @@
 
 	async function handleSave() {
 		if (!auth.user) return;
+		// Checked here as well as on the button's disabled state so the value
+		// cannot reach the prefs upsert through any other path.
+		if (maxHrOutOfRange) {
+			showToast(m('limits.maxHrOutOfRange', maxHrBounds), 'error');
+			return;
+		}
 		saving = true;
 		saved = false;
 
@@ -587,7 +603,7 @@
 		const prefs: Record<string, unknown> = {};
 		prefs.date_of_birth = healthDataConsent && dateOfBirth ? dateOfBirth : null;
 		if (restingHr) prefs.resting_hr_bpm = parseInt(restingHr, 10) || null;
-		if (maxHr) prefs.max_hr_bpm = parseInt(maxHr, 10) || null;
+		if (maxHr) prefs.max_hr_bpm = maxHrParsed;
 		// Cycle/pregnancy inputs are Art 9 reproductive-health data — write
 		// them only when the flag is on AND consent is granted; on withdrawal
 		// (or flag off) they are explicitly nulled so nothing lingers.
@@ -1293,7 +1309,10 @@
 			</label>
 			<label>
 				<span class="label-text">{m('settingsAccount.maxHr')}</span>
-				<input type="number" bind:value={maxHr} placeholder={m('settingsAccount.maxHrPlaceholder')} min="100" max="230" />
+				<input type="number" bind:value={maxHr} placeholder={m('settingsAccount.maxHrPlaceholder')} min={MAX_HR_BPM_MIN} max={MAX_HR_BPM_MAX} aria-invalid={maxHrOutOfRange} data-testid="max-hr" />
+				{#if maxHrOutOfRange}
+					<span class="field-error" data-testid="max-hr-error">{m('limits.maxHrOutOfRange', maxHrBounds)}</span>
+				{/if}
 			</label>
 		</div>
 		<label class="consent-checkbox">
@@ -1345,7 +1364,7 @@
 				{/if}
 			</div>
 		{/if}
-		<button class="btn btn-primary btn-save" onclick={handleSave} disabled={saving}>
+		<button class="btn btn-primary btn-save" onclick={handleSave} disabled={saving || maxHrOutOfRange}>
 			{saving ? m('settingsAccount.saving') : saved ? m('settingsAccount.savedDone') : m('settingsAccount.saveProfile')}
 		</button>
 	</section>
@@ -1821,6 +1840,7 @@
 
 	input:disabled { opacity: 0.6; cursor: not-allowed; }
 	.section-desc { font-size: 0.85rem; color: var(--color-text-secondary); margin-bottom: var(--space-md); line-height: 1.5; }
+	.field-error { display: block; font-size: 0.78rem; color: var(--color-danger-text); line-height: 1.45; margin-block-start: var(--space-2xs); }
 	.consent-checkbox { display: flex; gap: var(--space-sm); align-items: flex-start; font-size: 0.9rem; line-height: 1.45; margin-bottom: var(--space-md); }
 	.consent-checkbox input { margin-top: 0.2rem; flex-shrink: 0; width: auto; }
 	.consent-recorded { font-size: 0.8rem; }

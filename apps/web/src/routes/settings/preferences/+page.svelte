@@ -37,6 +37,7 @@
 		weightBoundsIn,
 	} from '$lib/format/weight';
 	import { valueLimit, withinValueLimit } from '$lib/core/column_limits';
+	import { MAX_HR_BPM_MIN, MAX_HR_BPM_MAX, isUsableMaxHrBpm } from '$lib/training/hr_zones';
 	import {
 		ACTIVITY_LEVELS,
 		type ActivityLevel,
@@ -332,6 +333,21 @@
 	// beta-blocked runner whose formula HR-max is wrong needs to set it.
 	let restingHr = $state('');
 	let maxHr = $state('');
+	// `min`/`max` on the max-HR input are COSMETIC, like the demographics card
+	// below: this field autosaves onblur and never reaches a form submit, so
+	// the browser's constraint validation never runs. This is the real gate.
+	// `max_hr_bpm` is a jsonb prefs key with no column and therefore no CHECK,
+	// so refusing it here is the only thing between a typo and three readers
+	// that each silently ignore it — the runner would otherwise type 300, be
+	// told nothing, and get age-estimated zones forever (decisions § 1407).
+	const maxHrParsed = $derived(maxHr.trim() === '' ? null : Number.parseInt(maxHr, 10));
+	const maxHrOutOfRange = $derived(maxHrParsed !== null && !isUsableMaxHrBpm(maxHrParsed));
+	const maxHrBounds = { min: MAX_HR_BPM_MIN, max: MAX_HR_BPM_MAX };
+
+	function saveMaxHr() {
+		if (maxHrOutOfRange) return;
+		autoSave({ max_hr_bpm: maxHrParsed });
+	}
 
 	// HR zones
 	let z1 = $state('');
@@ -976,7 +992,10 @@
 				</label>
 				<label>
 					<span class="label-text">{m('prefs.maxHr')}</span>
-					<input type="number" bind:value={maxHr} min="100" max="230" placeholder={m('prefs.maxHrPlaceholder')} onblur={() => autoSave({ max_hr_bpm: maxHr ? parseInt(maxHr, 10) || null : null })} />
+					<input type="number" bind:value={maxHr} min={MAX_HR_BPM_MIN} max={MAX_HR_BPM_MAX} placeholder={m('prefs.maxHrPlaceholder')} aria-invalid={maxHrOutOfRange} data-testid="max-hr" onblur={saveMaxHr} />
+					{#if maxHrOutOfRange}
+						<span class="field-error" data-testid="max-hr-error">{m('limits.maxHrOutOfRange', maxHrBounds)}</span>
+					{/if}
 				</label>
 			</div>
 			<p class="section-desc">{m('prefs.zonesUpperBoundDesc')}</p>

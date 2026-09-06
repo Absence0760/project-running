@@ -70,6 +70,15 @@ List<HrZoneBucket> hrZoneBreakdown(
 const int kMaxHrBpmMin = 80;
 const int kMaxHrBpmMax = 240;
 
+/// Whether a stored `max_hr_bpm` may be used as one. Every reader ignores a
+/// value outside the range, so every WRITER has to refuse the same one, or the
+/// runner types a figure the app accepts and then silently declines to use
+/// (decisions § 1407). Stating the test once is the point: the bound was
+/// already named per rail, and it was the three separate spellings of it that
+/// let the Wear OS rail apply a value the other two ignored (§ 1245).
+bool isUsableMaxHrBpm(int? value) =>
+    value != null && value >= kMaxHrBpmMin && value <= kMaxHrBpmMax;
+
 /// The age range Tanaka is applied over, for the same reason.
 const int kTanakaAgeMin = 5;
 const int kTanakaAgeMax = 120;
@@ -95,8 +104,8 @@ List<int> zoneCutoffsFromMaxHr(int maxHr) =>
 /// the legacy 190-bpm fallback (`zoneCutoffsFromMaxHr(190)` ==
 /// `[114, 133, 152, 171, 190]`). Mirrors the TS `defaultZoneCutoffs`.
 List<int> defaultZoneCutoffs({int? maxHrBpm, int? ageYears}) {
-  if (maxHrBpm != null && maxHrBpm >= kMaxHrBpmMin && maxHrBpm <= kMaxHrBpmMax) {
-    return zoneCutoffsFromMaxHr(maxHrBpm);
+  if (isUsableMaxHrBpm(maxHrBpm)) {
+    return zoneCutoffsFromMaxHr(maxHrBpm!);
   }
   if (ageYears != null && ageYears >= kTanakaAgeMin && ageYears <= kTanakaAgeMax) {
     return zoneCutoffsFromMaxHr(tanakaMaxHr(ageYears));

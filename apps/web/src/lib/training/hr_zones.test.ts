@@ -1,11 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
 	MAX_HR_BPM_MAX,
 	MAX_HR_BPM_MIN,
 	TANAKA_AGE_MAX,
 	TANAKA_AGE_MIN,
 	defaultZoneCutoffs,
+	isUsableMaxHrBpm,
 	tanakaMaxHr,
 	zoneCutoffsFromMaxHr
 } from './hr_zones';
@@ -77,4 +79,43 @@ test('the usable ranges are the bounds defaultZoneCutoffs applies', () => {
 test('a zero max HR is ignored, not applied as a ceiling', () => {
 	assert.deepEqual(defaultZoneCutoffs({ maxHrBpm: 0 }), [114, 133, 152, 171, 190]);
 	assert.deepEqual(defaultZoneCutoffs({ maxHrBpm: -1 }), [114, 133, 152, 171, 190]);
+});
+
+// The write side's gate and the read side's fallthrough are now the SAME
+// call, so they cannot disagree by construction — which is why this pins the
+// COMPOSITION rather than sweeping values, a sweep here being a tautology.
+// What can still regress is a write path quietly going back to storing a raw
+// parseInt: before decisions § 1407 both did, so a typed 300 was saved, then
+// silently ignored by all three readers, leaving the runner on age-estimated
+// zones with nothing on screen explaining why.
+test('both web max_hr_bpm write paths gate on the shared predicate', () => {
+	const pages = [
+		'../../routes/settings/account/+page.svelte',
+		'../../routes/settings/preferences/+page.svelte'
+	];
+	for (const rel of pages) {
+		const src = readFileSync(new URL(rel, import.meta.url), 'utf8');
+		assert.match(src, /isUsableMaxHrBpm/, `${rel} no longer gates max_hr_bpm`);
+		assert.doesNotMatch(
+			src,
+			/max_hr_bpm\s*[:=][^;\n]*parseInt/,
+			`${rel} writes max_hr_bpm from a raw parseInt again`
+		);
+		// The advisory min/max attributes disagreed with the real bound
+		// (100/230 against 80/240) for as long as they were literals.
+		assert.doesNotMatch(src, /bind:value=\{maxHr\}[^>]*min="/, `${rel} hardcodes a max-HR bound`);
+	}
+});
+
+// A number input yields '' when emptied and NaN from Number.parseInt on any
+// non-numeric text; both write paths route those through this predicate, so
+// neither may read as usable. 0 is what an emptied field posted before § 1245.
+test('isUsableMaxHrBpm rejects the absent and unparseable inputs', () => {
+	assert.equal(isUsableMaxHrBpm(null), false);
+	assert.equal(isUsableMaxHrBpm(undefined), false);
+	assert.equal(isUsableMaxHrBpm(Number.NaN), false);
+	assert.equal(isUsableMaxHrBpm(Number.POSITIVE_INFINITY), false);
+	assert.equal(isUsableMaxHrBpm(0), false);
+	assert.equal(isUsableMaxHrBpm(MAX_HR_BPM_MIN), true);
+	assert.equal(isUsableMaxHrBpm(MAX_HR_BPM_MAX), true);
 });
