@@ -89,7 +89,16 @@
 //       The same claim carries Apple's documented mutual exclusivity:
 //       `WKWatchOnly` says the app has no iOS companion and cannot coexist
 //       with `WKCompanionAppBundleIdentifier`, so a session resolving the
-//       companion question must remove one while adding the other.
+//       companion question must remove one while adding the other. And the
+//       declaration is held against the only thing Linux can check it
+//       against — whether the PHONE project bundles the watch app at all.
+//       `WKWatchOnly` is a true description of the Xcode project and a false
+//       one of an app whose whole sync path is `WCSession`; § 1256 measured
+//       that flipping the key alone would move the lie rather than fix it,
+//       because `Runner.xcodeproj` embeds nothing. So the plist follows the
+//       build: the moment the embed lands, the guard says so, and a
+//       companion named while nothing embeds fails the same way
+//       (decisions § 1349).
 //
 //  (12) The heart-rate coverage figures agree with Wear OS's. `avg_bpm` is
 //       SUPPRESSED below a coverage threshold and coverage itself is advanced
@@ -539,6 +548,42 @@ export const DELEGATE_IDENTITY_GATES = [
  * claims (6) and (7) read the phone's: the figure is written by both and owned
  * by neither.
  */
+/**
+ * The PHONE's Xcode project — the one that would have to embed the watch app
+ * for the companion relationship to exist as a build rather than only as a
+ * runtime `WCSession` conversation.
+ */
+export const PHONE_PBXPROJ = join(
+	'apps', 'mobile_ios', 'ios', 'Runner.xcodeproj', 'project.pbxproj',
+);
+
+/**
+ * Fixed strings that can only appear in an iOS project that bundles a watch
+ * app: Apple's Embed Watch Content phase copies into `…/Watch`, and the built
+ * product is referenced by name. Broad on purpose — anything that embeds the
+ * watch has to name the product or the destination, and a false positive here
+ * costs a sentence in a PR while a false negative costs the whole point of
+ * the claim.
+ */
+export const WATCH_EMBED_MARKERS = ['$(CONTENTS_FOLDER_PATH)/Watch', 'WatchApp.app'];
+
+/**
+ * The watch app's own bundle identifier, read off its project rather than
+ * written down — a third marker, and the one an embed cannot avoid carrying.
+ * The `.tests` target's id is dropped: it is a substring relationship, not a
+ * second app.
+ * @param {string} pbxproj
+ */
+export function watchBundleIdentifiers(pbxproj) {
+	return [
+		...new Set(
+			[...pbxproj.matchAll(/PRODUCT_BUNDLE_IDENTIFIER\s*=\s*"?([\w.-]+)"?\s*;/g)].map(
+				(m) => m[1],
+			),
+		),
+	].filter((id) => !id.endsWith('.tests'));
+}
+
 export const WEAR_COVERAGE = join(
 	'apps', 'watch_wear', 'android', 'app', 'src', 'main', 'kotlin',
 	'com', 'runapp', 'watchwear', 'recording', 'HeartRateCoverage.kt',
@@ -956,6 +1001,8 @@ export const UNGUARDED_DESTRUCTIVE = {
  *   `apple_watch_route_bridge.dart`; null skips claim (7) alone.
  * @param {string | null} [wearCoveragePath] absolute path to Wear OS's
  *   `HeartRateCoverage.kt`; null skips claim (12) alone.
+ * @param {string | null} [phonePbxprojPath] absolute path to the phone's
+ *   `Runner.xcodeproj/project.pbxproj`; null skips claim (10)'s embed half.
  * @returns {{ errors: string[], ok: string[] }}
  */
 export function check(
@@ -963,6 +1010,7 @@ export function check(
 	ingestPath = null,
 	routeBridgePath = null,
 	wearCoveragePath = null,
+	phonePbxprojPath = null,
 ) {
 	/** @type {string[]} */ const errors = [];
 	/** @type {string[]} */ const ok = [];
@@ -1414,7 +1462,51 @@ export function check(
 							'(decisions § 1256).',
 					);
 				}
-				if (errors.length === 0) {
+				if (phonePbxprojPath !== null) {
+					// The declaration held against the build rather than only
+					// against itself. This is the half § 1256 could settle but
+					// not act on: `WKWatchOnly` describes the PROJECT truly and
+					// the APP falsely, and the fix is the embed, not the key —
+					// so the key is required to follow the embed, in both
+					// directions, and the day the integration lands is the day
+					// this says so.
+					const phone = readFileSync(phonePbxprojPath, 'utf8');
+					const markers = [
+						...WATCH_EMBED_MARKERS,
+						...watchBundleIdentifiers(read(PBXPROJ)),
+					];
+					const embedded = markers.filter((m) => phone.includes(m));
+					const watchOnly = plist.get('WKWatchOnly') === true;
+					const companion = plist.has('WKCompanionAppBundleIdentifier');
+					if (embedded.length > 0 && watchOnly) {
+						errors.push(
+							`${PHONE_PBXPROJ} now bundles the watch app (it names ` +
+								`${embedded.map((m) => `\`${m}\``).join(', ')}) while ${WATCH_PLIST} ` +
+								'still declares `WKWatchOnly`, which Apple documents as "this app has ' +
+								'no iOS companion". Replace it with `WKCompanionAppBundleIdentifier` ' +
+								"naming the phone's bundle id — the embed is the build integration " +
+								'§ 1256 said had to come first, and it has.',
+						);
+					} else if (embedded.length === 0 && companion) {
+						errors.push(
+							`${WATCH_PLIST} names a companion via \`WKCompanionAppBundleIdentifier\`, ` +
+								`but ${PHONE_PBXPROJ} references neither the watch product nor an Embed ` +
+								'Watch Content destination — so nothing ships the two as one `.ipa` and ' +
+								'the declaration is a claim about a build that does not exist. That is ' +
+								'the "move the lie" outcome § 1256 refused: do the embed, then flip the ' +
+								'key.',
+						);
+					} else if (errors.length === 0) {
+						ok.push(
+							`${WATCH_PLIST} owns its own keys (no inert INFOPLIST_KEY_* on the ` +
+								'manual-plist target) and its companion declaration matches the build' +
+								(watchOnly
+									? ' — still `WKWatchOnly`, and the phone project still bundles no ' +
+										'watch app, so the § 1256 integration is owed rather than done'
+									: ''),
+						);
+					}
+				} else if (errors.length === 0) {
 					ok.push(
 						`${WATCH_PLIST} owns its own keys (no inert INFOPLIST_KEY_* on the manual-plist ` +
 							'target) and its companion declaration is self-consistent',
@@ -1542,6 +1634,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 		process.argv[3] ?? join(REPO_ROOT, INGEST),
 		process.argv[4] ?? join(REPO_ROOT, ROUTE_BRIDGE),
 		process.argv[5] ?? join(REPO_ROOT, WEAR_COVERAGE),
+		process.argv[6] ?? join(REPO_ROOT, PHONE_PBXPROJ),
 	);
 	for (const line of ok) console.log(`  ok: ${line}`);
 	if (errors.length > 0) {

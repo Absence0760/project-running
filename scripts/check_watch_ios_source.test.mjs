@@ -27,9 +27,11 @@ import {
 	buildSettingsBlocks,
 	INGEST,
 	ROUTE_BRIDGE,
+	PHONE_PBXPROJ,
 	UNGUARDED_DESTRUCTIVE,
 	WEAR_COVERAGE,
 	check,
+	watchBundleIdentifiers,
 	kotlinNumericConstant,
 	swiftNumericConstant,
 	confirmationDialogSpans,
@@ -68,6 +70,9 @@ const STAGED_ROUTE_BRIDGE = 'apple_watch_route_bridge.dart';
 /** …and of Wear OS's half of the heart-rate coverage contract. */
 const STAGED_WEAR_COVERAGE = 'HeartRateCoverage.kt';
 const WEAR_COVERAGE_ABS = join(REPO_ROOT, WEAR_COVERAGE);
+/** …and of the phone project claim (10) holds the plist against. */
+const STAGED_PHONE_PBX = 'Runner.project.pbxproj';
+const PHONE_PBXPROJ_ABS = join(REPO_ROOT, PHONE_PBXPROJ);
 const ARMED = join('WatchApp', 'ArmedRoute.swift');
 const DIRECT = join('WatchApp', 'SupabaseService.swift');
 const PBX = join('WatchApp.xcodeproj', 'project.pbxproj');
@@ -89,6 +94,7 @@ function stage() {
 	cpSync(INGEST_ABS, join(dir, STAGED_INGEST));
 	cpSync(ROUTE_BRIDGE_ABS, join(dir, STAGED_ROUTE_BRIDGE));
 	cpSync(WEAR_COVERAGE_ABS, join(dir, STAGED_WEAR_COVERAGE));
+	cpSync(PHONE_PBXPROJ_ABS, join(dir, STAGED_PHONE_PBX));
 	return dir;
 }
 
@@ -105,6 +111,7 @@ function runMutated(mutate) {
 			join(dir, STAGED_INGEST),
 			join(dir, STAGED_ROUTE_BRIDGE),
 			join(dir, STAGED_WEAR_COVERAGE),
+			join(dir, STAGED_PHONE_PBX),
 		);
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
@@ -1001,4 +1008,63 @@ test('the two numeric-constant readers take the literal and nothing around it', 
 	assert.equal(swiftNumericConstant('/// a is 0.5 on both wrists\n', 'a'), null);
 	assert.equal(kotlinNumericConstant('const val C = OTHER * 1000L\n', 'C'), null);
 	assert.equal(kotlinNumericConstant('const val C = 30_000L\n', 'MISSING'), null);
+});
+
+// ───────── claim (10): the plist follows the build, in both directions ─────────
+
+test('claim (10) refuses WKWatchOnly once the phone project embeds the watch', () => {
+	// The day § 1256's build integration lands is the day the key becomes a
+	// live defect rather than an accurate description of a project that ships
+	// nothing. Planted as the Embed Watch Content destination Apple writes.
+	const { errors } = runMutated((dir) => {
+		edit(dir, STAGED_PHONE_PBX, (s) =>
+			s.replace(
+				'objects = {',
+				'objects = {\n\t\tdstPath = "$(CONTENTS_FOLDER_PATH)/Watch";',
+			),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('now bundles the watch app') && e.includes('WKWatchOnly')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (10) refuses a companion named while nothing embeds', () => {
+	// The other direction, and the one § 1256 called "moving the lie": flipping
+	// the key alone declares a companion relationship no build produces.
+	const { errors } = runMutated((dir) => {
+		edit(dir, PLIST, (s) =>
+			s.replace(
+				'\t<key>WKWatchOnly</key>\n\t<true/>',
+				'\t<key>WKCompanionAppBundleIdentifier</key>\n\t<string>com.threkir.app</string>',
+			),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('names a companion') && e.includes('does not exist')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (10) recognises the embed by the watch bundle id too', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, STAGED_PHONE_PBX, (s) =>
+			s.replace('objects = {', 'objects = {\n\t\tPRODUCT_BUNDLE_IDENTIFIER = com.threkir.app.watchapp;'),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('now bundles the watch app')),
+		errors.join('\n'),
+	);
+});
+
+test('watchBundleIdentifiers drops the test target and dedupes', () => {
+	const src = [
+		'PRODUCT_BUNDLE_IDENTIFIER = com.threkir.app.watchapp;',
+		'PRODUCT_BUNDLE_IDENTIFIER = com.threkir.app.watchapp;',
+		'PRODUCT_BUNDLE_IDENTIFIER = com.threkir.app.watchapp.tests;',
+	].join('\n');
+	assert.deepEqual(watchBundleIdentifiers(src), ['com.threkir.app.watchapp']);
+	assert.deepEqual(watchBundleIdentifiers('nothing here'), []);
 });
