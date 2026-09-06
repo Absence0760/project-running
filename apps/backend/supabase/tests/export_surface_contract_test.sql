@@ -37,7 +37,7 @@
 
 begin;
 
-select plan(29);
+select plan(33);
 
 -- ── the exports bucket ──────────────────────────────────────────────────────
 
@@ -418,6 +418,80 @@ select is(
   '{} done | {} queued',
   'a drained payload is re-queued while the two still in flight are not — a kind-wide guard would have let the first payload inserted suppress the others every night');
 
+
+
+-- ── the retention overrun, which is the condition and not the cause ────────
+-- `jobs_backlog_summary` (20270710000004) catches a reap nobody claimed. It
+-- cannot catch a reap that WAS claimed, ran, and whose Go handler erased
+-- nothing: that job is `done` and the queue is drained while the archives stay
+-- readable. Only a count over `storage.objects` can tell, and § 1172 left
+-- nothing counting -- `cleanup_stale_export_blobs`'s own post-condition raise
+-- fires only when something calls it, and nothing calls it any more.
+--
+-- The storage fixture is reset first. Everything above left objects behind on
+-- purpose (the sweep's survivors, the blocked one, the legacy prefixes the
+-- enqueue derives from), and `export_retention_overrun` counts the whole
+-- bucket -- so the assertions below would be about that debris plus whatever
+-- this block files. The GUC is storage-api's `protect_delete()` escape, set
+-- transaction-locally exactly as the sweep sets it.
+do $reset$
+begin
+  perform set_config('storage.allow_delete_query', 'true', true);
+  delete from storage.objects
+   where (bucket_id = 'runs' and name like '%/exports/%') or bucket_id = 'exports';
+end
+$reset$;
+
+insert into storage.objects (bucket_id, name, created_at) values
+  ('exports', 'e8000000-0000-0000-0000-0000000000a3/way-past.zip', now() - interval '30 days'),
+  ('runs',    'e8000000-0000-0000-0000-0000000000a3/exports/legacy-past.zip', now() - interval '12 days'),
+  ('exports', 'e8000000-0000-0000-0000-0000000000a3/inside-grace.zip', now() - interval '7 days 6 hours'),
+  ('exports', 'e8000000-0000-0000-0000-0000000000a3/fresh.zip', now() - interval '1 day'),
+  ('runs',    'e8000000-0000-0000-0000-0000000000a3/track.json.gz', now() - interval '30 days');
+
+-- (24) Both archive prefixes count, the object inside the grace day does not,
+-- and a track in the same bucket is not an export artifact. The predicate is
+-- the sweep's own, so the alert and the reaper cannot disagree about what they
+-- are talking about.
+select results_eq(
+  $$ select (export_retention_overrun() ->> 'overrun_count')::int,
+            (export_retention_overrun() -> 'by_bucket') $$,
+  $$ values (2, '{"runs": 1, "exports": 1}'::jsonb) $$,
+  'the overrun counts stale archives in both the exports bucket and the legacy prefix, and nothing else');
+
+-- (25) The grace day is the whole reason this can be scheduled. Objects cross
+-- the 7-day line continuously and the reap runs once a night, so at any instant
+-- up to a day of archives are legitimately waiting. Without the grace this
+-- would fire every day forever, which is the same as not alerting.
+select is(
+  (select (export_retention_overrun('0 seconds'::interval) ->> 'overrun_count')::int),
+  3,
+  'and without the grace the object waiting for tonight''s reap would be reported too');
+
+-- (26) The oldest age is reported, so a scraper can alert on how long the
+-- overrun has lasted rather than on the fact of one.
+select cmp_ok(
+  (export_retention_overrun() ->> 'oldest_age_s')::int,
+  '>=',
+  30 * 86400,
+  'the age of the oldest survivor is reported alongside the count');
+
+-- (27) And a clean bucket reports zero rather than null, so a scraper routing
+-- on `overrun_count > 0` is not comparing against null on every healthy day.
+do $clean$
+begin
+  perform set_config('storage.allow_delete_query', 'true', true);
+  delete from storage.objects
+   where (bucket_id = 'runs' and name like '%/exports/%') or bucket_id = 'exports';
+end
+$clean$;
+
+select results_eq(
+  $$ select (export_retention_overrun() ->> 'overrun_count')::int,
+            (export_retention_overrun() ->> 'oldest_age_s')::int,
+            (export_retention_overrun() -> 'by_bucket') $$,
+  $$ values (0, 0, '{}'::jsonb) $$,
+  'a bucket inside its retention window reports zero and an empty breakdown, never null');
 
 select * from finish();
 
