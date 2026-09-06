@@ -36,6 +36,7 @@ import {
 	sqlColumnBound,
 	parseAwarderLadders,
 	parseBadgeCatalogue,
+	parseKotlinIntRange,
 	parseNamedInt,
 	parseNearbyCase,
 	parseNumberList,
@@ -257,6 +258,21 @@ test('a named integer is read from its declaration in Dart and in Kotlin', () =>
 	assert.deepEqual(parseNamedInt('  static const kMaxRoutesPerPush = 30;', 'kMaxRoutesPerPush'), ['30']);
 	assert.deepEqual(parseNamedInt('        const val MAX_ROUTES = 30', 'MAX_ROUTES'), ['30']);
 	assert.deepEqual(parseNamedInt('const val OTHER = 30', 'MAX_ROUTES'), []);
+});
+
+// A Kotlin range is ONE declaration where the other rails carry two constants.
+// parseNamedInt stops at the first integer, so reading a range with it would
+// silently compare the watch's floor against the other rails' ceiling and
+// report agreement between two different numbers.
+test('both ends of a Kotlin int range are read', () => {
+	assert.deepEqual(parseKotlinIntRange('internal val MAX_HR_BPM_RANGE = 80..240', 'MAX_HR_BPM_RANGE'), [
+		'80',
+		'240',
+	]);
+	assert.deepEqual(parseKotlinIntRange('val R = 80 .. 240', 'R'), ['80', '240']);
+	assert.deepEqual(parseKotlinIntRange('val OTHER = 80..240', 'R'), []);
+	// A plain scalar is not a range, and must not read as one end of one.
+	assert.deepEqual(parseKotlinIntRange('val R = 240', 'R'), []);
 });
 
 // A bucket's allowlist is created by an insert and narrowed by a later update,
