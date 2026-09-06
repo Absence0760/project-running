@@ -305,12 +305,17 @@ jobs:
       # lifts each build step's own `find` out of security.yml and RUNS it,
       # comparing the answer with an independent walk — so a step that goes back
       # to a hardcoded path fails, and so does one whose walk quietly stopped
-      # matching. A lint on a workflow file, hence here.
+      # matching. The interpreted legs have no build step to read, which is not
+      # the same as having no scope: their `init` config takes `paths` /
+      # `paths-ignore` and a `query-filters` block, and `queries:` selects the
+      # suite, so each declared narrowing is read here too and must carry a
+      # reason and still name something real (§ 1392). A lint on a workflow
+      # file, hence here.
       - name: CodeQL builds every tree it claims to scan
         run: |
           if ! node scripts/check_codeql_coverage.mjs; then
-            echo "::error::A compiled-language CodeQL leg does not build every tree the repo holds, so it reports clean over source it never read — a Go module or Gradle project the build step's own walk misses, an exclusion that has outlived its directory, or an exclusion list that has grown to cover everything. Nothing here is about workflow syntax, the toolchain pins or the CI diagnoses; those are other checks in this job."
-            echo "The failing line above names the language, the job and the tree. decisions § 1352 is why the build steps enumerate from the filesystem rather than naming paths."
+            echo "::error::A CodeQL leg does not read everything it reports clean over. On a compiled leg that is a Go module or Gradle project the build step's own walk misses, an exclusion that has outlived its directory, or an exclusion list that has grown to cover everything. On an interpreted leg it is a narrowing nobody justified — a paths/paths-ignore entry, a query-filters exclusion, a query suite below the broadest, or a config-file this guard cannot read. Nothing here is about workflow syntax, the toolchain pins or the CI diagnoses; those are other checks in this job."
+            echo "The failing line above names the language, the job and the tree or the entry. decisions § 1352 is why the build steps enumerate from the filesystem rather than naming paths; § 1392 is why every declared narrowing costs a reason."
             exit 1
           fi
           if ! node --test scripts/check_codeql_coverage.test.mjs; then
