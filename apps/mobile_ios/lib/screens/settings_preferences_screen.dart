@@ -7,6 +7,7 @@ import 'package:ui_kit/ui_kit.dart' show SectionHeader;
 
 import '../adaptive_width.dart';
 import '../goals.dart';
+import '../hr_zones.dart' show kMaxHrBpmMax, kMaxHrBpmMin;
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
@@ -1047,8 +1048,11 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       title: AppLocalizations.of(context).prefsMaxHr,
       current: _bagValue<num>(SettingsKeys.maxHrBpm)?.round(),
       suffix: 'bpm',
-      minValue: 80,
-      maxValue: 240,
+      // The bound the zone readers apply, not a second copy of it: three
+      // separate spellings of this range are what let the Wear OS rail use a
+      // value the other two ignored (decisions § 1245, § 1407).
+      minValue: kMaxHrBpmMin,
+      maxValue: kMaxHrBpmMax,
     );
     if (picked == null) return;
     await _putUniversal(SettingsKeys.maxHrBpm, picked == -1 ? null : picked);
