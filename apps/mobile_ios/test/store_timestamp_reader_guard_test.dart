@@ -23,6 +23,12 @@
 // both go through it and differ only in the `.toUtc()` — which gear's `date`
 // columns must not have.
 //
+// Since § 1377 that reader lives in `core_models`, not in this family, because
+// the same rollover reaches the stores' NEIGHBOURS — `local_run_store`,
+// `social_service`, `race_controller` — which are not stores and could never
+// be derived from `extends OfflineSyncStore<`. So the family carries zero raw
+// parses now, and the owner-file claim below reads the package file.
+//
 // The family is DERIVED from `extends OfflineSyncStore<`, not listed, so an
 // eighth store is covered the day it lands rather than the day someone
 // remembers to register it.
@@ -38,6 +44,9 @@ const _root = 'lib';
 const _marker = 'zone-verbatim:';
 
 const _shared = 'lib/offline_sync_store.dart';
+
+/// Where the one raw parse in the tree's stored-date-time path lives.
+const _owner = '../../packages/core_models/lib/src/iso_parse.dart';
 
 final _parseCall = RegExp(r'DateTime\.(try)?[Pp]arse\(');
 
@@ -82,10 +91,6 @@ void main() {
       final codeLines = code.split('\n');
       for (var i = 0; i < codeLines.length; i++) {
         if (!_parseCall.hasMatch(codeLines[i])) continue;
-        if (file.path == _shared &&
-            _enclosingReader(codeLines, i) == 'parseIsoStrict') {
-          continue;
-        }
         final marked = rawLines[i].contains(_marker) ||
             (i > 0 && rawLines[i - 1].contains(_marker));
         if (marked) continue;
@@ -101,8 +106,17 @@ void main() {
 
   test('the shared readers exist and the family actually uses them', () {
     final shared = File(_shared).readAsStringSync();
-    expect(shared.contains('DateTime? parseServerTimestamp(dynamic v) {'), isTrue);
-    expect(shared.contains('DateTime? parseCalendarDate(dynamic v) {'), isTrue);
+    expect(
+        shared.contains(
+            'DateTime? parseServerTimestamp(dynamic v) => '
+            'parseIsoStrictValue(v)?.toUtc();'),
+        isTrue,
+        reason: 'the .toUtc() IS what separates the two readers');
+    expect(
+        shared.contains(
+            'DateTime? parseCalendarDate(dynamic v) => parseIsoStrictValue(v);'),
+        isTrue,
+        reason: 'a `date` column must NOT be normalised to UTC — § 1344');
     expect(shared.contains('DateTime storedClockOrEpoch(dynamic v) =>'), isTrue);
 
     var timestampSites = 0;
@@ -123,20 +137,23 @@ void main() {
     expect(clockSites, greaterThanOrEqualTo(8));
   });
 
-  test('the raw parse exists exactly once in the family, inside its owner', () {
-    // The claim `parseIsoStrict` is built to make: every reader in the family
-    // is range-checked because there is nowhere else the text can be parsed.
-    // A second call anywhere in the shared file — a "quick" unchecked read
-    // beside the checked one — is what this refuses, and it is anchored on the
-    // COUNT so removing the check cannot remove the expectation with it.
-    final code = blankNonCode(File(_shared).readAsStringSync());
+  test('the raw parse exists exactly once in the tree, inside its owner', () {
+    // The claim `parseIsoStrict` is built to make: every reader that goes
+    // through it is range-checked because there is nowhere else the text can
+    // be parsed. A second call anywhere in the owner file — a "quick"
+    // unchecked read beside the checked one — is what this refuses, and it is
+    // anchored on the COUNT so removing the check cannot remove the
+    // expectation with it.
+    expect(File(_owner).existsSync(), isTrue,
+        reason: '$_owner has moved; this guard would check nothing');
+    final code = blankNonCode(File(_owner).readAsStringSync());
     final lines = code.split('\n');
     final sites = <int>[
       for (var i = 0; i < lines.length; i++)
         if (_parseCall.hasMatch(lines[i])) i,
     ];
     expect(sites, hasLength(1),
-        reason: 'raw parse sites in $_shared: '
+        reason: 'raw parse sites in $_owner: '
             '${sites.map((i) => i + 1).toList()}');
     expect(_enclosingReader(lines, sites.single), 'parseIsoStrict');
   });
