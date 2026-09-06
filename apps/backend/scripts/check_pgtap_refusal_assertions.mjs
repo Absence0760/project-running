@@ -233,6 +233,74 @@ export function literalOf(arg) {
   return null;
 }
 
+/**
+ * The text of a description argument, folding SQL's implicit concatenation of
+ * adjacent string literals — `'one ' 'two'` is one literal to the parser, and
+ * several of the suite's longer descriptions are written that way, which
+ * `literalOf` alone reads as no literal at all. Returns null when the argument
+ * is not a run of string literals.
+ * @param {string} arg
+ * @returns {string | null}
+ */
+export function descriptionOf(arg) {
+  const direct = literalOf(arg);
+  if (direct !== null) return direct;
+  const a = arg.trim();
+  /** @type {string[]} */
+  const parts = [];
+  let i = 0;
+  while (i < a.length) {
+    if (/\s/.test(a[i])) { i += 1; continue; }
+    if (a[i] !== "'") return null;
+    const end = skipToken(a, i);
+    if (end === null) return null;
+    const piece = literalOf(a.slice(i, end));
+    if (piece === null) return null;
+    parts.push(piece);
+    i = end;
+  }
+  return parts.length < 2 ? null : parts.join('');
+}
+
+// The pgtap assertions whose LAST argument is the description. Used to prove a
+// registered read-back names a real assertion in the same file, so deleting the
+// read-back fails the guard rather than quietly leaving the registry's reason
+// untrue.
+const PGTAP_ASSERTIONS = [
+  'ok',
+  'is',
+  'isnt',
+  'lives_ok',
+  'throws_ok',
+  'results_eq',
+  'results_ne',
+  'set_eq',
+  'bag_eq',
+  'is_empty',
+  'isnt_empty',
+  'matches',
+  'row_eq',
+];
+
+/**
+ * Every assertion description in [text].
+ * @param {string} text
+ * @returns {Set<string>}
+ */
+export function assertionDescriptions(text) {
+  /** @type {Set<string>} */
+  const out = new Set();
+  for (const name of PGTAP_ASSERTIONS) {
+    for (const call of findCalls(text, name)) {
+      const last = call.argv[call.argv.length - 1];
+      if (last === undefined) continue;
+      const desc = descriptionOf(last);
+      if (desc !== null) out.add(desc);
+    }
+  }
+  return out;
+}
+
 // pgTAP reads a 5-character second argument as a SQLSTATE and anything else as
 // an expected message; either is a pin. A `null` in both slots pins nothing, so
 // the assertion passes on ANY error, including one raised by a typo rather
@@ -963,41 +1031,66 @@ export function functionBodies(text) {
 }
 
 /**
- * The columns a trigger function assigns at the TOP LEVEL of its body — outside
- * every `if` and `case`, so the assignment cannot be skipped.
+ * The columns a trigger function assigns, split by whether the assignment sits
+ * at the TOP LEVEL of the body — outside every `if` and `case`, so it cannot be
+ * skipped — or inside a branch, where whether the supplied value survives
+ * depends on the fixture.
  * @param {string} body
- * @returns {string[]}
+ * @returns {{ unconditional: string[], conditional: string[] }}
  */
-export function unconditionalAssignments(body) {
+export function assignedColumns(body) {
   // One ordered pass rather than a per-line count: `end if` has to be read
   // before the bare `if` inside it, and a whole `if ... end if` written on one
   // line has to close before the next assignment is judged. `elsif` carries no
   // word boundary before its `if`, so it never opens a second block.
   const clean = body.replace(/--[^\n]*/g, '').toLowerCase();
   /** @type {Set<string>} */
-  const out = new Set();
+  const top = new Set();
+  /** @type {Set<string>} */
+  const branch = new Set();
   let depth = 0;
   const tokens = /\bend\s+if\b|\bend\s+case\b|\bcase\b|\bif\b|\bnew\.([a-z0-9_]+)\s*:=/g;
   for (const m of clean.matchAll(tokens)) {
     if (m[1] !== undefined) {
-      if (depth === 0) out.add(m[1]);
+      (depth === 0 ? top : branch).add(m[1]);
       continue;
     }
     if (/^end/.test(m[0])) depth = Math.max(0, depth - 1);
     else depth += 1;
   }
-  return [...out];
+  // A column assigned BOTH ways is unconditional: the top-level assignment
+  // always fires, so the branch adds nothing to what the supplied value is
+  // worth.
+  return {
+    unconditional: [...top],
+    conditional: [...branch].filter((c) => !top.has(c)),
+  };
 }
 
 /**
- * Every `<table>.<column>` a live BEFORE INSERT/UPDATE trigger stamps
- * unconditionally, mapped to the trigger that stamps it. Built by replaying the
- * migrations in version order, so a `drop trigger` retires its entry and a
- * `create or replace function` re-reads the body.
+ * The columns a trigger function assigns at the TOP LEVEL of its body — outside
+ * every `if` and `case`, so the assignment cannot be skipped.
+ * @param {string} body
+ * @returns {string[]}
+ */
+export function unconditionalAssignments(body) {
+  return assignedColumns(body).unconditional;
+}
+
+/**
+ * Every `<table>.<column>` a live BEFORE INSERT/UPDATE trigger stamps, mapped
+ * to the trigger that stamps it. Built by replaying the migrations in version
+ * order, so a `drop trigger` retires its entry and a `create or replace
+ * function` re-reads the body.
+ *
+ * [mode] picks the population: `unconditional` (the assignment always fires, so
+ * the supplied value is always discarded) or `conditional` (it fires on a
+ * branch, so whether the supplied value survives is a property of the fixture).
  * @param {{ name: string, text: string }[]} migrations
+ * @param {'unconditional' | 'conditional'} [mode]
  * @returns {Map<string, string>}
  */
-export function stampedColumns(migrations) {
+export function stampedColumns(migrations, mode = 'unconditional') {
   /** @type {Map<string, string>} */
   const bodies = new Map();
   /** @type {Map<string, { table: string, fn: string }>} */
@@ -1024,9 +1117,27 @@ export function stampedColumns(migrations) {
   for (const [key, { table, fn }] of triggers) {
     const body = bodies.get(fn);
     if (body === undefined) continue;
-    for (const col of unconditionalAssignments(body)) {
+    for (const col of assignedColumns(body)[mode]) {
       out.set(`${table}.${col}`, key.slice(table.length + 1));
     }
+  }
+  return out;
+}
+
+/**
+ * The conditionally stamped `<table>.<column>` set, with every pair some live
+ * trigger also stamps UNCONDITIONALLY removed — that assignment always fires,
+ * so the pair belongs to the stronger population rather than to this one.
+ * @param {{ name: string, text: string }[]} migrations
+ * @returns {Map<string, string>}
+ */
+export function conditionallyStampedColumns(migrations) {
+  const always = stampedColumns(migrations, 'unconditional');
+  /** @type {Map<string, string>} */
+  const out = new Map();
+  for (const [key, trigger] of stampedColumns(migrations, 'conditional')) {
+    if (always.has(key)) continue;
+    out.set(key, trigger);
   }
   return out;
 }
@@ -1098,6 +1209,162 @@ export const STAMPED_VALUE_ASSERTIONS = [
   },
 ];
 
+// ── ...and the same positives a CONDITIONALLY stamping trigger may have emptied
+//
+// decisions 1324 drew the line at UNCONDITIONAL assignments and said why: an
+// assignment inside an `if` may legitimately be a branch the fixture is
+// asserting does NOT fire, so a flat ban would be wrong. It measured the
+// remainder -- 13 `lives_ok` calls supplying a conditionally stamped column --
+// and left it unread, which is the state decisions 510 warns about: a
+// population nobody looks at.
+//
+// So this is the same scan over that population, with a REGISTRY instead of a
+// ban. Each of the 13 is accounted for one of two ways, and the difference is
+// what the entry is worth:
+//
+//   * `readBack` -- the assertion is followed by one that reads the stored
+//     value, so the pair together says accepted AND not rewritten. The named
+//     description must exist in the same file, so deleting the read-back fails
+//     the guard rather than quietly leaving the reason untrue.
+//
+//   * `reason` alone -- the claim survives the rewrite because of the TRIGGER'S
+//     OWN control flow or the assertion's subject, not because of a value in
+//     the fixture. That distinction is the whole discipline here: "the event
+//     has no capacity on this fixture" is exactly the kind of reason a later
+//     edit falsifies in silence, and every such site was repaired with a
+//     read-back instead of excused.
+//
+// `columns` is required on every entry and matched exactly, so a reason cannot
+// outlive the set of columns it was written about: a clipper that gains a
+// column, or a trigger re-pointed at another one, makes the entry stale.
+
+/**
+ * @type {{ file: string, description: string, columns: string[], readBack?: string, reason: string }[]}
+ */
+export const CONDITIONALLY_STAMPED_ASSERTIONS = [
+  {
+    file: 'notify_event_rsvp_organisers_test.sql',
+    description: 'a member can RSVP going to the event',
+    columns: ['event_attendees.status'],
+    readBack: 'the event creator is notified of the RSVP',
+    reason:
+      "`notify_event_rsvp` returns early on any status other than 'going', and it is an AFTER " +
+      'trigger, so it sees whatever `enforce_event_capacity` left. The three notification counts ' +
+      'below would therefore all be 0 had the row been waitlisted -- the fan-out IS the read-back.',
+  },
+  {
+    file: 'paid_events_test.sql',
+    description: 'going on a priced event with a matching paid order succeeds',
+    columns: ['event_attendees.status'],
+    readBack: 'the paid seat is going, not silently waitlisted',
+    reason:
+      'The money path. A `lives_ok` cannot tell a seated attendee from one the capacity trigger ' +
+      'silently moved to the waitlist, so the stored status is read back (decisions 1372).',
+  },
+  {
+    file: 'paid_events_test.sql',
+    description: 'going on a free event needs no order',
+    columns: ['event_attendees.status'],
+    reason:
+      'The subject is the paid-order gate, and that gate refuses a `waitlisted` row on a priced ' +
+      "event exactly as it refuses a `going` one (pinned by refund_failed_ledger_test's \"a " +
+      'refund_failed order cannot hold a waitlisted place either\"). So on a FREE event the claim ' +
+      'holds whichever of the two statuses the capacity trigger leaves behind.',
+  },
+  {
+    file: 'paid_events_test.sql',
+    description: 'a partially refunded order still backs a re-asserted going seat',
+    columns: ['event_attendees.status'],
+    readBack: 'the re-asserted seat is still going after the partial refund',
+    reason: 'The same money-path claim as above, re-asserted through an UPDATE.',
+  },
+  {
+    file: 'paid_events_test.sql',
+    description: 'a client can still RSVP to a free event instance',
+    columns: ['event_attendees.status'],
+    reason:
+      'The subject is the column-scoped INSERT grant: this write NOT raising 42501 where the two ' +
+      '`throws_ok` above it do. A BEFORE trigger rewriting `status` can neither cause nor prevent ' +
+      'a privilege error, so the claim is untouched by the rewrite.',
+  },
+  {
+    file: 'payment_refund_ledger_test.sql',
+    description: 'a terminal status can still be replaced by another terminal one',
+    columns: ['payment_refunds.status'],
+    readBack: 'the terminal replacement actually landed -- the latch did not silently hold',
+    reason:
+      'The positive control for the latch, and the one assertion in the file that MOST needed to ' +
+      'be able to fail: the latch rewrites `new.status` rather than raising, so a latch widened to ' +
+      'hold every status left this update succeeding with the row unmoved.',
+  },
+  {
+    file: 'payment_refund_ledger_test.sql',
+    description:
+      'a failed PARTIAL refund on an event order is recordable — the case event_orders ' +
+      'could not represent at all',
+    columns: ['payment_refunds.failure_reason', 'payment_refunds.status'],
+    readBack: "both ledgers' failed refunds answer one worklist query",
+    reason:
+      "This is an INSERT, and both of the lock trigger's assignments sit inside `if tg_op = " +
+      "'UPDATE'` -- the scan's model is (table, column) and carries no operation, so it cannot see " +
+      'that. The row is read back by the worklist assertion below in any case.',
+  },
+  {
+    file: 'payment_refund_ledger_test.sql',
+    description: "the service role (the stripe-events webhook) can move a refund's status",
+    columns: ['payment_refunds.status'],
+    readBack: "the service role's write moved the status, it was not latched back",
+    reason:
+      'The write surviving is the role claim; the status MOVING is the latch\'s, and the ' +
+      'description asserts both. Only the first is what `lives_ok` measures.',
+  },
+  {
+    file: 'refund_failed_ledger_test.sql',
+    description: 'a partially_refunded order still seats its attendee (20270522_001 stands)',
+    columns: ['event_attendees.status'],
+    readBack: 'the partially_refunded buyer holds a going seat, not a waitlist place',
+    reason:
+      'SEATS it -- a claim about the stored status. The row count below cannot separate the two: ' +
+      'a waitlisted attendee is a row, and is not a seat.',
+  },
+  {
+    file: 'status_policy_check_constraints_test.sql',
+    description: "event_attendees accepts status = 'waitlisted'",
+    columns: ['event_attendees.status'],
+    reason:
+      "`enforce_event_capacity` returns on `new.status <> 'going'` before it so much as reads " +
+      "`events.capacity`, so a supplied 'waitlisted' can never be rewritten -- and this assertion's " +
+      'subject IS that value reaching the CHECK.',
+  },
+  {
+    file: 'unbounded_numeric_column_bounds_test.sql',
+    description: 'an ordinary live ping still stores',
+    columns: ['live_run_pings.ele', 'live_run_pings.lat', 'live_run_pings.lng'],
+    readBack: 'the stored live ping is the supplied one, not a privacy-coarsened substitute',
+    reason:
+      'The clipper runs BEFORE the CHECKs this suite exists to exercise, so the positive control ' +
+      'would have survived a bound that had stopped admitting the client\'s own value. The ' +
+      'read-back covers `ele` and `coarse` as well as the coordinates, because ' +
+      '`privacy_coarsen_coord` leaves 51.5 / -0.12 unchanged (decisions 1372).',
+  },
+  {
+    file: 'unbounded_numeric_column_bounds_test.sql',
+    description: 'a zero odometer and a zero bpm are accepted — the first ping, sensor off-wrist',
+    columns: ['live_run_pings.lat', 'live_run_pings.lng'],
+    reason:
+      'The claim is about `distance_m` and `bpm`, and the clipper assigns neither -- it rewrites ' +
+      'lat / lng / ele / coarse only. The coordinates it does rewrite are the incidental 0, 0 the ' +
+      'row needs to exist at all.',
+  },
+  {
+    file: 'unbounded_numeric_column_bounds_test.sql',
+    description: 'an ordinary race ping still stores',
+    columns: ['race_pings.coarse', 'race_pings.lat', 'race_pings.lng'],
+    readBack: 'the stored race ping is the supplied one, not a privacy-coarsened substitute',
+    reason: 'The race-board half of the live-ping entry above, with the same repair.',
+  },
+];
+
 /**
  * @param {string[]} failures
  * @param {string} summary
@@ -1116,13 +1383,22 @@ function main() {
   /** @type {string[]} */
   const failures = [];
 
-  const stamped = stampedColumns(readMigrations());
+  const migrations = readMigrations();
+  const stamped = stampedColumns(migrations);
+  const conditional = conditionallyStampedColumns(migrations);
   const registered = new Set(STAMPED_VALUE_ASSERTIONS.map((e) => `${e.file}\u0000${e.description}`));
+  const conditionallyRegistered = new Map(
+    CONDITIONALLY_STAMPED_ASSERTIONS.map((e) => [`${e.file}\u0000${e.description}`, e]),
+  );
   /** @type {Set<string>} */
   const matched = new Set();
+  /** @type {Set<string>} */
+  const conditionallyMatched = new Set();
 
   for (const file of files) {
     const text = readFileSync(join(TESTS_DIR, file), 'utf8');
+    /** @type {Set<string> | null} */
+    let descriptions = null;
     for (const call of findCalls(text, 'throws_ok')) {
       if (throwsPinsItsError(call.argv)) continue;
       failures.push(
@@ -1132,20 +1408,53 @@ function main() {
     for (const call of findCalls(text, 'lives_ok')) {
       const sql = literalOf(call.argv[0]);
       if (sql === null) continue;
-      const writes = stampedValueWrites(sql, stamped);
-      if (writes.length === 0) continue;
-      const description = call.argv[1] === undefined ? '' : (literalOf(call.argv[1]) ?? '');
+      const description = call.argv[1] === undefined ? '' : (descriptionOf(call.argv[1]) ?? '');
       const key = `${file}\u0000${description}`;
-      if (registered.has(key)) {
-        matched.add(key);
+
+      const writes = stampedValueWrites(sql, stamped);
+      if (writes.length > 0) {
+        if (registered.has(key)) {
+          matched.add(key);
+        } else {
+          failures.push(
+            `${file}:${call.line}  "${description}" supplies ${writes
+              .map((w) => `${w.table}.${w.column}`)
+              .join(', ')}, which ${writes
+              .map((w) => w.trigger)
+              .join(' / ')} assigns unconditionally BEFORE the row is checked — so the value this assertion supplies never reaches the constraint and the assertion survives a server that stopped deriving it at all (decisions 1324). Stop supplying the column, read the stored value back through \`returning\`, or register the assertion in STAMPED_VALUE_ASSERTIONS with the reason its claim is unaffected.`,
+          );
+        }
+      }
+
+      const branchWrites = stampedValueWrites(sql, conditional);
+      if (branchWrites.length === 0) continue;
+      const columns = [...new Set(branchWrites.map((w) => `${w.table}.${w.column}`))].sort();
+      const entry = conditionallyRegistered.get(key);
+      if (entry === undefined) {
+        failures.push(
+          `${file}:${call.line}  "${description}" supplies ${columns.join(', ')}, which ${[
+            ...new Set(branchWrites.map((w) => w.trigger)),
+          ].join(
+            ' / ',
+          )} assigns on a BRANCH before the row is checked — so whether the value this assertion supplies is the value that lands is a property of the fixture, and nothing here says which (decisions 1372). Read the stored value back and register the assertion in CONDITIONALLY_STAMPED_ASSERTIONS naming that read-back, or register it with the reason its claim survives the rewrite.`,
+        );
         continue;
       }
+      conditionallyMatched.add(key);
+      if (entry.columns.join('\u0000') !== columns.join('\u0000')) {
+        failures.push(
+          `CONDITIONALLY_STAMPED_ASSERTIONS entry ${file} / "${description}" names ${entry.columns.join(
+            ', ',
+          )} but the assertion now supplies ${columns.join(
+            ', ',
+          )}. The reason was written about the old set — re-read it against the new one.`,
+        );
+      }
+      if (entry.readBack === undefined) continue;
+      descriptions ??= assertionDescriptions(text);
+      if (descriptions.has(entry.readBack)) continue;
       failures.push(
-        `${file}:${call.line}  "${description}" supplies ${writes
-          .map((w) => `${w.table}.${w.column}`)
-          .join(', ')}, which ${writes
-          .map((w) => w.trigger)
-          .join(' / ')} assigns unconditionally BEFORE the row is checked — so the value this assertion supplies never reaches the constraint and the assertion survives a server that stopped deriving it at all (decisions 1324). Stop supplying the column, read the stored value back through \`returning\`, or register the assertion in STAMPED_VALUE_ASSERTIONS with the reason its claim is unaffected.`,
+        `CONDITIONALLY_STAMPED_ASSERTIONS entry ${file} / "${description}" names the read-back "${entry.readBack}", and no assertion in that file carries that description any more. The read-back is what makes the entry's reason true, so restore it or replace the entry's justification.`,
       );
     }
   }
@@ -1158,11 +1467,21 @@ function main() {
     );
   }
 
+  for (const entry of CONDITIONALLY_STAMPED_ASSERTIONS) {
+    const key = `${entry.file}\u0000${entry.description}`;
+    if (conditionallyMatched.has(key)) continue;
+    failures.push(
+      `CONDITIONALLY_STAMPED_ASSERTIONS entry ${entry.file} / "${entry.description}" is stale: no lives_ok there supplies a conditionally stamped column any more. It was rewritten, renamed or deleted, or its trigger is gone — remove the entry so the next one cannot hide behind it.`,
+    );
+  }
+
   if (process.argv.includes('--static-only')) {
     report(
       failures,
-      `${files.length} test files scanned for unpinned negatives and for positives emptied by ` +
-        `one of the ${stamped.size} unconditionally stamped columns`,
+      `${files.length} test files scanned for unpinned negatives, for positives emptied by one of ` +
+        `the ${stamped.size} unconditionally stamped columns, and for the ` +
+        `${CONDITIONALLY_STAMPED_ASSERTIONS.length} positives supplying one of the ` +
+        `${conditional.size} conditionally stamped ones`,
     );
     return;
   }
