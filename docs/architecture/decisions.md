@@ -25561,3 +25561,164 @@ The test extension caught its own vacuity, which is the part worth recording. Si
 **And that same assertion is why the entry is not a suppression.** The guard's worry about a zero read from a definer relation is that it may be satisfied by a relation that returned nothing at all. In this file it cannot be: (1) and (2) are positives naming the rows the function *does* return in the same rolled-back transaction, so a `find_backlogged_jobs` that had gone silent fails there, two assertions before the first zero is read. That is a stronger footing than either existing entry stands on — both of those record an assertion as permanently unmeasurable and rely on the reason alone — and it is recorded in the entry rather than left to be rediscovered.
 
 **Verification.** `--validate-operators` green, and it re-derives the unreplaced set from the suite, so it confirms the declared list is now exactly the three relations the suite reads. The guard's own 29 unit tests pass, including the one asserting every entry still names a live assertion description and that no entry has a replacement as well. The full mutation run: 179 refusal assertions across 287 files, 5 survivors, all 5 expected — the same survivor set as before, so nothing joined it.
+
+## 1274. The share-workout unfurl counted one lift twice and its own comment claimed it could not, so the count is now the canonical counter rather than a fourth spelling of it
+
+`share_workout_meta.ts`'s `distinctExerciseCount` was
+`new Set(sets.map((s) => s.exercise_name.trim().toLowerCase())).size` under a
+comment reading "matched case- and whitespace-insensitively so \"Back Squat\"
+and \"back squat \" count once". It was neither, and the comment named the one
+pair `trim().toLowerCase()` happens to merge. Measured against
+`normaliseExerciseName`, the four pairs it does NOT merge are `Bench  Press` /
+`Bench Press` (an internal run), `Bench<U+00A0>Press` / `bench press` (the
+whitespace class the fold collapses and `trim` does not touch mid-string),
+`Bench\tPress` / `bench press`, and `İncline Press` / `incline press`
+(JS answers `i` + U+0307, the frozen table answers `i`). Each is one lift to
+`gym_workout_summaries` and to every keyed surface in the app.
+
+This is the [§ 1248](#1248-six-web-surfaces-keyed-the-exercise-grouping-on-the-runtimes-own-fold-and-the-two-that-were-lookups-lost-a-badge--the-fix-carries-the-key-rather-than-re-deriving-it) class, one tree over, and the reason it is worth an entry of
+its own is where the number goes: an `og:description` is handed to every
+unfurler that touches the link, so the wrong count is served to readers who
+never opened the page and is cached by them. The two callers — the share
+page's summary tile and the description builder — could not disagree with each
+other, which is what the old comment was really claiming; they disagreed with
+the rest of the product.
+
+The one cost is the fold table: `share_workout_meta.ts` is imported by
+`routes/share/workout/[id]/+page.svelte`, so the public unfurl target now
+reaches the generated `exercise_fold_table` (7,211 bytes gzipped, measured over
+the module with comments and whitespace stripped). It is already shipped to the
+gym routes, so at worst this route loads one more shared chunk, and
+`MAX_CODE_KB` sits 186 KB above the current 1934 — 3.8 % of the headroom for a
+count the rest of the product already agrees on.
+
+The fix is a delegation, not a repair. § 1248 had already given the count one
+home, `gym_prs`' own `distinctExerciseCount(Iterable<string>)`, which folds
+canonically and drops a blank name the way the PR map does; the share module's
+same-named export now maps its rows to names and calls it. It keeps its
+signature because `routes/share/workout/[id]/+page.svelte` imports it and that
+route is not this lane's to edit — so the module is an adapter over the
+canonical counter and holds no fold of its own. Both new assertions were
+mutation-tested against the old expression before the entry was written: the
+key test and the description test fail, the other eleven pass.
+
+## 1275. The coach was told a lifter did four exercises when they did three, and the fix deleted the tally rather than correcting its fold
+
+`summarizeRecentLifts` in `coach/context.ts` built a `Set` of
+`s.exercise_name?.trim().toLowerCase()` per workout and reported its size as
+`exercises` in the JSON context block the model reads. Same defect, same five
+spellings, and the filing was right that the stakes are lower — nothing keys
+off the number, and it never leaves the prompt. What it costs is not
+correctness downstream but the honesty of the description: a session of five
+bench sets logged under four spellings reads to the model as a circuit rather
+than as the session it was, and the advice is generated from that.
+
+Two things make the correction more than a substitution. First, the hand-rolled
+`Set` was the last reason the loop existed for anything but tonnage: the fold,
+the blank-name guard and the `.size` are all `distinctExerciseCount`'s, so the
+tally became one call and the loop shrank to the volume sum it also did. A
+second implementation of a counted set is what drifted in the first place.
+Second, `LiftSummary.exercises` documented itself as "distinct exercise names
+in the session", which is a truthful description of the wrong thing — a name
+is not an exercise, and the doc comment is now the claim the code makes.
+
+Verified by mutation: restoring the naive expression fails the canonical-key
+assertion and leaves the blank-name one green, which is correct — `''` and a
+lone U+00A0 are dropped by both, so that assertion is a non-regression pin
+rather than a fix pin, and saying so is worth more than deleting it.
+
+## 1276. The catalogue picker did not merely match fewer names — it reached a state where the exercise existed, could not be found, and could not be added
+
+The filing described `ExerciseCataloguePicker.svelte` as matching fewer names
+than the mobile picker, which is true and is not the defect. `hasExact` has
+folded canonically since the create-custom affordance was added, while
+`filtered` folded with `query.trim().toLowerCase()`, and the empty state is
+rendered on `filtered.length === 0 && !canCreate`. So a catalogue entry the
+naive filter cannot see but the canonical `hasExact` can find hides the results
+list AND suppresses the "add it" button that exists precisely for a search
+with no match. Simulated over the component's two derived expressions, three
+catalogue spellings reach it — `Bench<U+00A0>Press`, `Bench  Press` and
+`İncline Press`, each queried with the ordinary spelling — and all three
+render an empty list with no create affordance and no explanation. A
+user-created custom is free text typed into this same field, so the entry that
+traps the picker is one a user can make in it.
+
+Folding both sides through `normaliseExerciseName` closes the dead end
+structurally rather than by widening the filter: an entry whose key EQUALS the
+query's key necessarily contains it, so `hasExact` can no longer be true while
+the (uncategorised) result list is empty. It also brings the web half onto the
+instrument the three mobile pickers took in
+[§ 1249](#1249-two-more-mobile-fold-sites-the-audit-missed-and-every-mobile-exercise-autocomplete-now-folds-canonically), which is the point of the filing.
+
+The sort was deliberately NOT moved with it. § 1249 sent the picker's
+`localeCompare`-versus-fold divergence to § 1251's survivor list and § 1251
+did not carry it, so it has been unowned since; measured, it is real —
+`['Ab Wheel', 'Bench Press', 'Élévation latérale', 'Overhead Press', 'Row',
+'Überzug', 'źcisk', 'Zercher Squat']` under web's `localeCompare` becomes
+`[…, 'Zercher Squat', 'Élévation latérale', 'Überzug', 'źcisk']` under Dart's
+`compareTo` over folded keys, diverging at position 2 and filing every accented
+custom after `z`. But the divergence resolves TOWARD web: ordering a
+human-facing list is not keying it, `localeCompare` is the instrument for it,
+and a code-unit compare is simply worse. Dart's core library ships no collator,
+which is why the mobile picker sorts the way it does, so this is filed against
+the mobile tree rather than fixed by making the web list worse.
+
+## 1277. The web fold guard's exemption list is now empty on both platforms, and the two things it still cannot see are both the unfolded case
+
+With § 1274-1276 landed, `PENDING` in
+`apps/web/src/lib/gym/exercise_key_source_guard.test.ts` holds nothing — the
+state the Dart half has been in since [§ 1250](#1250-the-exercise-fold-guards-are-anchored-on-what-a-file-does-not-on-where-it-sits). The list stays rather than being
+deleted: it is the documented escape hatch plus the staleness test that stops
+an exemption outliving its site, and its predicate is still exercised by the
+`spared` fixtures, which prove `foldHits` returns nothing for a fold-free file.
+A regression was mutation-tested against the live component — restoring
+`query.trim().toLowerCase()` in the picker fails the scan by name and line.
+
+What the guard bans is the WRONG fold. It is blind to NO fold, and a scan of
+every web comparison of an `exercise_name` found four sites in that shape,
+all of them consecutive-run block grouping on the raw display spelling:
+`GymEditor.svelte:153` and `:173`, `routes/gym/[id]/+page.svelte:245`, and
+`routes/share/workout/[id]/+page.svelte:41`. Adjacency is correct there — a
+superset alternates A/B/A and must render as three blocks — but the adjacency
+test should be the canonical key, not the spelling, or two consecutive sets of
+one lift spelled differently render as two blocks beside a header stat that
+(since § 1274) says one exercise.
+
+`gym_routine.ts:163` is the same shape with a persisted consequence and is the
+one worth ranking first. `routineFromWorkout` groups on `last.exerciseName ===
+name` and then stamps each block `exerciseKey: normaliseExerciseName(name)`, so
+a workout whose consecutive sets carry two spellings saves a routine holding
+TWO `gym_routine_exercises` rows with the same `exercise_key` — there is no
+unique index on that column to refuse it (`20270709000010`'s own comment says
+so), and `computeRoutineAdherence` matches on `(exerciseKey, setIndex)`, so the
+two rows then compete for the same logged sets. The Dart twin
+(`gym_routine.dart:221`) carries the identical test, so it is a lockstep pair
+with one latent defect rather than a divergence. Filed, not fixed: `lib/gym/`
+and `routes/` are outside this lane, and the change owes a matched Dart edit.
+
+## 1278. The picker fix ships without a behavioural pin because the tree has no harness that could hold one, and saying so is better than a guard anchored to a spelling
+
+The two count fixes are pinned by unit tests that were mutation-tested against
+the code they replaced. The picker fix is not, and the reason is structural:
+`apps/web` runs its unit suite under `tsx --test`, which cannot compile a
+Svelte component, and a search of the tree found no `.svelte` component test of
+any kind — 107 components, zero. The logic is three lines of glue over
+`normaliseExerciseName`, whose behaviour `gym_prs.test.ts` already pins at
+every code point that matters.
+
+Three alternatives were considered and refused. Extracting the filter into a
+pure module to make it testable would put a source `.ts` into
+`lib/components/` (which holds 107 `.svelte` files and two test files, no
+source modules) to enable an assertion over `String.includes` — the preemptive
+abstraction the conventions name. Asserting in the source guard that the
+picker's two comparison sites spell `normaliseExerciseName` would be a guard
+anchored to a spelling, which passes broken code and fails correct code. And a
+Playwright spec is the instrument the tree actually has for a component
+behaviour, but this lane is barred from running Playwright, and an unexecuted
+spec is worth less than none.
+
+So what stands in its place is the guard: with the picker's `PENDING` entry
+deleted, the file may not reach for the runtime fold again, and the dead end of
+§ 1276 cannot return by that route. The behavioural pin — a Playwright case
+typing `bench press` against a catalogue holding `Bench<U+00A0>Press` and
+asserting the entry is listed — is filed for a lane that can run it.
