@@ -71,12 +71,12 @@ export const PUBLIC_ROUTE_LIST_COLUMNS = [
 
 export const ROUTE_LIST_COLS = ROUTE_LIST_COLUMNS.join(COLUMN_SEPARATOR) as Join<
 	typeof ROUTE_LIST_COLUMNS,
-	', '
+	typeof COLUMN_SEPARATOR
 >;
 
 export const PUBLIC_ROUTE_LIST_COLS = PUBLIC_ROUTE_LIST_COLUMNS.join(COLUMN_SEPARATOR) as Join<
 	typeof PUBLIC_ROUTE_LIST_COLUMNS,
-	', '
+	typeof COLUMN_SEPARATOR
 >;
 
 /// A row of the routes list — exactly the columns the query asks for, so
