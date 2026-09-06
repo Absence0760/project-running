@@ -78,6 +78,19 @@
 //       unsendable rather than merely unsent; nothing failed, the row just
 //       arrived short.
 //
+//  (10) The watch target's Info.plist is the only place its Info.plist keys
+//       live. `GENERATE_INFOPLIST_FILE = NO` means Xcode uses the committed
+//       file AS IS rather than merging the `INFOPLIST_KEY_*` build settings
+//       into it, so every such setting on that target is INERT while reading
+//       exactly like a declaration — which is how this app shipped with
+//       `INFOPLIST_KEY_CFBundleDisplayName = "Threkir"` set on both
+//       configurations and no `CFBundleDisplayName` in the plist at all,
+//       leaving the watch app named by its target (`WatchApp`) on the wrist.
+//       The same claim carries Apple's documented mutual exclusivity:
+//       `WKWatchOnly` says the app has no iOS companion and cannot coexist
+//       with `WKCompanionAppBundleIdentifier`, so a session resolving the
+//       companion question must remove one while adding the other.
+//
 // WHAT THIS GUARD DOES NOT PROVE. It parses text. It does not compile Swift,
 // does not run it, and cannot see anything a type-checker would: claim (1)
 // matches a catalog key on the SHAPE of its interpolation, not on the type of
@@ -488,6 +501,42 @@ export function phoneEnvelopeKeys(src) {
 	}
 	for (const m of src.matchAll(/\bmetadata\s*\[\s*"([^"\\\n]+)"\s*\]/g)) keys.add(m[1]);
 	return keys;
+}
+
+/** The watch target's Xcode project, claim (10)'s second rail. */
+export const PBXPROJ = join('WatchApp.xcodeproj', 'project.pbxproj');
+
+/** The watch app's committed Info.plist, read by claims (3) and (10). */
+export const WATCH_PLIST = join('WatchApp', 'Info.plist');
+
+/**
+ * Every `buildSettings { … }` block in a pbxproj, as raw text.
+ *
+ * Returns an empty array when none parse, which claim (10) treats as an error
+ * rather than as a clean tree.
+ * @param {string} src
+ * @returns {string[]}
+ */
+export function buildSettingsBlocks(src) {
+	/** @type {string[]} */
+	const out = [];
+	const re = /buildSettings\s*=\s*\{/g;
+	let m;
+	while ((m = re.exec(src)) !== null) {
+		const open = m.index + m[0].length - 1;
+		let depth = 0;
+		for (let i = open; i < src.length; i += 1) {
+			if (src[i] === '{') depth += 1;
+			else if (src[i] === '}') {
+				depth -= 1;
+				if (depth === 0) {
+					out.push(src.slice(open, i + 1));
+					break;
+				}
+			}
+		}
+	}
+	return out;
 }
 
 /** The DEBUG-only direct-to-Supabase writer, claim (9)'s other rail. */
@@ -1157,6 +1206,72 @@ export function check(watchRoot, ingestPath = null, routeBridgePath = null) {
 					`all ${sent.size} WCSession run fields are also written by the DEBUG direct path ` +
 						`(${Object.keys(DIRECT_ONLY_FIELDS).length} phone-supplied fields exempt)`,
 				);
+			}
+		}
+	}
+
+	// (10) Info.plist keys live in the Info.plist, and the companion
+	// declaration is internally consistent.
+	{
+		const blocks = buildSettingsBlocks(read(PBXPROJ));
+		if (blocks.length === 0) {
+			errors.push(
+				`Parsed no buildSettings blocks out of ${PBXPROJ} — claim (10) would pass vacuously.`,
+			);
+		} else {
+			let manual = 0;
+			for (const b of blocks) {
+				// The condition is read off the setting that CAUSES the inertness,
+				// so a target that switches to a generated plist correctly stops
+				// being subject to this and its INFOPLIST_KEY_* become live.
+				if (!/\bGENERATE_INFOPLIST_FILE\s*=\s*NO\s*;/.test(b)) continue;
+				manual += 1;
+				for (const m of b.matchAll(/\b(INFOPLIST_KEY_\w+)\s*=/g)) {
+					errors.push(
+						`${PBXPROJ} sets \`${m[1]}\` on a target whose GENERATE_INFOPLIST_FILE is NO. ` +
+							'Xcode merges INFOPLIST_KEY_* settings only into a plist it GENERATES, so on ' +
+							'this target the setting is inert while reading exactly like a declaration — ' +
+							'which is how the watch app came to ship with a display name set here, none ' +
+							`in ${WATCH_PLIST}, and the target's own name (\`WatchApp\`) on the wrist. ` +
+							`Put the key in ${WATCH_PLIST} and delete the setting.`,
+					);
+				}
+			}
+			if (manual === 0) {
+				errors.push(
+					`No target in ${PBXPROJ} sets GENERATE_INFOPLIST_FILE = NO — claim (10)'s first ` +
+						'half read nothing. Either the watch target now generates its plist (in which ' +
+						'case this check no longer applies and should be removed) or the setting moved.',
+				);
+			}
+
+			const plist = parseFlatPlist(read(WATCH_PLIST));
+			if (plist.size === 0) {
+				errors.push(`${WATCH_PLIST} parsed to zero keys — claim (10) would pass vacuously.`);
+			} else {
+				if (!plist.has('CFBundleDisplayName')) {
+					errors.push(
+						`${WATCH_PLIST} declares no \`CFBundleDisplayName\`, so the watch app is named ` +
+							"by `CFBundleName` — which is `$(PRODUCT_NAME)`, the Xcode TARGET name. A " +
+							'build setting cannot supply it here: see the first half of this claim.',
+					);
+				}
+				if (plist.get('WKWatchOnly') === true && plist.has('WKCompanionAppBundleIdentifier')) {
+					errors.push(
+						`${WATCH_PLIST} declares both \`WKWatchOnly\` and ` +
+							'`WKCompanionAppBundleIdentifier`. Apple documents these as mutually ' +
+							'exclusive: the first says the app has no iOS companion, the second names ' +
+							'one. Whichever is right, the other has to go — and this app syncs over ' +
+							'`WCSession` to a counterpart, which is a companion relationship ' +
+							'(decisions § 1256).',
+					);
+				}
+				if (errors.length === 0) {
+					ok.push(
+						`${WATCH_PLIST} owns its own keys (no inert INFOPLIST_KEY_* on the manual-plist ` +
+							'target) and its companion declaration is self-consistent',
+					);
+				}
 			}
 		}
 	}

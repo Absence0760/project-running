@@ -24004,3 +24004,57 @@ Read, not compiled: there is no Xcode here, the Swift change is
 `build-verified` only once the `Test watchOS app (Swift)` macOS job runs, and
 what a Mac must confirm is that `RunMetadata` encodes to the same JSON object
 the `[String: String]` literal did for its two shared keys.
+
+## 1256. `WKWatchOnly` is a true description of the Xcode project and a false description of the app, and the plist is not where that gets fixed
+
+§ 1207's round filed the `WKWatchOnly` declaration as unsettleable from Linux —
+"it may equally be correct-as-is". It is settleable, and the answer is both
+halves at once. Apple documents `WKWatchOnly` as "this app has no iOS
+companion" and as mutually exclusive with `WKCompanionAppBundleIdentifier`;
+`WCSession` is a counterpart API, and this app's whole Release sync path is
+`transferFile(_:metadata:)` into `com.threkir.app` with routes pushed back over
+the same session. Three things in this repo already say the app is a companion:
+`apps/mobile_ios/deployment.md` states "the iOS app and the Apple Watch app are
+one deployment … bundled inside the iOS app's `.ipa`" and lists
+`WKCompanionAppBundleIdentifier` = `com.threkir.app` as a REQUIRED key, and the
+watch's own bundle id `com.threkir.app.watchapp` is the companion naming rule
+exactly. So the declaration contradicts the app.
+
+**It does not contradict the project, and that is why flipping it would move
+the lie rather than remove it.** `apps/mobile_ios/ios/Runner.xcodeproj/project.pbxproj`
+contains ZERO occurrences of `WatchApp`, `watchos` or `Watch App` — measured —
+so the embedding `deployment.md` describes does not exist, and
+`apps/watch_ios/WatchApp.xcodeproj` is a standalone project no release pipeline
+builds. A watch app that declares a companion it is not bundled with is not a
+companion app; it is the same inconsistency written the other way round, and it
+would be asserted against the one job that compiles this tier — `test-watch-ios`
+installs the app on an UNPAIRED watch simulator, and whether LaunchServices
+refuses a companion-declaring bundle there is precisely what cannot be
+determined without a Mac. So `WKWatchOnly` stays, and what is owed is the build
+integration, which is also the missing piece behind the "end-to-end on paired
+physical devices" checkbox nobody has been able to tick.
+
+**What the audit found instead was a live defect one line away.** The watch
+target sets `GENERATE_INFOPLIST_FILE = NO` with `INFOPLIST_FILE =
+WatchApp/Info.plist`, and Xcode merges `INFOPLIST_KEY_*` settings only into a
+plist it GENERATES — so `INFOPLIST_KEY_CFBundleDisplayName = "Threkir"`, set on
+both configurations, was inert, the committed plist had no `CFBundleDisplayName`
+at all, and the app was therefore named by `CFBundleName` = `$(PRODUCT_NAME)` =
+`$(TARGET_NAME)`: **`WatchApp`**, on the wrist, in the app grid and in the
+iPhone Watch app's list. The name is now in the plist and the two inert settings
+(the display name, and an empty `INFOPLIST_KEY_WKCompanionAppBundleIdentifier`
+that read as a configured companion relationship) are deleted. Claim (10) of
+`check_watch_ios_source.mjs` keeps both: no `INFOPLIST_KEY_*` on a target whose
+`GENERATE_INFOPLIST_FILE` is NO, a `CFBundleDisplayName` in the file, and
+`WKWatchOnly` never beside a companion id — which is the mistake a Mac session
+resolving the companion question is most likely to make. Five mutations pinned,
+including one that flips every target to a generated plist and must REPORT that
+the check read nothing rather than pass.
+
+Rung: read plus Apple's documented semantics, not a build. What a Mac must
+confirm, in order: (1) `plutil -p …/WatchApp.app/Info.plist` after a build shows
+`CFBundleDisplayName = Threkir`; (2) the watch app is added as a target of
+`Runner.xcodeproj` / the workspace and embedded in the `.ipa`; (3) only then,
+`WKWatchOnly` is removed and `WKCompanionAppBundleIdentifier` set to
+`com.threkir.app`; (4) `test-watch-ios` still installs on an unpaired watch
+simulator; (5) a paired physical device completes one run sync end to end.

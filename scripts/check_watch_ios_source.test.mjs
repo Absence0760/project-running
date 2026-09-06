@@ -1,6 +1,6 @@
 // Unit tests for scripts/check_watch_ios_source.mjs.
 //
-// That guard makes nine claims about a tier this repo compiles in exactly one
+// That guard makes ten claims about a tier this repo compiles in exactly one
 // job, on a runner nobody here has. Every failure it exists to catch is silent
 // on the platform: a localization key with no catalog entry renders English and
 // throws nothing, an entitlement nothing claims builds and links fine and is
@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
 	DIRECT_ONLY_FIELDS,
+	buildSettingsBlocks,
 	INGEST,
 	ROUTE_BRIDGE,
 	UNGUARDED_DESTRUCTIVE,
@@ -61,11 +62,12 @@ const STAGED_INGEST = 'WatchIngestBridge.swift';
 const STAGED_ROUTE_BRIDGE = 'apple_watch_route_bridge.dart';
 const ARMED = join('WatchApp', 'ArmedRoute.swift');
 const DIRECT = join('WatchApp', 'SupabaseService.swift');
+const PBX = join('WatchApp.xcodeproj', 'project.pbxproj');
 
 /** Copy only the files the guard reads into a throwaway tree. */
 function stage() {
 	const dir = mkdtempSync(join(tmpdir(), 'watch-ios-source-'));
-	const rels = [CATALOG, PLIST, ENTS, README];
+	const rels = [CATALOG, PLIST, ENTS, README, PBX];
 	for (const sub of ['WatchApp', 'Complications']) {
 		for (const name of readdirSync(join(WATCH_IOS, sub))) {
 			if (name.endsWith('.swift')) rels.push(join(sub, name));
@@ -722,4 +724,78 @@ test('swiftStructFields reads stored properties and not computed ones', () => {
 	].join('\n');
 	assert.deepEqual(swiftStructFields(src, 'Thing'), ['a', 'b']);
 	assert.equal(swiftStructFields(src, 'Absent'), null);
+});
+
+// --- claim 10: the Info.plist owns its own keys --------------------------
+
+test('claim (10) refuses an INFOPLIST_KEY_* on a target that does not generate its plist', () => {
+	// The shape it shipped in: INFOPLIST_KEY_CFBundleDisplayName = "Threkir" on
+	// both configurations, GENERATE_INFOPLIST_FILE = NO, and no
+	// CFBundleDisplayName in the file — so the watch app was named `WatchApp`
+	// while a build setting sitting right there said otherwise.
+	const { errors } = runMutated((dir) => {
+		edit(dir, PBX, (s) =>
+			s.replace('\t\t\t\tGENERATE_INFOPLIST_FILE = NO;\n', '\t\t\t\tGENERATE_INFOPLIST_FILE = NO;\n\t\t\t\tINFOPLIST_KEY_CFBundleDisplayName = "Threkir";\n'),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('INFOPLIST_KEY_CFBundleDisplayName') && e.includes('inert')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (10) refuses a watch app with no display name of its own', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, PLIST, (s) => s.replace('\t<key>CFBundleDisplayName</key>\n\t<string>Threkir</string>\n', ''));
+	});
+	assert.ok(
+		errors.some((e) => e.includes('declares no `CFBundleDisplayName`')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (10) refuses WKWatchOnly and a companion bundle id together', () => {
+	// Apple documents them as mutually exclusive. This is the mistake a session
+	// resolving the companion question is most likely to make: adding the
+	// companion key without removing the watch-only claim.
+	const { errors } = runMutated((dir) => {
+		edit(dir, PLIST, (s) =>
+			s.replace(
+				'\t<key>WKWatchOnly</key>',
+				'\t<key>WKCompanionAppBundleIdentifier</key>\n\t<string>com.threkir.app</string>\n\t<key>WKWatchOnly</key>',
+			),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('mutually exclusive')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (10) reports rather than passes when no target uses a manual plist', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, PBX, (s) => s.replaceAll('GENERATE_INFOPLIST_FILE = NO;', 'GENERATE_INFOPLIST_FILE = YES;'));
+	});
+	assert.ok(
+		errors.some((e) => e.includes("claim (10)'s first half read nothing")),
+		errors.join('\n'),
+	);
+});
+
+test('buildSettingsBlocks brace-matches rather than running to the next block', () => {
+	const src = [
+		'\t\t\tbuildSettings = {',
+		'\t\t\t\tA = 1;',
+		'\t\t\t\tPATHS = (',
+		'\t\t\t\t\t"$(inherited)",',
+		'\t\t\t\t);',
+		'\t\t\t};',
+		'\t\t\tbuildSettings = {',
+		'\t\t\t\tB = 2;',
+		'\t\t\t};',
+	].join('\n');
+	const blocks = buildSettingsBlocks(src);
+	assert.equal(blocks.length, 2);
+	assert.ok(blocks[0].includes('A = 1') && !blocks[0].includes('B = 2'));
+	assert.deepEqual(buildSettingsBlocks('nothing here'), []);
 });
