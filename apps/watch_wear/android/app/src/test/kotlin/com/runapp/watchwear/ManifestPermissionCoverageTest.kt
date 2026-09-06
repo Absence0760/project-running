@@ -59,6 +59,9 @@ class ManifestPermissionCoverageTest {
         // Not a dialog either: it only permits LAUNCHING the system
         // whitelist prompt, which `system/BatteryOptimization.kt` does.
         "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+        // Normal permission. `Vibrator.vibrate` is still refused without the
+        // DECLARATION, which is the other direction this class now checks.
+        "VIBRATE",
     )
 
     /// Runtime permissions the app deliberately does not ask for, each with
@@ -71,6 +74,54 @@ class ManifestPermissionCoverageTest {
                 "approximate-location choice that would silently degrade the " +
                 "GPS trace",
     )
+
+    /// Platform APIs this module calls that the system refuses without a
+    /// manifest declaration, and the permission each one needs.
+    ///
+    /// The OTHER direction from every test above, and the one nothing checked:
+    /// those hold the manifest to the request site, so a permission declared
+    /// and never asked for is caught, while a permission CALLED FOR and never
+    /// declared is not — and that failure is quieter still. `Vibrator.vibrate`
+    /// throws `SecurityException` across the binder with no declaration, the
+    /// call site catches `Throwable` because a watch may genuinely have no
+    /// vibrator, and the two are indistinguishable from inside the app: the
+    /// pace alert's haptic had therefore never fired on any watch, on any
+    /// build, and read as hardware (decisions § 1302).
+    ///
+    /// Keyed on the API rather than on a receiver name, because the
+    /// requirement belongs to the call and not to whatever a local happens to
+    /// be called this month.
+    private val permissionGatedApis = mapOf(
+        Regex("""\.vibrate\(""") to "VIBRATE",
+    )
+
+    private fun mainSources(): List<File> =
+        File("src/main/kotlin").walkTopDown().filter { it.extension == "kt" }.toList()
+
+    @Test
+    fun `every permission-gated API this module calls is declared`() {
+        val sources = mainSources().map { it.readText() }
+        assertTrue("no Kotlin sources found — the scan is reading nothing", sources.size >= 10)
+        val declared = declaredPermissions()
+        val called = permissionGatedApis.filterKeys { re -> sources.any { re.containsMatchIn(it) } }
+        // A table whose every entry has stopped matching is a guard asleep,
+        // not a clean tree: the calls it names are all still made.
+        assertEquals(
+            "no permission-gated API matched anywhere under src/main — either " +
+                "every call was removed (drop the table entries) or the patterns " +
+                "have gone stale",
+            permissionGatedApis.size,
+            called.size,
+        )
+        val undeclared = called.values.filterNot { it in declared }.sorted()
+        assertEquals(
+            "called from src/main but never declared in AndroidManifest.xml, so " +
+                "the platform refuses it on every device: $undeclared. The call " +
+                "site's catch cannot tell you — it looks like absent hardware.",
+            emptyList<String>(),
+            undeclared,
+        )
+    }
 
     private fun declaredPermissions(): Set<String> =
         Regex("""<uses-permission\s+android:name="android\.permission\.([A-Z_0-9]+)"""")

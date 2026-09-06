@@ -34,6 +34,14 @@
          the foreground service after ~10 minutes. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!-- The pace alert's haptic. `Vibrator.vibrate` is permission-gated, so
+         without this the call throws SecurityException across the binder on
+         EVERY watch and the alert degrades silently to TTS-only — losing the
+         two-pulse-vs-one-pulse direction cue a runner is meant to read by
+         feel with headphones paused. Normal permission: granted at install,
+         nothing to request. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <!-- networkSecurityConfig (res/xml/network_security_config.xml) is
          the canonical mechanism — it scopes cleartext to the dev
          loopback (10.0.2.2) only. The application-level

@@ -624,7 +624,13 @@ steal focus from typing). `RotaryScrollWiringTest` pins the call sites.
   `createWaveform(longArrayOf(0, 180, 180, 180), ...)` double pulse
   for "speed up", a `createOneShot(220, DEFAULT_AMPLITUDE)` single
   pulse for "slow down", paired with a TTS nudge. Matches the
-  two-pulse vs single-pulse pattern on Android.
+  two-pulse vs single-pulse pattern on Android. `Vibrator.vibrate` is
+  permission-gated, so the manifest's `VIBRATE` declaration is load-bearing:
+  without it the call throws `SecurityException` on every watch and the
+  alert silently degrades to TTS-only, which is indistinguishable at the
+  call site from a watch with no vibrator (decisions § 1302 — it was in
+  that state until 2026-09-06, pinned now by the used-to-declared half of
+  `ManifestPermissionCoverageTest`).
 - **Pedometer.** `Pedometer.kt` wraps `Sensor.TYPE_STEP_COUNTER` with a
   per-run baseline subtraction so the flow yields cumulative steps
   since recording started. `RunRecordingService` collects into

@@ -503,6 +503,21 @@ export function phoneEnvelopeKeys(src) {
 	return keys;
 }
 
+/** The heart-rate session owner, claim (11)'s rail. */
+export const HEALTHKIT = 'WatchApp/HealthKitManager.swift';
+
+/**
+ * Claim (11)'s delegate gates: `[signature marker, identity check, the first
+ * thing the method writes]`. The third element is what makes the claim a
+ * question about ORDER rather than about the presence of a line — a gate below
+ * the mutation it is supposed to gate is no gate.
+ * @type {[string, string, string][]}
+ */
+export const DELEGATE_IDENTITY_GATES = [
+	['didFailWithError', 'workoutSession === session', 'handleSessionFailure('],
+	['didCollectDataOf', 'workoutBuilder === builder', 'coverage.noteSample('],
+];
+
 /** The watch target's Xcode project, claim (10)'s second rail. */
 export const PBXPROJ = join('WatchApp.xcodeproj', 'project.pbxproj');
 
@@ -627,6 +642,43 @@ export function methodBody(src, name) {
 		}
 	}
 	return null;
+}
+
+/**
+ * The body of the method whose signature contains `marker`, `{` through the
+ * matching `}`. Selected by an argument label rather than by name because
+ * `HealthKitManager` has two delegate methods called `workoutSession`.
+ * @param {string} src @param {string} marker
+ */
+export function bodyOfSignatureContaining(src, marker) {
+	const at = src.indexOf(marker);
+	if (at === -1) return null;
+	const open = src.indexOf('{', at);
+	if (open === -1) return null;
+	const close = matchDelimiter(src, open, '{', '}');
+	return close === -1 ? null : src.slice(open, close + 1);
+}
+
+/**
+ * Brace depth at the first occurrence of `needle` inside `body`, counting the
+ * body's own opening brace as 1. Anything nested in a closure is deeper, which
+ * is the whole question claim (11) asks of `stopWorkout`. -1 when absent.
+ * @param {string} body @param {string} needle
+ */
+export function depthOf(body, needle) {
+	const at = body.indexOf(needle);
+	if (at === -1) return -1;
+	let depth = 0;
+	for (let i = 0; i < at; i += 1) {
+		if (body[i] === '"') {
+			i += 1;
+			while (i < body.length && body[i] !== '"') i += body[i] === '\\' ? 2 : 1;
+			continue;
+		}
+		if (body[i] === '{') depth += 1;
+		else if (body[i] === '}') depth -= 1;
+	}
+	return depth;
 }
 
 /**
@@ -1273,6 +1325,69 @@ export function check(watchRoot, ingestPath = null, routeBridgePath = null) {
 					);
 				}
 			}
+		}
+	}
+
+	// (11) The HealthKit session a delegate acts on is the one the run is
+	//      holding, and the run releases it when it ENDS rather than when its
+	//      save completes.
+	//
+	//      Both halves are invisible to every other rail. `startWorkout()`
+	//      refuses to open a session while one is held, so a release chained
+	//      behind `finishWorkout` — a save that can take seconds and need
+	//      never call back — leaves the NEXT run recording with no heart rate,
+	//      no coverage figure and no notice saying why. And a delegate that
+	//      does not check identity lets the finishing run's session tear down
+	//      the starting run's heart rate, or its builder stamp a sample age
+	//      onto a run whose sensor it never touched — which coverage then
+	//      reads as a delivering sensor (decisions § 1300). The macOS job
+	//      compiles all of that happily; only a second run in one launch
+	//      shows it, and nothing here has one.
+	const hk = stripSwiftComments(read(HEALTHKIT));
+	const stopBody = bodyOfSignatureContaining(hk, 'func stopWorkout(');
+	if (stopBody === null) {
+		errors.push(`${HEALTHKIT} has no \`stopWorkout\` — claim (11) would pass vacuously.`);
+	} else {
+		const chained = ['self.session = nil', 'self.builder = nil'].filter(
+			(a) => depthOf(stopBody, a) !== 1,
+		);
+		if (chained.length > 0) {
+			errors.push(
+				`${HEALTHKIT}: \`stopWorkout\` does not release ${chained.join(' and ')} in its own ` +
+					'body — the assignment is missing, or nested inside a completion handler. ' +
+					'`startWorkout()` refuses to open a session while one is held, so a release that ' +
+					'waits on `finishWorkout` costs the next run of the launch its heart rate ' +
+					'entirely, silently, with no `heartRateUnavailable` notice.',
+			);
+		} else {
+			ok.push('`stopWorkout` releases the session in its own body, not behind the save');
+		}
+	}
+
+	for (const [marker, identity, mutates] of DELEGATE_IDENTITY_GATES) {
+		const body = bodyOfSignatureContaining(hk, marker);
+		if (body === null) {
+			errors.push(`${HEALTHKIT} has no \`${marker}\` delegate — claim (11) would pass vacuously.`);
+			continue;
+		}
+		const gate = body.indexOf(identity);
+		const touch = body.indexOf(mutates);
+		if (touch === -1) {
+			errors.push(
+				`${HEALTHKIT}: \`${marker}\` no longer calls \`${mutates}\`, so claim (11) can no ` +
+					'longer tell whether the identity gate still precedes the mutation. Re-point the ' +
+					'gate at whatever this delegate now writes.',
+			);
+		} else if (gate === -1 || gate > touch) {
+			errors.push(
+				`${HEALTHKIT}: \`${marker}\` reaches \`${mutates}\` without first checking ` +
+					`\`${identity}\`. The previous run's session and builder keep delegating here ` +
+					'until their workout has saved, so an unguarded callback applies one run\'s ' +
+					'heart-rate state to another — a torn-down sensor, or a sample age coverage then ' +
+					'credits to a run that never produced it.',
+			);
+		} else {
+			ok.push(`\`${marker}\` checks \`${identity}\` before it writes`);
 		}
 	}
 

@@ -30,8 +30,17 @@ class CheckpointHandoffWiringTest {
     private val viewModelSrc: String =
         File("src/main/kotlin/com/runapp/watchwear/RunViewModel.kt").readText()
 
+    /// The named function's body.
+    ///
+    /// `suspend` is erased from the source before matching rather than
+    /// spelled into every caller's signature: whether a function suspends is
+    /// a property of how it is CALLED, and nothing this file asserts depends
+    /// on it. Keying on the modifier failed the build the day
+    /// `handleFinishedRun` moved its track read off the main thread — a
+    /// change that touched none of the ordering below.
     private fun body(src: String, signature: String): String {
-        val block = Regex("""${Regex.escape(signature)}[\s\S]*?\n    \}""").find(src)
+        val normalised = src.replace(" suspend fun ", " fun ")
+        val block = Regex("""${Regex.escape(signature)}[\s\S]*?\n    \}""").find(normalised)
         assertTrue("expected a $signature body", block != null)
         return block!!.value
     }
