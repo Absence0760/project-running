@@ -296,15 +296,40 @@ The same two filter rules are why the sync needs no edit for the new file --
 pass 2's `--exclude "*" --include "*.html"` matches `200.html` on
 last-match-wins, so it uploads with the 60 s HTML cache like any other page.
 
-**This order is necessary and not sufficient.** It closes the CloudFront seam
-and does nothing about a second one that is not a deploy-order problem at all:
-the five share Lambdas EMBED the shell at bundle time, and each
-`apps/web/lambda/share-*/build.mjs` resolves it as `build/index.html`. Left
-unchanged, step 3 bakes the landing page into every share handler -- for its
-200 responses and for the `notFoundShell()` 404 body alike -- and no ordering
-repairs that. Those five paths, the three `*_spa_shell.ts` header comments and
-`spa_shell_head_signals.test.ts`'s artifact path must move to `200.html` in
-the same change as the `fallback`.
+**The code half is landed; the three steps are all that is left.** When this
+section was written the repo was mid-move and the paragraph here warned that
+the five share Lambdas still embedded `build/index.html` at bundle time, so
+step 3 would bake the landing page into every share handler whatever the
+ordering. That is no longer the state. Verified in the tree: `svelte.config.js`
+emits `fallback: "200.html"`, all five `apps/web/lambda/share-*/build.mjs`
+resolve `build/200.html`, `spa_shell_head_signals.test.ts` reads that artifact,
+and the `custom_error_response` in `infra/modules/web-stack/main.tf` names
+`/200.html`. `apps/web/src/lib/seo/spa_shell_filename.test.ts` derives the
+expected name from the adapter config and fails the PR if any of those rails
+drifts back, so the code cannot regress under the operator ([decisions
+§ 1272](../architecture/decisions.md)).
+
+**Which environment is this?** The steps are per-distribution and `prod` and
+`preview` are cut over independently. To find out whether an environment has
+already been through them, read the live mapping rather than assuming:
+
+```
+aws cloudfront get-distribution-config --id <DIST_ID> --query 'DistributionConfig.CustomErrorResponses.Items[?ErrorCode==`403`].ResponsePagePath' --output text
+```
+
+`/index.html` means the cutover has not happened on that distribution and the
+next `web@*` release will break every deep link on it; `/200.html` means steps
+1 and 2 are done. `aws s3 ls s3://<bucket>/200.html` answers step 1 on its own.
+
+**The one derived claim, and how to falsify it.** Everything above is read out
+of the workflow, the Terraform and the AWS CLI reference -- no lane holds
+credentials, so none of it has been executed against AWS. The step that carries
+the most weight is that the pre-seeded `200.html` survives the release's
+`aws s3 sync --delete`, which rests on excluded keys not being deletion
+candidates. Confirm it the cheap way the first time through: run step 1, run a
+release, and check `200.html` is still listed. If it is gone, the window
+between the release's two sync passes is real and the pre-seed has to be
+repeated after the deploy instead of before it.
 
 Rollback is the mirror image: revert the Terraform first (the bucket still
 holds an `index.html`, though after a post-cutover deploy it is the landing
