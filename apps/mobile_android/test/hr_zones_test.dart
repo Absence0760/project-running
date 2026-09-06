@@ -141,5 +141,36 @@ void main() {
       // implausible age falls through to the legacy default
       expect(defaultZoneCutoffs(ageYears: 200), [114, 133, 152, 171, 190]);
     });
+
+    // The bounds are the part the THIRD rail shares — the Wear OS
+    // `resolveZoneCutoffs` applied `max_hr_bpm` flat until decisions § 1245,
+    // so a mistyped 300 gave the same run different zones on the watch and the
+    // phone. `max_hr_bpm` is a jsonb prefs key with no CHECK, so nothing but
+    // these reads stands between a typo and a zone ladder.
+    test('the usable ranges are the bounds defaultZoneCutoffs applies', () {
+      expect(defaultZoneCutoffs(maxHrBpm: kMaxHrBpmMin)[4], kMaxHrBpmMin);
+      expect(defaultZoneCutoffs(maxHrBpm: kMaxHrBpmMax)[4], kMaxHrBpmMax);
+      expect(defaultZoneCutoffs(maxHrBpm: kMaxHrBpmMin - 1),
+          [114, 133, 152, 171, 190]);
+      expect(defaultZoneCutoffs(maxHrBpm: kMaxHrBpmMax + 1),
+          [114, 133, 152, 171, 190]);
+
+      expect(defaultZoneCutoffs(ageYears: kTanakaAgeMin),
+          zoneCutoffsFromMaxHr(tanakaMaxHr(kTanakaAgeMin)));
+      expect(defaultZoneCutoffs(ageYears: kTanakaAgeMax),
+          zoneCutoffsFromMaxHr(tanakaMaxHr(kTanakaAgeMax)));
+      expect(defaultZoneCutoffs(ageYears: kTanakaAgeMin - 1),
+          [114, 133, 152, 171, 190]);
+      expect(defaultZoneCutoffs(ageYears: kTanakaAgeMax + 1),
+          [114, 133, 152, 171, 190]);
+    });
+
+    // 0 survives every null check and is exactly what an emptied number input
+    // posts. Applied flat it yields an all-zero ladder that puts every real
+    // sample above Z5 — the shape the watch rail had.
+    test('a zero max HR is ignored, not applied as a ceiling', () {
+      expect(defaultZoneCutoffs(maxHrBpm: 0), [114, 133, 152, 171, 190]);
+      expect(defaultZoneCutoffs(maxHrBpm: -1), [114, 133, 152, 171, 190]);
+    });
   });
 }

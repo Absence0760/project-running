@@ -383,6 +383,7 @@ const TS_GAP_TEST = 'apps/web/src/lib/runs/grade_adjusted_pace.test.ts';
 const DT_GAP_ANDROID = 'apps/mobile_android/test/grade_adjusted_pace_test.dart';
 const DT_GAP_IOS = 'apps/mobile_ios/test/grade_adjusted_pace_test.dart';
 const MC_GAP = 'apps/watch_garmin/source/GradeAdjustedPaceView.mc';
+const MC_GAP_TEST = 'apps/watch_garmin/source-test/GradeAdjustedPaceTest.mc';
 
 /**
  * A file that does NOT restate a row's value but TAKES it from the rail that
@@ -712,6 +713,7 @@ export const CONSTANT_ROWS = [
       dartRail(DT_GAP_ANDROID, gapReferenceSpec(dartConst, GAP_REFERENCE_DART)),
       dartRail(DT_GAP_IOS, gapReferenceSpec(dartConst, GAP_REFERENCE_DART)),
       otherRail(TS_GAP_TEST, gapReferenceSpec(tsConst, GAP_REFERENCE_UPPER)),
+      otherRail(MC_GAP_TEST, gapReferenceSpec(mcConst, GAP_REFERENCE_UPPER)),
     ],
   },
 ];

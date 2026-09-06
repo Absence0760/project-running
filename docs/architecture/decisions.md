@@ -24680,3 +24680,161 @@ spells a filename is a new case asserting that pointing the 403 at
 `/index.html` — the prerendered landing page — is reported. A fixture that
 tracks the contract cannot drift; the one that must name a wrong value is the
 one proving the check exists.
+
+## 1243. `check_twin_claims` reads the twin claims a source file makes, not the ones that happen to sit at offset zero
+
+The guard exists because a pair whose divergence nothing can detect keeps
+recurring — § 641's `turn_cues` diverged in three implementations at once while
+registered nowhere, § 760's accent fold sat diverged for eighteen days while
+both doc comments claimed lockstep. It reads the tree for headers that DECLARE
+a twin and fails when the counterpart is missing from the syncer table. It was
+reading about three quarters of them, and its own floor was set too low to
+notice: 106 declarations found against `MIN_DECLARATIONS = 60`, so 46 of slack
+absorbed a quarter of the population and reported an incomplete census as a
+clean one.
+
+Two mechanisms, both measured over `readSources()`. **`headerComment` stopped
+at the first non-comment line**, and a module puts its imports above the block
+that documents it far more often than below, so 37 files returned an EMPTY
+header — `runs/run_stats.ts`, `runs/pace_analysis.ts`, `lib/elevation.dart`,
+`lib/hr_zones.dart` among them. It now steps over a prologue of blank, `import`,
+`export … from`, `library` and `part` lines before folding, and still stops at
+the first line of real code (a pinned case: a declaration written BELOW the
+first statement is not a header and is not read). **`DECLARATION` wanted a verb
+from a fixed list then a backticked path**, missing four forms in the tree: `the
+Dart twin \`path\`` with no *of*, `Mirrors apps/…/x.dart` with no backticks, a
+backticked path carrying a `:symbol` suffix, and `ported from`. Together:
+**106 → 167 declarations, none lost**, with the floor raised to 155 and a test
+that fails when the slack under the real census exceeds 15 — the floor's own
+failure mode, which the check written for it could not see. Each of the three
+changes was mutation-tested by reverting it: the prologue skip, the widened
+regex and the raised floor fail 2, 7 and 1 of the suite's cases respectively.
+
+A **fifth** form is deliberately still unread and is filed rather than fixed: a
+counterpart named RELATIVELY (`web's \`training/adaptive_fitness_flag.ts\``,
+`twin of web's \`core/undo_queue.ts\``), of which 11 cross-platform instances
+exist. Resolving one means guessing a root, and a suffix match against the
+source roots reaches `settings_safety_screen.dart → core/data.ts` and
+`password_change.ts → settings_account_screen.dart` — claims about screens and
+a 12,000-line data module, neither of which is a registrable pair. Widening to
+them would demand header rewords in four other trees to buy two real pairs.
+
+## 1244. Eleven existing TS↔Dart pairs registered, four twin claims reworded because they were not pairs
+
+The widened reader exposed 19 problems: one dangling path and 18 declarations
+no syncer row carried. `current_week.ts` named
+`lib/widgets/current_week.dart`, which has never existed (the twin is
+`lib/current_week.dart`; the widgets directory holds `current_week_strip.dart`,
+the renderer) — and called a TS↔Dart pair *byte-identical*, which only the iOS
+twin ever is.
+
+**Eleven were registered in both registries**, each with both halves on disk and
+a mirror suite on both sides: `goals`, `workout_kind_color`, `run_stats`,
+`elevation`, `adaptive_fitness_flag`, `hr_zones`, `auth_errors`, `food_search`,
+`nutrition_totals`, `payload_hash`, `race_match` and
+`workout_labels`/`training_labels`. Measured while registering, so the numbers
+are not owed later: `elevation` and `run_stats` are clean on their shared
+subsets (`run_stats`' `a > 1` haversine clamp — whose own comment records a
+round that fixed one side only — is present and pinned on both), and the
+differences in `goals`, `workout_kind_color`, `auth_errors` and
+`workout_labels` are idiomatic (a string union against an enum, a 1-based CSS
+custom-property index against a 0-based list index, a declared mobile-only enum
+member, per-platform i18n key identifiers). `workout_kind_color` had no web
+suite at all and now has one, pinning the nine-kinds-onto-six-marks grouping
+that is the whole of that pair.
+
+**Four were reworded instead**, because registering them would have made the
+registries assert something false: `revenuecat` and `strava` wrap different
+SDKs against different services on the two platforms, `route_describe_client`
+is network glue whose pure half is the already-registered `route_description`,
+and `fitness_card.dart` is a WIDGET claiming to be the port of a module its own
+sibling `fitness.dart` is. A header that overstates a relationship is the same
+defect as one that understates it — both send the next reader to the wrong
+place. One `KNOWN_GAPS` entry remains: `core/auth_gates.ts` claims a mirror in
+`screens/sign_up_screen.dart`, which cannot become a pair, and that tree
+belonged to another lane this round.
+
+## 1245. `hr_zones` is a three-rail helper; the Wear OS rail now applies the range bound, and its one remaining difference is stated rather than implied
+
+`training/hr_zones.ts` had declared for a long time that it was in lockstep with
+`lib/hr_zones.dart` and with `resolveZoneCutoffs` in the Wear OS
+`SupabaseClient.kt`. It was in neither registry, so nothing had ever compared
+them. **The TS↔Dart half measures clean** — every age 5..120 through
+`tanakaMaxHr` and every max HR 80..240 through `zoneCutoffsFromMaxHr` agree,
+because `Math.round` and Dart's `.round()` differ only on negative halves and
+neither range reaches one.
+
+**The Kotlin rail diverged in both directions, and one of the two is a defect.**
+`max_hr_bpm` is a jsonb prefs key with no column and therefore no CHECK, and
+the web preferences page writes it as a bare `parseInt` behind an advisory HTML
+`max` attribute, so an out-of-range value really does reach every reader. Web
+and Dart have always ignored one outside 80..240 and fallen through to Tanaka
+or to the legacy ladder; this rail applied it flat. A mistyped 300 gave that
+runner `[180, 210, 240, 270, 300]` on the wrist and the sensible ladder on the
+phone — the same run, two answers — and a stored 0, which is what an emptied
+number input posts, gave an all-zero ladder that puts every real sample above
+Z5. Fixed, and the bound is now named once per rail (`MAX_HR_BPM_MIN`/`_MAX`,
+`kMaxHrBpmMin`/`Max`, `MAX_HR_BPM_RANGE`) instead of spelled inline three
+times, so the write-path clamp that is still owed has something to import.
+
+**The second difference is deliberate and was kept**: with no usable signal at
+all web and mobile return the legacy 190 ladder and the watch returns null and
+shows no zones. A wrist face has no room to caveat a number, and inventing a
+stranger's max HR there is worse than an absent panel. What was wrong was that
+it sat unstated under a header claiming lockstep; it is now written on all
+three rails and pinned by the Kotlin suite's own no-signal case. The Kotlin fix
+was mutation-tested: reverting the `takeIf` fails exactly the two rows written
+for it.
+
+## 1246. The Garmin GAP golden joins the other four rails, and the guard that measures the Garmin tier grew rows for the two claims it had shipped without
+
+Two halves of the same gap. § 1201 landed the GAP reference fixture, the
+reduction and the frozen 311 s/km in `source-test/GradeAdjustedPaceTest.mc`
+under the same `GAP_REFERENCE_*` names the Rust, Dart and TS rails use — and
+nothing joined it to them, so four goldens agreed with each other and a fifth
+agreed with nothing. Two lines in `check_watch_wire_vectors.mjs` (`mcConst` and
+`GAP_REFERENCE_UPPER` both already existed); the row now reads five rails and
+they agree. Mutation-tested: moving the Monkey C 311 to 312 fails as a
+disagreement, and deleting one constant fails as an unmatched read rather than
+as a silently shorter spec.
+
+The other half: `check_garmin_source.sh` grew a seventh claim (§ 1201) and
+tightened its vacuity guard to a word boundary (§ 1202), and
+`check_garmin_source.test.mjs` — the suite that is the whole reason that
+script's green means anything, since no CI job compiles or runs the Monkey C —
+had rows for neither. Six added. Claim 7: a `GAP_REFERENCE_*` constant deleted
+and one declared twice (the two ways a name stops being readable exactly once,
+which takes this rail OUT of the five-rail comparison rather than failing it), a
+golden walk that stops driving the shipped `GradeTracker`, and one that freezes
+the window as a literal. Vacuity: a class renamed to
+`GradeAdjustedPaceViewV2` — a SUFFIX of itself, which the old substring check
+passed — and the same shape on the test module. Every row was mutation-tested
+against the GUARD rather than only against the source: relaxing the
+exactly-once count, dropping the tracker read, dropping the `$.MIN_SEGMENT_M`
+read and restoring the substring vacuity check each fail exactly the rows
+written for them.
+
+## 1247. A bare hyphen written into the parity bullet can delete the rest of it, and the reflow test is the only thing that sees it
+
+Writing five new entries into the `TS↔Dart parity helpers` bullet reintroduced
+§ 774 from the authoring side rather than the parsing side. The bullet is one
+enormous physical line; `foldSoftWraps` reconstructs it from however markdown
+wraps, and stops folding at a line that OPENS A NEW BLOCK. A new entry
+contained `220 - age`. Wrapped at 100 columns that puts `- age does` at the
+start of a line, which CommonMark reads as a list item, and the fold then
+truncated the bullet there — taking the six pairs written after it out of the
+registry with **no error reported**, because both registries agreed about
+everything the parser could still see.
+
+The guard cannot defend against this on the committed text, since the committed
+line does not wrap. What caught it is
+`check_parity_pair_registry.test.mjs`'s "the committed bullet survives being
+reflowed at 100 columns", which re-parses a reflowed copy and compares the pair
+sets: it named the six missing entries directly. Two consequences worth
+recording. Prose written into that bullet must use `—` or `−` and never a bare
+` - `, and the same holds for any construct `BLOCK_START` matches at a line
+start — `* `, `+ `, `> `, `| `, `# `, a fence, and `1. ` (only `1.`, per
+CommonMark's rule that no other ordinal may interrupt a paragraph, which is why
+"see § 77. Distinct from" is safe). And the reflow test is not a formatting
+nicety: it is the only check in the repo that exercises the fold against real
+content, and a lane adding registry prose should run it before committing.

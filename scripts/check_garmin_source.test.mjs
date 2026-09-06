@@ -264,6 +264,64 @@ test('a field that resolves no unit at all is refused', () => {
 	assert.match(out, /does not read `System\.getDeviceSettings\(\)\.paceUnits`/);
 });
 
+// --- claim 7: the GAP golden is graded through the shipped window -----------
+
+test('a GAP_REFERENCE_ constant the wire-vector guard cannot read is refused', () => {
+	// scripts/check_watch_wire_vectors.mjs joins all eight into one spec per
+	// rail and compares the specs. A name it cannot read EXACTLY once takes
+	// this rail out of that comparison rather than failing it, so the four
+	// remaining rails go on agreeing with each other about a number this one
+	// has stopped making any claim about.
+	const { status, out } = runMutated((dir) =>
+		edit(dir, TEST_SRC, /\n\s*const GAP_REFERENCE_PERIOD_M = [^;]+;/, ''),
+	);
+	assert.equal(status, 1, out);
+	assert.match(out, /declares `const GAP_REFERENCE_PERIOD_M` 0 times/);
+});
+
+test('a GAP_REFERENCE_ constant declared twice is refused too', () => {
+	// The other half of "exactly once": two declarations make the wire-vector
+	// guard's single-match read throw, which is the same exit from the
+	// comparison arrived at from the opposite direction.
+	const { status, out } = runMutated((dir) =>
+		edit(
+			dir,
+			TEST_SRC,
+			'const GAP_REFERENCE_PERIOD_M = 150.0;',
+			'const GAP_REFERENCE_PERIOD_M = 150.0;\n    const GAP_REFERENCE_PERIOD_M = 150.0;',
+		),
+	);
+	assert.equal(status, 1, out);
+	assert.match(out, /declares `const GAP_REFERENCE_PERIOD_M` 2 times/);
+});
+
+test('a golden walk that does not drive the shipped tracker is refused', () => {
+	// Anchored on the two lines that open `gapReferenceReportedSPerKm`, because
+	// `var t = new GradeTracker();` occurs several times earlier in the suite
+	// and a first-match mutation would leave this walk untouched.
+	const { status, out } = runMutated((dir) =>
+		edit(
+			dir,
+			TEST_SRC,
+			'var step = gapReferenceHorizStepM();\n        var t = new GradeTracker();',
+			'var step = gapReferenceHorizStepM();\n        var t = new PrivateWalk();',
+		),
+	);
+	assert.equal(status, 1, out);
+	assert.match(out, /does not drive a `GradeTracker`/);
+});
+
+test('a golden walk that spells the window as a literal is refused', () => {
+	// The window is the value this golden brackets from above. Frozen as a
+	// literal the walk keeps reporting 311 after the shipped window moves, and
+	// the agreement with the other four rails then says nothing about the code.
+	const { status, out } = runMutated((dir) =>
+		edit(dir, TEST_SRC, 'segHoriz >= $.MIN_SEGMENT_M', 'segHoriz >= 20.0'),
+	);
+	assert.equal(status, 1, out);
+	assert.match(out, /does not read `\$\.MIN_SEGMENT_M`/);
+});
+
 // --- vacuity ---------------------------------------------------------------
 
 test('a renamed view class fails loudly rather than passing on an unread file', () => {
@@ -273,6 +331,31 @@ test('a renamed view class fails loudly rather than passing on an unread file', 
 		edit(dir, VIEW, /class GradeAdjustedPaceView/g, 'class GapView'),
 	);
 	assert.equal(status, 1, out);
+	assert.match(out, /would pass on an empty file/);
+});
+
+test('a view class renamed to a SUFFIX of itself fails loudly too', () => {
+	// The case the rename above cannot reach and the substring check the guard
+	// used to carry could not either: `GradeAdjustedPaceViewV2` CONTAINS
+	// `GradeAdjustedPaceView`, so the vacuity guard passed while `body_of` --
+	// which ends the name correctly -- found no class, and claim 1's
+	// `onTimerReset` half plus the whole of claim 6 skipped themselves. The
+	// guard is anchored on a word boundary now; this is what holds it there.
+	const { status, out } = runMutated((dir) =>
+		edit(dir, VIEW, /class GradeAdjustedPaceView\b/, 'class GradeAdjustedPaceViewV2'),
+	);
+	assert.equal(status, 1, out);
+	assert.match(out, /would pass on an empty file/);
+});
+
+test('a renamed test module fails loudly rather than passing on an unread file', () => {
+	// Claim 7's own anti-vacuity half, and a suffix rename for the same reason
+	// as the view above.
+	const { status, out } = runMutated((dir) =>
+		edit(dir, TEST_SRC, /module GradeAdjustedPaceTest\b/, 'module GradeAdjustedPaceTestV2'),
+	);
+	assert.equal(status, 1, out);
+	assert.match(out, /no longer declares `module GradeAdjustedPaceTest`/);
 	assert.match(out, /would pass on an empty file/);
 });
 
