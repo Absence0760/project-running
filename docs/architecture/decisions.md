@@ -25106,7 +25106,7 @@ a banner drain any more.
 
 ## 1239. The recap's Dart half kept anchoring the current streak at 31 December, and it was the half that publishes the snapshot
 
-[§ 1221](#1221) fixed `recap.ts` and filed the Dart twin, which is the more
+[§ 1221](#1221-the-recap-anchored-current-streak-at-31-december-so-the-card-for-the-year-you-are-living-in-reported-every-live-streak-as-zero--and-its-test-agreed-for-a-second-wrong-reason) fixed `recap.ts` and filed the Dart twin, which is the more
 consequential of the two: `recapSnapshotJson` writes `public_recaps`, so a
 phone-published recap of the year or month you are living in rendered a **zero**
 current streak on the web share page while the web-built snapshot of the same
