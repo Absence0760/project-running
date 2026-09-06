@@ -15,6 +15,8 @@
  * + scale behaviour for both sources.
  */
 
+import { fold } from '../segments/catalogue_browse';
+
 export interface FoodMacros {
 	calories: number;
 	proteinG: number;
@@ -402,13 +404,23 @@ export async function searchFoodSources(
 	return dedupeFoods(merged);
 }
 
-/// Drop duplicate foods by case-insensitive name+brand, keeping the first
-/// occurrence (so the source order passed in decides the winner). Pure.
+/// Drop duplicate foods by case- and accent-insensitive name+brand, keeping
+/// the first occurrence (so the source order passed in decides the winner).
+/// Pure.
+///
+/// The key folds through `catalogue_browse`'s generated table rather than the
+/// runtime's own `toLowerCase`, for the reason the Dart twin exists at all:
+/// the two runtimes' lower-case disagree at 466 code points (decisions § 854),
+/// so a Turkish product name collapsed two rows into one on the phone and left
+/// two on the web from the same two searches. Folding the accents too is the
+/// point of the dedupe and not a side effect — the two sources spell the same
+/// product differently, and `Café Latte` from Open Food Facts beside
+/// `Cafe Latte` from USDA is one product listed twice.
 export function dedupeFoods(results: FoodSearchResult[]): FoodSearchResult[] {
 	const seen = new Set<string>();
 	const out: FoodSearchResult[] = [];
 	for (const r of results) {
-		const key = `${r.name.trim().toLowerCase()} ${(r.brand ?? '').trim().toLowerCase()}`;
+		const key = `${fold(r.name.trim())} ${fold((r.brand ?? '').trim())}`;
 		if (seen.has(key)) continue;
 		seen.add(key);
 		out.push(r);

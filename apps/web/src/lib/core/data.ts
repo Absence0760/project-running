@@ -19,6 +19,13 @@ import { challengesToRecomputeForRun } from '../social/challenge_progress';
 import { mergeMyProgress } from '../social/challenge_list';
 import { selectEffectivePricing } from '../social/event_instance';
 import { planHeadCopyFields, planWeekCopyRows, planWorkoutCopyRows } from './plan_copy';
+import { clubSlug, CLUB_SLUG_FALLBACK } from '../social/club_slug';
+import {
+	ROUTE_LIST_COLS,
+	PUBLIC_ROUTE_LIST_COLS,
+	type RouteListItem,
+	type PublicRouteListRow
+} from '../routes/route_list_columns';
 import type {
 	Run,
 	Route,
@@ -1558,21 +1565,7 @@ export async function setRouteStar(routeId: string, starred: boolean): Promise<v
 	if (error) throw error;
 }
 
-// "My routes" + the route pickers (RunEditor / EventEditor / club transfer)
-// read only these columns. `routes.geom` — a geography(LineString) duplicating
-// `waypoints` purely for server-side spatial queries — and `start_point` ship
-// as opaque binary on `select('*')`, doubling the geometry payload with no
-// client reader. Enumerate the consumed set instead. `as const` so supabase-js
-// infers the row shape (see CLUB_SELECT_COLS).
-const ROUTE_LIST_COLS =
-	'id, user_id, club_id, name, distance_m, elevation_m, surface, waypoints, is_starred, run_count, created_at' as const;
-
-// The public_routes view (saved routes owned by another user) omits
-// waypoints / is_starred / geom by construction — take the subset it exposes.
-const PUBLIC_ROUTE_LIST_COLS =
-	'id, user_id, club_id, name, distance_m, elevation_m, surface, run_count, created_at' as const;
-
-export async function fetchRoutes(): Promise<Route[]> {
+export async function fetchRoutes(): Promise<RouteListItem[]> {
 	const result = await fetchRoutesWithError();
 	return result.routes;
 }
@@ -1593,7 +1586,10 @@ function describeReadError(e: { message: string; code?: string | null }): string
 /// and routes they've bookmarked (`saved_routes.user_id = me`). Each is
 /// fetched in parallel and merged with a Set on `id` so a user who saves
 /// their own route doesn't see it twice.
-export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: string | null }> {
+export async function fetchRoutesWithError(): Promise<{
+	routes: RouteListItem[];
+	error: string | null;
+}> {
 	// Read the session via `getSession()` — synchronous-ish from local
 	// storage, doesn't round-trip to /auth/v1/user, and works the
 	// instant the supabase-js client has initialised. Falls back to
@@ -1624,7 +1620,7 @@ export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: 
 		return { routes: [], error: describeReadError(ownedRes.error) };
 	}
 
-	const owned = (ownedRes.data ?? []) as unknown as Route[];
+	const owned = (ownedRes.data ?? []) as unknown as RouteListItem[];
 
 	// Saved routes can't be embedded as `route:routes(*)` off saved_routes:
 	// the base `routes` SELECT RLS only exposes the caller's own + club
@@ -1649,7 +1645,7 @@ export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: 
 	const savedIds = ((savedIdsRes.data ?? []) as { route_id: string }[]).map(
 		(r) => r.route_id,
 	);
-	let saved: Route[] = [];
+	let saved: RouteListItem[] = [];
 	if (savedIds.length > 0) {
 		const [savedBaseRes, savedPublicRes] = await Promise.all([
 			supabase.from('routes').select(ROUTE_LIST_COLS).in('id', savedIds),
@@ -1664,23 +1660,24 @@ export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: 
 			console.error('fetchRoutes (saved bodies) failed', savedErr);
 			return { routes: [], error: describeReadError(savedErr) };
 		}
-		const byId = new Map<string, Route>();
+		const byId = new Map<string, RouteListItem>();
 		for (const r of [
-			...((savedBaseRes.data ?? []) as unknown as Route[]),
-			...((savedPublicRes.data ?? []) as unknown as Omit<Route, 'waypoints' | 'is_starred'>[]).map(
-				(r) => ({ ...r, ...publicRouteListFill() }) as Route,
-			),
+			...((savedBaseRes.data ?? []) as unknown as RouteListItem[]),
+			...((savedPublicRes.data ?? []) as unknown as PublicRouteListRow[]).map((r) => ({
+				...r,
+				...publicRouteListFill()
+			})),
 		]) {
 			if (!byId.has(r.id)) byId.set(r.id, r);
 		}
 		// Preserve the saved_at-desc order the id list already carries.
 		saved = savedIds
 			.map((id) => byId.get(id))
-			.filter((r): r is Route => r != null);
+			.filter((r): r is RouteListItem => r != null);
 	}
 
 	const seen = new Set<string>();
-	const merged: Route[] = [];
+	const merged: RouteListItem[] = [];
 	for (const r of [...owned, ...saved]) {
 		if (seen.has(r.id)) continue;
 		seen.add(r.id);
@@ -2063,15 +2060,6 @@ const CLUB_SELECT_COLS =
 // today (no UI consumer).
 const EVENT_SELECT_COLS =
 	'id, club_id, title, description, starts_at, timezone, duration_min, meet_label, route_id, distance_m, pace_target_sec, capacity, author_id, created_at, updated_at, recurrence_freq, recurrence_byday, recurrence_until, recurrence_count, category, discipline, gym_template, session_plan_id, is_public' as const;
-
-function slugify(name: string): string {
-	return name
-		.toLowerCase()
-		.trim()
-		.replace(/[^a-z0-9]+/g, '-')
-		.replace(/^-|-$/g, '')
-		.slice(0, 48);
-}
 
 /** Browse public clubs. Most recently created first. */
 export async function browseClubsWithError(
@@ -2718,7 +2706,7 @@ export async function createClub(input: {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
 
-	const baseSlug = slugify(input.name) || 'club';
+	const baseSlug = clubSlug(input.name) || CLUB_SLUG_FALLBACK;
 	const inviteToken = input.join_policy === 'invite' ? genToken() : null;
 	// Retry with a short random suffix up to 3 times if the slug is taken —
 	// simpler than a SQL trigger and acceptable for the expected volume.
@@ -3070,12 +3058,12 @@ export async function fetchNextRsvpedEvent(
 		if (!ev) continue;
 		// The card's whole job is to deep-link the club. A missing slug would
 		// route it at /clubs/undefined, so skip the candidate and try the next.
-		const clubSlug = singleEmbed(ev.clubs)?.slug;
-		if (!clubSlug) continue;
+		const slug = singleEmbed(ev.clubs)?.slug;
+		if (!slug) continue;
 		return {
 			event_id: eventId,
 			instance_start: instanceStart,
-			club_slug: clubSlug,
+			club_slug: slug,
 			title: ev.title,
 			meet_label: ev.meet_label ?? null,
 		};

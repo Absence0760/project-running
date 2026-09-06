@@ -663,4 +663,75 @@ void main() {
     expect(out[0].code, '1'); // OFF kept (first wins)
     expect(out[1].code, '3');
   });
+
+  test('dedupeFoods folds U+0130, so the phone and the web collapse the same rows',
+      () {
+    // The two runtimes' `toLowerCase` disagree at 466 code points and the one
+    // reachable in Latin text is the Turkish dotted capital I: Dart answered
+    // `i` where JS answered `i` + U+0307, so these two rows were one product
+    // here and two on the web (decisions § 1251 + § 1280). Mirrored in
+    // `food_search.test.ts`.
+    const off = FoodSearchResult(
+      code: '1',
+      source: FoodSource.off,
+      name: 'İzmir Tulum Peyniri',
+      brand: 'Sütaş',
+      calories100g: 300,
+      protein100g: 20,
+      carbs100g: 1,
+      fat100g: 24,
+    );
+    const usdaDupe = FoodSearchResult(
+      code: '2',
+      source: FoodSource.usda,
+      name: 'izmir tulum peyniri',
+      brand: 'Sütaş',
+      calories100g: 300,
+      protein100g: 20,
+      carbs100g: 1,
+      fat100g: 24,
+    );
+    final out = dedupeFoods([off, usdaDupe]);
+    expect(out.length, 1);
+    expect(out[0].code, '1');
+  });
+
+  test('dedupeFoods collapses the same product spelled with and without accents',
+      () {
+    // Not a side effect of the parity fix but the reason the fold is the right
+    // instrument for this key: the two sources are independent catalogues and
+    // spell one product two ways.
+    const off = FoodSearchResult(
+      code: '1',
+      source: FoodSource.off,
+      name: 'Café Latte',
+      brand: 'Müller',
+      calories100g: 60,
+      protein100g: 3,
+      carbs100g: 7,
+      fat100g: 2,
+    );
+    const usdaDupe = FoodSearchResult(
+      code: '2',
+      source: FoodSource.usda,
+      name: 'Cafe Latte',
+      brand: 'Muller',
+      calories100g: 60,
+      protein100g: 3,
+      carbs100g: 7,
+      fat100g: 2,
+    );
+    const distinct = FoodSearchResult(
+      code: '3',
+      source: FoodSource.off,
+      name: 'Cafe Mocha',
+      brand: 'Müller',
+      calories100g: 60,
+      protein100g: 3,
+      carbs100g: 7,
+      fat100g: 2,
+    );
+    final out = dedupeFoods([off, usdaDupe, distinct]);
+    expect(out.map((r) => r.code).toList(), <String>['1', '3']);
+  });
 }

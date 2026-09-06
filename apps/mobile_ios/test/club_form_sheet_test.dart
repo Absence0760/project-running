@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:ui_kit/ui_kit.dart' show ChoiceChipRow;
 
+import '../lib/club_slug.dart';
 import '../lib/social_service.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/club_form_sheet.dart';
@@ -317,7 +318,9 @@ void main() {
 
     testWidgets('a name with no alphanumerics surfaces the slug error',
         (tester) async {
-      // "!!!" slugifies to empty → friendly inline error, no API call.
+      // "!!!" carries no letter or digit in ANY script → friendly inline
+      // error, no API call. A name that merely has no ASCII (a Cyrillic one,
+      // say) is creatable — see the non-Latin case above.
       final fake = _CapturingSocialService();
       await _openSheet(tester, social: fake);
       await tester.enterText(find.widgetWithText(TextField, 'Name'), '!!!');
@@ -353,6 +356,47 @@ void main() {
       expect(fake.capturedSlug, 'hackney-half-runners');
       // The launcher records the popped slug.
       expect(find.text('result=hackney-half-runners'), findsOneWidget);
+    });
+
+    testWidgets('the persisted slug is the folded one, matching the web rail',
+        (tester) async {
+      // The slug reaches `clubs.slug` and is thereafter the club's public
+      // URL, so the phone and the web must derive the same one. They did not:
+      // the two runtimes' `toLowerCase` disagree at U+0130, so this name
+      // produced `izmir-kosu-kulubu` here and `i-zmir-kosu-kulubu` on the web
+      // (decisions § 1251 + § 1279). Pinned end-to-end at the sheet rather
+      // than only in `club_slug_test.dart`, because the defect was that the
+      // CALLER re-derived it.
+      final fake = _CapturingSocialService();
+      await _openSheet(tester, social: fake);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Name'),
+        'İzmir Koşu Kulübü',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+      await tester.pumpAndSettle();
+
+      expect(fake.createCalled, isTrue);
+      expect(fake.capturedSlug, 'izmir-kosu-kulubu');
+    });
+
+    testWidgets('a club named in a non-Latin script is creatable, under the '
+        'shared fallback slug', (tester) async {
+      // The refusal used to test the SLUG for emptiness, so every name written
+      // entirely in Cyrillic, Greek, Hebrew, Arabic or CJK was rejected on the
+      // phone — with a message claiming the name had no letter or digit, about
+      // a name made entirely of letters — while the web created it under the
+      // fallback slug (decisions § 1281).
+      final fake = _CapturingSocialService();
+      await _openSheet(tester, social: fake);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Name'), 'Бегуны Москвы');
+      await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+      await tester.pumpAndSettle();
+
+      expect(fake.createCalled, isTrue);
+      expect(fake.capturedName, 'Бегуны Москвы');
+      expect(fake.capturedSlug, kClubSlugFallback);
     });
 
     testWidgets(

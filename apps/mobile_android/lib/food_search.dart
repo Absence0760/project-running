@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'catalogue_browse.dart' show fold;
+
 /// Food search for nutrition logging — two sources behind one shape.
 ///
 /// Dart twin of `apps/web/src/lib/nutrition/food_search.ts` — keep the parse
@@ -455,14 +457,23 @@ class _Settled {
   const _Settled({this.value, this.error});
 }
 
-/// Drop duplicate foods by case-insensitive name+brand, keeping the first
-/// occurrence (so the source order passed in decides the winner). Pure.
+/// Drop duplicate foods by case- and accent-insensitive name+brand, keeping
+/// the first occurrence (so the source order passed in decides the winner).
+/// Pure.
+///
+/// The key folds through `catalogue_browse`'s generated table rather than the
+/// runtime's own `toLowerCase`, for the reason this twin exists at all: the
+/// two runtimes' lower-case disagree at 466 code points (decisions § 854), so
+/// a Turkish product name collapsed two rows into one here and left two on the
+/// web from the same two searches. Folding the accents too is the point of the
+/// dedupe and not a side effect — the two sources spell the same product
+/// differently, and `Café Latte` from Open Food Facts beside `Cafe Latte` from
+/// USDA is one product listed twice.
 List<FoodSearchResult> dedupeFoods(List<FoodSearchResult> results) {
   final seen = <String>{};
   final out = <FoodSearchResult>[];
   for (final r in results) {
-    final key =
-        '${r.name.trim().toLowerCase()} ${(r.brand ?? '').trim().toLowerCase()}';
+    final key = '${fold(r.name.trim())} ${fold((r.brand ?? '').trim())}';
     if (seen.contains(key)) continue;
     seen.add(key);
     out.add(r);

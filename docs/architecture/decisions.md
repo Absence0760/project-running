@@ -25770,3 +25770,165 @@ In `core/data.ts`: delete the two literal constants and import `ROUTE_LIST_COLS`
 **Two adjacent instances of the same class were measured and are deliberately not touched.** `nearbyPublicRoutes` and `searchPublicRoutes` cast an RPC that returns `setof public_routes` — fifteen columns — to `Route[]`, so they omit seven: `waypoints`, `is_starred`, `geom`, `geom_public`, `start_point`, `description` and `shadow_hidden`. Their only consumer, `RouteExplorer.svelte`, reads `is_featured` and `tags`, both of which the view serves, so nothing is broken; and no new declaration is owed either, because the generated `Functions['search_public_routes']['Returns'][number]` already IS the truthful type. And `Route` itself over-declares `shadow_hidden` on every path: `fetchRouteById` destructures it away with a `void` and returns `as Route`, so the overlay promises a field the read boundary deliberately strips. Removing it from `Omit<RouteRow, …>` is a one-word edit that breaks `core/mock-data.ts`'s `makeRoute`, which sets it — filed with the remedy rather than half-applied.
 
 **Also measured, and it is why the public half still needs `as unknown as`.** Postgres cannot prove non-nullability through a view, so the generated `public_routes` row types `id`, `user_id`, `name`, `distance_m` and `run_count` as nullable where the base table types them `NOT NULL`. `PublicRouteListRow` is therefore `Pick`ed from `Route` rather than from the view — the values are non-null at runtime because the view selects them straight off `routes` — and the residual gap is a generator artifact, not a lie the type is telling.
+
+## 1279. The club slug was one persisted answer derived twice, and the fold is the right instrument because a slug wants ASCII anyway
+
+[§ 1251](#1251-the-residual-dart-case-gap-was-measured-against-the-wrong-instrument--in-european-text-its-whole-reachable-surface-is-one-code-point) ranked the club slug first among the residual case-gap
+survivors because it is the only one that PERSISTS, and the filing was right:
+`clubs.slug` is written at create time and is thereafter the club's public URL.
+Both rails spelled the derivation the same way — lower-case, then `[^a-z0-9]+`
+to a hyphen — which reads as one expression and is not one function. Measured
+on the committed code: `İzmir` gave `i-zmir` on the web, because JS emits `i`
+plus U+0307 and the strip turns the combining dot into a separator, and `izmir`
+on the phone. Two clients, one club name, two permanent public URLs.
+
+**The derivation is now one module, and extraction is half the fix rather than
+tidiness.** `slugify` lived inside `core/data.ts`, which calls the `supabase`
+singleton at import time — `core/data.test.ts` is a file of SOURCE guards for
+exactly that reason, and reads the module as text. So the web half of a
+persisted, two-platform contract had no behavioural test and could not be given
+one where it sat. `social/club_slug.ts` ↔ `club_slug.dart` is registered in both
+parity registries with 13 mirror tests each, which is the only thing that makes
+the two answers comparable; § 641's lesson is that an unregistered pair is one
+whose divergence nothing can detect, and this pair was not merely unregistered,
+it was two anonymous expressions.
+
+**The fold is `catalogue_browse`'s generated table and deliberately not the
+frozen exercise one.** § 1251 named that choice and it holds: the exercise table
+is frozen because two of the columns keyed through it sit under a validated
+CHECK, so moving it is a migration, and a slug carries no such constraint.
+The positive reason is stronger than the parity one. A slug wants to be ASCII,
+and stripping a diacritic leaves the base letter where the raw strip left a
+hyphen: `Zürich Runners` reaches `zurich-runners` rather than `z-rich-runners`.
+Letters with no canonical decomposition (`ß`, `ø`, `đ`) still strip, because
+[§ 856](#856-hangul-is-computed-and-canonical-reordering-is-conceded--the-two-things-the-fold-table-deliberately-does-not-hold) settled that the fold does not invent equivalences Unicode does not
+have, and importing a transliteration table for a slug would be a much larger
+claim than this change is making.
+
+**Two things this deliberately does not do, both stated rather than left to be
+rediscovered.** It does not rewrite the slugs already in the table: a slug is a
+URL, and silently re-minting one breaks every link to it, so the accented clubs
+created before today keep the spelling they were created with and only new ones
+improve. And folding WIDENS the class of names that collide — `Café Runners`
+and `Cafe Runners` now derive one base slug where they derived two. That is
+absorbed rather than ignored: both create paths retry up to four times with a
+random suffix (web's `createClub`, `SocialService.createClub`), which is the
+same mechanism that already handled two clubs with the identical name, and the
+mobile path having that retry was verified rather than assumed — `ApiClient`
+carries a second `createClub` that does not, and it turns out to have no caller
+at all.
+
+## 1280. A registered parity pair could not see this divergence, because both halves were spelled identically and still answered differently
+
+`dedupeFoods` keys the food-search merge on name plus brand, and both halves
+were `trim().toLowerCase()`. `food_search` has been a REGISTERED parity pair the
+whole time, its two files name each other, and the `shared-library-syncer` reads
+both — and none of that could ever have caught this, because every one of those
+instruments compares SOURCE. The two sources agree. The runtimes underneath them
+do not, at 466 code points ([§ 854](#854-the-generated-fold-table-carries-the-case-mapping-too-rather-than-composing-with-darts-tolowercase)), so a Turkish product name collapsed two rows
+into one on the phone and left two on the web from the same pair of searches.
+That is worth recording as a class and not just a fix: a parity pair is only as
+good as the primitives its two halves share, and `toLowerCase` is not one of
+them. Both registry entries now say so, which is the only place a future editor
+would look.
+
+**The cosmetic rail gets the same instrument as the persisted one, and the
+argument is not symmetry.** The round's framing invited a narrower answer here —
+the dedupe key is computed and consumed inside one function call, never stored,
+never compared across platforms, so nothing durable is wrong. But the fold is
+not merely the parity-preserving choice for this key, it is the CORRECT one:
+Open Food Facts and USDA are independent catalogues that spell one product two
+ways, so `Café Latte` beside `Cafe Latte` is the duplicate the function exists
+to drop. The cost the widening carries is that a dedupe hides rows, and it was
+weighed rather than waved past — the key includes the brand, and two products
+from one brand differing only in their diacritics are the same product.
+
+**A narrower instrument was considered and does not exist.** "Fold only where
+the runtimes disagree" needs a table of exactly the disagreements, which is a
+second generated table serving one function, maintained against two runtimes'
+Unicode versions rather than against Unicode. The generated table already in the
+tree answers the same question for a smaller cost, and it is the one § 1251
+named.
+
+## 1281. The phone refused to create a club named in any non-Latin script, and the message it showed the user was false
+
+Putting the two slug rails side by side to write § 1279 surfaced a defect the
+filing did not name and that is larger than the one it did. The club form
+sheet computed the slug, and refused the save when the slug came back EMPTY,
+under `clubFormErrSlug` — "Name needs at least one letter or digit." For
+`Бегуны Москвы` that sentence is false: the name is nothing but letters. The
+fold romanises no script, so a club named entirely in Cyrillic, Greek, Hebrew,
+Arabic, Thai, Devanagari or CJK has no `[a-z0-9]` to build a slug from, and
+every one of them was impossible to create from the phone. The web created them
+without comment: `createClub` substitutes a literal `club` for an empty base
+slug and the collision retry distinguishes the second such club. Seven shipped
+locales, and one of the two clients refused half the world's club names.
+
+**The refusal was testing the wrong string.** It now tests the NAME for a
+Unicode letter or digit (`[\p{L}\p{N}]`, which Dart's `RegExp` supports under
+`unicode: true`), which is what the message claims and what the question
+actually is: whether the name NAMES something, which every script can do, as
+against what the URL can spell, which only ASCII can. `!!!` and `###` still
+refuse, and their two existing tests still pass unchanged. The predicate stays
+in the sheet and is explicitly NOT part of the parity pair — it is a mobile-only
+affordance, the same shape `safety_nudge` records for its own surface, because
+the web editor asks for a non-blank name and nothing more.
+
+**The fallback joined the pair rather than being a second literal.** `'club'`
+reaches `clubs.slug` and becomes a public URL, so two hand-written copies of it
+is the same class of defect this whole entry is about, one constant smaller.
+`CLUB_SLUG_FALLBACK` / `kClubSlugFallback` is exported beside the derivation and
+both create paths substitute it. Whether the WEB should also refuse a name with
+no letter or digit — today `!!!` is a perfectly creatable club there, slug
+`club` — is a real question this change does not answer, because the web
+editor's validation is not this lane's tree; it is filed.
+
+## 1282. The 48-character cap was the second divergence hiding in the same expression, and its reachable window is 49 to 80 characters
+
+The filing measured the case gap and stopped there. The two rails differed in a
+second way nobody had written down: web's `slugify` ended `.slice(0, 48)` and
+the phone's `_slugify` ended nowhere. `clubs.slug` is `text unique not null`
+with no CHECK and no length constraint, so nothing server-side was bounding it
+either — the cap existed on exactly one of the two clients that write the
+column. The window is not unbounded, which is why it is worth stating precisely
+rather than alarmingly: `clubs_name_len_chk` caps the name at 80 characters
+(`text_limits`, migration `20270502_001`), so the reachable divergence is a slug
+of 49 to 80 characters, mintable only from the phone.
+
+`CLUB_SLUG_MAX_LEN` is now part of the pair for the same reason the derivation
+is. One correctness detail came with it: a cap can land mid-separator, so the
+cut is followed by a second trailing-hyphen strip. The uncapped path cannot
+produce one — the `[^a-z0-9]+` collapse means the string never carries adjacent
+hyphens, so a single edge strip suffices — which is why the extra step reads as
+redundant and is not. Both suites pin it.
+
+## 1283. The route-name search fold is not in `core/data.ts`, and the sort beside it is a larger divergence than the search
+
+The item as handed down located the route-name search fold in `data.ts`. It is
+not there, and the correction is worth more than the fix would have been.
+`data.ts` contains exactly two `toLowerCase` sites: `slugify`, which is
+§ 1279's, and the exact-`@handle` float in `searchPeople`, which § 1251 already
+ruled unreachable because `user_profiles_handle_format` bounds a handle to
+`^[a-z0-9_]{3,30}$` and which has no Dart twin to diverge from. The route rails
+are the ones the round-40 filing itself named:
+`apps/web/src/routes/routes/+page.svelte:153/159` against
+`apps/mobile_android/lib/screens/routes_screen.dart:402/413`, neither of them in
+this lane's tree, so the item is refiled with the measured paths rather than
+guessed at.
+
+Measured, the search half of the filing is right and its direction is worth
+keeping: `'İstanbul Loop'.toLowerCase()` is `i̇stanbul loop` in Node, which does
+not contain `istanbul`, so the route is found by typing `istanbul` on the phone
+and not on the web — the same reversal § 1249 recorded for the catalogue picker.
+The one-line fix on each side is `fold` from `catalogue_browse`.
+
+**The SORT beside it is a different and larger question, and folding it would be
+wrong.** Web orders `az` with `localeCompare` and the phone with
+`toLowerCase().compareTo()`. Those disagree far more widely than at one code
+point — a collation orders `Å` beside `A` where a code-unit comparison puts it
+after `Z`, and `localeCompare`'s answer depends on the host's ICU data, which is
+why `catalogue_browse` deliberately compares FOLDED names with `<` and `>`
+rather than collating at all. Making the two agree means choosing which of those
+two orders the product wants on both platforms, not reaching for the fold
+because it is nearby. Filed as its own item, with that choice stated as the
+work.
