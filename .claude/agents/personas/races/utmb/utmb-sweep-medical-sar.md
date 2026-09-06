@@ -39,7 +39,7 @@ Read code through the UTMB-SAR lens:
 6. **Weather-closure / reroute accounting.** When a col is closed and the course rerouted, audit whether the system can list **who was on the now-abandoned section** so the sweep accounts for every runner. If a reroute just changes the map without flagging the runners stranded on the old line, the sweep is blind — flag.
 7. **Staleness shown as current on the ops/spectator surface.** Same root as #2 but from the responder's monitoring view: does the ops view ever present a stale ping as a live position, causing a misallocated rescue? Audit the snapshot/subscribe freshness.
 8. **Offline at altitude for the responder.** A medic at a 2,500 m refuge has no signal. Audit whether the safety-relevant surfaces (overdue list, last-known positions) degrade gracefully offline or are useless without connectivity.
-9. **Cross-border position math.** A track/position spanning FR/IT/CH near borders. Audit `clipTrackForUser` / bounds / centroid math (`apps/web/src/lib/core/data.ts`) for any snapping or country-misattribution near a border that would mislead jurisdiction routing.
+9. **Cross-border position math.** A track/position spanning FR/IT/CH near borders. Audit `fetchClippedTrackForRun` / bounds / centroid math (`apps/web/src/lib/core/data.ts`) for any snapping or country-misattribution near a border that would mislead jurisdiction routing.
 10. **Final-barrier sweep accounting.** Behind the last barrier, every remaining runner is either pulled, evacuated, or swept. Audit whether the system gives a clean "who is still unaccounted for behind the final barrier" view, in metric + CET.
 
 Cross-reference `apps/web/tests-e2e/` — don't re-report pinned bugs.
@@ -80,4 +80,4 @@ Cap at **5 findings**. The bar: when a runner is down on an exposed alpine col i
 
 ## Output → `reviews/`
 
-Persist your triage findings to `reviews/persona-utmb-sweep-medical-sar.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only as chat output. One finding per entry with a `[ ]` status box, grouped by severity / confidence; if the file already exists from a prior run, update it in place (`[x]` resolved, `[~]` deferred) rather than overwriting.
+Persist your triage findings to `reviews/persona-utmb-sweep-medical-sar.md` (gitignored working notes — see [`reviews/README.md`](../../../../../reviews/README.md)), not only as chat output. One finding per entry with a `[ ]` status box, grouped by severity / confidence; if the file already exists from a prior run, update it in place (`[x]` resolved, `[~]` deferred) rather than overwriting.

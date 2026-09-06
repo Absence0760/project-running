@@ -581,7 +581,7 @@ Pure emitter: `apps/web/src/lib/routes/route_gpx.ts`
 **"GPX + markers"** download on `/routes/[id]` + `/routes/[id]/roadbook`
 (web, shown only when the route has ≥1 marker) and the **"Share as GPX +
 markers"** route-detail action on mobile. Distinct from the plain
-[GPX route export](features.md#gpx--kml-import) (line only, no waypoints),
+[GPX route export](../product/features.md#gpx--kml-import) (line only, no waypoints),
 which both still offer.
 
 ---

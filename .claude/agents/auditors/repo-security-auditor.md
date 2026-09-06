@@ -34,7 +34,7 @@ The `/audit/*` slash commands invoke you. Their prompt tells you which area to f
 | `secrets` | `process.env.*` references in client-bundle paths; service-role key in git history (`git log -S`); public asset containing a literal key; verbose Actions `env:` | `.github/workflows/`, `apps/web/src/routes/`, every `.env*` |
 | `public-rows` | Columns surfaced via `is_public = true` policies that reveal private state (raw external API blobs in metadata, sync timestamps, internal flags) | `migrations/`, `docs/backend/metadata.md` |
 | `paywall` | Pro-only features reachable by direct RPC call; `BYPASS_PAYWALL` honored in prod; client-trusted subscription state | `docs/features/paywall.md`, grep for `is_pro`, `subscription_tier` |
-| `privacy-zones` | Track render site that bypasses `clipTrackForUser`; `viewerId == ownerId` without null-check (treats anon as owner); owner-bypass missing on caller side; cache key without `raw:`/`clip:` prefix | `decisions.md §33`, `RunTrackPreview.svelte`/`.dart`, `public_run_screen.dart`, `public_route_screen.dart` |
+| `privacy-zones` | Track render site that bypasses `fetchClippedTrackForRun` (runs) or `fetchClippedRouteForViewer` / `ApiClient.clipRouteForViewer` (routes); `viewerId == ownerId` without null-check (treats anon as owner); owner-bypass missing on caller side; cache key without `raw:`/`clip:` prefix | `decisions.md §33`, `RunTrackPreview.svelte`/`.dart`, `public_run_screen.dart`, `public_route_screen.dart` |
 
 ## How to report
 

@@ -103,6 +103,7 @@ import { fileURLToPath } from 'node:url';
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const WORKFLOW_DIR = join(REPO_ROOT, '.github', 'workflows');
 export const ACTION_DIR = join(REPO_ROOT, '.github', 'actions');
+export const ORIENTATION_DOC = join(REPO_ROOT, 'CLAUDE.md');
 
 /// Bundled jobs the derivation below cannot see, and why the job name cannot
 /// diagnose for them. Anything running two or more of this repo's own guards
@@ -917,6 +918,96 @@ export function checkRuleSubjects(files, actions) {
 	return { errors, ok };
 }
 
+/// Rule 6. The job count the root `CLAUDE.md` states is the job count `ci.yml`
+/// holds, and the number the gate is said to wait for is the length of its own
+/// `needs:` list.
+///
+/// Both figures are transcriptions of something this file already parses, and
+/// nothing had ever compared them: the count was wrong after most rounds that
+/// added a job, was corrected by hand twice, and drifted again each time
+/// (decisions § 1260). The claims are matched by PHRASE, and a phrase that
+/// matches NOTHING is a hard error rather than a pass — a reworded sentence
+/// must fail loudly instead of silently checking nothing, which is the one way
+/// a prose guard reads as complete while covering none of its subject.
+/// A sweep beside it fails any OTHER number written next to "CI jobs", so a
+/// second claim cannot be added in a form the templates do not read.
+/**
+ * @param {readonly WorkflowFile[]} files
+ * @param {string} doc the root orientation document's text
+ * @returns {{ errors: string[], ok: string[], stated: number }}
+ */
+export function checkStatedJobCount(files, doc) {
+	/** @type {string[]} */
+	const errors = [];
+	/** @type {string[]} */
+	const ok = [];
+	const ci = files.find((f) => f.name === 'ci.yml');
+	if (!ci) {
+		return { errors: ['ci.yml was not read, so its job count cannot be compared'], ok, stated: 0 };
+	}
+	const jobs = parseJobKeys(ci.text);
+	const needs = parseNeeds(ci.text, GATE_JOB) ?? [];
+	// The block wraps across lines in the layout diagram, so a sentence is read
+	// with its indentation folded away rather than line by line.
+	const prose = doc.replace(/\n\s+/g, ' ');
+
+	/** @type {Array<{ re: RegExp, want: number, what: string }>} */
+	const claims = [
+		{ re: /the same (\d+) CI jobs/g, want: jobs.length, what: 'job keys in ci.yml' },
+		{
+			re: /needs: every one of the other (\d+)/g,
+			want: needs.length,
+			what: `entries in \`${GATE_JOB}\`'s needs: list`,
+		},
+	];
+
+	/** @type {Array<[number, number]>} spans a registered claim accounted for */
+	const claimed = [];
+	let matched = 0;
+	for (const { re, want, what } of claims) {
+		let hits = 0;
+		for (const m of prose.matchAll(re)) {
+			hits++;
+			matched++;
+			claimed.push([m.index, m.index + m[0].length]);
+			const got = Number(m[1]);
+			if (got === want) continue;
+			errors.push(
+				`CLAUDE.md states ${got} where ci.yml has ${want} ${what}. The workflow is the ` +
+					'fact; the sentence is the transcription.',
+			);
+		}
+		if (hits === 0) {
+			errors.push(
+				`CLAUDE.md holds no sentence matching /${re.source}/, so that rule checks ` +
+					'nothing. Restore the phrasing, or re-anchor the rule on the sentence that ' +
+					'replaced it.',
+			);
+		}
+	}
+
+	// The other direction: a number written next to "CI jobs" that no claim
+	// read. Without it the templates would read as complete while covering only
+	// the sentence someone remembered to register.
+	for (const m of prose.matchAll(/\d+ CI jobs/g)) {
+		const a = m.index;
+		const b = a + m[0].length;
+		if (claimed.some(([x, y]) => a < y && x < b)) continue;
+		errors.push(
+			`CLAUDE.md writes "${m[0]}", which no template in checkStatedJobCount reads. ` +
+				'Register it against the workflow, or write the sentence count-free.',
+		);
+	}
+
+	if (errors.length === 0) {
+		ok.push(
+			`the root CLAUDE.md's ${matched} CI-shape figure(s) match ci.yml: ${jobs.length} ` +
+				`job key(s), ${needs.length} of them in \`${GATE_JOB}\`'s needs: list`,
+		);
+	}
+	return { errors, ok, stated: matched };
+}
+
 /**
  * @param {readonly WorkflowFile[]} files
  * @param {readonly WorkflowFile[]} [actions]
@@ -928,6 +1019,7 @@ export function checkAll(files, actions = []) {
 	const verdict = checkGateVerdict(files);
 	const delivery = checkShellSafeDiagnoses(files, actions);
 	const subjects = checkRuleSubjects(files, actions);
+	const stated = checkStatedJobCount(files, readFileSync(ORIENTATION_DOC, 'utf-8'));
 	return {
 		errors: [
 			...subjects.errors,
@@ -936,6 +1028,7 @@ export function checkAll(files, actions = []) {
 			...gate.errors,
 			...verdict.errors,
 			...delivery.errors,
+			...stated.errors,
 		],
 		ok: [
 			...subjects.ok,
@@ -944,6 +1037,7 @@ export function checkAll(files, actions = []) {
 			...gate.ok,
 			...verdict.ok,
 			...delivery.ok,
+			...stated.ok,
 		],
 		scoping,
 		diagnoses,
@@ -951,6 +1045,7 @@ export function checkAll(files, actions = []) {
 		verdict,
 		delivery,
 		subjects,
+		stated,
 	};
 }
 

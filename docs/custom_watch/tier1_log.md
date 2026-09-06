@@ -900,7 +900,7 @@ the composed screens, the ICE card, the BLE bond, the pushed course and workout,
 the trackback breadcrumb, and the recorder's pushed biometrics / pacer goal /
 gear / roadbook / fuel plan / page mask / auto-lap rung / backyard arm. The two
 arguable ones are argued in § 378 and tabulated in
-[`privacy.md`](privacy.md#the-erase-378): the **ICE card** goes because it is
+[`privacy.md`](privacy.md#the-erase--378): the **ICE card** goes because it is
 the only third-party personal data on the device (a next-of-kin who never
 consented to the next holder) and is re-pushable in one action, and the **bond**
 goes because it is a live credential whose IRK defeats the previous owner's
