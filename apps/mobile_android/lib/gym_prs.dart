@@ -223,6 +223,24 @@ int distinctExerciseCount(Iterable<String> exerciseNames) {
   return keys.length;
 }
 
+/// Do two free-text exercise spellings name the same lift?
+///
+/// The one comparison every *consecutive-set* block grouping must make. The
+/// display surfaces each walked a flat set list and opened a new block on
+/// `last.name != s.exerciseName` -- the raw DISPLAY spelling -- so two
+/// consecutive sets of one lift typed two ways rendered as two blocks beside a
+/// header stat counting one, [distinctExerciseCount] having been keyed since
+/// decisions 1248. Adjacency itself is load-bearing and stays: a superset
+/// alternates A/B/A and has to stay three blocks. Only the equality test moves
+/// onto the key.
+///
+/// Blank spellings compare equal to each other, as they did on the raw
+/// comparison -- a surface that renders an unnamed set still renders it, and
+/// deciding to split those into a block each is a separate call no caller has
+/// asked for.
+bool sameExerciseName(String? a, String? b) =>
+    normaliseExerciseName(a ?? '') == normaliseExerciseName(b ?? '');
+
 class WorkoutPrResult {
   /// The grouping key — [normaliseExerciseName] of the exercise. Carried so a
   /// caller keying a lookup on the result never re-derives it from

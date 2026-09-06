@@ -159,6 +159,25 @@ void main() {
     });
   });
 
+  group('sameExerciseName', () {
+    test('spellings the canonical fold merges are the same lift', () {
+      expect(sameExerciseName('Bench Press', 'bench press'), isTrue);
+      expect(sameExerciseName('Bench  Press', 'Bench Press'), isTrue);
+      expect(sameExerciseName('Bench\u00a0Press', 'bench press'), isTrue);
+      expect(sameExerciseName('\u0130ncline Press', 'incline press'), isTrue);
+      expect(sameExerciseName('  Row  ', 'row'), isTrue);
+    });
+
+    test('different lifts, and the blank cases', () {
+      expect(sameExerciseName('Bench Press', 'Back Squat'), isFalse);
+      expect(sameExerciseName('Row', ''), isFalse);
+      // Blank spellings match each other, as they did on the raw comparison
+      // the grouping surfaces used to make.
+      expect(sameExerciseName('', '   '), isTrue);
+      expect(sameExerciseName(null, null), isTrue);
+    });
+  });
+
   group('distinctExerciseCount', () {
     test('spellings the canonical fold merges count once', () {
       // Each pair is one lift under two spellings that `trim().toLowerCase()`

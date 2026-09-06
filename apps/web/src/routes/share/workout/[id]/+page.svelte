@@ -12,6 +12,7 @@
 		distinctExerciseCount
 	} from '$lib/share/share_workout_meta';
 	import type { SharedWorkoutSet } from '$lib/share/share_workout_lookup';
+	import { normaliseExerciseName } from '$lib/gym/gym_prs';
 
 	let { data } = $props();
 
@@ -35,11 +36,12 @@
 	// shape as the owner's /gym/[id] detail, minus the owner-only PR / edit
 	// affordances. No notes / RPE are fetched, so nothing private leaks.
 	let blocks = $derived.by(() => {
-		const out: { name: string; sets: SharedWorkoutSet[] }[] = [];
+		const out: { name: string; key: string; sets: SharedWorkoutSet[] }[] = [];
 		for (const s of data.workout?.sets ?? []) {
 			const last = out[out.length - 1];
-			if (last && last.name === s.exercise_name) last.sets.push(s);
-			else out.push({ name: s.exercise_name, sets: [s] });
+			const key = normaliseExerciseName(s.exercise_name);
+			if (last && last.key === key) last.sets.push(s);
+			else out.push({ name: s.exercise_name, key, sets: [s] });
 		}
 		return out;
 	});
