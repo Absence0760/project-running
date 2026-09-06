@@ -614,6 +614,32 @@ void main() {
       expect(indexSummaries().map((s) => s['id']).toSet(), {'r1', 'r2'});
     });
 
+    test('restoreFromBackup keeps a record whose clock is the wrong type',
+        () async {
+      // decisions § 1290. The `as String?` cast this replaced threw on a
+      // non-string clock, and `_restoreFromBackup` catches per record — so an
+      // archive entry whose `last_modified_at` was a number was skipped whole,
+      // taking a food entry that exists nowhere else with it, while the same
+      // entry with NO clock field at all restored fine.
+      final record = StoredFood(
+        row: {
+          'id': 'mistyped-clock',
+          'item_name': 'Porridge',
+          'started_at': DateTime.utc(2026, 6, 1).toIso8601String(),
+        },
+        syncState: FoodSyncState.synced,
+      ).toJson();
+      record['last_modified_at'] = 1757116800000;
+
+      final before = DateTime.now().toUtc();
+      expect(await store.restoreFromBackup([record]), 1);
+      expect(store.rowsById.containsKey('mistyped-clock'), isTrue);
+      final stored = store.rowsById['mistyped-clock']!;
+      expect(stored.row['item_name'], 'Porridge');
+      expect(stored.syncState, FoodSyncState.pendingCreate);
+      expect(stored.lastModifiedAt.isBefore(before), isFalse);
+    });
+
     test('cold-load self-heals when index.json is deleted', () async {
       await store.createLocal(
           startedAt: DateTime.utc(2026, 6, 2), itemName: 'Kept');

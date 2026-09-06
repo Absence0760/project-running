@@ -40,10 +40,7 @@ class StoredCrossing implements SyncEntry {
   factory StoredCrossing.fromJson(Map<String, dynamic> json) => StoredCrossing(
         row: Map<String, dynamic>.from(json['row'] as Map),
         syncState: syncStateFromWire(json['sync_state'] as String?),
-        lastModifiedAt:
-            DateTime.tryParse(json['last_modified_at'] as String? ?? '')
-                    ?.toUtc() ??
-                DateTime.now().toUtc(),
+        lastModifiedAt: storedClockOrNow(json['last_modified_at']),
       );
 }
 
@@ -245,7 +242,7 @@ class LocalCrossingsStore extends OfflineSyncStore<StoredCrossing> {
   }
 
   static bool _beyondRetention(dynamic recordedAt, DateTime now) {
-    final at = _parseTime(recordedAt)?.toUtc();
+    final at = parseServerTimestamp(recordedAt);
     if (at == null) return false;
     return now.difference(at) > kSyncedRetention;
   }
@@ -255,13 +252,20 @@ class LocalCrossingsStore extends OfflineSyncStore<StoredCrossing> {
       api.upsertCheckpointCrossing(
         eventId: stored.row['event_id'] as String,
         checkpointId: stored.row['checkpoint_id'] as String,
-        instanceStart:
-            DateTime.parse(stored.row['instance_start'] as String),
+        // `instance_start` is a KEY the server matches with `=`, and every
+        // other writer of it — RSVP, attendance, results, race sessions —
+        // sends `instanceStart.toIso8601String()` unnormalised, off the same
+        // `EventView.nextInstanceStart`. Normalising here alone would file a
+        // crossing under an instance no other surface writes. That the
+        // occurrence is viewer-zone-dependent at all is a separate,
+        // cross-cutting defect, filed rather than half-fixed from one store.
+        // zone-verbatim: match what every other instance_start writer sends.
+        instanceStart: DateTime.parse(stored.row['instance_start'] as String),
         userId: stored.row['user_id'] as String?,
         bib: stored.row['bib'] as String?,
         runnerName: stored.row['runner_name'] as String?,
-        inTime: _parseTime(stored.row['in_time']),
-        outTime: _parseTime(stored.row['out_time']),
+        inTime: parseServerTimestamp(stored.row['in_time']),
+        outTime: parseServerTimestamp(stored.row['out_time']),
         healthConsent: (stored.row['health_consent'] as bool?) ?? false,
         bodyWeightKg: (stored.row['body_weight_kg'] as num?)?.toDouble(),
         bodyWeightPct: (stored.row['body_weight_pct'] as num?)?.toDouble(),
@@ -278,9 +282,4 @@ class LocalCrossingsStore extends OfflineSyncStore<StoredCrossing> {
 
   @override
   Future<void> pushDelete(ApiClient api, StoredCrossing stored) async {}
-
-  static DateTime? _parseTime(dynamic v) {
-    if (v is String && v.isNotEmpty) return DateTime.tryParse(v);
-    return null;
-  }
 }

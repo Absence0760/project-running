@@ -97,10 +97,7 @@ class StoredRecipe implements SyncEntry {
                 Map<String, dynamic>.from(it as Map)))
             .toList(),
         syncState: syncStateFromWire(json['sync_state'] as String?),
-        lastModifiedAt:
-            DateTime.tryParse(json['last_modified_at'] as String? ?? '')
-                    ?.toUtc() ??
-                DateTime.now().toUtc(),
+        lastModifiedAt: storedClockOrNow(json['last_modified_at']),
       );
 }
 
@@ -251,7 +248,7 @@ class LocalRecipeStore extends OfflineSyncStore<StoredRecipe> {
         continue;
       }
       final local = syncedLocal[id];
-      final serverTs = _parseTs(r.recipe['last_modified_at']);
+      final serverTs = parseServerTimestamp(r.recipe['last_modified_at']);
       if (local != null &&
           serverTs != null &&
           local.lastModifiedAt.isAfter(serverTs)) {
@@ -268,11 +265,6 @@ class LocalRecipeStore extends OfflineSyncStore<StoredRecipe> {
     rowsById.addAll(preserved);
     await rewriteAll();
     notifyListeners();
-  }
-
-  static DateTime? _parseTs(dynamic v) {
-    if (v is String && v.isNotEmpty) return DateTime.tryParse(v)?.toUtc();
-    return null;
   }
 
   @override
