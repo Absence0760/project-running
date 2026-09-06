@@ -161,7 +161,7 @@ class StoredRoutine implements SyncEntry {
                 StoredRoutineExercise.fromJson(Map<String, dynamic>.from(e as Map)))
             .toList(),
         syncState: syncStateFromWire(json['sync_state'] as String?),
-        lastModifiedAt: storedClockOrNow(json['last_modified_at']),
+        lastModifiedAt: storedClockOrEpoch(json['last_modified_at']),
       );
 }
 

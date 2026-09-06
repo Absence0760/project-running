@@ -6,6 +6,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/local_food_store.dart';
+import '../lib/offline_sync_store.dart' show kUnknownStoredClock;
 
 /// Fake [ApiClient] that records food-log CRUD calls and lets a test
 /// inject per-method failure modes. Tracks the order of operations so we
@@ -631,13 +632,17 @@ void main() {
       ).toJson();
       record['last_modified_at'] = 1757116800000;
 
-      final before = DateTime.now().toUtc();
       expect(await store.restoreFromBackup([record]), 1);
       expect(store.rowsById.containsKey('mistyped-clock'), isTrue);
       final stored = store.rowsById['mistyped-clock']!;
       expect(stored.row['item_name'], 'Porridge');
       expect(stored.syncState, FoodSyncState.pendingCreate);
-      expect(stored.lastModifiedAt.isBefore(before), isFalse);
+      // § 1342: an unreadable clock is the epoch, not `now`. The record is
+      // restored pendingCreate, so it is preserved across every
+      // `replaceFromServer` and pushed regardless of what its clock says —
+      // the epoch costs it nothing, where `now` would have let it win
+      // newer-wins against the server for good once it went `synced`.
+      expect(stored.lastModifiedAt, kUnknownStoredClock);
     });
 
     test('cold-load self-heals when index.json is deleted', () async {

@@ -26794,3 +26794,164 @@ That step is not cosmetic, and `catalogue_browse`'s comment already says why: `t
 The copy is deleted and the canonical `fold` imported, which also gains this search the accent folding every other search key has. Web-only, no Dart twin, so no parity-pair obligation.
 
 **The transferable point is about copies, not about sigma.** The tree now has one fold and four consumers of it (`catalogue_browse`, `club_slug`, `food_search`, `dm_recipients`); a fifth written by hand would be undetectable by `check_parity_pair_registry.mjs`, which compares the two registries and not the two behaviours (§ 852). A private helper that reimplements a shared one is invisible to every guard the tree has.
+
+---
+
+## 1342. An unknown clock must lose, not win: the offline stores' fallback moves from `now` to the epoch
+
+**Decided 2026-09-06.** [§ 1290](#1290-a-record-is-not-worth-less-than-its-clock) made a
+wrong-TYPED `last_modified_at` behave like an absent one instead of discarding the whole
+record, and deliberately left the fallback VALUE alone. This closes that: `storedClockOrNow`
+is `storedClockOrEpoch`, and the four inputs it covers — absent, empty, unparseable,
+wrong-type — now read as `DateTime.utc(1970)` rather than as `DateTime.now().toUtc()`.
+
+`now` is not a neutral default; it is the single most favourable value the field can hold.
+Every `replaceFromServer` in the family decides with `local.lastModifiedAt.isAfter(serverTs)`,
+and `serverTs` is a stamp the server wrote in the past, so a `synced` row handed `now` wins
+that comparison against every stamp the server will ever have. `rewriteAll` then persists the
+winning clock, so the next cold load parses a perfectly valid timestamp that is still ahead of
+the server, and the row goes on winning across launches — the server copy can never reach it
+again. That is worse than the throw § 1290 removed, which at least let the next refresh re-add
+the row and self-heal. Three surfaces have a second symptom: `local_routine_store`,
+`local_recipe_store` and `local_meal_template_store` each order their library
+`b.lastModifiedAt.compareTo(a.lastModifiedAt)`, so an unreadable record claimed the head of
+the most-recently-used list — presented as the freshest thing the user owns.
+
+The epoch loses every comparison there is, which is the honest answer in both directions and
+costs nothing that matters. `replaceFromServer` sorts every non-`synced` row into `preserved`
+BEFORE the newer-wins comparison runs, so an unsent create/update/delete is still kept and
+still pushed whatever its clock says; only a `synced` row is affected, and a `synced` row
+losing to the server is the correct resolution when the local clock is unknown. In
+`local_routine_store`'s windowed variant the epoch reads as "older than anything the fetch
+could have returned", so the row is preserved rather than clobbered — also correct. The one
+place the value is now visibly different is the sort, where an undatable record goes last
+instead of first.
+
+The name moved with the behaviour. A helper called `storedClockOrNow` that returns the epoch
+is the class of stale name this tree keeps paying for, and renaming forced every one of the
+seven `fromJson` call sites to be re-read. `kUnknownStoredClock` is exported so the tests and
+the readers share one spelling of the sentinel instead of each writing `DateTime.utc(1970)`.
+
+Pinned by four tests in `offline_sync_timestamps_test.dart`: the four unusable inputs all
+equal `kUnknownStoredClock`; the sentinel loses `isAfter` against three server stamps
+including one a second past the epoch, with the old fallback's winning comparison asserted
+beside it as the control; and the sentinel sorts last under the library comparator. The
+`local_food_store` restore test that asserted the old `now` behaviour now asserts the epoch,
+with the reason it does not matter to a restored (pendingCreate) record stated in place.
+
+---
+
+## 1343. `instance_start` is normalised at the one boundary that serialises it, not at the one that mints it
+
+**Decided 2026-09-06.** [§ 1291](#1291-a-checkpoint-crossing-is-filed-under-an-instance_start-that-depends-on-the-readers-timezone-and-one-store-is-the-wrong-place-to-fix-it)
+traced a recurring occurrence being filed under the reader's wall clock on mobile and under
+the true instant on web, and left the choice open: either `api_client` normalises every
+`instance_start`, or `recurrence.dart` stops minting local instants. It is the first, and
+measuring the tree said so more clearly than the trace did.
+
+`expandInstances` is not wrong. For an event declaring no timezone it builds a LOCAL
+`DateTime`, which names exactly the absolute instant web's `new Date(y, m, d, h, mi, s)`
+names — the two platforms compute the same occurrence. The divergence is entirely in
+serialisation: a JS `Date` IS an instant and `toISOString()` always emits `Z`, while Dart's
+`toIso8601String()` writes no designator at all for a local `DateTime`, and Postgres then
+resolves the zone-less literal in the session's own TimeZone. So changing `recurrence.dart`
+would move one half of a registered parity pair away from a twin that is not wrong, to fix a
+defect that is not there.
+
+**The tree had already decided this and only api_client had missed it.** `social_service.dart`
+writes `instance_start` at eleven sites — the RSVP upsert, the going-count filters, the
+attendee delete, the results RPC, the race-session reads, the photo tag — and every one of
+them is already `instance.toUtc().toIso8601String()`. `race_controller.dart` persists its
+active race the same way. `api_client.dart` was the only writer that did not, at six sites:
+the run-photo insert and its gallery filter, `setEventRsvp` and `fetchEventAttendees`, the
+crossings filter and the `upsert_checkpoint_crossing` RPC. Two of those six sit on opposite
+ends of one feature — a photo is TAGGED to an occurrence through `social_service` (normalised)
+and READ BACK through `addRunPhoto`'s sibling filter in `api_client` (not), so an event gallery
+could fail to list the photos that same phone had just uploaded to it.
+
+All six now go through `instanceStartKey(DateTime) → at.toUtc().toIso8601String()`, with
+`instanceStartKeyOrNull` for the nullable photo tag (a photo attached to no occurrence stays
+null; it does not acquire an epoch). A no-op for a timezoned event and for a one-off's
+`startsAt`; only legacy zone-less recurring rows move, and they move onto the value web has
+been writing all along.
+
+**The store half is a second defect the same shape.** `local_crossings_store` compared
+`instance_start` as a STRING — `row['instance_start'] == instanceStart.toIso8601String()` — in
+both `rowsForCheckpoint` and `replaceFromServer`'s scope test. One occurrence has at least
+three spellings in that store: PostgREST answers `2026-06-14T07:00:00+00:00`,
+`CheckpointCrossingRow.toJson` re-serialises it as `…T07:00:00.000Z`, and a row the store
+wrote itself carries whatever `toIso8601String()` produced. So a server-fetched crossing did
+not match the instance the screen was asking about, and "who has already been stamped here" —
+the whole reason the offline store exists — listed only the stamps this phone had made. Both
+sites now compare instants through `sameInstance`, which is immune to spelling and to rows
+written before this change; `createLocal` stores the normalised key, and `pushCreate` reads
+it back through `parseServerTimestamp` rather than the raw `DateTime.parse` § 1291 had to
+leave marked, REFUSING a crossing whose stored instance is unreadable rather than filing it
+under a guessed occurrence (the drain isolates that per row and the stamp stays pending).
+
+Pinned by eight tests in `instance_start_key_test.dart` — five on the helper plus a
+source guard anchored on the COUNT of `instance_start` sites, so deleting the normalisation
+cannot delete its own requirement — and seven in `local_crossings_store_test.dart`, including
+all four spellings matching one occurrence and a control that a different occurrence of the
+same series is still excluded. Mutation-tested three ways: removing the `.toUtc()` from the
+helper fails four assertions, reverting one call site to a bare `toIso8601String()` fails the
+guard by name, and restoring the string equality fails the spelling test.
+
+Web needs no change and gets none. This is one-sided by construction: the platform that was
+already correct is the one the other is being brought onto.
+
+---
+
+## 1344. `DateTime.tryParse` answers an impossible date instead of refusing it, and the store family now refuses it in one place
+
+**Decided 2026-09-06.** `DateTime.tryParse` has two behaviours under one name. It refuses text
+it cannot recognise as ISO 8601 — and it ROLLS OVER anything it can, through the calendar,
+without complaint. `2026-13-45T99:99:99Z` is not an error; it is 2027-02-18T04:40:39Z.
+`2026-06-32` is the 2nd of July. `2026-02-30` is the 2nd of March. So an unusable column does
+not yield "no value": it yields a confident wrong one, which passes every downstream non-null
+and `> 0` check the tree has, and which no caller can distinguish from a real answer.
+
+The `OfflineSyncStore` family had that parse behind two readers. On the timestamp side it is
+arguably survivable — `parseServerTimestamp`'s callers only compare the result or store it —
+but on the DATE side it is not. `local_gear_store` read `purchased_at` / `retired_at` with a
+private `_parseDate`, and those values go straight back out through `api.createGear` /
+`api.updateGear`, which serialise them with `.toIso8601String().substring(0, 10)` into a
+`date` column. A rolled-over day therefore becomes the STORED day, and `gearBackfillCandidates`
+then measures a purchase date the user never entered. Nothing produces such a value today (the
+Material date picker cannot), so this is a robustness gap rather than a live defect — but it is
+the shape where a wrong answer is durable rather than transient.
+
+`parseIsoStrict` is now the single call to `DateTime.tryParse` in the family, and both readers
+go through it: `parseServerTimestamp` adds the `.toUtc()`, and the new shared
+`parseCalendarDate` deliberately does not. It parses first, then range-checks every component
+against the calendar the text claims to be in, using the SDK's own anchored grammar verbatim —
+a narrower pattern would refuse text the platform accepts, which is a regression dressed as a
+hardening. The day bound is the target month's own last day, so 29 February is a date in 2024
+and is not in 2027. The `2026-06-14T24:00:00Z` end-of-day form is refused too: it is legal ISO,
+nothing here emits it, and it is indistinguishable from the rollover this exists to catch.
+
+**Gear's private reader is gone rather than exempted.** § 1289 left `_parseDate` in place with a
+`zone-verbatim:` marker, which read as "one reader plus an exception". It is now
+`parseCalendarDate` beside `parseServerTimestamp`, two named readers in the shared file whose
+one difference — the `.toUtc()` — is stated once. `store_timestamp_reader_guard_test.dart`
+follows: its allowance moves to `parseIsoStrict`, and it gains an assertion that the shared
+file holds EXACTLY ONE raw-parse site and that its enclosing reader is that one. That count is
+what cannot be deleted along with the check it protects.
+
+**§ 1289's prose has the hemisphere backwards, and that is corrected here.** It says
+normalising a `date` to UTC "moves the day itself for every device west of Greenwich". It is
+the other way: local midnight at UTC−04:00 is 04:00 the SAME day in UTC, while local midnight
+at UTC+03:00 is 21:00 the PREVIOUS day. Measured with `TZ=America/New_York`,
+`TZ=Europe/Athens` and `TZ=Pacific/Auckland` against `DateTime.tryParse('2026-06-03').toUtc()`:
+day 3, day 2, day 2. The code comments now say "ahead of UTC". This also explains why the
+gear-store integration test cannot catch a `.toUtc()` added to `parseCalendarDate` — the
+workstation sits west of Greenwich, where the day does not move — so the load-bearing
+assertion is the zone-independent one in `offline_sync_timestamps_test.dart`
+(`isUtc == false` plus the y/m/d unchanged), which is the assertion that actually failed when
+that mutation was planted.
+
+Mutation-tested four ways: removing the day bound fails five assertions across two files;
+adding a second raw parse to the shared file fails the new count assertion by line number;
+reverting gear to its private marked reader fails the guard's reader-usage count AND the gear
+drain test with the exact rolled-over value (2026-07-02) the filing predicted; and normalising
+`parseCalendarDate` to UTC fails the calendar-day assertion.

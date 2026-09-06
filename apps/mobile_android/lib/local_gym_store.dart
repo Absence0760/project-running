@@ -54,7 +54,7 @@ class StoredGymWorkout implements SyncEntry {
             .map((s) => Map<String, dynamic>.from(s as Map))
             .toList(),
         syncState: syncStateFromWire(json['sync_state'] as String?),
-        lastModifiedAt: storedClockOrNow(json['last_modified_at']),
+        lastModifiedAt: storedClockOrEpoch(json['last_modified_at']),
       );
 }
 
