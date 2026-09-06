@@ -107,15 +107,6 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
     super.dispose();
   }
 
-  /// Whether [name] carries any Unicode letter or digit. Deliberately wider
-  /// than the slug's own `[a-z0-9]`: it decides whether the name is NAMING
-  /// something, which every script can do, where the slug decides what the URL
-  /// can spell, which only ASCII can. Mobile-only — the web editor asks for a
-  /// non-blank name and nothing else.
-  static final RegExp _letterOrDigit = RegExp(r'[\p{L}\p{N}]', unicode: true);
-
-  bool _hasLetterOrDigit(String name) => _letterOrDigit.hasMatch(name);
-
   Future<void> _submit() async {
     if (_busy) return;
     final l10n = AppLocalizations.of(context);
@@ -124,15 +115,18 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
     // field instead (sign_up_screen idiom); the no-usable-characters
     // case is name-attributable too.
     final slug = clubSlug(name);
-    // The refusal tests the NAME for a letter or digit, not the slug for
+    // The refusal tests the NAME for a nameable character, not the slug for
     // emptiness. A club called `Бегуны Москвы` folds to no `[a-z0-9]` at all,
     // so the old test refused to create it — with a message claiming the name
     // had no letter or digit, about a name made entirely of letters — while
     // the web created it happily under the shared fallback slug. Every
     // non-Latin script was unreachable on the phone (decisions § 1281).
+    // The predicate now lives in `club_slug.dart` beside the slug it guards,
+    // so the web editor runs the same one rather than accepting a name this
+    // side refuses (decisions § 1338).
     final nameError = name.isEmpty
         ? l10n.clubFormErrName
-        : _hasLetterOrDigit(name)
+        : clubNameNamesSomething(name)
             ? null
             : l10n.clubFormErrSlug;
     setState(() => _nameError = nameError);

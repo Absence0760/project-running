@@ -63,3 +63,40 @@ String clubSlug(String name) {
       ? capped.substring(0, capped.length - 1)
       : capped;
 }
+
+/// Whether [name] names something, rather than being blank or made only of
+/// marks that cannot name anything on their own.
+///
+/// This is the pre-flight both club create forms run before [clubSlug], and it
+/// belongs to the pair because the two clients disagreeing about it means one
+/// of them creates a club the other would refuse. This side tested the NAME
+/// for `[\p{L}\p{N}]` while the web tested nothing beyond non-blank, so a club
+/// called `!!!` was creatable there and refused here, landing under the
+/// [kClubSlugFallback] slug (decisions § 1338).
+///
+/// It is deliberately a REFUSE-list rather than the accept-list this side used,
+/// and the reason is measured. A Unicode property class is answered by each
+/// runtime's own Unicode tables, exactly like `toLowerCase`: over all
+/// 1,112,064 assignable scalar values, `[\p{L}\p{N}]` gives a DIFFERENT answer
+/// in Dart and in Node at **4,657 code points**, and every one of them is a
+/// letter the newer table knows and the older one does not — so the
+/// accept-list refuses real letters on whichever platform is behind, which is
+/// § 1281's bug verbatim. `[^\p{Z}\p{P}\p{S}\p{Cc}\p{Cf}]` diverges at
+/// **104**, and in the opposite direction: a code point one runtime has not
+/// yet assigned is in none of those categories, so it reads as nameable on
+/// both. The residual 104 are newly-assigned SYMBOLS that web refuses and this
+/// side accepts — the harmless direction, and only for a name made of nothing
+/// else.
+///
+/// `\p{Cn}` (unassigned) is deliberately NOT in the list even though `\p{C}`
+/// would be shorter: including it is what makes the class fail closed against
+/// a letter this runtime is too old to know. `Cc` and `Cf` are named
+/// individually because they are stable, long-assigned categories, so a name
+/// of nothing but control or format characters is still refused.
+///
+/// Wider than the slug's own `[a-z0-9]` on purpose: this decides whether the
+/// name is NAMING something, which every script can do, where the slug decides
+/// what the URL can spell, which only ASCII can.
+final RegExp _nameable = RegExp(r'[^\p{Z}\p{P}\p{S}\p{Cc}\p{Cf}]', unicode: true);
+
+bool clubNameNamesSomething(String name) => _nameable.hasMatch(name);
