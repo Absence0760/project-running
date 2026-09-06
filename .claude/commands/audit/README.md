@@ -23,7 +23,7 @@ Invoke from a Claude Code session as `/audit/<name>`.
 
 | Command | What it checks |
 |---|---|
-| [/audit/privacy-zones](privacy-zones.md) | Every non-owner surface routes through `clipTrackForUser` (decisions §33) |
+| [/audit/privacy-zones](privacy-zones.md) | Every non-owner surface routes through `fetchClippedTrackForRun` / `clipRouteForViewer` (decisions §33) |
 | [/audit/pii-in-logs](pii-in-logs.md) | PII / location / health / secrets leaking into server logs, error bodies, or an external sink (SOC 2 / GovRAMP) |
 
 ### Invariants

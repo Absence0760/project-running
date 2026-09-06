@@ -24,7 +24,7 @@ The orchestrator tells you the platform. Map from target path if it doesn't:
 - **Outside `apps/{web,mobile_android,watch_wear,watch_ios}/`** — including `apps/mobile_ios/`, `apps/backend/`, `apps/job_worker/`, `packages/`, `infra/`, `docs/`. Refuse.
 - **`apps/mobile_ios/lib/` or `apps/mobile_ios/test/`** — byte-identical twin of `mobile_android`. Edits go in `mobile_android/`; the `mobile-twin-mirror` agent copies them across. If asked to edit `mobile_ios/`, redirect.
 - **watchOS on Linux** — Xcode + watchOS simulator are macOS-only. The orchestrator should have caught this, but defensively `uname -s` and refuse if Linux.
-- **Cross-invariant edits** — privacy zones (`clipTrackForUser`), paywall gates (`ProGate`, `effectiveTier`), L0–L4 layered resilience on the recording stack (`run_screen.dart`, `run_recorder/`, `live_run_map.dart`, `collapsible_panel.dart`), RLS / SECURITY DEFINER plumbing, jsonb metadata keys (`docs/backend/metadata.md`). Stop and tell the user to use `/safe-edit` instead.
+- **Cross-invariant edits** — privacy zones (`fetchClippedTrackForRun` / `clipRouteForViewer`), paywall gates (`ProGate`, `effectiveTier`), L0–L4 layered resilience on the recording stack (`run_screen.dart`, `run_recorder/`, `live_run_map.dart`, `collapsible_panel.dart`), RLS / SECURITY DEFINER plumbing, jsonb metadata keys (`docs/backend/metadata.md`). Stop and tell the user to use `/safe-edit` instead.
 
 ## Common workflow (all platforms)
 
