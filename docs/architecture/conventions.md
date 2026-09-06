@@ -564,6 +564,40 @@ binding ceiling. Four fields were in that state when the class was swept
   kilograms and the field may be pounds, so convert — rounding the floor UP and
   the ceiling DOWN, or the range advertises a value its own gate refuses.
 
+## A narrowed select gets a narrowed row type, derived from the same column list
+
+A `.select()` that enumerates columns instead of `'*'` is a good thing — `geom`
+duplicates `waypoints` purely for server-side spatial queries and doubles the
+wire payload, `start_point` leaks a run's start location, `shadow_hidden` is
+moderation state the client has no business reading. What is not fine is
+handing the resulting rows back under the table's full row type. The absent
+fields are `undefined` at runtime under a type that declares them, so a
+consumer that reads one gets `undefined` with the compiler's blessing: no
+throw, no error, and a `{#if}` that can never be true. `routes` shipped that
+way — eleven of twenty-two columns absent behind `Route`
+([decisions § 1294](decisions.md)).
+
+- **Declare the projection once and derive both halves from it.** The column
+  tuple is the source: `as const satisfies readonly (keyof Row)[]`, so a column
+  a migration dropped fails to compile; the wire string is `join`ed from it and
+  the row type is `Pick`ed from it. A hand-written `Pick<Row, …>` beside a
+  hand-written select string is two declarations and the [§ 641](decisions.md)
+  shape — they agree until they don't. `apps/web/src/lib/routes/route_list_columns.ts`
+  is the model.
+- **The narrowed type is what the fetcher returns**, not what one careful
+  consumer annotates. A return type of the full row is the lie; every consumer
+  that has to remember to narrow it is a consumer that will forget.
+- **Pin it at compile time, because no runtime test can see it.** A read of an
+  absent field yields `undefined` rather than throwing, so the assertions are
+  `@ts-expect-error` on each withheld column and an `Exclude<…> extends never`
+  on the set — checked by `svelte-check`, not by `tsx --test`. Mutation-test
+  both directions: widening the type must leave the `@ts-expect-error`s unused,
+  and dropping a projected column must fail the consumers.
+- **A view that withholds a column is filled, not cast.** Where two reads merge
+  into one list, the narrower half supplies the difference with values that
+  state what is true ([§ 1229](decisions.md)) — and the fill's coverage is a
+  type-level claim, so it cannot be partially right.
+
 ## Local stores — a directory transition is serialised, not just atomic
 
 `writeStringAtomic` gives each in-flight write its own `.tmp` sibling and renames
