@@ -1403,7 +1403,7 @@ export type Database = {
           last_modified_at?: string
           modality?: string
           name: string
-          name_key: string
+          name_key?: string
         }
         Update: {
           author_id?: string | null
@@ -1874,7 +1874,7 @@ export type Database = {
           superset_order: number | null
         }
         Insert: {
-          exercise_key: string
+          exercise_key?: string
           exercise_name: string
           id?: string
           modality?: string

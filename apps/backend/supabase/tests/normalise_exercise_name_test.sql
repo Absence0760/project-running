@@ -205,13 +205,20 @@ values ('00000000-0000-0000-0000-0000000b2001',
 
 -- 13. The invariant is the database's now, not a convention four surfaces have
 --     to remember. ' bench press' is exactly what the old server expression
---     derived from this name.
-select throws_ok(
-  $$insert into gym_routine_exercises (routine_id, exercise_name, exercise_key, position)
-    values ('00000000-0000-0000-0000-0000000b2001', E'\tBench Press', ' bench press', 0)$$,
-  '23514',
-  null,
-  'a stored exercise_key that is not the canonical derivation is rejected'
+--     derived from this name, and it is what a client sending a key of its own
+--     could still store. Since 20270711000001 the client's value is REPLACED
+--     rather than refused -- the refusal was coupled to the client's Unicode
+--     version, and `exercise_key_server_stamped_test` disables the trigger to
+--     prove the CHECK behind this is still what catches an unstamped write.
+with ins as (
+  insert into gym_routine_exercises (routine_id, exercise_name, exercise_key, position)
+  values ('00000000-0000-0000-0000-0000000b2001', E'\tBench Press', ' bench press', 0)
+  returning exercise_key
+)
+select is(
+  (select exercise_key from ins),
+  'bench press',
+  'a stored exercise_key that is not the canonical derivation is corrected'
 );
 
 -- 14. The CHECK is evaluated as the role doing the INSERT, and it names a
@@ -333,12 +340,19 @@ select is(
 -- 21. The reachability pin for 18. `i` + U+0307 is exactly what a web build
 --     wrote for this name and what the ICU server derived, so the two agreed
 --     and the bare `i` the mobile rail wrote was refused -- 23514 on a
---     legitimate save, from a CHECK added to protect the key.
-select lives_ok(
-  $$insert into gym_routine_exercises (routine_id, exercise_name, exercise_key, position)
-    values ('00000000-0000-0000-0000-0000000b2001',
-            chr(304) || 'tme', 'itme', 2)$$,
-  'the key the mobile rail derives for a U+0130 name satisfies the CHECK'
+--     legitimate save, from a CHECK added to protect the key. Asserted on the
+--     STORED key rather than as a `lives_ok`: since 20270711000001 the server
+--     stamps the column, so a bare `lives_ok` would survive any fold at all and
+--     this pin has to read what was written.
+with ins as (
+  insert into gym_routine_exercises (routine_id, exercise_name, exercise_key, position)
+  values ('00000000-0000-0000-0000-0000000b2001', chr(304) || 'tme', 'itme', 2)
+  returning exercise_key
+)
+select is(
+  (select exercise_key from ins),
+  'itme',
+  'the key stored for a U+0130 name is the bare-i form both client rails derive'
 );
 
 -- ---- The frozen fold table (decisions § 1175) -------------------------------
@@ -405,11 +419,16 @@ select is(
 --     Cherokee name keyed by a client that folds through the table is accepted
 --     by the CHECK, where before the table this server derived the unfolded
 --     spelling and refused it -- 23514 on a legitimate save.
-select lives_ok(
-  $$insert into gym_routine_exercises (routine_id, exercise_name, exercise_key, position)
-    values ('00000000-0000-0000-0000-0000000b2001',
-            chr(5024) || 'press', chr(43888) || 'press', 3)$$,
-  'a key folded through the frozen table satisfies the CHECK'
+with ins as (
+  insert into gym_routine_exercises (routine_id, exercise_name, exercise_key, position)
+  values ('00000000-0000-0000-0000-0000000b2001',
+          chr(5024) || 'press', chr(43888) || 'press', 3)
+  returning exercise_key
+)
+select is(
+  (select exercise_key from ins),
+  chr(43888) || 'press',
+  'a Cherokee name is stored under the key the frozen table folds it to'
 );
 
 -- 27. `normalise_exercise_name` reaches `exercise_fold_case` as SECURITY
