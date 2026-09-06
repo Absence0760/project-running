@@ -26997,3 +26997,193 @@ The same slip on `HealthKitFailureTests.swift` would leave the macOS `test-watch
 Measuring it settled a standing claim. All 19 files under `WatchAppTests/` are members, `test-watch-ios` runs `xcodebuild test` on every diff outside `docs/` and `.claude/`, and it is one of the jobs the required CI gate needs — so the accumulator's nine cases **have** executed on a watchOS simulator since #859 landed on `main`. The round-41 filing's "the tests themselves have not run anywhere yet either" was true when written and is not now. **What is still owed is unchanged and is not a rung the workstation can reach**: a recorded run through a real `HKWorkoutSession`, with `hr_coverage` present and plausibly non-zero on the row. Unit tests executing on a simulator say nothing about whether HealthKit's sample timestamps are what the accumulator assumes on hardware.
 
 Claim (4) was made to report a missing formatter copy rather than throw an `ENOENT` stack, which is the same complaint this whole file exists to make about failures that do not name themselves.
+
+## 1352. CodeQL's Kotlin leg had the § 1304 defect too, and the fix is a guard that runs the workflow's own walk rather than reading it
+
+**Decided 2026-09-06.** § 1304 found `security.yml`'s `codeql-go` job building
+one of two Go modules. Looking for the same shape on the other compiled leg
+found it: `codeql-kotlin` had a single `working-directory:
+apps/watch_wear/android`, under a header claiming the language covered both
+Kotlin surfaces. CodeQL analyses what the build steps compile, so the 128
+Kotlin/Java files under `apps/watch_wear` were analysed and the 11 under
+`apps/mobile_android/android` were not — `MainActivity.kt`,
+`RunActionReceiver.kt` (a `BroadcastReceiver`), and the platform-channel
+bridges that mediate health permissions, calendar access and foreground-service
+actions. Two things that saved the Go leg are absent here and were checked
+rather than assumed: `runAutobuildIfLegacyGoWorkflow` is Go-specific with no
+Java/Kotlin analogue, and `build-mode: none` cannot stand in for a build,
+because CodeQL's buildless Java extractor does not process Kotlin at all
+("Detected X Kotlin files in your project that could not be processed without a
+build" is its own documented warning).
+
+**The scan itself is not extended here, and the reason is that it cannot be
+verified from this lane.** Covering the Flutter Gradle host means the pinned
+Flutter SDK and a `melos bootstrap` inside a CodeQL job — `settings.gradle.kts`
+reads `flutter.sdk` out of a `local.properties` only the Flutter tool writes,
+and `:app` compiles against every plugin subproject — paid on every PR and every
+weekly cron. That is a trade for the owner, and shipping an unverifiable
+multi-minute Gradle step into the security workflow would have been worse than
+the gap.
+
+**What did change is that the gap is now a value rather than a sentence.** The
+build step enumerates Gradle projects from the tree, exactly as § 1304's Go step
+does, and skips the ones named in a `CODEQL_KOTLIN_UNBUILT` declaration the same
+step's loop reads. A third Gradle project is therefore built the day it lands,
+and if it cannot be built here CI goes red and somebody decides — which is the
+outcome the silent version never produced. Four branches were mutation-tested
+against a stub tree: a walk that stopped matching refuses at the floor, an
+exclusion list that swallowed every project refuses, a failing build refuses
+with its own reproduce line, and a newly-planted third project is built without
+anyone editing the file.
+
+`scripts/check_codeql_coverage.mjs` (the `workflow-lint` job) is what keeps both
+legs honest, and its anchor is the point. It does not look for the WORDS of an
+enumeration — a guard keyed on spelling passes every way of getting this wrong.
+It lifts each build step's own `find` expression out of the workflow, **runs
+it**, and compares the answer against an independent walk of the tree, the same
+instrument `edge_functions_typecheck_coverage.test.mjs` already uses on the
+deno-check lane. Seven mutations were watched failing: reverting either leg to a
+hardcoded path, growing a `-not -path` that hides a tree, an exclusion naming a
+directory that is not a project, an exclusion bought with a four-character
+reason, an exclusion list covering everything, and a walk that finds fewer trees
+than the floor. The floor is under the WALK, not the workflow, because a walk
+and a `find` that broke the same way would otherwise pass by agreeing with each
+other.
+
+## 1353. `terraform validate` re-run for round 42, and the module's transitive coverage re-measured
+
+**Re-run 2026-09-06.** The standing item, run as prescribed: `terraform init
+-backend=false` + `validate` in `infra/bootstrap`, `infra/dns`,
+`infra/github-oidc`, `infra/envs/prod` and `infra/envs/preview` — all five
+"Success! The configuration is valid." — plus `terraform fmt -check -recursive
+infra`, exit 0. Local Terraform is 1.13.0, which is the version
+`terraform.yml` pins for both its `fmt` and `validate` jobs, so this is the same
+binary CI runs and not an approximation.
+
+The module's transitive coverage was re-measured rather than asserted, per
+§ 1267 (`configuration_aliases` makes `modules/web-stack` a non-root by
+construction, so it cannot be validated standalone). An undeclared-variable
+reference planted in `modules/web-stack/outputs.tf` was reported by BOTH root
+stacks that consume it — "Error: Reference to undeclared input variable", naming
+`../../modules/web-stack/outputs.tf` and the line — and both exited 1. Restored
+and re-validated clean.
+
+Still nothing behind §§ 1021-1024, 1084-1085, 1111 or § 1268's
+`custom_error_response` has been `plan`ned against real state, because no lane
+holds AWS credentials by design; the item is re-filed on that basis, not
+retired. And what this class of check structurally cannot see is worth
+restating with a fresh example: the three stale `*_spa_shell.ts` comments closed
+in the same round described the CloudFront error-response contract wrongly and
+passed `validate` and `fmt` without a murmur, because neither reads a comment.
+
+## 1354. The `PUBLIC_` prefix convention was stated in four headers, false in one of them, and the one header that named the exception named a variable nothing reads
+
+**Decided 2026-09-06.** Every mobile deploy-gate module's header says the same
+thing: "web spells the same flag `PUBLIC_<X>`; mobile drops the web-only
+`PUBLIC_` prefix, as every other mobile deploy flag does." That is an
+operational claim, not a style one — an operator flipping a gate for a release
+reads one name and sets the other, so a pair whose STEMS differ means one
+platform has been signed off and the other has not, silently, in exactly the
+direction a fail-closed gate exists to prevent.
+
+It is false for `weigh_in_flag`: web reads `PUBLIC_WEIGH_IN_ENABLED`, mobile
+reads `WEIGH_IN_GATE`. Worse, the Dart header named the counterpart as
+`PUBLIC_WEIGH_IN_GATE` — a variable no file in this repo reads or sets — so the
+single place a reader could have learned about the exception told them its
+opposite, in the confident register of a header comment.
+
+**The convention is now measured rather than described.**
+`apps/web/src/lib/safety/deploy_gate_names.test.ts` and its Dart mirror read the
+`PUBLIC_*` key out of each web gate and the `k…EnvKey` constant out of each Dart
+gate — out of the SOURCE, never from a list of names, because a list of names
+goes stale exactly the way the header did — and make four claims: the two names
+differ only by the prefix, or the gate is a declared exception; a declared
+exception whose names have started agreeing FAILS, so the register can only
+shrink; no `PUBLIC_*` token appearing in any gate module is a name no web gate
+reads; and the census walks `src/lib` for `*_flag.ts` (and `lib/` for
+`*_flag.dart`), so a gate the file has never heard of fails instead of going
+unmeasured. That last claim earned itself immediately: the first draft listed
+three pairs and the walk found a fourth, `nearby_flag`, which nothing had been
+comparing.
+
+The dead-variable check also decided how to word the correction. The first fix
+left the header explaining that `PUBLIC_WEIGH_IN_GATE` was the name it used to
+carry — and the guard failed it, correctly: the token was still there, and a
+guard that reads negation to excuse it is the shape `check_twin_claims.mjs`
+already refuses. The header now states the two live names and points at the
+guard, and the dead one survives only in this ADR and the followup, where a
+reader cannot mistake it for a variable to set.
+
+## 1355. `off_route_flag` and `weigh_in_flag` get the mirror suites their registration promised
+
+**Decided 2026-09-06.** § 1315 registered both as parity pairs, which made their
+divergence detectable, and neither had a mirror suite — `off_route_flag` had
+none on either side. Registration and coverage are different properties: the
+syncer can tell you the two halves disagree, but nothing was pinning what either
+half is supposed to DO, and for a two-line env binding the thing worth pinning
+is not the parse (that belongs to `env_flag` and is pinned there) but the
+surface the gate fences.
+
+Both suites are therefore SOURCE guards in `adaptive_fitness_gate_guard`'s
+shape. `off_route_flag.test.ts` (3) / `off_route_flag_test.dart` (4) assert the
+gate delegates rather than carrying a parse, does not default to on, fails
+closed on an unreadable `dotenv`, and — the half that had nothing on it at all —
+that the escalation surface is unreachable while the flag is off: on web every
+affordance of the `/settings/safety` card sits inside `{#if offRouteEnabled}`
+and nowhere else, matched by block NESTING rather than by substring so an
+`{#each}` inside cannot close the block early; on mobile the run screen
+constructs the detector only under the conjunction of the gate, the runner's own
+opt-in and a selected route, and the else branch NULLS it rather than leaving
+one armed from a previous recording. The extra Dart case is that arming, which
+has no web analogue because recording is mobile-only.
+
+`weigh_in_flag_test.dart` (3) mirrors the web suite's claim on the Art 9
+surface: the sheet that collects body weight, the medical-hold flag and the
+organiser consent tick opens only under the gate, the checkpoint picker's
+weigh-in marker renders only under it, and the consent term starts `false` and
+is raised from exactly one writer — the sheet's own result. It also pins the
+COUNT of `weighInGate` reads on the screen at two, so a third affordance cannot
+be added without this guard being told about it; that is the assertion that
+turns "these two places are gated" into "these are the only places".
+
+Two mutations were watched failing on the web half — moving the off-route card
+out from behind the gate, and replacing the delegated parse with a
+`!== 'false'` default-on — and three on the naming guard. The Dart halves could
+not be executed from this lane (two other lanes held the Flutter budget), so
+every assertion was instead replayed against the real sources by an independent
+script, statement for statement; that found and fixed one wrong assertion, a
+negative lookahead that also matched the `var healthConsent = false;`
+declaration it was meant to exclude.
+
+## 1356. The CodeQL merge gate stays a repo setting, and the half of it a repo file CAN buy is now bought
+
+**Decided 2026-09-06.** § 1264 and § 1305 both concluded that folding
+`security.yml` into `ci.yml` — the § 1149 caller-job trick that made
+`terraform.yml`'s and `gitleaks.yml`'s red actually block a merge — does not
+gate a CodeQL FINDING, because `github/codeql-action/analyze` has no severity
+threshold and a fold would gate on the analysis completing. Round 42 was pointed
+at the same item again, so the claim was re-read first-hand against the action's
+own `action.yml` at the pinned SHA rather than inherited: 18 inputs, none of them
+a severity or alert threshold. The conclusion holds, and gating a finding remains
+a **repo setting** (the code-scanning results requirement on the `CodeQL` tool),
+which no file in this tree can read, set or verify.
+
+**What had not been noticed is that the two guarantees were being weighed as one.**
+`docs/ops/deployment.md` already recorded the cheaper halfway option — requiring
+the four `analyze` jobs, which gates on the scan RUNNING and is "worth doing if
+the worry is a scanner that silently stops working" — but framed it as another
+branch-protection change and therefore equally out of reach. The part of that
+worry which has actually bitten this repo is narrower and IS reachable: twice a
+compiled leg reported clean over source it had never read (§ 1304, § 1352), and
+in both cases the `analyze` job passed, so requiring it would have caught
+neither. `scripts/check_codeql_coverage.mjs` sits in `workflow-lint`, which is in
+the `CI gate`'s `needs:`, and fails the PR on exactly that state. The loud
+failure modes — an extractor that crashes, a bad `queries:` value — remain
+advisory, which is a far easier thing to notice than a green scan over nothing.
+
+The fold's cost is now written down in `deployment.md` rather than re-derived:
+it re-keys all four analyses, and `security.yml`'s own `push` / `pull_request`
+triggers would have to come off in the same change or every merge runs the
+analyses twice and two uploads to one SARIF category make the alert set
+flip-flop — the failure that merging `codeql.yml` into `security.yml` existed to
+escape. Declined for a third time on that basis, not foreclosed.
