@@ -14,11 +14,11 @@
 	import RunSurfaceTabs from '$lib/components/RunSurfaceTabs.svelte';
 	import RouteExplorer from '$lib/components/RouteExplorer.svelte';
 	import RouteTrackPreview from '$lib/components/RouteTrackPreview.svelte';
-	import type { Route } from '$lib/types';
+	import type { RouteListItem } from '$lib/routes/route_list_columns';
 	import type { Snapshot } from './$types';
 
 	let tab = $state<'mine' | 'explore' | 'heatmap'>('mine');
-	let routes = $state<Route[]>([]);
+	let routes = $state<RouteListItem[]>([]);
 	let loading = $state(true);
 	let fetchError = $state<string | null>(null);
 	let showImport = $state(false);
@@ -223,7 +223,7 @@
 	}
 
 	export const snapshot: Snapshot<{
-		routes: Route[];
+		routes: RouteListItem[];
 		tab: 'mine' | 'explore' | 'heatmap';
 		search: string;
 		surfaceFilter: SurfaceFilter;
