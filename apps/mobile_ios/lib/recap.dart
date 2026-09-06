@@ -243,23 +243,49 @@ String _mondayOf(DateTime d) {
 String _hhmm(DateTime d) =>
     '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
+/// The day the "current streak" walk may count back from: the earlier of the
+/// period's last day and [now].
+///
+/// `computeRunStreaks` ignores runs after its anchor and starts the walk at the
+/// anchor (or its grace day), so an anchor in the future is not merely
+/// imprecise — it puts the walk on two empty days and returns 0 for every live
+/// streak there is.
+DateTime _currentAnchor(DateTime periodEnd, DateTime now) =>
+    now.isBefore(periodEnd) ? now : periodEnd;
+
+/// The stored ascent for [r], mirroring `key_stats.ts`'s `storedElevationGainM`
+/// over the one reading a domain [Run] carries.
+///
+/// Migration `20270302_001` promoted total ascent to `runs.elevation_gain_m`
+/// and the TS half reads that column first, falling back to the bag key. A
+/// `Run` has no column to read, so the column-wins rule is applied one layer
+/// down instead: `ApiClient._runFromRow` surfaces `elevation_gain_m` back onto
+/// this key, alongside `activity_type`, `is_dnf` and the four `fastest_*_s`
+/// (decisions § 1240). Reading the bag here is therefore reading the column.
+///
+/// A non-finite value is no reading, exactly as the TS half's `Number.isFinite`
+/// says: the bag is schemaless and a NaN summed into the year total takes every
+/// other run's climb with it.
 double _elevationOf(Run r) {
-  // Run.metadata.elevation_m is the canonical key (jsonb).
-  final m = r.metadata;
-  if (m == null) return 0;
-  final raw = m['elevation_m'];
-  if (raw is num) return raw.toDouble();
+  final raw = r.metadata?['elevation_m'];
+  if (raw is num && raw.isFinite) return raw.toDouble();
   return 0;
 }
 
 /// Build the year-in-running aggregate. Pass ALL runs, not just the
 /// target year — internal filter lets the streak computation extend
 /// across the year boundary.
+///
+/// [now] is the reader's clock, stateable so a test does not inherit it; Dart
+/// cannot default a parameter to `DateTime.now()`, so it is nullable here where
+/// the TS half takes `now: Date = new Date()`.
 YearInRunningRecap buildYearInRunningRecap(
   List<Run> runs,
   int year, [
   RecapExtras extras = const RecapExtras(),
+  DateTime? now,
 ]) {
+  final at = now ?? DateTime.now();
   final inYear = <Run>[];
   for (final r in runs) {
     // Classify by the run's *local* calendar year — the per-month / per-week
@@ -349,13 +375,17 @@ YearInRunningRecap buildYearInRunningRecap(
     }
   });
 
-  // Anchor "today" at Dec 31 23:59 local, and bound `best` at Jan 1 so a
-  // streak that ended before this year is somebody else's card's headline,
-  // not this one's.
+  // Bound `best` at Jan 1 so a streak that ended before this year is somebody
+  // else's card's headline, not this one's. The "current" anchor is the EARLIER
+  // of 31 Dec and now: anchoring unconditionally at 31 Dec meant that for the
+  // year you are living in — the only card anyone opens while a streak is
+  // running — the walk looked for a run on 31 Dec, then on the grace day of
+  // 30 Dec, found neither, and reported `current: 0`. `best` keeps the period's
+  // own end so a past year's card still clamps at its own 31 Dec.
   final endOfYear = DateTime(year, 12, 31, 23, 59);
   final streaks = computeRunStreaks(
     runs.map((r) => r.startedAt).toList(),
-    endOfYear,
+    _currentAnchor(endOfYear, at),
     DateTime(year, 1, 1),
   );
 
@@ -420,8 +450,10 @@ YearInRunningRecap buildMonthInRunningRecap(
   int year,
   int month, [
   RecapExtras extras = const RecapExtras(),
+  DateTime? now,
 ]) {
-  final yearRecap = buildYearInRunningRecap(runs, year, extras);
+  final at = now ?? DateTime.now();
+  final yearRecap = buildYearInRunningRecap(runs, year, extras, at);
   final bucket = (month >= 1 && month <= 12)
       ? yearRecap.monthly[month - 1]
       : RecapMonthBucket(month: month, distanceM: 0, durationS: 0, runCount: 0);
@@ -493,7 +525,7 @@ YearInRunningRecap buildMonthInRunningRecap(
   final endOfMonth = DateTime(year, month + 1, 0, 23, 59);
   final streaks = computeRunStreaks(
     runs.map((r) => r.startedAt).toList(),
-    endOfMonth,
+    _currentAnchor(endOfMonth, at),
     DateTime(year, month, 1),
   );
 

@@ -23,7 +23,6 @@ import '../lib/screens/run_screen.dart';
 import '../lib/social_service.dart';
 import '../lib/training_service.dart';
 import '../lib/turn_cues.dart';
-import '../lib/widgets/top_banner.dart';
 import 'pump_until.dart';
 
 /// Drives the full RunScreen UI flow: tap START → countdown → recording.
@@ -954,8 +953,6 @@ void main() {
         reason: 'the indoor fallback still tells the runner why',
       );
 
-      // Drain the 6 s notice banner before teardown.
-      await tester.pump(const Duration(seconds: 6));
       await tester.pumpWidget(const SizedBox());
       for (var i = 0; i < 4; i++) {
         await tester.pump(const Duration(milliseconds: 50));
@@ -1098,8 +1095,6 @@ void main() {
           reason: '187 km of restored distance is not a split just crossed — '
               'the resumed run must not announce one');
 
-      // Drain the 3 s resumed banner before teardown.
-      await tester.pump(const Duration(seconds: 3));
       await tester.pumpWidget(const SizedBox());
       for (var i = 0; i < 4; i++) {
         await tester.pump(const Duration(milliseconds: 50));
@@ -1259,14 +1254,6 @@ void main() {
       tester.takeException(); // LiveRunMap tile-fetch noise
     }
 
-    /// Let a fired `showTopBanner` reach its own auto-dismiss. Its timer
-    /// lives in the root Overlay, not the screen, so screen dispose does
-    /// not cancel it and leaving it pending fails the test teardown.
-    Future<void> drainBanner(WidgetTester tester) async {
-      await tester.pump(kTopBannerMaxDuration + const Duration(seconds: 1));
-      tester.takeException();
-    }
-
     /// Flip the toggle on with the belt reporting connected, then push one
     /// sample through. Leaves the screen showing the live belt speed.
     Future<void> engageBelt(WidgetTester tester, BleTreadmill treadmill,
@@ -1391,7 +1378,6 @@ void main() {
       expect(find.text('Treadmill lost, reconnecting…'), findsWidgets,
           reason: 'the toggle states the belt is being chased, and does not '
               'hold the last speed as if it were current');
-      await drainBanner(tester);
     });
 
     testWidgets('a connect failure is disclosed on the toggle', (tester) async {
@@ -1408,7 +1394,6 @@ void main() {
       expect(find.text('Reconnect'), findsOneWidget,
           reason: 'connectFailed never retries itself — the runner is offered '
               'the one-tap reconnect, mirroring the HR strap');
-      await drainBanner(tester);
     });
 
     testWidgets('connecting is disclosed on the toggle', (tester) async {
@@ -1516,7 +1501,6 @@ void main() {
       expect(sw.subtitle, isNull,
           reason: 'connected-with-no-sample is the one blank state, and it is '
               'blank because it is true');
-      await drainBanner(tester);
     });
 
     testWidgets('a fresh sample after a reconnect is the figure shown',
@@ -1537,7 +1521,6 @@ void main() {
 
       expect(find.text('Belt 7.5 km/h'), findsOneWidget);
       expect(find.text('Belt 10.0 km/h'), findsNothing);
-      await drainBanner(tester);
     });
 
     testWidgets('a connect failure after a live belt clears the last figure',
@@ -1553,7 +1536,6 @@ void main() {
       expect(find.text('No belt data — distance from GPS'), findsOneWidget,
           reason: 'connectFailed and disconnected share one line: the fact '
               'the runner needs is that distance is coming from GPS');
-      await drainBanner(tester);
     });
 
     testWidgets('an engaged belt with no sample yet claims nothing',

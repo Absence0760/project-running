@@ -8,7 +8,6 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_route_store.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/route_detail_screen.dart';
-import '../lib/widgets/top_banner.dart';
 import '../lib/widgets/undo_bar.dart';
 
 cm.Route _route() => cm.Route(
@@ -147,8 +146,6 @@ void main() {
       expect(api.deleteCalls, 0);
       expect(_deleteReviewButton(tester), findsOneWidget,
           reason: 'the same review row is back, not a re-inserted copy');
-      hideTopBanner();
-      await tester.pump();
     });
 
     testWidgets('the window closing deletes for real', (tester) async {
@@ -178,11 +175,6 @@ void main() {
           reason: 'a list must never claim a row is gone while the server '
               'still holds it');
       expect(find.textContaining("Couldn't delete the review"), findsOneWidget);
-
-      // showTopBanner schedules an auto-dismiss timer; the binding asserts on
-      // a pending timer at teardown, so it has to be cleared here.
-      hideTopBanner();
-      await tester.pump();
     });
   });
 }

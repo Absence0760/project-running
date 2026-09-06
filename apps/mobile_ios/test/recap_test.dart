@@ -317,7 +317,8 @@ void main() {
       // A streak that started in late December of the previous year
       // should count its in-year days against the target year. Pass
       // every run; the helper passes them all through to
-      // computeRunStreaks anchored at Dec 31 of the target year.
+      // computeRunStreaks anchored at Dec 31 of the target year (a past
+      // year here, so the anchor is not clamped to now).
       final runs = [
         for (var i = 0; i < 10; i++)
           _run(
@@ -358,6 +359,28 @@ void main() {
       ];
       final r = buildYearInRunningRecap(runs, 2025);
       expect(r.totalElevationM, 50);
+    });
+
+    test('a non-finite elevation contributes nothing rather than poisoning the '
+        'total', () {
+      // The bag is schemaless jsonb; `raw is num` admits a NaN the way the TS
+      // half's `Number.isFinite` does not, and one such run would take every
+      // other run's climb in the year down with it.
+      final runs = [
+        _run(
+          id: 'a',
+          startedAt: DateTime(2025, 2, 1),
+          distanceM: 5000,
+          elevationM: double.nan,
+        ),
+        _run(
+          id: 'b',
+          startedAt: DateTime(2025, 2, 2),
+          distanceM: 5000,
+          elevationM: 50,
+        ),
+      ];
+      expect(buildYearInRunningRecap(runs, 2025).totalElevationM, 50);
     });
 
     test('zero runs → null earliest + latest start', () {
@@ -664,6 +687,97 @@ void main() {
         buildYearInRunningRecap(staleStreakRuns(), 2026),
       );
       expect(json['bestStreakDays'], 3);
+    });
+  });
+
+  // Mirrors `recap.test.ts`'s anchor cases (decisions § 1221 / § 1239). The
+  // anchor used to be 31 Dec of the card's year unconditionally, so for the
+  // year you are living in the walk looked for a run on 31 Dec, then on its
+  // grace day of 30 Dec, found neither, and reported 0 for every live streak.
+  group('current-streak anchor', () {
+    /// A 4-day streak ending on the stated `now`.
+    List<Run> liveStreakRuns() => [
+          for (var i = 0; i < 4; i++)
+            _run(
+              id: 'live-$i',
+              startedAt: DateTime(2026, 3, 7 + i, 7),
+              distanceM: 5000,
+            ),
+        ];
+
+    final now = DateTime(2026, 3, 10, 9); // 10 Mar 2026, 09:00 local
+
+    test('the card for the year you are IN reports the live streak', () {
+      final r = buildYearInRunningRecap(
+          liveStreakRuns(), 2026, const RecapExtras(), now);
+      expect(r.currentStreakDays, 4,
+          reason: 'a streak running up to and including today is the current '
+              'streak');
+      expect(r.bestStreakDays, 4);
+    });
+
+    test('the grace day keeps a streak alive on a morning before the run', () {
+      final r = buildYearInRunningRecap(
+          liveStreakRuns().sublist(0, 3), 2026, const RecapExtras(), now);
+      expect(r.currentStreakDays, 3);
+    });
+
+    /// The web suite's `BOUNDARY_STREAK_DAYS`: a 7-day streak straddling the
+    /// year end, four of whose days are in 2025.
+    List<Run> boundaryStreakRuns() => [
+          for (final d in [
+            DateTime(2025, 12, 28, 10),
+            DateTime(2025, 12, 29, 10),
+            DateTime(2025, 12, 30, 10),
+            DateTime(2025, 12, 31, 10),
+            DateTime(2026, 1, 1, 10),
+            DateTime(2026, 1, 2, 10),
+            DateTime(2026, 1, 3, 10),
+          ])
+            _run(
+                id: 'b-${d.year}-${d.month}-${d.day}',
+                startedAt: d,
+                distanceM: 5000),
+        ];
+
+    test('a past year still clamps at its own 31 Dec', () {
+      // The 2025 card counts the four days up to its own year end rather than
+      // being dragged forward to `now`, and the 2026 half is excluded because
+      // it falls after the anchor.
+      final r = buildYearInRunningRecap(
+          boundaryStreakRuns(), 2025, const RecapExtras(), now);
+      expect(r.currentStreakDays, 4);
+    });
+
+    test('the month you are IN reports the live streak', () {
+      final r = buildMonthInRunningRecap(
+          liveStreakRuns(), 2026, 3, const RecapExtras(), now);
+      expect(r.currentStreakDays, 4);
+    });
+
+    test('a finished month still clamps at its own last day', () {
+      final r = buildMonthInRunningRecap(
+          boundaryStreakRuns(), 2025, 12, const RecapExtras(), now);
+      expect(r.currentStreakDays, 4);
+    });
+
+    test('a month already over reports no current streak', () {
+      // March 2026 held a streak that ended on the 10th; read from September
+      // the anchor is the month's own 31 Mar, two clear days past the last run,
+      // so the card reports no live streak rather than the length it had.
+      final r = buildMonthInRunningRecap(
+          liveStreakRuns(), 2026, 3, const RecapExtras(), DateTime(2026, 9, 5));
+      expect(r.currentStreakDays, 0);
+      expect(r.bestStreakDays, 4);
+    });
+
+    test('recapSnapshotJson carries the live streak, not a zero', () {
+      // `recapSnapshotJson` writes `public_recaps`, so the anchor defect made a
+      // phone-published snapshot of an in-progress period render a zero on the
+      // web share page while the web-built one rendered the real streak.
+      final json = recapSnapshotJson(buildYearInRunningRecap(
+          liveStreakRuns(), 2026, const RecapExtras(), now));
+      expect(json['currentStreakDays'], 4);
     });
   });
 }

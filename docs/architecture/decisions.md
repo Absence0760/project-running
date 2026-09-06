@@ -25044,3 +25044,240 @@ same trigger to those two turns every version of this refusal into a silent
 correction and removes the client-version coupling for good — 410, 465 and 55
 all become zero. Filed for the lane that owns migrations; the doc note is the
 interim, not the answer.
+
+## 1238. Finishing § 1195: the doc still prescribed the drain, and every one of the 33 sites the sweep had left as judgement calls turned out not to be one
+
+`apps/mobile_android/CLAUDE.md` § Tests closed with "Waiting for a screen's
+completion path often also arms `showTopBanner`'s 3 s dismissal timer, which
+then trips `A Timer is still pending`: pump past it (decisions § 1131)." That
+stopped being true when § 1195 moved the pill's clock into its own `State` —
+armed in `initState`, cancelled in `dispose` — and deleted 60 of the 70 drains
+it had produced. A doc that keeps prescribing a deleted remedy re-manufactures
+the population the sweep just cleared, one new screen test at a time, which is
+how 70 of them accumulated in the first place. The sentence now states the rule
+from `docs/testing/testing.md` § Patterns instead: a screen test reaching a
+completion path needs no drain, and a pending timer under a widget you control
+is that widget's bug, because the assertion is raised inside the test body
+before any `tearDown` can run.
+
+The file-notes list carried the same claim one level down and it was wrong in a
+second way: `route_conditions_test.dart` was annotated "`showTopBanner` timer
+drained per the mobile-test gotcha", but that file's `_drain` pumps nine seconds
+and its own docstring names the **armed undo window** as the owner of the timer
+— the banner was never what it was draining. Left as written, the note would
+have invited the next sweep to delete a pump the undo window still needs. It now
+names the undo window.
+
+**The 10 drains § 1195 kept, and the 23 more nobody had counted, are gone too.**
+The filing described what was left as deliberately harder — nine drains "each
+doing something else as well", two `_drainBanner` helpers with "9 call sites
+between them", and two pumps in `run_screen_recording_flow_test.dart` that
+"advance the RECORDING clock mid-test, which is why they were deliberately put
+back after the sweep first removed them". Measured by removing each and running
+the file: **every one of them was removable and none of the stated reasons
+held.** The six standalone drains are each `pump(4 s)` followed by a settling
+`pump()` — the "further pumping whose purpose is not the banner" is the settle
+after the drain. The two clock-advancing pumps sit after their test's last
+`expect`, ahead of a `pumpWidget(const SizedBox())` teardown, so there is no
+assertion downstream for a shortened clock to reach. And the helper count was
+wrong in the other direction: `nearby_area_test.dart` has 3 call sites and
+`route_detail_watch_course_test.dart` has 15, not 9 between them.
+
+A census of the same class found three more sites the filing never listed, two
+of them still carrying the false sentence in comment form: four
+`hideTopBanner()` calls trailing an assertion in
+`route_detail_review_delete_test.dart` and `watch_live_screen_test.dart` (one
+annotated "the binding asserts on a pending timer at teardown, so it has to be
+cleared here" — wrong twice over, since § 1195 established the assertion is
+raised inside the test body), one in `settings_email_reoptin_test.dart`, and a
+drain inside `top_banner_test.dart` itself. The filing's own suggestion to drop
+`settings_email_reoptin_test.dart`'s `tearDown(hideTopBanner)` was checked
+rather than taken on trust — `_current` is a library global cleared by the
+pill's `onDisposed` only for a banner that was BUILT, so a never-built one does
+leak past the test — and a probe showing a never-built banner into a tree that
+is then replaced, followed by a second test showing and asserting its own
+banner, passes: the leak is inert. Removed.
+
+103 lines across 11 files, no insertions, plus five now-unused
+`top_banner.dart` imports; `dart analyze` over the eleven exits 0 and all 191
+tests pass. The rule this leaves is the one in `docs/testing/testing.md`
+§ Patterns and now in `apps/mobile_android/CLAUDE.md`: there is no such thing as
+a banner drain any more.
+
+## 1239. The recap's Dart half kept anchoring the current streak at 31 December, and it was the half that publishes the snapshot
+
+[§ 1221](#1221) fixed `recap.ts` and filed the Dart twin, which is the more
+consequential of the two: `recapSnapshotJson` writes `public_recaps`, so a
+phone-published recap of the year or month you are living in rendered a **zero**
+current streak on the web share page while the web-built snapshot of the same
+runner rendered the real number. `buildYearInRunningRecap` and
+`buildMonthInRunningRecap` now take a trailing optional `now`, resolve it with
+`now ?? DateTime.now()` — Dart cannot default a parameter to a non-constant, and
+that is the only shape difference from `now: Date = new Date()` — and anchor
+`computeRunStreaks` at `_currentAnchor(periodEnd, now)`, the earlier of the
+period's end and the reader's clock. The month builder threads the same instant
+into its own call to the year builder, so one card cannot answer two clocks.
+
+**Two of the six mirrored cases were wrong as first written, and getting them
+right is what the group is for.** A past-year clamp fixture of 29-31 Dec 2025
+plus 1 Jan 2026 expects 4 and yields 3: the 1 January run is after the anchor,
+so it is excluded, and the streak that reaches 31 December is three days long.
+The web suite's `BOUNDARY_STREAK_DAYS` opens on 28 December for exactly that
+reason and the Dart fixture now matches it. And "a finished month still clamps"
+cannot be shown with a March fixture read from September — March's own anchor is
+31 March, two clear days past the last run, so the honest answer is 0. That case
+is now stated as its own test (`a month already over reports no current streak`,
+current 0 with best still 4) and the clamp is shown on the December fixture that
+actually ends on its period's last day.
+
+All four new anchor assertions were verified failing against the old behaviour
+by making `_currentAnchor` return `periodEnd` unconditionally: the year card,
+the grace day, the month card and the published snapshot each report 0 where the
+streak is 4 or 3. The Dart suite goes 36 -> 43 tests against the web half's 42;
+the pair was 6 apart before this change and is now 1, the extra being the
+`recapSnapshotJson` case, which is the direction the pair's registry entry
+already documents.
+
+## 1240. The recap's Dart half could not read the promoted ascent column, because the seam that surfaces every other promoted column dropped that one
+
+The filing said `recap.dart` reads the bag key where `recap.ts` reads the
+promoted `runs.elevation_gain_m` column first, and named
+`apps/mobile_android/` as the owner tree. **The mechanism is real and the owner
+tree is wrong.** The Dart domain `Run` carries no column at all — only
+`metadata` — so no edit inside `recap.dart` can prefer one. `runRowFromRun`
+lifts the bag key INTO the column on the way out, and
+`kRunMirroredMetadataColumns` declares elevation as a deliberate double-write
+kept in the bag; but the read direction, `ApiClient._runFromRow`, surfaces
+`activity_type`, `is_dnf`, the four `fastest_*_s`, `track_url` and
+`hr_series_url` back onto the bag and silently omits `elevation_gain_m`.
+
+Measured with `ApiClient.debugRunFromRow` on a row carrying
+`elevation_gain_m: 312.5` and a bag of `{title: hilly}`: the resulting `Run`
+holds `{title, activity_type, is_dnf}` and `buildYearInRunningRecap` reports
+`totalElevationM: 0.0`. The reachable population today is nonetheless **zero**,
+which the filing's body says and its headline does not: every writer of the
+column also writes the key — `_shared/strava.ts` (the OAuth ingest and the
+webhook), web `createManualRun`, mobile `runRowFromRun`, and `20270302_001`'s
+own backfill — while `parkrun-import`, `race-results-import` and the backup
+restore write neither. The gap opens the moment one writer sets only the column.
+The structural cause is that `run_row_shape_test.dart` guards the WRITE
+direction ("runRowFromRun fills every declared column") and nothing guarded the
+read one, so the single omitted line had nothing to fail against.
+
+**Fixed at the seam, which is the only place it can be fixed.** `_runFromRow`
+now stashes `elevation_gain_m` onto `MetadataKeys.elevationM` when present,
+beside the `fastest_*_s` stashes and under the same absent-key rule. The same
+probe now prints `{title, activity_type, is_dnf, elevation_m: 312.5}` and
+`totalElevationM: 312.5`. Patching `recap.dart` was never an option and
+patching only its caller would have left `dashboard_screen.dart`'s today-card
+and `RunSummary.fromRun`'s index entry reading the same absent key. The write
+direction was checked before touching the read one and is not implicated:
+`_runUpsertBody` strips nulls from the upsert body, so a round trip of a
+column-only run could not have cleared the column — the gap was read-side only.
+
+The missing guard is now the read-side twin of the write-side one, and it is
+derived rather than spelled: it builds a row from
+`kRunPromotedMetadataColumns` + `kRunMirroredMetadataColumns`, both of which
+live in `core_models` and neither of which can lose an entry without failing
+the write-side test, then asserts every declared key comes back on the bag
+carrying the column's value. A separate case fails when a newly promoted column
+has no sample row value, so a future promotion cannot be silently skipped
+instead of checked. Five mutations were planted and each caught: the fix
+reverted, the stash made unconditional so an absent column nulls its key, the
+bag copy made to win over the column, a *pre-existing* stash (`fastest_10k_s`)
+deleted — proving the guard is not elevation-specific — and a sample value
+removed, proving the coverage half is live.
+
+`recap.dart`'s own half landed with it. The comment calling
+`metadata.elevation_m` "the canonical key" has not been true since
+`20270302_001` and is precisely the belief under which the seam gap went
+unnoticed; it now says that reading the bag here is reading the column, and why.
+And `raw is num` admitted a non-finite value where the TS half's
+`Number.isFinite` does not — a NaN in the schemaless bag would have summed into
+the year total and taken every other run's climb with it. Not a fix for
+anything measured reachable (nothing on the phone writes that key, and
+`jsonDecode` cannot produce a NaN), but the two halves of a registered pair
+should not answer the same input differently; pinned, and verified failing
+without the guard.
+
+## 1241. The relink picker's tie order was Dart's to lose, and the two clients were not even fetching in the same order to lose it from
+
+The filing asked which half of `filterRelinkCandidates` is nondeterministic
+before proposing a fix, because the round before it had answered that question
+wrong. Measured, on the shapes this helper actually sees. **V8: zero
+divergences from a stable sort in 800,000 trials** (list sizes 2, 8, 16, 32, 33,
+34, 40, 64, 120, 570 crossed with 1-5 distinct instants) — `Array.prototype.sort`
+is stable by contract and, unlike the comparator § 1200 found, this one returns 0
+on a tie, so the contract applies. **Dart: 0 divergences in 400,000 trials at 33
+elements or fewer, and 320,000 of 320,000 past it** — `List.sort` switches from
+insertion sort to dual-pivot quicksort at 34 and reorders equal elements on
+every single run at 34, 40, 64 and 120. The nondeterministic half is Dart's, and
+34 is reachable: the phone filters to ±7 local days and the web query to ±9, so a
+runner logging a little over two activities a day — and `runs` now carries walks,
+hikes, rides and stroller pushes — fills that window.
+
+**The second half of the filing measured out true and matters more.** Neither
+fetcher carries a secondary `.order()` key: `data.ts` orders `started_at`
+descending over a `started_at` window OR-ed with the current pick's id, and
+`training_service.dart` orders `started_at` descending over the owner's entire
+run history. Two different queries, two different plans, one unspecified tie
+order each — so even with both sorts stable the two platforms could hand the
+same runner two different pickers. Stability was never enough here; only a total
+order is.
+
+Both halves now sort `started_at` descending then `id` ascending. That is
+deliberately not § 1200's scan-instead-of-sort — this helper's caller consumes
+the whole ordered list, which is the `readiness` / `routine_history` case — but
+it is stronger than that house shape, which leaves each platform deterministic
+with respect to its own input: a total order removes the input order from the
+answer entirely, which is what two differing fetches required. Adding `id` to
+the two `.order()` clauses was considered and **not** done: with the helper
+totally ordered the fetch order is unobservable, neither query paginates, and a
+second rail asserting the same thing is a thing that can drift. Web's comparator
+falls through to the id tiebreak on a NaN (`if (byStart)` is falsy for both 0 and
+NaN), so an unparseable instant is ordered rather than left in fetch order; the
+Dart half's typed `DateTime` cannot reach that case, the same shape difference
+the pair already carries elsewhere. Two mirrored tests each — the two-run case
+from the filing and a 40-run all-tied case past Dart's threshold, both asserted
+from two opposite input orders — take the suites to 12 and 12, and each was
+verified failing with its own tiebreak removed.
+
+## 1242. Three copies of the prune predicate, and the argument for extracting a five-line function
+
+The house rule is that three similar lines beat a premature helper, so the case
+has to be made rather than assumed. It is made by what the predicate DECIDES,
+not by its length. `outsideFetchWindow` answers whether a windowed refresh may
+prune a synced row that the fetch did not return — outside the window the
+absence means "never asked for" and the row must be kept; inside it means the
+server deleted it and the row must go. Get the half-open convention wrong on one
+store and that store silently discards synced rows the server still has, which
+is data loss with no error and no test failure anywhere else. It is a
+contract that three call sites have to agree on, which is the same thing the
+TS-Dart parity registry exists for, one platform down; § 1198 declined a
+`replaceResident(build)` template on the opposite finding — that all seven
+`replaceFromServer` gates were verbatim identical, so the extraction would have
+caught nothing — and here the three were already NOT identical.
+
+`local_food_store.dart` and `local_gym_store.dart` carried it character for
+character. `local_routine_store.dart` open-coded
+`windowStart != null && entry.value.lastModifiedAt.isBefore(windowStart)`, which
+is the same predicate with the `end` bound dropped and the null-`at` branch
+unreachable behind a non-nullable field — correct today, and the shape from
+which a drift starts, because the next person adding an `end` bound to the
+routine library has no shared function to add it to. One top-level function in
+`offline_sync_store.dart`, which all three already import; a top-level function
+rather than the filing's suggested `@protected static` because `@protected` is
+an instance-member annotation and a static one that ignores `this` would only
+be documentation.
+
+The three suites reached the predicate only through a whole `replaceFromServer`,
+so the extraction ships the first direct cases: the unplaceable timestamp, the
+no-bounds full replace, start-inclusive against end-exclusive at
+microsecond resolution, each single-sided window, and a UTC row timestamp
+against a local window bound. Four mutations were planted in the extracted body
+and each was caught — start made exclusive, end made inclusive, a null timestamp
+read as outside the window, and a wall-clock field comparison in place of the
+instant one. **Filed rather than done in the same pass:** `_parseTs` is a
+byte-identical private static in SIX stores (food, gear, gym, meal template,
+recipe, routine), a larger instance of the same shape than the one this entry
+closes, but three of those files belong to no lane this round.

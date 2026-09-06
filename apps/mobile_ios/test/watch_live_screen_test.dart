@@ -10,7 +10,6 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/watch_live_screen.dart';
 import '../lib/sim_watch_sync.dart';
 import '../lib/watch_status_link.dart';
-import '../lib/widgets/top_banner.dart';
 
 /// Stands in for the radio: [open] hands back a controller the test drives,
 /// [close] ends it — the same fake shape `watch_status_link_test.dart` uses,
@@ -408,9 +407,6 @@ void main() {
       findsOneWidget,
     );
     expect(source.closes, greaterThan(0));
-
-    hideTopBanner();
-    await tester.pump();
   });
 
   testWidgets('a signed-out session cannot arm the relay', (tester) async {
@@ -426,8 +422,5 @@ void main() {
     expect(find.text('Not connected'), findsOneWidget);
     expect(find.text('Sign in to share a live tracking link.'), findsOneWidget);
     expect(source.opened, isEmpty);
-
-    hideTopBanner();
-    await tester.pump();
   });
 }
