@@ -2,15 +2,16 @@
 /// select string built from them, and the row type that says so.
 ///
 /// `fetchRoutes` / `fetchRoutesWithError` select eleven of `routes`' twenty-two
-/// columns and used to hand the rows back as `Route`, which declares all
-/// twenty-two. Eleven of those fields — `description`, `tags`, `is_public`,
-/// `updated_at`, `slug`, `is_featured`, `featured_at`, `shadow_hidden`,
-/// `geom`, `geom_public`, `start_point` — are `undefined` at runtime under a
-/// type promising them, so a consumer that reads one gets `undefined` with the
-/// compiler's blessing. Narrowing the select is right (§ 1229 and the guard
-/// above it): `geom` duplicates `waypoints` for server-side spatial queries and
-/// doubles the wire payload, and `shadow_hidden` is a moderation column the
-/// read boundary strips everywhere else. The defect is the type, not the query.
+/// columns and used to hand the rows back as `Route`, which declares twenty-one
+/// of them (`shadow_hidden` left the overlay in § 1327, because every read path
+/// strips it). Ten of those fields — `description`, `tags`, `is_public`,
+/// `updated_at`, `slug`, `is_featured`, `featured_at`, `geom`, `geom_public`,
+/// `start_point` — are `undefined` at runtime under a type promising them, so a
+/// consumer that reads one gets `undefined` with the compiler's blessing.
+/// Narrowing the select is right (§ 1229 and the guard above it): `geom`
+/// duplicates `waypoints` for server-side spatial queries and doubles the wire
+/// payload, and `shadow_hidden` is a moderation column the read boundary strips
+/// everywhere else. The defect is the type, not the query.
 ///
 /// So the contract is declared ONCE, here, and both halves are derived from it:
 /// the wire string is computed from the column tuple, and `RouteListItem` is

@@ -1765,7 +1765,9 @@ export async function fetchRouteById(id: string): Promise<Route | null> {
 		// `shadow_hidden` is a server-/trigger-owned moderation column
 		// (migration 20270218_001) the client has no business reading; the
 		// `public_routes` view already projects it away, so strip it from the
-		// base-table owner read too. `surface` is narrowed through the same
+		// base-table owner read too. `Route` no longer declares it either
+		// (§ 1327) — the strip is what makes the returned value that type
+		// rather than a cast over it. `surface` is narrowed through the same
 		// defensive parse `fetchRunById` uses for `source`, so a value outside
 		// the RouteSurface union can't leak past the read boundary.
 		const { shadow_hidden, ...rest } = ownerRead.data as typeof ownerRead.data & {

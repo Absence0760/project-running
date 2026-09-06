@@ -90,7 +90,13 @@ export type Run = Omit<RunRow, 'source' | 'metadata' | 'activity_type'> & {
 	has_track?: boolean;
 };
 
-export type Route = Omit<RouteRow, 'waypoints' | 'surface'> & {
+// `shadow_hidden` is omitted, not narrowed: it is server-/trigger-owned
+// moderation state (migration 20270218_001) and every read path in the client
+// strips it — `fetchRouteById` destructures it off the owner read, the
+// `public_routes` view projects it away, and the list projection never selects
+// it. The one column the read boundary is unanimous about must not be the one
+// the type promises on every path (§ 1327).
+export type Route = Omit<RouteRow, 'waypoints' | 'surface' | 'shadow_hidden'> & {
 	waypoints: TrackPoint[];
 	surface: RouteSurface | null;
 };

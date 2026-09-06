@@ -16,6 +16,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { publicRouteListFill } from '../core/data_normalise';
+import type { Route } from '../types';
 import {
 	PUBLIC_ROUTE_LIST_COLS,
 	PUBLIC_ROUTE_LIST_COLUMNS,
@@ -30,6 +31,16 @@ import {
 /// `T extends never` only holds for the empty union, so a non-empty argument
 /// is a compile error naming the columns that broke the claim.
 type AssertNever<T extends never> = T;
+
+/// `shadow_hidden` is not merely absent from the list projection — it left the
+/// `Route` overlay entirely (§ 1327), because every read path strips it:
+/// `fetchRouteById` destructures it off the owner read, `public_routes`
+/// projects it away, and neither column tuple names it. Pinned on `Route`
+/// rather than only on `RouteListItem`, because re-adding it to the overlay
+/// would put it back on `fetchRouteById`'s return without touching the `Pick`
+/// below — the `@ts-expect-error` further down would still be used, and
+/// nothing else would notice.
+export type RouteDeclaresNoModerationState = AssertNever<Extract<keyof Route, 'shadow_hidden'>>;
 
 /// The saved-route half reads `public_routes` and fills what the view
 /// withholds. If the fill ever stops covering the difference — or starts
@@ -61,7 +72,8 @@ export const withheldReadsDoNotCompile = (r: RouteListItem) => [
 	r.is_featured,
 	// @ts-expect-error — not in ROUTE_LIST_COLUMNS
 	r.featured_at,
-	// @ts-expect-error — server-owned moderation column, stripped at every read boundary
+	// @ts-expect-error — server-owned moderation column: not in the projection,
+	// and since § 1327 not on `Route` either
 	r.shadow_hidden,
 	// @ts-expect-error — server-spatial only, doubles the wire payload
 	r.geom,
