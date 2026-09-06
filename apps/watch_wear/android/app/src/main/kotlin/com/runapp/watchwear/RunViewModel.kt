@@ -1217,7 +1217,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
 
     /// Called from the recording observer when the service publishes a
     /// `Finished` state. Persists the run to LocalRunStore + drains.
-    private fun handleFinishedRun(m: RecordingRepository.Metrics) {
+    private suspend fun handleFinishedRun(m: RecordingRepository.Metrics) {
         val runId = m.runId ?: return
         val trackPath = m.trackFilePath ?: return
         val durationS = (m.elapsedMs / 1000).toInt()
@@ -1560,7 +1560,6 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /// Turn the service's raw lap list (cumulative marks) into split-per-lap
     /// Read the just-finished track JSON off disk so the post-run
     /// screen can render a preview thumbnail. Decimates to ≤ 256
     /// points (geometric every-other halving, same shape-preserving
@@ -1568,13 +1567,24 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     /// thousands of points still draws cheaply on a 96 dp canvas.
     /// Returns empty on any failure — caller treats that as
     /// "indoor / no track to preview".
-    private fun readTrackForPreview(
+    ///
+    /// On `Dispatchers.IO`, like every other disk touch in this class. It was
+    /// the one that was not, and it is the largest: `handleFinishedRun` runs
+    /// in the `RecordingRepository.metrics` collect body, which is
+    /// `Dispatchers.Main.immediate`, so a 100-hour ultra's ~36,000-record,
+    /// ~2.8 MB track was read AND fully materialised as a `JsonArray` on the
+    /// UI thread between the runner pressing Stop and the post-run screen
+    /// appearing (decisions § 1303). The decimation runs here too — it is
+    /// the parse that is expensive, and there is nothing to hand back until
+    /// it is done.
+    private suspend fun readTrackForPreview(
         path: String,
-    ): List<com.runapp.watchwear.recording.RouteMath.LatLng> {
-        return try {
-            val raw = File(path).takeIf { it.exists() }?.readText() ?: return emptyList()
+    ): List<com.runapp.watchwear.recording.RouteMath.LatLng> = withContext(Dispatchers.IO) {
+        try {
+            val raw = File(path).takeIf { it.exists() }?.readText()
+                ?: return@withContext emptyList()
             val arr = (kotlinx.serialization.json.Json.parseToJsonElement(raw)
-                as? kotlinx.serialization.json.JsonArray) ?: return emptyList()
+                as? kotlinx.serialization.json.JsonArray) ?: return@withContext emptyList()
             val all = arr.mapNotNull { el ->
                 val obj = el as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
                 val lat = (obj["lat"] as? kotlinx.serialization.json.JsonPrimitive)
@@ -1592,6 +1602,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /// Turn the service's raw lap list (cumulative marks) into split-per-lap
     /// rows suitable for the post-run table. The final "bonus" row is the
     /// partial between the last lap mark and the stop — only included when
     /// it's non-trivial (≥ 1s and ≥ 1m).

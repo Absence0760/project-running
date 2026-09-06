@@ -247,4 +247,54 @@ class ViewModelStreamResilienceTest {
             silent,
         )
     }
+
+    /// Blocking calls this class makes that must not run on the collector's
+    /// thread. Every emission the view model handles arrives on
+    /// `Dispatchers.Main.immediate` — `launchGuarded` is `viewModelScope`,
+    /// and `handleFinishedRun` is called straight out of the
+    /// `RecordingRepository.metrics` collect body — so a disk read there is a
+    /// frozen watch, not a slow one.
+    private val blockingIoCalls = listOf(
+        ".readText()", ".readBytes()", ".writeText()",
+        ".exists()", ".delete()", ".listFiles()",
+    )
+
+    /// Members at this class's own indent, `{` through the matching `\n    }`.
+    /// Nested braces sit at eight spaces or more, so the four-space close is
+    /// the member boundary — the same extraction `SignOutLifecycleWiringTest`
+    /// uses on `tearDownSession`.
+    private fun memberBodies(): Map<String, String> =
+        Regex("""\n    (?:private |internal |public )*(?:suspend )?fun (\w+)\(([\s\S]*?)\n    \}""")
+            .findAll(src)
+            .associate { it.groupValues[1] to it.groupValues[2] }
+
+    @Test
+    fun `every blocking disk call in the view model runs on the IO dispatcher`() {
+        val bodies = memberBodies()
+        assertTrue(
+            "no member bodies parsed out of RunViewModel.kt — the scan would pass on anything",
+            bodies.size >= 20,
+        )
+        val touching = bodies.filterValues { body -> blockingIoCalls.any { body.contains(it) } }
+        // Derived, not listed — but a scan that matches nothing is asleep
+        // rather than clean: this class does touch disk in several places.
+        assertTrue(
+            "no member of RunViewModel matched any blocking disk call — the token " +
+                "list has gone stale",
+            touching.size >= 3,
+        )
+        val onMainThread = touching
+            .filterValues { !it.contains("Dispatchers.IO") }
+            .keys.sorted()
+        assertEquals(
+            "reads or writes disk without withContext(Dispatchers.IO): $onMainThread. " +
+                "Every emission this class handles arrives on Dispatchers.Main.immediate, " +
+                "so the call blocks the UI thread. readTrackForPreview was the outlier and " +
+                "the largest — a 100-hour ultra's track is ~2.8 MB of JSON, read and parsed " +
+                "between the runner pressing Stop and the post-run screen appearing.",
+            emptyList<String>(),
+            onMainThread,
+        )
+    }
+
 }
