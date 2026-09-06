@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { formatDistance } from '$lib/format/units.svelte';
 	import { minMax } from '$lib/util/min_max';
+	import { computeElevationGain } from '$lib/routes/route_simplify';
 	import { m } from '$lib/i18n/store.svelte';
 
 	/// `onhover` is fired with the elevations-index the user is
@@ -36,17 +37,13 @@
 	let maxEle = $derived(extent?.max ?? 100);
 	let eleRange = $derived(Math.max(maxEle - minEle, 1));
 
-	/// Total elevation gain — sum of positive deltas across the
-	/// elevations array. Surfaced in the tooltip so users get the same
-	/// roll-up they see on the route detail page tile.
-	let totalGain = $derived.by(() => {
-		let g = 0;
-		for (let i = 1; i < elevations.length; i++) {
-			const d = elevations[i] - elevations[i - 1];
-			if (d > 0) g += d;
-		}
-		return Math.round(g);
-	});
+	/// Total elevation gain, through the same gated reduction the route
+	/// detail tile uses. A local sum of every positive delta has no noise
+	/// floor, so on a real GPS altitude series it reports the sampling
+	/// jitter as climb -- measured at 116,484 m against a 600 m truth.
+	let totalGain = $derived(
+		Math.round(computeElevationGain(elevations.map((ele) => ({ lat: 0, lng: 0, ele })))),
+	);
 
 	function xFor(i: number): number {
 		if (elevations.length < 2) return padding.left;
