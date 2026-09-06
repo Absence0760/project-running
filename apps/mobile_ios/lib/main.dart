@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/foundation.dart';
@@ -851,9 +850,12 @@ class _RunAppState extends State<RunApp> {
 /// installation is a harmless no-op and the bridge never fires.
 ///
 /// Each call carries: `{id, started_at, duration_s, distance_m, source,
-/// avg_bpm?, track: [{lat, lng, ele?, ts?}]}`. We construct a
-/// `core_models.Run` and upload via `ApiClient.saveRun` — same path
-/// any other recording source uses, so web sees it identically.
+/// avg_bpm?, hr_coverage?, activity_type?, last_modified_at?, track}` —
+/// `track` as the JSON TEXT of the file the watch wrote. Decoding is
+/// [runFromWatchPayload]'s, not this class's: the same payload is decoded
+/// here when the runner is signed in and by the queue's drain when they are
+/// not, so a second copy of the decode could only ever be a divergence
+/// waiting to happen, and was one.
 ///
 /// When the user is not authenticated, the payload is persisted to the
 /// [WatchIngestQueue] on disk and replayed on the next sign-in.
@@ -866,13 +868,23 @@ class WatchIngest {
       final args = call.arguments as Map<Object?, Object?>?;
       if (args == null) return false;
 
+      // One payload, ONE decoder. This handler used to carry a second
+      // hand-written copy of the decode for the signed-in branch, and the two
+      // copies had already drifted in both directions over the same bridge
+      // payload: this one never learned the per-point `bpm` that
+      // `docs/backend/metadata.md` says the watch-ingest decoder reads, and
+      // `runFromWatchPayload` never learned that this bridge sends `track` as
+      // JSON TEXT — so an Apple Watch run that arrived while signed out was
+      // enqueued and later replayed with no track at all. Whether the runner
+      // happened to be signed in is not something a decoder should be able to
+      // change about the run.
+      final payload = <String, dynamic>{
+        for (final e in args.entries)
+          if (e.key is String) e.key as String: e.value,
+      };
+
       if (api.userId == null) {
         try {
-          final payload = Map<String, dynamic>.fromEntries(
-            args.entries
-                .where((e) => e.key is String)
-                .map((e) => MapEntry(e.key as String, e.value)),
-          );
           await queue.enqueue(payload);
         } catch (e) {
           debugPrint('Watch ingest queue write failed: $e');
@@ -881,84 +893,12 @@ class WatchIngest {
       }
 
       try {
-        final run = _runFromArgs(args);
-        await api.saveRun(run);
+        await api.saveRun(runFromWatchPayload(payload));
         return true;
       } catch (e) {
         debugPrint('Watch ingest failed: $e');
         return false;
       }
     });
-  }
-
-  static cm.Run _runFromArgs(Map<Object?, Object?> raw) {
-    final id = raw['id'] as String? ?? '';
-    final startedAt = DateTime.parse(raw['started_at'] as String);
-    final durationS = (raw['duration_s'] as num).toInt();
-    final distanceM = (raw['distance_m'] as num).toDouble();
-    // This channel only carries payloads from the Apple Watch
-    // (see `Runner/WatchIngestBridge.swift`), so a missing `source`
-    // means watch — never web/mobile-app. The fallback in
-    // `_parseSource` matches.
-    final source = raw['source'] as String? ?? 'watch';
-    final trackRaw = raw['track'];
-    final track = <cm.Waypoint>[];
-    if (trackRaw is List) {
-      for (final p in trackRaw) {
-        if (p is Map) {
-          track.add(cm.Waypoint(
-            lat: (p['lat'] as num).toDouble(),
-            lng: (p['lng'] as num).toDouble(),
-            elevationMetres: (p['ele'] as num?)?.toDouble(),
-            timestamp: (p['ts'] as String?) != null
-                ? DateTime.tryParse(p['ts'] as String)
-                : null,
-          ));
-        }
-      }
-    } else if (trackRaw is String) {
-      final decoded = jsonDecode(trackRaw);
-      if (decoded is List) {
-        for (final p in decoded) {
-          if (p is Map) {
-            track.add(cm.Waypoint(
-              lat: (p['lat'] as num).toDouble(),
-              lng: (p['lng'] as num).toDouble(),
-              elevationMetres: (p['ele'] as num?)?.toDouble(),
-              timestamp: (p['ts'] as String?) != null
-                  ? DateTime.tryParse(p['ts'] as String)
-                  : null,
-            ));
-          }
-        }
-      }
-    }
-
-    final metadata = <String, dynamic>{};
-    final avgBpm = raw['avg_bpm'];
-    if (avgBpm is num) metadata[cm.MetadataKeys.avgBpm] = avgBpm.toDouble();
-    final activity = raw['activity_type'];
-    if (activity is String) metadata[cm.MetadataKeys.activityType] = activity;
-    final lastModified = raw['last_modified_at'];
-    if (lastModified is String) {
-      metadata[cm.MetadataKeys.lastModifiedAt] = lastModified;
-    }
-
-    return cm.Run(
-      id: id,
-      startedAt: startedAt,
-      duration: Duration(seconds: durationS),
-      distanceMetres: distanceM,
-      track: track,
-      source: _parseSource(source),
-      metadata: metadata.isEmpty ? null : metadata,
-    );
-  }
-
-  static cm.RunSource _parseSource(String raw) {
-    for (final s in cm.RunSource.values) {
-      if (s.name == raw) return s;
-    }
-    return cm.RunSource.watch;
   }
 }

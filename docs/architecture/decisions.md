@@ -25281,3 +25281,229 @@ instant one. **Filed rather than done in the same pass:** `_parseTs` is a
 byte-identical private static in SIX stores (food, gear, gym, meal template,
 recipe, routine), a larger instance of the same shape than the one this entry
 closes, but three of those files belong to no lane this round.
+
+## 1253. The Wear post-run Discard arms by replacing the cluster it sits in, because a 52 dp glyph has nowhere to announce an arm
+
+`PostRunScreen`'s bottom-end `×` called `RunViewModel.discard` on a single tap.
+That is `store.remove(id)`, the button renders only under `!synced`, and while
+the run has not reached Supabase the local queue is the only place it exists —
+so the tap was the end of the run, the same shape § 1206 fixed on the crash
+recovery prompt and § 1208 fixed twice on watchOS. The comment defending it
+argued a Discard tap "can be re-triggered if dismissed by mistake", which is a
+claim about re-opening a *confirm*; nothing re-triggers `store.remove`.
+
+The § 1206 idiom is two presses inside `CONFIRM_WINDOW_MS` graded by the pure
+`confirmPress`, with the arm announced by a relabel. This control has nowhere to
+put a label: its whole visual is a 52 dp `×`, and this module's own
+`ScreenWiringTest` already refuses colour as a signal. So the ARM replaces the
+whole bottom cluster — Sync, Next and the `×` give way to "Not saved anywhere
+else" above a labelled `Discard?` chip, and the second press lands on that. Two
+consequences worth having: the commit target moves from the bottom-END corner to
+bottom-CENTRE, so a fat-finger double tap where the arming tap landed reaches
+empty space rather than the confirm; and the arm is announced to TalkBack too,
+by `cd_discard_confirm` in all seven catalogues, where the `×` and the confirm
+would otherwise have read identically. The arm lapses on its own, and a sync
+that lands while armed retires it rather than leaving a confirm live over a run
+that is no longer only here.
+
+`PostRunDiscardConfirmTest` pins the shape rather than the wording: `onDiscard()`
+is called from exactly one place in the composable, that place is the
+`ConfirmPress.Confirmed` branch, no control binds the callback directly, both the
+label and the stake render, and the extraction refuses to pass vacuously if
+`PostRunScreen` is renamed. Five mutations were planted and each was refused by
+the guard — rebinding the `×` straight to `onDiscard`, swapping the stake string
+for the plain `discard` one, deleting the lapse `delay`, moving the call into the
+`Armed` branch, and dropping `&& !synced` from the armed predicate. Unlike § 1206
+and § 1208 this one is **build-verified**, not read: `./gradlew assembleDebug
+testDebugUnitTest` runs on this workstation and both are green at 744 tests. What
+that does NOT settle is how the armed strip renders on a 192 dp round bezel — no
+Wear emulator was run, and that is the one claim left for a device.
+
+## 1254. The watch bridge had two decoders for one payload, and they had drifted in both directions
+
+§ 1207 sent `hr_coverage` from `apps/watch_ios` and filed the remainder: the two
+Dart decoders past the Swift bridge build `metadata` from hand-written key
+allowlists, and neither named the key. Fixing that by adding two lines to each
+was the filed shape, and it would have left the actual defect in place. The two
+decoders decode the SAME payload — `WatchIngest._runFromArgs` when the runner is
+signed in, `runFromWatchPayload` when the payload was queued because they were
+not — so a key present in one and absent in the other means the run a runner
+gets depends on whether they happened to be signed in when their watch synced.
+
+Measuring the two against each other found a second divergence going the other
+way, and a worse one. `WatchIngestBridge.swift` sets `payload["track"]` to the
+raw JSON TEXT of the file the watch wrote; `_runFromArgs` had a `trackRaw is
+String` branch and `runFromWatchPayload` did not. So an Apple Watch run that
+arrived while the runner was signed out was enqueued, drained on the next
+sign-in, and landed with an EMPTY track — the run's whole GPS trace, gone,
+while its distance and duration made it look complete. Nothing tested it: every
+existing payload test hands the decoder a List, which is the shape the CUSTOM
+watch's BLE sync produces, and that sender never reaches the other decoder at
+all. In the same direction, `_runFromArgs` never read per-point `bpm`, which
+`docs/backend/metadata.md` already claimed the watch-ingest decoder does.
+
+So the fix is one decoder, not four lines. `WatchIngest` normalises the
+method-channel map once and hands it to `runFromWatchPayload` on both branches;
+`_parseSource`, a byte-identical copy of `parseRunSource`, went with it, and
+`runFromWatchPayload` gained the string-track branch. `hr_coverage` is forwarded
+verbatim like `avg_bpm` — every reader already grades the range
+(`hrCoveragePercent`, `_hrCoveragePercent`, `hrCoverageCell`) and the Art 20 CSV
+deliberately keeps the raw figure in its `metadata` column, so a value this
+build cannot interpret is better stored and refused at render than dropped into
+the ambiguous "no key" population `metadata.md` enumerates. The one check is
+finiteness, and that is not fastidiousness: `metadata` is JSON-encoded on the
+way to Postgres, so a non-finite double throws and takes the whole run upload
+with it. An undecodable track string throws rather than degrading to an empty
+track, which quarantines the entry the way a blank id already is — silently
+landing a trackless run is the defect, not the fallback.
+
+`watch_ingest_single_decoder_guard_test.dart` pins the property behaviourally
+rather than by name: building a `Run` or a `Waypoint` inside the bridge, or
+assembling a metadata map there, IS a second decoder however it is spelled, and
+the payload must be normalised exactly once for both branches. Four mutations
+were planted and each was refused — a `cm.Run(` constructed in the signed-in
+branch, a `MetadataKeys.` read reintroduced, a second `args.entries`
+normalisation for the queued branch, and a rename of the class (which the
+vacuity assertion catches rather than passing on an empty extraction). Verified
+by running the targeted Dart suites (131 tests) plus the twin diff; the Swift
+half is unchanged and remains read-not-run.
+
+## 1255. The DEBUG direct-upload path is typed rather than deleted, and claim (9) holds it against the envelope
+
+`SupabaseService.RunPayload.metadata` was `[String: String]`, so `avg_bpm` and
+`hr_coverage` were not omitted from the DEBUG direct-to-Supabase write — they
+were UNSENDABLE, because a Double had nowhere to go. § 1207 filed the choice
+between typing the payload and deleting a path that lands a row short of the one
+the same run produces through the phone.
+
+**Typed, not deleted, and the reason is who reads it.** This is the path a
+watch-sim-alone developer uses to see a row land with no phone in the loop, and
+it is the ONLY such path — deleting it removes the capability rather than the
+defect, and the DEBUG button in `ContentView` would go with it. The claim it
+makes is also not false, just short: it says "this run synced", which is true.
+`RunPayload.metadata` is now a `RunMetadata: Encodable` carrying
+`activity_type` / `last_modified_at` / `avg_bpm?` / `hr_coverage?`. Swift's
+synthesized encoder uses `encodeIfPresent` for an Optional, so a nil is omitted
+rather than written as `null` — which is exactly the rule § 1207 needs, where
+absent means UNMEASURED and a fabricated zero is worse than a missing key.
+
+**The durable half is the guard, not the four fields.** Two transports writing
+one run from two hand-written field lists is § 1254's shape one tier up, and it
+had already produced this defect. Claim (9) of `check_watch_ios_source.mjs`
+reads the WCSession envelope's key set and the union of `RunPayload`'s and
+`RunMetadata`'s stored properties, and requires the first to be contained in the
+second. The reverse direction is a named register, `DIRECT_ONLY_FIELDS`, holding
+the two fields the phone supplies on the envelope path — `user_id` from its own
+session, `track_url` from its own Storage upload — and an entry naming a field
+the payload no longer sends FAILS, the same staleness rule `UNGUARDED_DESTRUCTIVE`
+carries. `metadata` itself is excluded as the container rather than exempted as a
+datum. Six mutations are pinned in the test file: dropping `hr_coverage` from
+`RunMetadata`, adding a `cadence_spm` the envelope has never heard of, renaming
+`track_url` so its exemption goes stale, renaming `RunMetadata`, renaming the
+`metadata` field on `RunPayload` so the bag is unreachable, and a parser unit
+test that a computed property and a method-local are not fields. Breaking the
+envelope literal now reports vacuity from claims (6) AND (9), and the existing
+vacuity test was tightened to require both rather than loosened to accept
+either.
+
+Read, not compiled: there is no Xcode here, the Swift change is
+`build-verified` only once the `Test watchOS app (Swift)` macOS job runs, and
+what a Mac must confirm is that `RunMetadata` encodes to the same JSON object
+the `[String: String]` literal did for its two shared keys.
+
+## 1256. `WKWatchOnly` is a true description of the Xcode project and a false description of the app, and the plist is not where that gets fixed
+
+§ 1207's round filed the `WKWatchOnly` declaration as unsettleable from Linux —
+"it may equally be correct-as-is". It is settleable, and the answer is both
+halves at once. Apple documents `WKWatchOnly` as "this app has no iOS
+companion" and as mutually exclusive with `WKCompanionAppBundleIdentifier`;
+`WCSession` is a counterpart API, and this app's whole Release sync path is
+`transferFile(_:metadata:)` into `com.threkir.app` with routes pushed back over
+the same session. Three things in this repo already say the app is a companion:
+`apps/mobile_ios/deployment.md` states "the iOS app and the Apple Watch app are
+one deployment … bundled inside the iOS app's `.ipa`" and lists
+`WKCompanionAppBundleIdentifier` = `com.threkir.app` as a REQUIRED key, and the
+watch's own bundle id `com.threkir.app.watchapp` is the companion naming rule
+exactly. So the declaration contradicts the app.
+
+**It does not contradict the project, and that is why flipping it would move
+the lie rather than remove it.** `apps/mobile_ios/ios/Runner.xcodeproj/project.pbxproj`
+contains ZERO occurrences of `WatchApp`, `watchos` or `Watch App` — measured —
+so the embedding `deployment.md` describes does not exist, and
+`apps/watch_ios/WatchApp.xcodeproj` is a standalone project no release pipeline
+builds. A watch app that declares a companion it is not bundled with is not a
+companion app; it is the same inconsistency written the other way round, and it
+would be asserted against the one job that compiles this tier — `test-watch-ios`
+installs the app on an UNPAIRED watch simulator, and whether LaunchServices
+refuses a companion-declaring bundle there is precisely what cannot be
+determined without a Mac. So `WKWatchOnly` stays, and what is owed is the build
+integration, which is also the missing piece behind the "end-to-end on paired
+physical devices" checkbox nobody has been able to tick.
+
+**What the audit found instead was a live defect one line away.** The watch
+target sets `GENERATE_INFOPLIST_FILE = NO` with `INFOPLIST_FILE =
+WatchApp/Info.plist`, and Xcode merges `INFOPLIST_KEY_*` settings only into a
+plist it GENERATES — so `INFOPLIST_KEY_CFBundleDisplayName = "Threkir"`, set on
+both configurations, was inert, the committed plist had no `CFBundleDisplayName`
+at all, and the app was therefore named by `CFBundleName` = `$(PRODUCT_NAME)` =
+`$(TARGET_NAME)`: **`WatchApp`**, on the wrist, in the app grid and in the
+iPhone Watch app's list. The name is now in the plist and the two inert settings
+(the display name, and an empty `INFOPLIST_KEY_WKCompanionAppBundleIdentifier`
+that read as a configured companion relationship) are deleted. Claim (10) of
+`check_watch_ios_source.mjs` keeps both: no `INFOPLIST_KEY_*` on a target whose
+`GENERATE_INFOPLIST_FILE` is NO, a `CFBundleDisplayName` in the file, and
+`WKWatchOnly` never beside a companion id — which is the mistake a Mac session
+resolving the companion question is most likely to make. Five mutations pinned,
+including one that flips every target to a generated plist and must REPORT that
+the check read nothing rather than pass.
+
+Rung: read plus Apple's documented semantics, not a build. What a Mac must
+confirm, in order: (1) `plutil -p …/WatchApp.app/Info.plist` after a build shows
+`CFBundleDisplayName = Threkir`; (2) the watch app is added as a target of
+`Runner.xcodeproj` / the workspace and embedded in the `.ipa`; (3) only then,
+`WKWatchOnly` is removed and `WKCompanionAppBundleIdentifier` set to
+`com.threkir.app`; (4) `test-watch-ios` still installs on an unpaired watch
+simulator; (5) a paired physical device completes one run sync end to end.
+
+## 1257. The watch README's test counts are a chronology, so the fix is a present-tense figure that is guarded — not a correction
+
+`apps/custom_watch/README.md`'s dated batch notes state a count per ported core
+and a `watch_core` total per batch — "924 host tests" on 2026-07-11,
+`plan_replan` "13". Both are long stale. § 1181's rule says a measured count in
+prose is derived from the guard that measures it or it is not stated, and the
+filing offered two fixes: mark the notes as as-of, or move the counts into a
+present-tense table a guard can read.
+
+Neither, exactly. `check_watch_doc_counts.mjs`'s own header already answers half
+of it: a dated log is out of scope **deliberately** (§ 793), because a batch note
+records what was true on the day of the batch and rewriting it would misdescribe
+the batch it describes. So hand-correcting "924" is wrong twice — it rots again,
+and it falsifies a record. What was actually missing was a present-tense figure
+anywhere: nothing in the doc set stated the current count, so a reader had only
+the chronology to take one from. That figure now lives in
+`apps/custom_watch/CLAUDE.md` (which IS in `DOC_FILES`), the README's chronology
+carries one banner saying its counts are as-of and pointing there, and no
+historical number was touched.
+
+**The figure is derived, and the derivation was validated against the runtime
+before it was trusted.** A new registry row resolves `core.host_tests` as the
+`#[test]` attributes across the modules `core/src/lib.rs` DECLARES — lib.rs's
+own list, not the directory, because a `.rs` file no `mod` declares is not
+compiled and its tests do not run. That count is **2428**, and `cargo test
+--target x86_64-unknown-linux-gnu -p watch_core` reports `running 2428 tests` for
+the same target: the crate declares its tests plainly, so the static derivation
+and the runtime agree exactly and the doc sentence promises the number that
+actually runs. The whole-workspace sweep is a different population and is named
+as one — `bin/watch-test.sh`, measured 2,868 passed / 0 ignored — with no guard,
+because that one needs cargo.
+
+**Adding `host tests?` to `SWEEP_NOUNS` immediately found a stale count nobody
+had looked at**: `privacy.md` said `core/src/privacy.rs` has "nine host tests"
+and it has eight. Corrected and registered as its own row, so it cannot rot
+again. Two other numbered occurrences are exempted with written reasons rather
+than registered — `roadmap.md`'s workspace figure (which already carries its
+command and its measurement date, the honest form of a dated snapshot) and
+`quality_standards.md`'s "two host tests over `Recorder`", which names two
+specific guards rather than counting a symbol. Six new tests, three of them
+mutation runs against a throwaway copy: a bumped doc figure, a NEW unregistered
+numbered claim, and a planted `#[test]` in `privacy.rs` each exit non-zero.

@@ -131,6 +131,90 @@ void main() {
       expect(run.metadata, isNull);
     });
 
+    test('promotes hr_coverage into metadata beside the average', () {
+      final raw = _basePayload()
+        ..['avg_bpm'] = 145
+        ..['hr_coverage'] = 0.42;
+      final run = runFromWatchPayload(raw);
+      expect(run.metadata!['hr_coverage'], 0.42);
+    });
+
+    test('hr_coverage arrives on its own when the average was suppressed', () {
+      // The watch clients suppress `avg_bpm` below 0.5 coverage, so a run
+      // carrying the share and NO average is the most informative shape the
+      // key has — and the one both run-detail screens give its own sentence.
+      final raw = _basePayload()..['hr_coverage'] = 0.31;
+      final run = runFromWatchPayload(raw);
+      expect(run.metadata!['hr_coverage'], 0.31);
+      expect(run.metadata!.containsKey('avg_bpm'), isFalse);
+    });
+
+    test('a zero hr_coverage is kept — it is a measurement, not an absence',
+        () {
+      final raw = _basePayload()..['hr_coverage'] = 0;
+      final run = runFromWatchPayload(raw);
+      expect(run.metadata!['hr_coverage'], 0.0);
+    });
+
+    test('non-num hr_coverage is ignored', () {
+      final raw = _basePayload()..['hr_coverage'] = 'most of it';
+      final run = runFromWatchPayload(raw);
+      expect(run.metadata, isNull);
+    });
+
+    test('a non-finite hr_coverage is refused', () {
+      // Not fastidiousness: metadata is JSON-encoded on the way to Postgres,
+      // and a non-finite double throws there and takes the whole run with it.
+      for (final v in [double.nan, double.infinity, double.negativeInfinity]) {
+        final raw = _basePayload()..['hr_coverage'] = v;
+        expect(runFromWatchPayload(raw).metadata, isNull, reason: '$v');
+      }
+    });
+
+    test('an out-of-range hr_coverage is stored, not dropped', () {
+      // Every reader grades the range itself and the Art 20 export keeps the
+      // raw value in its `metadata` column. Dropping it here would move the
+      // run into the ambiguous "no key" population metadata.md enumerates,
+      // which is strictly less diagnosable than a figure nothing renders.
+      final raw = _basePayload()..['hr_coverage'] = 85;
+      final run = runFromWatchPayload(raw);
+      expect(run.metadata!['hr_coverage'], 85.0);
+    });
+
+    test('a JSON-string track decodes — the shape the Apple Watch sends', () {
+      // `WatchIngestBridge.swift` sets `payload["track"]` to the raw JSON TEXT
+      // of the file the watch wrote. Until this decoder understood that, an
+      // Apple Watch run that arrived while the runner was signed out was
+      // enqueued and replayed with an EMPTY track — the run's whole GPS trace,
+      // lost on the sign-in state at the moment it happened to arrive.
+      final raw = _basePayload()
+        ..['track'] = '[{"lat":51.5,"lng":-0.1,"ele":12.5,'
+            '"ts":"2026-04-15T07:30:05Z","bpm":142},'
+            '{"lat":51.51,"lng":-0.11}]';
+      final run = runFromWatchPayload(raw);
+      expect(run.track, hasLength(2));
+      expect(run.track.first.lat, 51.5);
+      expect(run.track.first.elevationMetres, 12.5);
+      expect(run.track.first.bpm, 142);
+      expect(run.track.first.timestamp!.toUtc(),
+          DateTime.utc(2026, 4, 15, 7, 30, 5));
+      expect(run.track.last.bpm, isNull);
+    });
+
+    test('the bridge empty-track sentinel decodes to no points', () {
+      // The bridge writes "[]" when it cannot read the file it was handed.
+      final raw = _basePayload()..['track'] = '[]';
+      expect(runFromWatchPayload(raw).track, isEmpty);
+    });
+
+    test('an undecodable track string throws rather than landing trackless',
+        () {
+      // drain quarantines the entry, the same treatment a blank id gets.
+      // Silently landing a run with no track is the defect, not the fallback.
+      final raw = _basePayload()..['track'] = '{not json';
+      expect(() => runFromWatchPayload(raw), throwsA(isA<FormatException>()));
+    });
+
     test('non-num avg_bpm is ignored', () {
       // Defensive: the ObjC bridge has historically sent strings here
       // for a beat or two before the type-checker lands.

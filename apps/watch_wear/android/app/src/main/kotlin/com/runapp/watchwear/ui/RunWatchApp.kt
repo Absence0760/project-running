@@ -2093,92 +2093,156 @@ private fun PostRunScreen(
             contentColor = DuskPalette.parchment,
         )
 
-        // Bottom-centre: primary action. Sync until the run lands;
-        // Done after. Sized to SmallButtonSize like the running
-        // screen's Lap / Stop buttons — the previous full-width chip
-        // dwarfed the route preview.
-        // audit/accessibility (May 2026) High — same Modifier.semantics
-        // pattern as the running-screen buttons above. "Sync" / "Done"
-        // / "Next" / "×" announce as their visual content otherwise;
-        // the contentDescription names each action explicitly.
-        val primaryCd = when {
-            syncing -> stringResource(R.string.cd_syncing_run)
-            synced -> stringResource(R.string.cd_start_next_run)
-            else -> stringResource(R.string.cd_sync_run)
+        // Discard on this screen ends an UNSYNCED run: `RunViewModel.discard`
+        // is `store.remove(id)`, and while the run has not reached Supabase the
+        // local queue is the only place it exists. So it is behind the estate's
+        // two-press confirm (decisions § 1206) like the crash-recovery prompt's
+        // Discard and both watchOS ones (§ 1208), not a single tap.
+        //
+        // The arm cannot be announced on the control itself: the whole visual
+        // is a 52 dp `×` with no room for a word, and recolouring it would make
+        // the arm a colour, which this module already refuses to accept as a
+        // signal. So the armed state replaces the whole bottom cluster with a
+        // labelled chip and the stake above it. That also moves the commit
+        // target away from where the arming tap landed — a double tap in the
+        // bottom-end corner reaches empty space, not the confirm.
+        var discardArmedAtMs by remember { mutableStateOf<Long?>(null) }
+        LaunchedEffect(discardArmedAtMs) {
+            val armedAt = discardArmedAtMs ?: return@LaunchedEffect
+            delay(CONFIRM_WINDOW_MS)
+            if (discardArmedAtMs == armedAt) discardArmedAtMs = null
         }
-        Button(
-            onClick = if (synced) onStartNext else onSync,
-            enabled = !syncing,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 14.dp)
-                .size(ButtonDefaults.SmallButtonSize)
-                .semantics {
-                    contentDescription = primaryCd
-                    role = Role.Button
-                },
-        ) {
-            when {
-                syncing -> CircularProgressIndicator(
-                    strokeWidth = 2.dp,
-                    modifier = Modifier.size(16.dp),
-                )
-                synced -> Text(
-                    stringResource(R.string.done),
-                    style = MaterialTheme.typography.caption3,
-                )
-                else -> Text(
-                    stringResource(R.string.sync),
-                    style = MaterialTheme.typography.caption3,
-                )
+        val onDiscardPress: () -> Unit = {
+            val now = System.currentTimeMillis()
+            when (confirmPress(discardArmedAtMs, now)) {
+                ConfirmPress.Armed -> discardArmedAtMs = now
+                ConfirmPress.Confirmed -> {
+                    discardArmedAtMs = null
+                    onDiscard()
+                }
             }
         }
+        // A sync that lands while the guard is armed retires the confirm rather
+        // than leaving it live over a run that is no longer only here.
+        val discardArmed = discardArmedAtMs != null && !synced && summary != null
 
-        // Bottom-start: "Start next run" — only meaningful while the
-        // current run is not yet synced (post-sync the centre button
-        // already routes to Next). Sits at the curve like Pause on
-        // the running screen.
-        if (!synced && summary != null) {
-            val nextCd = stringResource(R.string.cd_start_next_run)
-            Button(
-                onClick = onStartNext,
+        if (discardArmed) {
+            val confirmCd = stringResource(R.string.cd_discard_confirm)
+            Column(
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 22.dp, bottom = 36.dp)
-                    .size(ButtonDefaults.SmallButtonSize)
-                    .semantics {
-                        contentDescription = nextCd
-                        role = Role.Button
-                    },
-                colors = translucent,
-            ) {
-                Text(stringResource(R.string.next), style = MaterialTheme.typography.caption3)
-            }
-        }
-
-        // Bottom-end: discard. Mirror of Stop on the running screen
-        // — destructive action positioned where the runner's hand
-        // already expects it. Single tap (no hold) is fine here:
-        // the run isn't running, just unsaved, and a Discard tap
-        // can be re-triggered if dismissed by mistake.
-        if (!synced && summary != null) {
-            val discardCd = stringResource(R.string.cd_discard_unsaved_run)
-            Button(
-                onClick = onDiscard,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 22.dp, bottom = 36.dp)
-                    .size(ButtonDefaults.SmallButtonSize)
-                    .semantics {
-                        contentDescription = discardCd
-                        role = Role.Button
-                    },
-                colors = translucent,
+                    .align(Alignment.BottomCenter)
+                    .padding(start = 24.dp, end = 24.dp, bottom = 14.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    stringResource(R.string.discard_short),
-                    style = MaterialTheme.typography.body2,
+                    stringResource(R.string.discard_stake),
+                    style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
+                    color = DuskPalette.warning,
+                    textAlign = TextAlign.Center,
                 )
+                Spacer(Modifier.height(4.dp))
+                CompactChip(
+                    onClick = onDiscardPress,
+                    label = {
+                        Text(
+                            stringResource(R.string.discard_confirm),
+                            style = MaterialTheme.typography.caption3,
+                        )
+                    },
+                    colors = ChipDefaults.secondaryChipColors(),
+                    modifier = Modifier.semantics {
+                        contentDescription = confirmCd
+                        role = Role.Button
+                    },
+                )
+            }
+        } else {
+            // Bottom-centre: primary action. Sync until the run lands;
+            // Done after. Sized to SmallButtonSize like the running
+            // screen's Lap / Stop buttons — the previous full-width chip
+            // dwarfed the route preview.
+            // audit/accessibility (May 2026) High — same Modifier.semantics
+            // pattern as the running-screen buttons above. "Sync" / "Done"
+            // / "Next" / "×" announce as their visual content otherwise;
+            // the contentDescription names each action explicitly.
+            val primaryCd = when {
+                syncing -> stringResource(R.string.cd_syncing_run)
+                synced -> stringResource(R.string.cd_start_next_run)
+                else -> stringResource(R.string.cd_sync_run)
+            }
+            Button(
+                onClick = if (synced) onStartNext else onSync,
+                enabled = !syncing,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 14.dp)
+                    .size(ButtonDefaults.SmallButtonSize)
+                    .semantics {
+                        contentDescription = primaryCd
+                        role = Role.Button
+                    },
+            ) {
+                when {
+                    syncing -> CircularProgressIndicator(
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    synced -> Text(
+                        stringResource(R.string.done),
+                        style = MaterialTheme.typography.caption3,
+                    )
+                    else -> Text(
+                        stringResource(R.string.sync),
+                        style = MaterialTheme.typography.caption3,
+                    )
+                }
+            }
+
+            // Bottom-start: "Start next run" — only meaningful while the
+            // current run is not yet synced (post-sync the centre button
+            // already routes to Next). Sits at the curve like Pause on
+            // the running screen.
+            if (!synced && summary != null) {
+                val nextCd = stringResource(R.string.cd_start_next_run)
+                Button(
+                    onClick = onStartNext,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 22.dp, bottom = 36.dp)
+                        .size(ButtonDefaults.SmallButtonSize)
+                        .semantics {
+                            contentDescription = nextCd
+                            role = Role.Button
+                        },
+                    colors = translucent,
+                ) {
+                    Text(stringResource(R.string.next), style = MaterialTheme.typography.caption3)
+                }
+            }
+
+            // Bottom-end: discard. Mirror of Stop on the running screen
+            // — destructive action positioned where the runner's hand
+            // already expects it. One tap ARMS; the confirm that commits
+            // renders in place of this whole cluster.
+            if (!synced && summary != null) {
+                val discardCd = stringResource(R.string.cd_discard_unsaved_run)
+                Button(
+                    onClick = onDiscardPress,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 22.dp, bottom = 36.dp)
+                        .size(ButtonDefaults.SmallButtonSize)
+                        .semantics {
+                            contentDescription = discardCd
+                            role = Role.Button
+                        },
+                    colors = translucent,
+                ) {
+                    Text(
+                        stringResource(R.string.discard_short),
+                        style = MaterialTheme.typography.body2,
+                    )
+                }
             }
         }
     }

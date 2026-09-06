@@ -25,11 +25,13 @@ import {
 	attributeCount,
 	check,
 	constValue,
+	declaredModules,
 	derivedValue,
 	enumVariants,
 	loadDocs,
 	loadSource,
 	numberOf,
+	testFnCount,
 	unregisteredDocs,
 } from './check_watch_doc_counts.mjs';
 
@@ -403,4 +405,89 @@ test('a new doc under docs/custom_watch fails the guard rather than going unread
 	});
 	assert.equal(res.status, 1);
 	assert.match(res.stderr, /invented\.md is under docs\/custom_watch but in neither DOC_FILES/);
+});
+
+// --- the host-test count -----------------------------------------------------
+
+test('declaredModules reads lib.rs\'s own list, not a directory', () => {
+	const src = [
+		'//! A crate doc comment naming mod ghost;',
+		'// mod commented_out;',
+		'pub mod age_grade;',
+		'mod internal;',
+		'pub use age_grade::Foo;',
+	].join('\n');
+	assert.deepEqual(declaredModules(src), ['age_grade', 'internal']);
+	assert.throws(() => declaredModules('pub use x::y;'), /no `mod` declarations/);
+});
+
+test('testFnCount counts attributes and not comments about them', () => {
+	const src = [
+		'// #[test] in a comment is not a test.',
+		'/// Nor is #[test] in a doc comment.',
+		'#[test]',
+		'fn a() {}',
+		'#[ test ]',
+		'fn b() {}',
+		'#[tokio::test]',
+		'fn c() {}',
+	].join('\n');
+	// `#[tokio::test]` is deliberately not matched: the attribute this counts is
+	// the bare libtest one, which is what `cargo test` runs in this crate.
+	assert.equal(testFnCount(src), 2);
+	assert.equal(testFnCount('fn a() {}'), 0);
+});
+
+test('the host-test count is the sum over the declared modules', () => {
+	const row = REGISTRY.find((r) => r.id === 'core.host_tests');
+	assert.ok(row, 'core.host_tests is gone from the registry');
+	/** @type {Record<string, string>} */
+	const fixture = {
+		'apps/custom_watch/core/src/lib.rs': 'pub mod a;\npub mod b;\n',
+		'apps/custom_watch/core/src/a.rs': '#[test]\nfn one() {}\n#[test]\nfn two() {}\n',
+		'apps/custom_watch/core/src/b.rs': '#[test]\nfn three() {}\n',
+		// Present on disk, declared by nobody: not compiled, so its tests do not
+		// run and must not be counted.
+		'apps/custom_watch/core/src/orphan.rs': '#[test]\nfn never() {}\n',
+	};
+	assert.equal(
+		row.resolve((path) => {
+			const src = fixture[path];
+			assert.ok(src !== undefined, `resolve read an undeclared file: ${path}`);
+			return src;
+		}),
+		3,
+	);
+});
+
+test('a stale host-test count in a present-tense doc fails the guard', () => {
+	const { status, stderr } = runOnCopy((_dir, read, write) => {
+		const f = 'apps/custom_watch/CLAUDE.md';
+		const md = read(f);
+		const m = /(\d+) host tests in `watch_core`/.exec(md);
+		assert.ok(m, 'the registered sentence is gone from apps/custom_watch/CLAUDE.md');
+		write(f, md.replace(m[0], `${Number(m[1]) + 1} host tests in \`watch_core\``));
+	});
+	assert.notEqual(status, 0);
+	assert.match(stderr, /core\.host_tests/);
+});
+
+test('a NEW numbered host-test claim must be registered or exempted', () => {
+	// The sweep half: this is what catches a count nobody thought to register,
+	// which is the case the registry is structurally blind to.
+	const { status, stderr } = runOnCopy((_dir, read, write) => {
+		const f = 'apps/custom_watch/local_testing.md';
+		write(f, `${read(f)}\n\nThe driver crates carry 99 host tests between them.\n`);
+	});
+	assert.notEqual(status, 0);
+	assert.match(stderr, /99 host tests/);
+});
+
+test('a stale per-module host-test count fails too', () => {
+	const { status, stderr } = runOnCopy((_dir, read, write) => {
+		const f = 'apps/custom_watch/core/src/privacy.rs';
+		write(f, `${read(f)}\n#[test]\nfn planted() {}\n`);
+	});
+	assert.notEqual(status, 0);
+	assert.match(stderr, /privacy\.host_tests/);
 });

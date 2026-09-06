@@ -123,6 +123,7 @@
     <string name="cd_start_next_run">次のランを開始</string>
     <string name="cd_sync_run">ランを同期</string>
     <string name="cd_discard_unsaved_run">未保存のランを破棄</string>
+    <string name="cd_discard_confirm">破棄を確認。他に保存されていません。</string>
 
     <string name="tts_run_started">ランを開始しました</string>
     <plurals name="tts_split_unit_km">
