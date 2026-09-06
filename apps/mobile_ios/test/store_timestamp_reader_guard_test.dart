@@ -4,7 +4,8 @@
 // (decisions § 1289): six byte-identical `_parseTs` statics, a `_parseTime`
 // and two inline `startedAt` getters that dropped the UTC normalisation, seven
 // `fromJson` clock reads that cast the field before parsing it, and gear's
-// `_parseDate`, whose MISSING normalisation is load-bearing because its
+// `_parseDate` (now the shared `parseCalendarDate`), whose MISSING
+// normalisation is load-bearing because its
 // columns are `date`. Nothing in the tree compared any of them, which is how a
 // helper of that name came to mean two different things in one file family.
 //

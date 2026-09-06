@@ -7,7 +7,8 @@ import '../lib/offline_sync_store.dart';
 /// five behaviourally distinct spellings — six byte-identical `_parseTs`
 /// statics, a `_parseTime` and two `startedAt` getters that dropped the UTC
 /// normalisation, seven `fromJson` clock reads that cast before parsing, and a
-/// `_parseDate` whose missing normalisation is load-bearing. Nothing compared
+/// `_parseDate` whose missing normalisation is load-bearing (now the shared
+/// `parseCalendarDate`, § 1344). Nothing compared
 /// any of them. These are the direct cases the store suites only ever reached
 /// through a whole refresh or a whole cold load.
 void main() {
