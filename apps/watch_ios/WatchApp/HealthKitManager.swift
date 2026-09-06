@@ -268,13 +268,20 @@ class HealthKitManager: NSObject, ObservableObject {
         guard let session, let builder else { return }
         let endDate = Date()
         session.end()
-        builder.endCollection(withEnd: endDate) { [weak self] _, _ in
-            builder.finishWorkout { _, _ in
-                DispatchQueue.main.async {
-                    self?.session = nil
-                    self?.builder = nil
-                }
-            }
+        // Dropped HERE, not in the completion below. `startWorkout()` refuses
+        // to open a session while one is held, and until this ran the release
+        // was chained behind `finishWorkout` — a save that can take seconds
+        // and need never call back at all. So a runner who finished one run
+        // and began the next before it returned recorded that run with no
+        // heart rate, no coverage figure, and no `heartRateUnavailable`
+        // notice saying why; a `finishWorkout` that never completed cost
+        // every remaining run of the launch the same way. The locals keep
+        // both objects alive for the completion chain, which needs neither
+        // property (decisions § 1300).
+        self.session = nil
+        self.builder = nil
+        builder.endCollection(withEnd: endDate) { _, _ in
+            builder.finishWorkout { _, _ in }
         }
     }
 
@@ -398,6 +405,12 @@ extension HealthKitManager: HKWorkoutSessionDelegate {
     }
 
     func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
+        // Only the session this run is holding. A failure reported by the
+        // PREVIOUS run's session — still delegating here while its workout
+        // saves — would otherwise tear down the heart rate of the run now
+        // recording and raise "heart rate unavailable" over a sensor that is
+        // working (decisions § 1300).
+        guard workoutSession === session else { return }
         // The runner is told the heart rate is gone; the reason is only ever
         // useful to us, and nothing else records it.
         print("HealthKitManager: workout session failed: \(error)")
@@ -413,8 +426,13 @@ extension HealthKitManager: HKLiveWorkoutBuilderDelegate {
         didCollectDataOf collectedTypes: Set<HKSampleType>
     ) {
         // A sample arriving after the session failed would put a number back
-        // on a screen that has already told the runner it has none.
-        guard !sessionDidFail else { return }
+        // on a screen that has already told the runner it has none — and one
+        // from the previous run's builder, which keeps delegating here until
+        // its workout has saved, would stamp that run's reading and freshness
+        // onto this one. Coverage is measured against the newest sample's
+        // age, so an inherited stamp reads as a sensor delivering for a run
+        // it never touched (decisions § 1300).
+        guard !sessionDidFail, workoutBuilder === builder else { return }
         let hrType = HKQuantityType(.heartRate)
         guard collectedTypes.contains(hrType),
               let stats = workoutBuilder.statistics(for: hrType) else { return }
