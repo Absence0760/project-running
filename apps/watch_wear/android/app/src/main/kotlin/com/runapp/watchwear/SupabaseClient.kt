@@ -187,8 +187,16 @@ internal fun parseUniversalSettings(body: String?): UniversalSettings? {
             hrZones = parseHrZones(prefs["hr_zones"] as? JsonObject),
             restingHrBpm = (prefs["resting_hr_bpm"]?.jsonPrimitive?.intOrNull)
                 ?.takeIf { it in 25..120 },
+            // `MAX_HR_BPM_RANGE`, not a second literal. This gate used to
+            // read 100..240 while the shared contract § 1245 established is
+            // 80..240, and since this parse is the ONLY producer of a
+            // `UniversalSettings`, `resolveZoneCutoffs` could never observe a
+            // value in 80..99 — so a heavily beta-blocked masters runner with
+            // a genuine max of 95 got zones on web and phone and, on the
+            // watch, Tanaka zones off a different number entirely or no
+            // Z-badge at all (decisions § 1303).
             maxHrBpm = (prefs["max_hr_bpm"]?.jsonPrimitive?.intOrNull)
-                ?.takeIf { it in 100..240 },
+                ?.takeIf { it in MAX_HR_BPM_RANGE },
             dateOfBirth = prefs["date_of_birth"]?.jsonPrimitive?.contentOrNull
                 ?.takeIf { isValidIsoDate(it) },
             bodyWeightKg = (prefs["body_weight_kg"]?.jsonPrimitive?.doubleOrNull)
