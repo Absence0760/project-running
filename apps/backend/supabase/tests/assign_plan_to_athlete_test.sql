@@ -4,10 +4,21 @@
 -- active plan. A stranger / ended link cannot; the source must be readable by
 -- the coach; the athlete must not already have an active plan; nobody can
 -- assign to themselves.
+--
+-- And the copy carries the PLAN, not the coach. The source here is the coach's
+-- own personal plan, which -- unlike a template -- can hold `vdot`,
+-- `current_5k_seconds` and plan-level `notes`, the three columns 20270508_001
+-- classified owner-only. 20270711000002 nulls them on the row the athlete owns.
+-- Asserted at the assigned row rather than at the source, which is the opposite
+-- of `plan_clone_pace_columns_test`'s call for the template paths and for the
+-- same reason: there the trigger makes the source incapable of holding the
+-- values, so the clone's own `null, null` has nothing to copy and a mutation
+-- survives; here the source DOES hold them, so the assigned row is the only
+-- place the copy can be observed.
 
 begin;
 
-select plan(8);
+select plan(11);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -31,10 +42,15 @@ insert into coach_athletes (coach_id, athlete_id, status, invite_token) values
 -- Coach C1 owns a source plan with one week + one workout.
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000000c1"}';
-insert into training_plans (id, user_id, name, goal_event, goal_distance_m, start_date, end_date)
+insert into training_plans (id, user_id, name, goal_event, goal_distance_m, start_date, end_date,
+   vdot, current_5k_seconds, notes, rules)
 values ('aaaaaaaa-0000-0000-0000-00000000dd01',
    '00000000-0000-0000-0000-0000000000c1', 'Coach Marathon Block', 'distance_full', 42195,
-   current_date, current_date + 84);
+   current_date, current_date + 84,
+   -- The coach's own fitness and their own plan-level free text. A template
+   -- could not hold these (the strip trigger); a personal plan can, which is
+   -- what made this path the outlier.
+   58.4, 1020, 'left achilles still grumbling on hills', '["80% easy"]'::jsonb);
 insert into plan_weeks (id, plan_id, week_index, phase)
 values ('aaaaaaaa-0000-0000-0000-00000000ee01',
    'aaaaaaaa-0000-0000-0000-00000000dd01', 0, 'base');
@@ -90,9 +106,41 @@ select is(
   1,
   'assigned plan deep-cloned the source week + workout'
 );
+-- ── 4. The coach's own fitness and free text do not ride along. ──
+select is(
+  (select coalesce(vdot::text, 'null') || '/' ||
+          coalesce(current_5k_seconds::text, 'null') || '/' ||
+          coalesce(notes, 'null')
+     from training_plans
+    where user_id = '00000000-0000-0000-0000-0000000000a2'
+      and assigned_by_coach_id = '00000000-0000-0000-0000-0000000000c1'),
+  'null/null/null',
+  'the assigned plan carries none of the coach''s owner-private columns'
+);
+
+-- ── 5. Stripping the COPY is not editing the coach's own plan. ──
+select is(
+  (select coalesce(vdot::text, 'null') || '/' ||
+          coalesce(current_5k_seconds::text, 'null') || '/' ||
+          coalesce(notes, 'null')
+     from training_plans where id = 'aaaaaaaa-0000-0000-0000-00000000dd01'),
+  '58.40/1020/left achilles still grumbling on hills',
+  'the coach''s source plan keeps its own fitness and notes'
+);
+
+-- ── 6. `rules` is the sanctioned prose channel and still propagates. ──
+--    Without this, nulling `notes` reads as "strip the prose", and the next
+--    edit takes `rules` with it -- which 20270710000003 added on purpose.
+select is(
+  (select rules from training_plans
+    where user_id = '00000000-0000-0000-0000-0000000000a2'
+      and assigned_by_coach_id = '00000000-0000-0000-0000-0000000000c1'),
+  '["80% easy"]'::jsonb,
+  'the plan-wide rules the coach wrote still reach the athlete'
+);
 set local role authenticated;
 
--- ── 4. Coach cannot assign to a user they aren't linked to (stranger). ──
+-- ── 7. Coach cannot assign to a user they aren't linked to (stranger). ──
 select throws_ok(
   $$ select assign_plan_to_athlete(
        'aaaaaaaa-0000-0000-0000-00000000dd01',
@@ -102,7 +150,7 @@ select throws_ok(
   'coach cannot assign to an athlete they are not actively linked to'
 );
 
--- ── 5. Nobody can assign a plan to themselves. ──
+-- ── 8. Nobody can assign a plan to themselves. ──
 select throws_ok(
   $$ select assign_plan_to_athlete(
        'aaaaaaaa-0000-0000-0000-00000000dd01',
@@ -112,7 +160,7 @@ select throws_ok(
   'cannot assign a plan to yourself'
 );
 
--- ── 6. Coach cannot launder a source plan they can't read (D3's private plan). ──
+-- ── 9. Coach cannot launder a source plan they can't read (D3's private plan). ──
 select throws_ok(
   $$ select assign_plan_to_athlete(
        'aaaaaaaa-0000-0000-0000-00000000dd03',
@@ -122,7 +170,7 @@ select throws_ok(
   'coach cannot assign a source plan they are not authorised to read'
 );
 
--- ── 7. Refuses when the athlete already has an active plan. ──
+-- ── 10. Refuses when the athlete already has an active plan. ──
 select throws_ok(
   $$ select assign_plan_to_athlete(
        'aaaaaaaa-0000-0000-0000-00000000dd01',
@@ -132,7 +180,7 @@ select throws_ok(
   'refuses to assign when the athlete already has an active plan'
 );
 
--- ── 8. Ending the link revokes the ability to assign. ──
+-- ── 11. Ending the link revokes the ability to assign. ──
 set local role postgres;
 update coach_athletes set status = 'ended'
  where coach_id = '00000000-0000-0000-0000-0000000000c1'
