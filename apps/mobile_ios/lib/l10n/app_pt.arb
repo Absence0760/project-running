@@ -2891,6 +2891,7 @@
   "gymCatalogueSearchPlaceholder": "Procurar exercícios",
   "gymCatalogueCategoryLabel": "Categoria",
   "gymCatalogueEmpty": "Nenhum exercício corresponde.",
+  "gymCatalogueOtherCategory": "“{name}” já está no catálogo, em {category}.",
   "gymCatalogueCustomBadge": "Personalizado",
   "gymCatalogueCreate": "Adicionar “{name}” como exercício personalizado",
   "gymCatalogueCreateFailed": "Não foi possível adicionar esse exercício.",

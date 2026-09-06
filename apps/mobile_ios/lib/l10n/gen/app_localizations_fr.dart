@@ -10354,6 +10354,11 @@ class AppLocalizationsFr extends AppLocalizations {
   String get gymCatalogueEmpty => 'Aucun exercice ne correspond.';
 
   @override
+  String gymCatalogueOtherCategory(String name, String category) {
+    return '« $name » est déjà dans le catalogue, dans $category.';
+  }
+
+  @override
   String get gymCatalogueCustomBadge => 'Perso';
 
   @override

@@ -9797,6 +9797,11 @@ class AppLocalizationsJa extends AppLocalizations {
   String get gymCatalogueEmpty => '該当する種目がありません。';
 
   @override
+  String gymCatalogueOtherCategory(String name, String category) {
+    return '「$name」はすでにカタログにあります（$category）。';
+  }
+
+  @override
   String get gymCatalogueCustomBadge => 'カスタム';
 
   @override

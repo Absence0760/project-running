@@ -16905,6 +16905,12 @@ abstract class AppLocalizations {
   /// **'No exercises match.'**
   String get gymCatalogueEmpty;
 
+  /// Shown when the typed name matches a catalogue entry the category filter is hiding
+  ///
+  /// In en, this message translates to:
+  /// **'“{name}” is already in the catalogue, under {category}.'**
+  String gymCatalogueOtherCategory(String name, String category);
+
   /// No description provided for @gymCatalogueCustomBadge.
   ///
   /// In en, this message translates to:
