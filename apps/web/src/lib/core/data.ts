@@ -149,7 +149,13 @@ import {
 
 // --- Runs ---
 
-export interface FetchRunsOptions {
+/// A `runs` projection, as the tuple both the wire string and the row type are
+/// derived from. `satisfies RunColumns` on a literal refuses a name that is not
+/// a column, so a migration that drops one fails to compile at the declaration
+/// rather than asking PostgREST for nothing.
+export type RunColumns = readonly (keyof Run)[];
+
+export interface FetchRunsOptions<C extends RunColumns = RunColumns> {
 	/** Cap the number of rows returned. Pair with `offset` for paging. */
 	limit?: number;
 	/** Skip this many rows before the page (for paged loads). */
@@ -163,18 +169,28 @@ export interface FetchRunsOptions {
 	 */
 	throwOnError?: boolean;
 	/**
-	 * PostgREST select list. Defaults to `*`. A caller that reads only a
-	 * handful of columns should narrow — `*` ships the `metadata` jsonb bag
-	 * on every row, which is what made the unbounded history scan expensive
-	 * in the first place (#332).
+	 * The columns to project, as a tuple. Absent means `*`. A caller that
+	 * reads only a handful should narrow — `*` ships the `metadata` jsonb bag
+	 * on every row, which is what made the unbounded history scan expensive in
+	 * the first place (#332).
+	 *
+	 * A tuple rather than the PostgREST string it becomes, because the string
+	 * narrowed the WIRE while the return type stayed `Run[]`: nineteen of the
+	 * twenty-four columns were `undefined` behind a type promising them
+	 * (§ 1330). The tuple is the one declaration both halves derive from — the
+	 * select list is joined from it and the row type is `Pick`ed from it.
 	 */
-	columns?: string;
+	columns?: C;
 	/** Inclusive lower bound on `started_at`, as an ISO instant. */
 	startedAtFrom?: string;
 	/** Exclusive upper bound on `started_at`, as an ISO instant. */
 	startedAtBefore?: string;
 }
 
+export async function fetchRuns(opts?: Omit<FetchRunsOptions, 'columns'>): Promise<Run[]>;
+export async function fetchRuns<C extends RunColumns>(
+	opts: FetchRunsOptions<C> & { columns: C },
+): Promise<Pick<Run, C[number]>[]>;
 export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 	// Explicit user_id filter as defence in depth — RLS already scopes
 	// runs to the caller, but every other personal-data list in this
@@ -185,7 +201,7 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 	const build = () => {
 		let q = supabase
 			.from(TABLES.runs)
-			.select(opts?.columns ?? '*')
+			.select(opts?.columns ? opts.columns.join(', ') : '*')
 			.eq('user_id', userId);
 		if (opts?.startedAtFrom != null) q = q.gte('started_at', opts.startedAtFrom);
 		if (opts?.startedAtBefore != null) q = q.lt('started_at', opts.startedAtBefore);
@@ -250,7 +266,7 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 /// `fetchFoodLogWithError` convention. A signed-out caller is empty, not an
 /// error (nothing to load yet).
 export async function fetchRunsWithError(
-	opts?: FetchRunsOptions,
+	opts?: Omit<FetchRunsOptions, 'columns'>,
 ): Promise<{ runs: Run[]; error: string | null }> {
 	try {
 		const runs = await fetchRuns({ ...opts, throwOnError: true });
@@ -372,7 +388,17 @@ export async function fetchRunStreaks(
 /// Exactly the columns `PeriodSummary` reads. The period drilldown has to
 /// ship every row — it lists them — so the saving is per-row width, not row
 /// count: no `metadata` jsonb bag, no elevation, no DNF flag.
-export const PERIOD_SUMMARY_RUN_COLUMNS = 'id, started_at, distance_m, duration_s, source';
+export const PERIOD_SUMMARY_RUN_COLUMNS = [
+	'id',
+	'started_at',
+	'distance_m',
+	'duration_s',
+	'source',
+] as const satisfies RunColumns;
+
+/// A run as the period drilldown reads it — the five values it renders, and
+/// nothing it can read `undefined` off.
+export type PeriodSummaryRun = Pick<Run, (typeof PERIOD_SUMMARY_RUN_COLUMNS)[number]>;
 
 /// Complete run history for a `PeriodSummary`, column-narrowed to the five
 /// values it renders. Both drilldown entry points use it: the standalone
@@ -380,7 +406,7 @@ export const PERIOD_SUMMARY_RUN_COLUMNS = 'id, started_at, distance_m, duration_
 /// requested period reaches past `DASHBOARD_RUNS_WINDOW_DAYS`. Throws on a
 /// fetch error so the caller can show a retry rather than a total that is
 /// silently short.
-export async function fetchRunsForPeriodSummary(): Promise<Run[]> {
+export async function fetchRunsForPeriodSummary(): Promise<PeriodSummaryRun[]> {
 	return fetchRuns({ columns: PERIOD_SUMMARY_RUN_COLUMNS, throwOnError: true });
 }
 
@@ -390,8 +416,20 @@ export async function fetchRunsForPeriodSummary(): Promise<Run[]> {
 /// behind the run-family longest / fastest rules, and the route id for the
 /// unique-route tally. `source` rides along because `fetchRuns` narrows it on
 /// every row it returns.
-export const RECAP_RUN_COLUMNS =
-	'id, started_at, distance_m, duration_s, elevation_gain_m, activity_type, route_id, source, metadata';
+export const RECAP_RUN_COLUMNS = [
+	'id',
+	'started_at',
+	'distance_m',
+	'duration_s',
+	'elevation_gain_m',
+	'activity_type',
+	'route_id',
+	'source',
+	'metadata',
+] as const satisfies RunColumns;
+
+/// A run as the recap engine reads it.
+export type RecapRun = Pick<Run, (typeof RECAP_RUN_COLUMNS)[number]>;
 
 /// Runs shaped for a recap card, without the lifetime `select('*')` scan both
 /// pages used to do — ~3,000 full rows, `metadata` bag and all, to render a
@@ -413,10 +451,20 @@ export async function fetchRunsForRecap(year: number): Promise<Run[]> {
 			startedAtFrom: win.fromIso,
 			startedAtBefore: win.beforeIso,
 		}),
-		fetchRuns({ columns: 'started_at' }),
+		fetchRuns({ columns: ['started_at'] as const }),
 	]);
+	// The one place in this file where a narrowed read is still widened back to
+	// the full row, and it is deliberate rather than overlooked. `windowed` IS
+	// a `RecapRun[]` — nine of the twenty-four columns — but the consumers of
+	// the merged list are `mergeRecapRuns` (web-only), then
+	// `buildYearInRunningRecap` and `computeRunStreaks`, and the last two are
+	// registered TS<->Dart parity pairs whose `Run[]` parameters would each
+	// have to widen to a structural bound the Dart half cannot express the same
+	// way. Narrowing the return here would move the error into those pairs
+	// rather than remove it, so the widening is stated once, here, and the
+	// remaining step is filed (§ 1330).
 	return mergeRecapRuns(
-		windowed,
+		windowed as unknown as Run[],
 		allStartedAt.map((r) => r.started_at),
 		win,
 	);

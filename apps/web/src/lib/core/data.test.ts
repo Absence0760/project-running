@@ -13,6 +13,9 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { stripComments } from './strip_comments';
+// Type-only, so nothing in `data.ts` (the supabase singleton, `$env/static/public`)
+// is evaluated when this file runs under `tsx --test`.
+import type { PeriodSummaryRun } from './data';
 
 function read(...parts: string[]): string {
 	return readFileSync(resolve(...parts), 'utf-8');
@@ -143,10 +146,16 @@ test('fetchRunsForPeriodSummary ships the whole history column-narrowed, and sur
 		/throwOnError:\s*true/,
 		'a failed history fetch must throw, not degrade to an incomplete total.',
 	);
+	// Anchored on the whole tuple, not its first line: since § 1330 the
+	// constant is a multi-line `as const satisfies RunColumns` array, so
+	// reading one line proved nothing about what it names.
+	const tuple = /const PERIOD_SUMMARY_RUN_COLUMNS = \[([^\]]*)\]/.exec(source);
+	assert.ok(tuple, 'PERIOD_SUMMARY_RUN_COLUMNS must be a column tuple — re-anchor.');
 	assert.doesNotMatch(
-		source.slice(source.indexOf('PERIOD_SUMMARY_RUN_COLUMNS =')).split('\n')[0],
-		/\*/,
-		'PERIOD_SUMMARY_RUN_COLUMNS must be an explicit column list, never `*`.',
+		tuple[1],
+		/[*]|metadata/,
+		'PERIOD_SUMMARY_RUN_COLUMNS must be an explicit column list, never `*` ' +
+			'and never the metadata jsonb bag the drilldown does not read.',
 	);
 	// The standalone deep-link route shares the narrowed reader.
 	const route = read('src/routes/dashboard/period/[type]/[date]/+page.svelte');
@@ -1656,3 +1665,37 @@ test('no enumerated read, and no row type, names a column the client is not gran
 		}
 	}
 });
+
+
+// ── Compile-time: a narrowed run read cannot be read for what it did not fetch ──
+//
+// `svelte-check` is the gate for these, not `tsx --test`: a read of an absent
+// field yields `undefined` rather than throwing, so the only assertion that can
+// see the defect is one the compiler makes (§ 1294 / § 1330).
+
+/// The period drilldown projects five of `runs`' twenty-four columns. Each of
+/// these was a field `Run` promised and the query never fetched. The
+/// `@ts-expect-error` is the mutation test: widen the return type back to
+/// `Run[]` and every directive here reports unused, which fails the build.
+export const periodSummaryWithheldReadsDoNotCompile = (r: PeriodSummaryRun) => [
+	// @ts-expect-error — the jsonb bag the drilldown does not read
+	r.metadata,
+	// @ts-expect-error — not in PERIOD_SUMMARY_RUN_COLUMNS
+	r.elevation_gain_m,
+	// @ts-expect-error — not in PERIOD_SUMMARY_RUN_COLUMNS
+	r.activity_type,
+	// @ts-expect-error — not in PERIOD_SUMMARY_RUN_COLUMNS
+	r.is_dnf,
+	// @ts-expect-error — a lazy Storage download, never a column
+	r.track_url,
+];
+
+/// The five it does read have to stay readable, or the narrowing has gone too
+/// far and the pin above is the only thing still passing.
+export const periodSummaryReadsCompile = (r: PeriodSummaryRun) => [
+	r.id,
+	r.started_at,
+	r.distance_m,
+	r.duration_s,
+	r.source,
+];

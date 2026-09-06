@@ -84,7 +84,7 @@
 				Date.now() - CHRONIC_WINDOW_WEEKS * 7 * 86_400_000,
 			).toISOString();
 			const runs = await fetchRuns({
-				columns: 'started_at,distance_m,activity_type',
+				columns: ['started_at', 'distance_m', 'activity_type'] as const,
 				startedAtFrom: fromIso,
 			});
 			recentVolume = recentRunVolume(runs, Date.now());
