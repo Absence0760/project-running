@@ -139,6 +139,20 @@ data class UiState(
     val signInLoading: Boolean = false,
     val syncing: Boolean = false,
     val syncError: String? = null,
+    /// True when the last COMPLETED drain pass stopped on a transient failure
+    /// — a 5xx, a timeout, a dropped connection — which is also what arms
+    /// `drainBackoff`.
+    ///
+    /// Deliberately not carried on [syncError], which is the PostRun banner
+    /// and a fact about one pass: `startNextRun` clears it, and PreRun is the
+    /// screen the runner is on for every drain but the first, so the banner's
+    /// lifetime is exactly wrong for the surface that needed it. This is the
+    /// same split § 1347 drew for [rejectedRunIds] — a standing fact about the
+    /// queue rather than about a pass (decisions § 1390).
+    ///
+    /// Not persisted, and re-derived by the next completed pass in both
+    /// directions: a pass that gets through clears it.
+    val syncFailed: Boolean = false,
     val thisRunId: String? = null,
     val thisRunSynced: Boolean = false,
     val lastRunSummary: FinishedSummary? = null,
@@ -1520,6 +1534,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         // is about the queue (decisions § 1347).
         _state.value = _state.value.copy(
             syncError = result.lastError,
+            syncFailed = result.anyTransientFailure,
             rejectedRunIds = rejectedAfterPass(
                 previouslyRejected = _state.value.rejectedRunIds,
                 queuedIdsBeforePass = snapshot.map { it.id },

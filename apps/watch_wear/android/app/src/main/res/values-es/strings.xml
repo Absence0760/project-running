@@ -41,6 +41,15 @@
     <string name="start">Empezar</string>
     <string name="sync_count">Sincronizar %1$d</string>
     <string name="sync_retry">Reintentar</string>
+    <string name="sync_retry_count">Reintentar %1$d</string>
+    <plurals name="cd_sync_queued">
+        <item quantity="one">%1$d carrera guardada pendiente de sincronizar. Toca para sincronizar ahora.</item>
+        <item quantity="other">%1$d carreras guardadas pendientes de sincronizar. Toca para sincronizar ahora.</item>
+    </plurals>
+    <plurals name="cd_sync_failed_retry">
+        <item quantity="one">%1$d carrera guardada en espera. La última sincronización no llegó. Toca para reintentar.</item>
+        <item quantity="other">%1$d carreras guardadas en espera. La última sincronización no llegó. Toca para reintentar.</item>
+    </plurals>
     <string name="cd_sync_unreadable_retry">Carreras guardadas ilegibles, toca para reintentar</string>
     <plurals name="sync_rejected">
         <item quantity="one">%1$d rechazada</item>

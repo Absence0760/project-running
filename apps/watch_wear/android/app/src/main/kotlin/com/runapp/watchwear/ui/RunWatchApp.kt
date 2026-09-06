@@ -225,6 +225,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                             queuedCount = state.queuedCount,
                             queueUnreadable = state.queueUnreadable,
                             rejectedCount = state.rejectedRunIds.size,
+                            syncFailed = state.syncFailed,
                             syncing = state.syncing,
                             authed = state.authed,
                             authError = state.authError,
@@ -645,6 +646,7 @@ private fun PreRunScreen(
     queuedCount: Int,
     queueUnreadable: Boolean,
     rejectedCount: Int,
+    syncFailed: Boolean,
     syncing: Boolean,
     authed: Boolean,
     authError: String?,
@@ -980,6 +982,30 @@ private fun PreRunScreen(
                 // chips at the bottom arc: same `translucentChip`
                 // colours (white-alpha-0.15 + parchment) and `caption3`
                 // typography so the four chips read as one family.
+                //
+                // …and it is also where a TRANSIENT failure gets said. A 5xx
+                // or a dead socket left this arc silent: the runner tapped
+                // Sync, the chip spun, the count stayed, and `drainBackoff`
+                // was armed behind it — so the one screen a runner is on for
+                // every drain but the first named no reason at all
+                // (decisions § 1390). It is the SAME chip rather than a fourth
+                // branch because Sync is still the useful affordance during a
+                // transient: a branch that took the slot would remove the
+                // retry to describe why the retry was needed. And it is a
+                // label change, not only a colour: the 100 dp label states the
+                // action, the warning colour marks it, and the content
+                // description carries the sentence neither can hold — the same
+                // three-signal shape § 1104 settled for the unreadable chip.
+                //
+                // Gated on `online` because offline the chip is already
+                // disabled, and a dimmed control reading "Retry" invites a tap
+                // that cannot fire.
+                val syncFailedNow = syncFailed && online && authed
+                val syncCd = if (syncFailedNow) {
+                    pluralStringResource(R.plurals.cd_sync_failed_retry, queuedCount, queuedCount)
+                } else {
+                    pluralStringResource(R.plurals.cd_sync_queued, queuedCount, queuedCount)
+                }
                 CompactChip(
                     onClick = onSync,
                     enabled = online && authed && !syncing,
@@ -988,11 +1014,19 @@ private fun PreRunScreen(
                             CircularProgressIndicator(
                                 strokeWidth = 1.5.dp,
                                 modifier = Modifier.size(12.dp),
-                                indicatorColor = DuskPalette.parchment,
+                                indicatorColor = if (syncFailedNow) {
+                                    DuskPalette.warning
+                                } else {
+                                    DuskPalette.parchment
+                                },
                             )
                         } else {
                             Text(
-                                stringResource(R.string.sync_count, queuedCount),
+                                stringResource(
+                                    if (syncFailedNow) R.string.sync_retry_count
+                                    else R.string.sync_count,
+                                    queuedCount,
+                                ),
                                 style = MaterialTheme.typography.caption3,
                                 maxLines = 1,
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -1001,9 +1035,15 @@ private fun PreRunScreen(
                     },
                     colors = ChipDefaults.secondaryChipColors(
                         backgroundColor = Color.White.copy(alpha = 0.15f),
-                        contentColor = DuskPalette.parchment,
+                        contentColor = if (syncFailedNow) {
+                            DuskPalette.warning
+                        } else {
+                            DuskPalette.parchment
+                        },
                     ),
-                    modifier = Modifier.widthIn(max = 100.dp),
+                    modifier = Modifier
+                        .widthIn(max = 100.dp)
+                        .semantics { contentDescription = syncCd },
                 )
             } else if (!online && authed) {
                 Text(

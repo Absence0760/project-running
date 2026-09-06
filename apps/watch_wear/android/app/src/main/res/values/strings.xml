@@ -58,6 +58,18 @@
     <string name="start">Start</string>
     <string name="sync_count">Sync %1$d</string>
     <string name="sync_retry">Retry sync</string>
+    <!-- The counted chip when the last completed drain pass stopped on a
+         transient failure: same slot, same tap, a label and a colour that
+         say the previous attempt did not get through. -->
+    <string name="sync_retry_count">Retry %1$d</string>
+    <plurals name="cd_sync_queued">
+        <item quantity="one">%1$d saved run waiting to sync. Tap to sync now.</item>
+        <item quantity="other">%1$d saved runs waiting to sync. Tap to sync now.</item>
+    </plurals>
+    <plurals name="cd_sync_failed_retry">
+        <item quantity="one">%1$d saved run waiting. The last sync did not get through. Tap to try again.</item>
+        <item quantity="other">%1$d saved runs waiting. The last sync did not get through. Tap to try again.</item>
+    </plurals>
     <string name="cd_sync_unreadable_retry">Saved runs unreadable, tap to retry</string>
     <!-- Queue entries the server permanently refused. The chip states the
          refusal, arms on the first tap, and only the second tap discards. -->
