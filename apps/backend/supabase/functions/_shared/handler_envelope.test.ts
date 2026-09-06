@@ -1360,15 +1360,25 @@ Deno.test({
 //
 // The payload carries NO `user.id`, so the handler skips its
 // `user_settings` locale read entirely: this test needs the function
-// host and the mail catcher, not the database, and so is gated on the
-// hook secret rather than on SERVICE_ROLE_KEY.
+// host and the mail catcher, not the database, so it is NOT gated on
+// SERVICE_ROLE_KEY. It is not gated on the hook secret either, and that
+// is a deliberate removal rather than an omission. A `SKIP_MAIL = SKIP
+// || SEND_EMAIL_SECRET.length === 0` stood here, and `??` falls back
+// only on undefined: an ABSENT `SEND_EMAIL_HOOK_SECRET` took the
+// literal below and the case ran, while one set to the EMPTY STRING -
+// which is what a `SEND_EMAIL_HOOK_SECRET:` line with nothing after the
+// colon produces - skipped it. That is the opposite of its sibling
+// SKIP_DB (absent means skip) and it made the one shape a workflow edit
+// actually produces the one shape that vanishes silently. Without a
+// gate the same two inputs fail loudly against a host holding a
+// different secret, which is a diagnosis rather than a disappearance
+// (decisions § 1320).
 
 const SEND_EMAIL_SECRET = Deno.env.get('SEND_EMAIL_HOOK_SECRET') ??
   'v1,Y2ktYXV0aC1lbWFpbC1ob29rLXNlY3JldC0zMmNoYXJz';
 // Read from the RUNNER, which is why this is a published host port and
 // not the `host.docker.internal:54325` the function host dials.
 const MAILPIT_URL = Deno.env.get('MAILPIT_URL') ?? 'http://127.0.0.1:54324';
-const SKIP_MAIL = SKIP || SEND_EMAIL_SECRET.length === 0;
 
 // Standard Webhooks signs `${id}.${timestamp}.${body}` and carries the
 // result base64, not hex — so this is not `hmacHex`. Mirrors
@@ -1456,7 +1466,7 @@ async function waitForMail(
 Deno.test({
   name: 'auth-email: a correctly signed signup hook renders in the ' +
     "recipient's locale and delivers over SMTP",
-  ignore: SKIP_MAIL,
+  ignore: SKIP,
   fn: async () => {
     const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const to = `auth-email-pos-${stamp}@example.test`;
