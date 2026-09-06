@@ -1343,10 +1343,23 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    /// Drop the run the PostRun `×` is showing — the queue entry and the track
+    /// file it points at, through the one path that orders those two.
+    ///
+    /// It removed the queue entry and nothing else, which left a track of
+    /// several megabytes on an ultra alive until `sweepOrphanTracks` reached
+    /// it — once per process, and not at all while a recording is live, so
+    /// the file could outlive the run by a whole session (decisions § 1388).
+    ///
+    /// `thisRunId` may name a run the queue never held: an already-synced one,
+    /// whose entry and file the drain dropped together when it uploaded. The
+    /// snapshot lookup then finds nothing and only the no-op removal runs,
+    /// which is the right answer rather than a case to special-case — there is
+    /// no file left to delete.
     fun discard() {
         val id = _state.value.thisRunId
         launchGuarded {
-            if (id != null) store.remove(id)
+            if (id != null) dropQueuedRun(id, store.queue.first())
             startNextRun()
         }
     }
