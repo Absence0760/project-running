@@ -570,3 +570,42 @@ test('dedupeFoods drops case-insensitive name+brand dupes, keeping the first', (
 	assert.equal(out[0].code, '1'); // OFF kept (first wins)
 	assert.equal(out[1].code, '3');
 });
+
+test('dedupeFoods folds U+0130, so the phone and the web collapse the same rows', () => {
+	// The two runtimes' `toLowerCase` disagree at 466 code points and the one
+	// reachable in Latin text is the Turkish dotted capital I: JS answered
+	// `i` + U+0307 where Dart answered `i`, so these two rows were one product
+	// on the phone and two on the web (decisions § 1251 + § 1280). Mirrored in
+	// `food_search_test.dart`.
+	const off: FoodSearchResult = {
+		code: '1',
+		source: 'off',
+		name: 'İzmir Tulum Peyniri',
+		brand: 'Sütaş',
+		per100g: { calories: 300, proteinG: 20, carbsG: 1, fatG: 24 },
+	};
+	const usdaDupe: FoodSearchResult = { ...off, code: '2', source: 'usda', name: 'izmir tulum peyniri' };
+	const out = dedupeFoods([off, usdaDupe]);
+	assert.equal(out.length, 1);
+	assert.equal(out[0].code, '1');
+});
+
+test('dedupeFoods collapses the same product spelled with and without accents', () => {
+	// Not a side effect of the parity fix but the reason the fold is the right
+	// instrument for this key: the two sources are independent catalogues and
+	// spell one product two ways.
+	const off: FoodSearchResult = {
+		code: '1',
+		source: 'off',
+		name: 'Café Latte',
+		brand: 'Müller',
+		per100g: { calories: 60, proteinG: 3, carbsG: 7, fatG: 2 },
+	};
+	const usdaDupe: FoodSearchResult = { ...off, code: '2', source: 'usda', name: 'Cafe Latte', brand: 'Muller' };
+	const distinct: FoodSearchResult = { ...off, code: '3', name: 'Cafe Mocha' };
+	const out = dedupeFoods([off, usdaDupe, distinct]);
+	assert.deepEqual(
+		out.map((r) => r.code),
+		['1', '3'],
+	);
+});
