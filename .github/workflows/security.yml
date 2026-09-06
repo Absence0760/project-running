@@ -19,8 +19,16 @@ name: Security
 #     The build step below enumerates them from the tree rather than
 #     naming them, because CodeQL analyses only what the build compiles
 #     and a module nobody builds is a module nobody scans (§ 1304).
-#   - java-kotlin covers apps/watch_wear (native Kotlin + Compose) plus
-#     apps/mobile_android/android (Gradle host)
+#   - java-kotlin covers apps/watch_wear (native Kotlin + Compose) ONLY.
+#     It claimed apps/mobile_android/android (the Flutter Gradle host) too
+#     and does not reach it, for the same reason § 1304 found on the Go
+#     leg: CodeQL analyses what the build steps compile, the only build
+#     step below is watch_wear's, and the Go-specific autobuild fallback
+#     has no Java/Kotlin analogue. That leaves 11 platform-channel bridges
+#     unscanned, RunActionReceiver.kt among them. Covering them means
+#     building the Flutter host, which needs the pinned SDK set up in this
+#     job — filed rather than done here, and the claim corrected meanwhile
+#     so the gap is stated instead of hidden.
 #   - actions covers every workflow under .github/workflows/
 #   - Trivy scans both Go service images — apps/job_worker and
 #     apps/graph_cycle (multi-stage, final image distroless). They
