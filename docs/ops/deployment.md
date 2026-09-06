@@ -280,6 +280,38 @@ working -- a broken extractor or a bad `queries:` value fails those jobs, and
 nothing else in CI would notice -- but it is a different guarantee, not a
 weaker version of the same one.
 
+Re-derived against the action's own `action.yml` at the pinned SHA on
+2026-09-06 rather than inherited from the paragraph above: 18 inputs
+(`check_name`, `output`, `upload`, `cleanup-level`, `ram`, `add-snippets`,
+`skip-queries`, `threads`, `checkout_path`, `ref`, `sha`, `category`,
+`upload-database`, `post-processed-sarif-path`, `wait-for-processing`, `token`,
+`matrix`, `expect-error`), and not one is a severity or alert threshold. The
+conclusion stands.
+
+**Part of the "scanner silently stops working" worry is now inside the gate,
+and it is the part that has actually happened.** Twice a compiled leg reported
+clean over source it had never read -- `apps/graph_cycle`
+([§ 1304](../architecture/decisions.md)) and 11 Kotlin files under
+`apps/mobile_android/android` ([§ 1352](../architecture/decisions.md)) -- because
+CodeQL scopes a compiled language to whatever the build steps compile, and a
+database holding one tree looks exactly like one holding two. Neither would have
+been caught by requiring the `analyze` jobs to pass, because in both cases they
+DID pass. `scripts/check_codeql_coverage.mjs` runs in `workflow-lint`, which is
+in the gate, and fails the PR when a build step stops covering a tree the repo
+holds. What is still outside the gate is a leg that fails outright or a bad
+`queries:` value -- loud states, unlike the silent one.
+
+Folding `security.yml` into `ci.yml` the way `terraform.yml` and `gitleaks.yml`
+were folded would buy the rest of that second guarantee without a repo setting,
+and it has been re-derived and declined three times now, so the cost is recorded
+here to stop a fourth: the fold re-keys all four analyses (the action derives
+its key from the run's workflow path), and `security.yml`'s own `push` and
+`pull_request` triggers would have to be removed at the same time or every merge
+runs the analyses twice and two uploads to one SARIF category make the alert set
+flip-flop -- the exact failure `security.yml`'s header records being merged to
+escape. It is a real option, not a foreclosed one; it is just not free, and it
+is not the option that gates a FINDING.
+
 Two things to do at the same time as the setting, because nothing in the repo
 can observe it:
 
