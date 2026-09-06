@@ -10,11 +10,13 @@
 /// the form is in sign-up mode; sign-in mode (existing account) is
 /// unaffected.
 ///
-/// Mobile mirrors this logic in
+/// The equivalent gates on mobile are NOT a parity pair with this
+/// module and cannot become one: they live inline in a screen, which is
+/// a widget rather than a pure helper. See
 /// `apps/mobile_android/lib/screens/sign_up_screen.dart` (`_checkGates`).
-/// The mobile sign-up screen is separate from the sign-in screen, so
-/// the gates always apply there; on web the screen is shared and
-/// the gate has to be conditional on `isSignUp`.
+/// That screen is separate from the sign-in screen, so the gates always
+/// apply there; on web the screen is shared and the gate has to be
+/// conditional on `isSignUp`.
 
 import { PASSWORD_MIN_LENGTH } from './auth_rules';
 

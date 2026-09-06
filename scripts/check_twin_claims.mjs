@@ -104,13 +104,7 @@ export const MIN_DECLARATIONS = 155;
 /// Declarations that violate a property today. Each is a defect with a home
 /// somewhere this guard cannot reach.
 /** @type {readonly KnownGap[]} */
-export const KNOWN_GAPS = [
-	{
-		file: 'apps/web/src/lib/core/auth_gates.ts',
-		counterpart: 'apps/mobile_android/lib/screens/sign_up_screen.dart',
-		reason: 'not a pair and cannot become one: the counterpart is a SCREEN, and the syncer row already records that mobile keeps those gates inline there. The header is what needs rewording, and `apps/web/src/lib/core` is another lane\'s tree',
-	},
-];
+export const KNOWN_GAPS = /** @type {KnownGap[]} */ ([]);
 
 /// Lines that may sit between the top of a file and the block that documents
 /// it. A module puts its imports above its doc comment far more often than
