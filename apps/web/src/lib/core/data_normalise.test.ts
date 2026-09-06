@@ -16,6 +16,10 @@ import {
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { stripComments } from './strip_comments.js';
+import {
+	PUBLIC_ROUTE_LIST_COLUMNS,
+	ROUTE_LIST_COLUMNS,
+} from '../routes/route_list_columns';
 
 // ---------------------------------------------------------------------------
 // trimOrNull — the JS `s?.trim() || null` mirror
@@ -514,14 +518,12 @@ test('every column the public_routes half cannot serve is filled with what it me
 	// half about the new column fails here rather than silently producing rows
 	// missing a field under a type that promises it. That is exactly how
 	// `waypoints` came to be `undefined` on every route saved from Explore.
-	const source = readFileSync(resolve('src/lib/core/data.ts'), 'utf-8');
-	const listOf = (name: string): string[] => {
-		const m = source.match(new RegExp(`const ${name}\\s*=\\s*\\n?\\s*'([^']*)'`));
-		assert.ok(m, `Could not locate ${name} — rename?`);
-		return m![1].split(',').map((c) => c.trim());
-	};
-	const owned = listOf('ROUTE_LIST_COLS');
-	const publicCols = new Set(listOf('PUBLIC_ROUTE_LIST_COLS'));
+	// The two lists used to be scraped out of `core/data.ts` as string
+	// literals. They are declared once in `routes/route_list_columns.ts` now,
+	// so this reads them rather than parsing them back out of a source file —
+	// the claim is unchanged and the instrument is no longer a regex.
+	const owned: readonly string[] = ROUTE_LIST_COLUMNS;
+	const publicCols = new Set<string>(PUBLIC_ROUTE_LIST_COLUMNS);
 	const withheld = owned.filter((c) => !publicCols.has(c));
 	assert.ok(withheld.length > 0, 'the two lists differ — that is the point of the fill');
 	const fill = publicRouteListFill() as Record<string, unknown>;
