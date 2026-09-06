@@ -19,6 +19,7 @@ import { challengesToRecomputeForRun } from '../social/challenge_progress';
 import { mergeMyProgress } from '../social/challenge_list';
 import { selectEffectivePricing } from '../social/event_instance';
 import { planHeadCopyFields, planWeekCopyRows, planWorkoutCopyRows } from './plan_copy';
+import { clubSlug } from '../social/club_slug';
 import type {
 	Run,
 	Route,
@@ -2064,15 +2065,6 @@ const CLUB_SELECT_COLS =
 const EVENT_SELECT_COLS =
 	'id, club_id, title, description, starts_at, timezone, duration_min, meet_label, route_id, distance_m, pace_target_sec, capacity, author_id, created_at, updated_at, recurrence_freq, recurrence_byday, recurrence_until, recurrence_count, category, discipline, gym_template, session_plan_id, is_public' as const;
 
-function slugify(name: string): string {
-	return name
-		.toLowerCase()
-		.trim()
-		.replace(/[^a-z0-9]+/g, '-')
-		.replace(/^-|-$/g, '')
-		.slice(0, 48);
-}
-
 /** Browse public clubs. Most recently created first. */
 export async function browseClubsWithError(
 	search?: string
@@ -2718,7 +2710,7 @@ export async function createClub(input: {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
 
-	const baseSlug = slugify(input.name) || 'club';
+	const baseSlug = clubSlug(input.name) || 'club';
 	const inviteToken = input.join_policy === 'invite' ? genToken() : null;
 	// Retry with a short random suffix up to 3 times if the slug is taken —
 	// simpler than a SQL trigger and acceptable for the expected volume.
@@ -3070,12 +3062,12 @@ export async function fetchNextRsvpedEvent(
 		if (!ev) continue;
 		// The card's whole job is to deep-link the club. A missing slug would
 		// route it at /clubs/undefined, so skip the candidate and try the next.
-		const clubSlug = singleEmbed(ev.clubs)?.slug;
-		if (!clubSlug) continue;
+		const slug = singleEmbed(ev.clubs)?.slug;
+		if (!slug) continue;
 		return {
 			event_id: eventId,
 			instance_start: instanceStart,
-			club_slug: clubSlug,
+			club_slug: slug,
 			title: ev.title,
 			meet_label: ev.meet_label ?? null,
 		};

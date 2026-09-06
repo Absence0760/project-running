@@ -1487,3 +1487,29 @@ test('the exact tallies are counted by the database, never by a page of rows', (
 		);
 	}
 });
+
+test('the club slug is derived by the shared helper, never re-spelled here', () => {
+	// Reason: `clubs.slug` is persisted and becomes the club's public URL, and
+	// the phone derives it too. When both rails spelled out "lower-case, then
+	// [^a-z0-9]+ to -" they read as one expression while being two functions —
+	// the runtimes' `toLowerCase` disagree at U+0130 — so `İzmir` minted
+	// `i-zmir` here and `izmir` on the phone (decisions § 1251 + § 1279). The
+	// derivation must stay in `social/club_slug.ts`, whose mirror suite is what
+	// pins the two platforms to one answer.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	assert.match(
+		source,
+		/import \{ clubSlug \} from '\.\.\/social\/club_slug'/,
+		'core/data.ts must import the shared clubSlug derivation.',
+	);
+	assert.doesNotMatch(
+		source,
+		/\[\^a-z0-9\]/,
+		'core/data.ts must not re-spell the slug character class — call clubSlug.',
+	);
+	assert.doesNotMatch(
+		source,
+		/toLowerCase\(\)[\s\S]{0,80}?replace\(/,
+		'a lower-case feeding a strip is the slug derivation re-grown; call clubSlug.',
+	);
+});
