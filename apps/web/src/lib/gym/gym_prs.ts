@@ -231,6 +231,35 @@ export function sameExerciseName(
 	return normaliseExerciseName(a ?? '') === normaliseExerciseName(b ?? '');
 }
 
+/// Does this free-text spelling name an exercise at all?
+///
+/// The one blankness test every surface that PERSISTS an exercise name must
+/// make, and the companion to [sameExerciseName]: identity and emptiness are
+/// both properties of the KEY, and a surface that reads either off the display
+/// spelling disagrees with every surface that reads it off the key.
+///
+/// `name.trim() === ''` is not this test. The two answers differ on exactly
+/// one code point — U+0085 (NEL), which is in the shared whitespace class this
+/// module folds and is NOT in the set JS `trim()` strips (it is category Cc,
+/// so neither a `WhiteSpace` nor a `LineTerminator` to the language). That one
+/// gap is the same one [decisions 1322] closed inside `routineFromWorkout`,
+/// and it survived one layer out in the two editors and the catalogue picker:
+/// a name made only of U+0085 passed their raw drop guards, so the web editor
+/// SAVED a `gym_sets` row whose server-stamped `exercise_key` is `''` — a row
+/// `distinctExerciseCount` counts as nothing, `gym_workout_summaries` excludes,
+/// and `routineFromWorkout` drops, while the editor kept rendering it. The
+/// routine editor and the picker had it worse: `gym_routine_exercises
+/// .exercise_key` and `exercises.name_key` both carry `length(...) between 1
+/// and 120`, so the same name reached the user as an unactionable 23514.
+///
+/// Dart's `String.trim()` strips the whole Unicode `White_Space` set plus
+/// U+FEFF, which is this module's class exactly — so the mobile twin answered
+/// correctly by coincidence of its runtime, which is the precise thing the
+/// spelled-out class exists to stop relying on. Both rails now name the test.
+export function namesAnExercise(name: string | null | undefined): boolean {
+	return normaliseExerciseName(name ?? '') !== '';
+}
+
 export interface WorkoutPrResult {
 	/// The grouping key — [normaliseExerciseName] of the exercise. Carried so a
 	/// caller keying a lookup on the result never re-derives it from
