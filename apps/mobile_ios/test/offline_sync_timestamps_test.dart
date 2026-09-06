@@ -28,17 +28,62 @@ void main() {
       expect(parseServerTimestamp('2026-06-32T'), isNull);
     });
 
-    test('out-of-range components ROLL OVER, they are not rejected', () {
-      // Pinning what `DateTime.tryParse` actually does rather than what the
-      // name suggests: a string that is syntactically an ISO timestamp but
-      // names an impossible instant is normalised through the calendar, not
-      // refused. So a corrupt column can yield a confident wrong answer here,
-      // and no caller in the family may treat a non-null return as proof the
-      // column was sane — they only ever compare it or store it.
-      expect(parseServerTimestamp('2026-13-45T99:99:99Z'),
-          DateTime.utc(2027, 2, 18, 4, 40, 39));
-      expect(parseServerTimestamp('2026-06-32')!.isAtSameMomentAs(
-          DateTime(2026, 7, 2)), isTrue);
+    test('out-of-range components are REFUSED, not rolled over', () {
+      // § 1344. `DateTime.tryParse` normalises an impossible date through the
+      // calendar instead of refusing it — `2026-13-45T99:99:99Z` is
+      // 2027-02-18T04:40:39Z and `2026-06-32` is the 2nd of July — so a
+      // corrupt column yielded a confident wrong answer that passes every
+      // downstream non-null check. The old behaviour is asserted beside the
+      // new one so the difference is legible, and so the test fails if the
+      // platform ever changes underneath it.
+      expect(DateTime.tryParse('2026-13-45T99:99:99Z'),
+          DateTime.utc(2027, 2, 18, 4, 40, 39),
+          reason: 'the platform behaviour this refuses');
+      expect(parseServerTimestamp('2026-13-45T99:99:99Z'), isNull);
+      expect(parseServerTimestamp('2026-06-32'), isNull);
+      for (final raw in [
+        '2026-00-01', // month 0
+        '2026-13-01', // month 13
+        '2026-06-00', // day 0
+        '2026-02-30', // day past February
+        '2027-02-29', // day past a NON-leap February
+        '2026-06-14T24:00:00Z', // ISO end-of-day, still a rollover here
+        '2026-06-14T07:60:00Z',
+        '2026-06-14T07:00:60Z',
+        '2026-06-14T07:00:00+24:00',
+        '2026-06-14T07:00:00+02:60',
+      ]) {
+        expect(parseServerTimestamp(raw), isNull, reason: raw);
+      }
+    });
+
+    test('a real date at the edge of its month is still accepted', () {
+      // The refusal must be a range check, not a narrowing: the day bound is
+      // the target month's OWN last day, so a leap day is a date and the same
+      // day one year later is not.
+      expect(parseServerTimestamp('2024-02-29T00:00:00Z'),
+          DateTime.utc(2024, 2, 29));
+      expect(parseServerTimestamp('2026-01-31T23:59:59Z'),
+          DateTime.utc(2026, 1, 31, 23, 59, 59));
+      expect(parseServerTimestamp('2026-12-31T23:59:59.999Z'),
+          DateTime.utc(2026, 12, 31, 23, 59, 59, 999));
+    });
+
+    test('every shape a PostgREST column actually arrives in survives', () {
+      // The refusal is worthless if it also refuses a legitimate value, and
+      // the same text reaches these readers in several spellings.
+      for (final raw in [
+        '2026-06-14T07:00:00+00:00',
+        '2026-06-14T07:00:00.000Z',
+        '2026-06-14T07:00:00.123456+00:00',
+        '2026-06-14 07:00:00+00',
+        '2026-06-14T09:00:00+02:00',
+        '2026-06-14T07:00:00',
+        '2026-06-14',
+        '20260614T070000Z',
+      ]) {
+        expect(parseServerTimestamp(raw), isNotNull, reason: raw);
+      }
     });
 
     test('a PostgREST timestamptz keeps its instant', () {
@@ -74,6 +119,41 @@ void main() {
         '2026-03-12',
       ]) {
         expect(parseServerTimestamp(raw)?.isUtc, isTrue, reason: raw);
+      }
+    });
+  });
+
+  group('parseCalendarDate', () {
+    test('a `date` column keeps its calendar DAY', () {
+      // The whole reason this is a second reader rather than a call to
+      // `parseServerTimestamp`: normalising local midnight to UTC moves the
+      // day itself for a device AHEAD of UTC (local midnight at +03:00 is
+      // 21:00 the previous day), and `gear.purchased_at` is written back to a
+      // `date` column from this value (decisions § 1289 + § 1344). The `isUtc`
+      // assertion below is the half that holds on ANY runner: this one is
+      // vacuous west of Greenwich, which is where the workstation sits.
+      final at = parseCalendarDate('2026-06-14')!;
+      expect(at.isUtc, isFalse);
+      expect([at.year, at.month, at.day], [2026, 6, 14]);
+      expect([at.hour, at.minute], [0, 0]);
+    });
+
+    test('an out-of-range day is refused, not rolled into the next month', () {
+      // § 1344, and the reason the refusal matters more here than on the
+      // timestamp side: this value goes straight back to a `date` column
+      // through `api.createGear` / `api.updateGear`, so a rolled-over day
+      // becomes the STORED day.
+      expect(parseCalendarDate('2026-06-32'), isNull);
+      expect(parseCalendarDate('2026-02-30'), isNull);
+      expect(parseCalendarDate('2026-13-01'), isNull);
+      expect(parseCalendarDate('2026-06-00'), isNull);
+      expect(parseCalendarDate('2024-02-29'), isNotNull,
+          reason: 'a leap day is a date');
+    });
+
+    test('a non-string, empty or unparseable column is no date', () {
+      for (final raw in <dynamic>[null, '', '   ', 'not a date', 1, 2.5, true]) {
+        expect(parseCalendarDate(raw), isNull, reason: '$raw');
       }
     });
   });

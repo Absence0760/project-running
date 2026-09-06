@@ -26725,3 +26725,59 @@ guard by name, and restoring the string equality fails the spelling test.
 
 Web needs no change and gets none. This is one-sided by construction: the platform that was
 already correct is the one the other is being brought onto.
+
+---
+
+## 1344. `DateTime.tryParse` answers an impossible date instead of refusing it, and the store family now refuses it in one place
+
+**Decided 2026-09-06.** `DateTime.tryParse` has two behaviours under one name. It refuses text
+it cannot recognise as ISO 8601 — and it ROLLS OVER anything it can, through the calendar,
+without complaint. `2026-13-45T99:99:99Z` is not an error; it is 2027-02-18T04:40:39Z.
+`2026-06-32` is the 2nd of July. `2026-02-30` is the 2nd of March. So an unusable column does
+not yield "no value": it yields a confident wrong one, which passes every downstream non-null
+and `> 0` check the tree has, and which no caller can distinguish from a real answer.
+
+The `OfflineSyncStore` family had that parse behind two readers. On the timestamp side it is
+arguably survivable — `parseServerTimestamp`'s callers only compare the result or store it —
+but on the DATE side it is not. `local_gear_store` read `purchased_at` / `retired_at` with a
+private `_parseDate`, and those values go straight back out through `api.createGear` /
+`api.updateGear`, which serialise them with `.toIso8601String().substring(0, 10)` into a
+`date` column. A rolled-over day therefore becomes the STORED day, and `gearBackfillCandidates`
+then measures a purchase date the user never entered. Nothing produces such a value today (the
+Material date picker cannot), so this is a robustness gap rather than a live defect — but it is
+the shape where a wrong answer is durable rather than transient.
+
+`parseIsoStrict` is now the single call to `DateTime.tryParse` in the family, and both readers
+go through it: `parseServerTimestamp` adds the `.toUtc()`, and the new shared
+`parseCalendarDate` deliberately does not. It parses first, then range-checks every component
+against the calendar the text claims to be in, using the SDK's own anchored grammar verbatim —
+a narrower pattern would refuse text the platform accepts, which is a regression dressed as a
+hardening. The day bound is the target month's own last day, so 29 February is a date in 2024
+and is not in 2027. The `2026-06-14T24:00:00Z` end-of-day form is refused too: it is legal ISO,
+nothing here emits it, and it is indistinguishable from the rollover this exists to catch.
+
+**Gear's private reader is gone rather than exempted.** § 1289 left `_parseDate` in place with a
+`zone-verbatim:` marker, which read as "one reader plus an exception". It is now
+`parseCalendarDate` beside `parseServerTimestamp`, two named readers in the shared file whose
+one difference — the `.toUtc()` — is stated once. `store_timestamp_reader_guard_test.dart`
+follows: its allowance moves to `parseIsoStrict`, and it gains an assertion that the shared
+file holds EXACTLY ONE raw-parse site and that its enclosing reader is that one. That count is
+what cannot be deleted along with the check it protects.
+
+**§ 1289's prose has the hemisphere backwards, and that is corrected here.** It says
+normalising a `date` to UTC "moves the day itself for every device west of Greenwich". It is
+the other way: local midnight at UTC−04:00 is 04:00 the SAME day in UTC, while local midnight
+at UTC+03:00 is 21:00 the PREVIOUS day. Measured with `TZ=America/New_York`,
+`TZ=Europe/Athens` and `TZ=Pacific/Auckland` against `DateTime.tryParse('2026-06-03').toUtc()`:
+day 3, day 2, day 2. The code comments now say "ahead of UTC". This also explains why the
+gear-store integration test cannot catch a `.toUtc()` added to `parseCalendarDate` — the
+workstation sits west of Greenwich, where the day does not move — so the load-bearing
+assertion is the zone-independent one in `offline_sync_timestamps_test.dart`
+(`isUtc == false` plus the y/m/d unchanged), which is the assertion that actually failed when
+that mutation was planted.
+
+Mutation-tested four ways: removing the day bound fails five assertions across two files;
+adding a second raw parse to the shared file fails the new count assertion by line number;
+reverting gear to its private marked reader fails the guard's reader-usage count AND the gear
+drain test with the exact rolled-over value (2026-07-02) the filing predicted; and normalising
+`parseCalendarDate` to UTC fails the calendar-day assertion.

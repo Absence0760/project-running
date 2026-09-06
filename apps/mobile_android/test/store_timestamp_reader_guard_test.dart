@@ -9,11 +9,18 @@
 // helper of that name came to mean two different things in one file family.
 //
 // So: inside the family, `DateTime.parse` / `DateTime.tryParse` may appear only
-// in `parseServerTimestamp` itself, or on a site that states in a
-// `zone-verbatim:` marker why it must keep the parsed value's own zone. The
-// marker is local rather than a file allowlist because two of the files carry
-// both shapes, and an allowlist keyed on the file would go on covering the next
-// reader added to it.
+// in `parseIsoStrict` itself, or on a site that states in a `zone-verbatim:`
+// marker why it must keep the parsed value's own zone. The marker is local
+// rather than a file allowlist because two of the files carry both shapes, and
+// an allowlist keyed on the file would go on covering the next reader added to
+// it.
+//
+// `parseIsoStrict` is where the raw parse lives since § 1344, because
+// `tryParse` ROLLS OVER an out-of-range component rather than refusing it
+// (`2026-06-32` is the 2nd of July) and the family needs that refused in one
+// place, not in each reader. `parseServerTimestamp` and `parseCalendarDate`
+// both go through it and differ only in the `.toUtc()` — which gear's `date`
+// columns must not have.
 //
 // The family is DERIVED from `extends OfflineSyncStore<`, not listed, so an
 // eighth store is covered the day it lands rather than the day someone
@@ -75,7 +82,7 @@ void main() {
       for (var i = 0; i < codeLines.length; i++) {
         if (!_parseCall.hasMatch(codeLines[i])) continue;
         if (file.path == _shared &&
-            _enclosingReader(codeLines, i) == 'parseServerTimestamp') {
+            _enclosingReader(codeLines, i) == 'parseIsoStrict') {
           continue;
         }
         final marked = rawLines[i].contains(_marker) ||
@@ -94,19 +101,42 @@ void main() {
   test('the shared readers exist and the family actually uses them', () {
     final shared = File(_shared).readAsStringSync();
     expect(shared.contains('DateTime? parseServerTimestamp(dynamic v) {'), isTrue);
+    expect(shared.contains('DateTime? parseCalendarDate(dynamic v) {'), isTrue);
     expect(shared.contains('DateTime storedClockOrEpoch(dynamic v) =>'), isTrue);
 
     var timestampSites = 0;
+    var dateSites = 0;
     var clockSites = 0;
     for (final file in _familyFiles()) {
       final code = blankNonCode(file.readAsStringSync());
       timestampSites += 'parseServerTimestamp('.allMatches(code).length;
+      dateSites += 'parseCalendarDate('.allMatches(code).length;
       clockSites += 'storedClockOrEpoch('.allMatches(code).length;
     }
-    // Declarations included: 16 timestamp reads + 1 declaration, 7 clock reads
-    // + 1 declaration when this landed. A drop to the declarations alone means
-    // a store went back to open-coding the read past this guard's blind spot.
+    // Declarations included: 16 timestamp reads + 1 declaration, 3 date reads
+    // + 1 declaration, 7 clock reads + 1 declaration when this landed. A drop
+    // to the declarations alone means a store went back to open-coding the
+    // read past this guard's blind spot.
     expect(timestampSites, greaterThanOrEqualTo(12));
+    expect(dateSites, greaterThanOrEqualTo(4));
     expect(clockSites, greaterThanOrEqualTo(8));
+  });
+
+  test('the raw parse exists exactly once in the family, inside its owner', () {
+    // The claim `parseIsoStrict` is built to make: every reader in the family
+    // is range-checked because there is nowhere else the text can be parsed.
+    // A second call anywhere in the shared file — a "quick" unchecked read
+    // beside the checked one — is what this refuses, and it is anchored on the
+    // COUNT so removing the check cannot remove the expectation with it.
+    final code = blankNonCode(File(_shared).readAsStringSync());
+    final lines = code.split('\n');
+    final sites = <int>[
+      for (var i = 0; i < lines.length; i++)
+        if (_parseCall.hasMatch(lines[i])) i,
+    ];
+    expect(sites, hasLength(1),
+        reason: 'raw parse sites in $_shared: '
+            '${sites.map((i) => i + 1).toList()}');
+    expect(_enclosingReader(lines, sites.single), 'parseIsoStrict');
   });
 }

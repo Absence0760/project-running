@@ -80,6 +80,62 @@ bool outsideFetchWindow(DateTime? at, DateTime? start, DateTime? end) {
   return false;
 }
 
+/// The ONE `DateTime.tryParse` in the [OfflineSyncStore] family, and the only
+/// place a stored date-time text is turned into a value.
+///
+/// `tryParse` refuses text it cannot recognise as ISO 8601 and then ROLLS OVER
+/// anything it can: `2026-13-45T99:99:99Z` is not an error, it is
+/// 2027-02-18T04:40:39Z, and `2026-06-32` is the 2nd of July. So a column
+/// holding an impossible date yields a confident wrong answer rather than no
+/// answer, and every downstream non-null and `> 0` check passes on it. That is
+/// worse than an absent value, which is exactly what these readers are built
+/// to survive — `gear.purchased_at` is written straight BACK to a `date`
+/// column through `api.createGear` / `api.updateGear`, so a rolled-over day
+/// becomes the stored day (decisions § 1344).
+///
+/// This refuses instead. Every component is range-checked against the calendar
+/// it claims to be in, using the same anchored grammar `DateTime.parse` itself
+/// accepts, so a string this rejects is one `tryParse` would have answered
+/// wrongly and never one it would have answered correctly. The day bound is
+/// the target month's own last day, so 29 February is accepted in a leap year
+/// and refused otherwise.
+DateTime? parseIsoStrict(String text) {
+  final parsed = DateTime.tryParse(text);
+  if (parsed == null) return null;
+  final m = _isoShape.firstMatch(text);
+  // Unreachable while the pattern mirrors the SDK's: anything `tryParse`
+  // answered matched it. Fail closed rather than admit an unchecked value if
+  // the two ever drift.
+  if (m == null) return null;
+  final month = int.parse(m.group(2)!);
+  if (month < 1 || month > 12) return null;
+  final day = int.parse(m.group(3)!);
+  if (day < 1 || day > DateTime.utc(int.parse(m.group(1)!), month + 1, 0).day) {
+    return null;
+  }
+  if (!_within(m.group(4), 23)) return null;
+  if (!_within(m.group(5), 59)) return null;
+  if (!_within(m.group(6), 59)) return null;
+  if (!_within(m.group(10), 23)) return null;
+  if (!_within(m.group(11), 59)) return null;
+  return parsed;
+}
+
+/// `DateTime.parse`'s own accepted shape, capturing every component so each
+/// can be range-checked. Mirrors the SDK pattern exactly — a narrower one
+/// would refuse text the platform accepts, which is a regression rather than a
+/// hardening.
+final RegExp _isoShape = RegExp(r'^([+-]\d{6}|\d{4})-?(\d\d)-?(\d\d)'
+    r'(?:[ T](\d\d)(?::?(\d\d)(?::?(\d\d)(?:[.,](\d+))?)?)?'
+    r'( ?[zZ]| ?([-+])(\d\d)(?::?(\d\d))?)?)?$');
+
+/// An absent optional component is in range; a present one must be `0..max`.
+bool _within(String? raw, int max) {
+  if (raw == null) return true;
+  final n = int.parse(raw);
+  return n >= 0 && n <= max;
+}
+
 /// Reads a `timestamptz` column off a row map as an absolute instant,
 /// normalised to UTC.
 ///
@@ -95,10 +151,29 @@ bool outsideFetchWindow(DateTime? at, DateTime? start, DateTime? end) {
 /// NOT for a `date` column. `gear.purchased_at` / `gear.retired_at` are
 /// `date`, whose zone-less text is a calendar DAY rather than an instant:
 /// parsing it gives local midnight, and converting THAT to UTC moves the day
-/// itself for every device west of Greenwich. [LocalGearStore] keeps its own
-/// reader for that reason (decisions § 1289).
+/// itself for every device AHEAD of UTC. Use [parseCalendarDate] for those
+/// (decisions § 1289, whose prose has that hemisphere backwards — § 1344).
 DateTime? parseServerTimestamp(dynamic v) {
-  if (v is String && v.isNotEmpty) return DateTime.tryParse(v)?.toUtc();
+  if (v is String && v.isNotEmpty) return parseIsoStrict(v)?.toUtc();
+  return null;
+}
+
+/// Reads a `date` column off a row map as the calendar DAY it names, at local
+/// midnight.
+///
+/// Deliberately NOT normalised to UTC, and that omission is load-bearing:
+/// `gear.purchased_at` / `gear.retired_at` are `date` columns whose zone-less
+/// text is a calendar day rather than an instant, so `.toUtc()` would move the
+/// day itself for every device AHEAD of UTC — local midnight at +03:00 is
+/// 21:00 the previous day, so a shoe bought on the 3rd would read as bought on
+/// the 2nd and `gearBackfillCandidates` would drop the purchase day's own
+/// runs. (§ 1289 states this hemisphere backwards; measured in § 1344, and a
+/// west-of-Greenwich test runner cannot tell the two apart because there the
+/// day does NOT move.) Shared here rather
+/// than kept as a private static so the family has two named readers with
+/// their difference stated once, instead of one reader plus an exception.
+DateTime? parseCalendarDate(dynamic v) {
+  if (v is String && v.isNotEmpty) return parseIsoStrict(v);
   return null;
 }
 
