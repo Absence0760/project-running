@@ -24082,3 +24082,163 @@ error card even when it has rows, and adding the one new key
 anonymously and carries the control the assertion needs to mean anything — that
 a run with genuinely no campaign still renders nothing — and was NOT executed in
 this lane.
+
+## 1223. The share card divides the same clock the page does, and one derived value is what makes that true
+
+`/runs/[id]` computed the run's pace in three places from its own copy of
+`movingSeconds > 0 ? movingSeconds : run.duration_s` — the key-stats grid, the
+threshold that decides whether the grade-adjusted-pace cell appears, and the
+off-screen 1080-square card `html-to-image` rasterises to a PNG. The card's
+copy had lost the moving half: it rendered `formatPace(run.duration_s, ...)`.
+On a 10 km with ten minutes of traffic-light stops the page said 5:00 /km and
+the image the runner posted said 6:00 /km, with no label on the card naming
+which clock it meant. Three copies, one of them already wrong, is the defect;
+the fix is one `paceSeconds` derived and no copies.
+
+The card's time cell moved to the same value, labelled `runDetail.moving` when
+that is what it is. That is a product call and the principle behind it is that
+a share card is read with no page beside it: a reader who divides the printed
+time by the printed distance has to land on the printed pace. Pairing elapsed
+time with moving pace survives on the page — which discloses both clocks in
+adjacent cells — and does not survive on a square image with three numbers.
+The page's own Time cell is unchanged; the card is the surface that has to be
+self-contained.
+
+`run_detail_pace_guard.test.ts` is anchored to the calls rather than to the
+spelling: every `formatPace`/`formatSpeed` whose second argument is
+`run.distance_m` is a whole-run pace, and each must take `paceSeconds`. A new
+cell dividing by the run's distance therefore cannot reintroduce a second
+clock. Mutation-tested by planting three violations — the card's pace reverted
+to `run.duration_s`, a second `paceSeconds` declaration, and the card's time
+reverted while its pace stayed — each caught by the intended assertion.
+
+## 1224. The run-detail elevation profile carries the line across a dropout instead of plotting it at sea level
+
+`/runs/[id]` handed the chart `baseTrack.map((p) => p.ele ?? 0)`. On a track
+with intermittent altitude — tree cover, a tunnel, a GPX import where only some
+points carry `<ele>` — every gap was drawn as a vertical plunge to 0 m, and
+`hasElevation` needed only ONE point with an altitude to mount the chart at
+all. Measured on a synthetic 30-minute alpine climb (1 Hz, 1800 to 2400 m, 3 %
+dropout rate, 3.8 m altitude sigma, 55 dropouts): the chart's own "Total gain"
+read **116,484 m** over a 600 m climb and its y-axis spanned 0 to 2,405 m.
+
+`elevationSeries` replaces the coalesce. It keeps the array 1:1 with the track
+— the chart reports a hovered INDEX which the page maps straight back to a
+lat/lng for the linked map cursor, so a compacted series would paint the marker
+where the runner never was — and fills each gap by linear interpolation in
+INDEX, which is exactly the straight line the chart's index-based x-axis would
+have drawn had the two real samples been adjacent. Leading and trailing gaps
+carry the nearest sample, the same carry-across `computeElevationGain` already
+applies to the identical dropout, so the chart and the climb figure beside it
+read one gap the same way. A non-numeric altitude is not a sample, and fewer
+than two samples draws nothing rather than a flat line spanning the run at one
+altitude. On the same track: total 4,460 m, y-axis 1,793 to 2,405 m.
+
+Half the filing is deliberately not closed here. The chart's `totalGain` is an
+UNGATED sum of positive deltas living in `lib/components/ElevationProfile.svelte`,
+which five surfaces share and this lane does not own; against the key stat's
+`ELEVATION_GAIN_MIN_DELTA_M`-gated 3,958 m on the measurement above it still
+reads 4,460 m, so the panel and the grid still grade one run by two rules. The
+change wanted is four lines in that one file — derive `totalGain` through
+`computeElevationGain` over the samples rather than summing them inline — and
+it fixes every consumer at once rather than adding a prop for this one.
+
+## 1225. A cutoff board says nothing about a crossing it cannot time, rather than saying "safe"
+
+`gradeCutoff` graded a margin with `marginS < 0 ? 'miss' : marginS < TIGHT ?
+'tight' : 'safe'`. A NaN margin fails both comparisons and falls through to the
+optimistic terminal branch, so the race-director board reported `safe` — with
+`marginS: NaN` printed beside it — about a runner it could not time at all. The
+NaN got in through `buildBoard`'s `Math.max(0, (new Date(c.inTime).getTime() -
+raceStartMs) / 1000)`: `Math.max(0, NaN)` is NaN, not 0, so the clamp meant to
+floor a bad stamp passed it straight through. Worse than the leg: the status
+ladder is `blownCutoff ? dnf : reachedLast ? finished`, so an unparseable stamp
+on the FINAL checkpoint promoted the runner to `finished` with every cutoff on
+the board graded safe.
+
+Three changes, and the split between them is deliberate. `gradeCutoff` now
+returns null on a non-finite margin — `ProjectionLeg.cutoff` was already
+nullable and both consumers already render a null as ungraded, so nothing
+downstream had to move. `projectRunner` drops a crossing whose `elapsedS` is
+not finite, the same sanitisation it already applies to `positionM` one block
+up, which makes the module fail closed for every caller rather than only for
+the one that had the bug. And `buildBoard` — web-only, no Dart twin — drops a
+crossing whose derived elapsed is not finite OR is negative instead of clamping
+it: a stamp predating the race start is not a timing sample either, and
+clamping it to 0 graded the leg `safe` with the full cutoff as its margin, the
+exact case `projectRunner`'s own `lastElapsedS > 0` comment already names.
+
+`checkpoint_projection` is an enforced TS<->Dart pair, so both halves moved
+together; the Dart `_gradeCutoff` returns `CutoffVerdict?` and `blownCutoff`
+reads `cutoff?.status`. Seven new web cases and three Dart mirrors, each of the
+seven verified to FAIL against `b7f3467a3` and pass after. The web suite carries
+one case the Dart side cannot reach — a `cutoffElapsedS` that is not a number —
+because that field is a Dart `int?`. A race director shown "not yet through" is
+better served than one shown "safely through": the fail-open direction was the
+one that gets a runner left on a mountain.
+
+## 1226. An unusable GAP segment is skipped, not allowed to poison the whole run
+
+`gradeAdjustedPaceSecPerKm` declares `number | null` and returned NaN. A track
+point with a non-finite lat/lng makes `segHoriz` NaN; `NaN < MIN_SEGMENT_M` is
+false so the walk enters the body rather than accumulating, `adjDistM` goes NaN
+and stays NaN, and the closing `adjDistM <= 0` guard is false for NaN — so
+`Math.round(NaN)` came back as the run's pace. The Dart twin THREW on the same
+input: `.round()` on a non-finite double is an `UnsupportedError`, and it is
+raised from inside a widget build. Two platforms, two different wrong answers,
+from one class of bad fix.
+
+The filed change was the NaN-rejecting guard, `!(adjDistM > 0) || !(timeS > 0)`
+— the form `race_day.ts`'s `goalFeasibility` already uses in the same
+directory. That is applied, but on its own it turns one bad GPS fix in a
+three-hour ultra into no GAP at all for the entire run. The root cause is that
+an unusable segment was accumulated rather than skipped, and this module
+already has a rule for an unusable segment: the one with no timestamps is
+skipped while the anchor still advances. So the equivalent-flat distance is now
+tested for finiteness and the segment skipped on the same terms — which also
+covers the second way in, a non-finite ALTITUDE, where `gradeFactor` clamps
+neither bound of a NaN and the Minetti fit returns NaN through a perfectly
+good coordinate pair. A skipped segment does not count as having seen
+elevation either, so a track whose only altitudes are unusable reports no GAP
+rather than reporting raw pace as one.
+
+Both halves of the registered pair moved together and the Dart is mirrored to
+the iOS twin. Three new web cases and three Dart mirrors, each verified to fail
+against `b7f3467a3` — on the web side by returning NaN, on the Dart side by
+throwing — and to pass after. The pinning case for the durable half plants one
+infinite fix in the middle of a 41-point graded track and requires the GAP to
+move by under 10 %; measured, it moves by well under that where before it was
+null on one platform and an exception on the other.
+
+## 1227. The negative-split header was wrong, not the code, and an assertion now says which
+
+`negativeSplitPacing`'s header claimed "A 2% negative split for a 4:30/km
+marathon means first half ~4:33, second half ~4:27". The code applies
+`delta = avgPerUnit * deltaPercent / 100` to EACH half, so 2% on a 270 s/km
+average gives 275.4 / 264.6 — 4:35 and 4:25. The header describes a total
+spread of `deltaPercent` (±1.11%); the code applies `deltaPercent` per half, a
+total spread of twice it. A maintainer tuning the parameter against the header
+was off by 2x.
+
+The header is what moved. Both readings are defensible in isolation — "a 2%
+negative split" is often said to mean the second half is 2% faster than the
+first, which is exactly the header's arithmetic — but this product already has
+a SECOND implementation of the same named strategy: `race_phases.ts`'s
+`negative_split` preset is `HOLD_BACK_FACTOR = 1.02` with a derived 0.98 second
+half, and `race_phases` is a registered TS<->Dart pair with a `no_std` firmware
+port driving the watch's Pacer glance page. Changing `race_day` to match its
+own header would make the race-day panel plan a race differently from the
+mobile race-strategy sheet and the watch, for one strategy under one name.
+
+The filing cited `race_day.test.ts:179` as pinning ±2% of 300. That line is a
+COMMENT beside a test that only asserts the splits sum to 3000, which holds
+under either reading — so nothing in the suite actually held the magnitude, and
+a doc and a comment disagreeing is how it drifted. Two assertions now do: one
+pins the literal 306/294 halves, and one derives the expected halves from
+`buildPhasePlan('negative_split')`'s own factors, so the two implementations
+fail the PR the day they disagree. Separately, `evenSplitPacing` and
+`negativeSplitPacing` guarded with `distanceM <= 0`, which NaN passes — the
+panel then rendered a NaN average pace and one bogus split holding the whole
+predicted time. Both now use the NaN-rejecting `!(x > 0)` form `goalFeasibility`
+uses twenty lines further down the same file, extended to `unitMetres` and to
+`deltaPercent`.

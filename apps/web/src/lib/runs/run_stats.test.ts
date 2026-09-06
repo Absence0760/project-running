@@ -2,7 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { movingTimeSeconds, computeRealSplits, haversineMetres } from './run_stats';
+import {
+	movingTimeSeconds,
+	computeRealSplits,
+	haversineMetres,
+	SPLIT_TAIL_MIN_M,
+} from './run_stats';
 import { stripComments } from '../core/strip_comments';
 import type { TrackPoint } from '../types';
 
@@ -272,4 +277,27 @@ test('haversineMetres clamps instead of returning NaN near antipodal', () => {
 test('haversineMetres agrees with the Dart twin on ordinary distances', () => {
 	const d = haversineMetres(51.5, -0.1, 51.6, -0.2);
 	assert.ok(Math.abs(d - 13093.993) < 0.01);
+});
+
+test('computeRealSplits — the dropped tail is bounded by the named floor', () => {
+	// The split table's own total is allowed to fall short of the run's headline
+	// distance, and by how much is the whole content of the rule: a wrong pace
+	// on a named row is worse than a total under one percent light. Anchored to
+	// the constant rather than to 50 so the bound and the rule move together.
+	for (const tail of [0, 10, 30, SPLIT_TAIL_MIN_M, SPLIT_TAIL_MIN_M + 40]) {
+		const pts = track(10, 2, 101 + tail / 10);
+		const splits = computeRealSplits(pts);
+		const summed = splits.reduce((a, sp) => a + sp.distance_m, 0);
+		const covered = haversineMetres(
+			pts[0].lat,
+			pts[0].lng,
+			pts[pts.length - 1].lat,
+			pts[pts.length - 1].lng,
+		);
+		assert.ok(
+			covered - summed <= SPLIT_TAIL_MIN_M + 1,
+			`a ${tail} m tail left ${covered - summed} m unaccounted for`,
+		);
+		assert.ok(summed <= covered + 1, 'the splits may never total more than the track');
+	}
 });

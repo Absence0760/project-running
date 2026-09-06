@@ -4,10 +4,12 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
 	cadenceSpm,
+	elevationSeries,
 	elevationSourceTrack,
 	stepCount,
 	storedElevationGainM,
 	MIN_CADENCE_MOVING_S,
+	MIN_ELEVATION_SAMPLES,
 } from './key_stats';
 import { stripComments } from '../core/strip_comments';
 import type { TrackPoint } from '../types';
@@ -197,4 +199,68 @@ test('storedElevationGainM — the column wins, the legacy key is the fallback, 
 		190,
 		'an unusable column value falls through to the key rather than rendering Infinity',
 	);
+});
+
+
+// ─────────── elevationSeries ───────────
+
+test('elevationSeries — too few samples to draw a profile', () => {
+	assert.equal(elevationSeries(null), null);
+	assert.equal(elevationSeries(undefined), null);
+	assert.equal(elevationSeries([]), null);
+	assert.equal(elevationSeries([pt({ ele: 100 })]), null);
+	// A track that never recorded altitude, and one that recorded it once.
+	assert.equal(elevationSeries([pt(), pt(), pt()]), null);
+	assert.equal(elevationSeries([pt({ ele: 1800 }), pt(), pt()]), null);
+	assert.equal(MIN_ELEVATION_SAMPLES, 2);
+});
+
+test('elevationSeries — a fully-sampled track passes straight through', () => {
+	const track = [pt({ ele: 10 }), pt({ ele: 12 }), pt({ ele: 9 })];
+	assert.deepEqual(elevationSeries(track), [10, 12, 9]);
+});
+
+test('elevationSeries — an interior dropout is the line between its neighbours, not a cliff to sea level', () => {
+	// The alpine case: `p.ele ?? 0` drew [1800, 0, 0, 1806] and stretched the
+	// y-axis from zero. The chart's x-axis is the index, so the fill is the
+	// straight line it would have drawn had the two samples been adjacent.
+	const track = [pt({ ele: 1800 }), pt(), pt(), pt({ ele: 1806 })];
+	assert.deepEqual(elevationSeries(track), [1800, 1802, 1804, 1806]);
+});
+
+test('elevationSeries — leading and trailing gaps carry the nearest sample', () => {
+	// The same carry-across `computeElevationGain` applies to a dropout, so the
+	// chart and the climb figure beside it read one gap the same way.
+	const track = [pt(), pt({ ele: 500 }), pt({ ele: 510 }), pt()];
+	assert.deepEqual(elevationSeries(track), [500, 500, 510, 510]);
+});
+
+test('elevationSeries — the series stays 1:1 with the track', () => {
+	// The chart reports a hovered INDEX and the page maps it back to a lat/lng
+	// for the linked map cursor. A compacted series would paint the marker
+	// somewhere the runner never was.
+	const track = [pt({ ele: 5 }), pt(), pt(), pt(), pt({ ele: 9 }), pt()];
+	const series = elevationSeries(track);
+	assert.ok(series);
+	assert.equal(series.length, track.length);
+});
+
+test('elevationSeries — a non-numeric altitude is not a sample', () => {
+	// `metadata` and imported tracks are schemaless; a string altitude used to
+	// subtract into NaN rather than being ignored.
+	const bad = [
+		pt({ ele: '100' as unknown as number }),
+		pt({ ele: NaN }),
+		pt({ ele: 40 }),
+		pt({ ele: 44 }),
+	];
+	assert.deepEqual(elevationSeries(bad), [40, 40, 40, 44]);
+	assert.equal(
+		elevationSeries([pt({ ele: '1' as unknown as number }), pt({ ele: 7 })]),
+		null,
+	);
+});
+
+test('elevationSeries — a genuinely flat measured run still draws', () => {
+	assert.deepEqual(elevationSeries([pt({ ele: 0 }), pt({ ele: 0 })]), [0, 0]);
 });

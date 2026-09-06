@@ -70,3 +70,48 @@ test('pace adherence is graded against the workout\'s own tolerance', () => {
 		'a literal tolerance is the defect — the fallback belongs behind the stamped read',
 	);
 });
+
+test('every step kind the recorder can emit has a label on this page', () => {
+	// `WorkoutStepKind.walk` is what the recorder stamps for the rest step of a
+	// walk-run -- the preset the onboarding wizard seeds for a beginner goal --
+	// and `stepLabel` had no case for it, so a couch-to-5k runner whose phone
+	// showed "Walk 1/7" opened the same run on the web and saw a bare lowercase
+	// `walk`, untranslated, in every locale.
+	//
+	// Anchored to the recorder's own enum rather than to a list kept here: the
+	// day a seventh kind is added to `WorkoutStepKind`, this fails.
+	const decl = recorder.match(/enum WorkoutStepKind \{([^}]*)\}/);
+	assert.ok(decl, 'WorkoutStepKind moved or was renamed');
+	const kinds = decl[1]
+		.split(',')
+		.map((k) => k.trim())
+		.filter(Boolean);
+	assert.ok(kinds.length >= 6, `expected the full kind vocabulary, got ${kinds.join(',')}`);
+
+	const start = page.indexOf('function stepLabel(');
+	assert.ok(start >= 0, 'stepLabel moved');
+	const body = page.slice(start, page.indexOf('\n\t}', start));
+	for (const kind of kinds) {
+		assert.match(
+			body,
+			new RegExp(`case '${kind}':`),
+			`stepLabel has no case for the '${kind}' step the recorder emits`,
+		);
+	}
+});
+
+test('an unrecognised step kind renders a translated word, not its slug', () => {
+	// The bag is schemaless and the phone ships independently of this build, so
+	// a kind from a newer recorder reaches the default branch. Returning
+	// `s.kind` there prints an English identifier into a Japanese UI.
+	const start = page.indexOf('function stepLabel(');
+	const body = page.slice(start, page.indexOf('\n\t}', start));
+	const fallback = body.match(/default:\s*return ([^;]+);/);
+	assert.ok(fallback, 'stepLabel must keep a default branch -- `kind` is a string off a jsonb bag');
+	assert.doesNotMatch(
+		fallback[1],
+		/\bs\.kind\b/,
+		'the default branch must not render the raw slug',
+	);
+	assert.match(fallback[1], /^m\('/, 'the default branch must resolve a message key');
+});

@@ -288,3 +288,57 @@ test('the walk measures distance with the shared clamped haversine, not a copy',
 		'a second copy of the great-circle formula in this file is the defect itself',
 	);
 });
+
+test('a non-finite coordinate never leaves NaN in the return type', () => {
+	// The signature is `number | null`. `segHoriz` goes NaN on a bad fix,
+	// `NaN < MIN_SEGMENT_M` is false so the walk enters the body, and the old
+	// `adjDistM <= 0` guard is false for NaN — so `Math.round(NaN)` was
+	// returned as a pace. The Dart twin THREW on the same input, from a widget
+	// build, because `.round()` refuses a non-finite double.
+	const track: TrackPoint[] = [
+		{ lat: 51.5, lng: -0.1, ele: 10, ts: '2026-01-01T00:00:00Z' },
+		{ lat: Number.NaN, lng: -0.1, ele: 20, ts: '2026-01-01T00:05:00Z' },
+		{ lat: 51.5, lng: -0.09, ele: 30, ts: '2026-01-01T00:10:00Z' },
+	];
+	const gap = gradeAdjustedPaceSecPerKm(track);
+	assert.ok(gap === null || Number.isFinite(gap), `GAP must be null or a number, got ${gap}`);
+});
+
+test('one bad fix does not erase the GAP of the run around it', () => {
+	// The durable half. A single unusable segment is skipped the way a segment
+	// with no timestamps already is, rather than poisoning the accumulator and
+	// discarding every good segment in a three-hour ultra with it.
+	const good: TrackPoint[] = [];
+	for (let i = 0; i <= 40; i++) {
+		good.push({
+			lat: 46 + i * 0.0005,
+			lng: 7,
+			ele: 1800 + i * 2,
+			ts: new Date(Date.UTC(2026, 0, 1, 0, i, 0)).toISOString(),
+		});
+	}
+	const clean = gradeAdjustedPaceSecPerKm(good);
+	assert.ok(clean != null && Number.isFinite(clean));
+
+	const spoiled = good.slice();
+	spoiled[20] = { ...spoiled[20], lat: Number.POSITIVE_INFINITY };
+	const withBadFix = gradeAdjustedPaceSecPerKm(spoiled);
+	assert.ok(withBadFix != null, 'one bad fix must not erase the whole run');
+	assert.ok(Number.isFinite(withBadFix));
+	assert.ok(
+		Math.abs(withBadFix - clean) < clean * 0.1,
+		`a single skipped segment should barely move GAP: ${clean} -> ${withBadFix}`,
+	);
+});
+
+test('a non-finite altitude is not a measured grade', () => {
+	// The other way in: `b.ele - a.ele` is NaN, `gradeFactor` clamps neither
+	// bound of a NaN, and `minettiCostAtGrade(NaN)` is NaN. The segment is
+	// skipped, so it also does not count as having SEEN elevation.
+	const track: TrackPoint[] = [
+		{ lat: 46, lng: 7, ele: Number.NaN, ts: '2026-01-01T00:00:00Z' },
+		{ lat: 46.0005, lng: 7, ele: Number.NaN, ts: '2026-01-01T00:01:00Z' },
+		{ lat: 46.001, lng: 7, ele: Number.NaN, ts: '2026-01-01T00:02:00Z' },
+	];
+	assert.equal(gradeAdjustedPaceSecPerKm(track), null);
+});

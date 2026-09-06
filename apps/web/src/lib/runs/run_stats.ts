@@ -42,6 +42,13 @@ export interface Split {
 }
 
 /**
+ * The shortest tail `computeRealSplits` will emit as a split of its own, in
+ * metres. Below it the split table drops the leftover rather than printing a
+ * pace derived from a few seconds over a few metres.
+ */
+export const SPLIT_TAIL_MIN_M = 50;
+
+/**
  * Compute per-unit splits from a GPS track. Requires timestamps on track
  * points; returns [] when fewer than two points carry timestamps. Mirrors
  * the Android `run_detail_screen.dart` split logic.
@@ -123,11 +130,20 @@ export function computeRealSplits(track: TrackPoint[], tickMetres = 1000): Split
 		}
 	}
 
-	// Final partial split if there are remaining metres.
+	// The tail after the last whole tick, emitted only when it is long enough
+	// to carry a pace worth reading. Under the floor the duration is a handful
+	// of seconds over a handful of metres, and dividing them prints a pace off
+	// by an order of magnitude beside every real split in the table.
+	//
+	// The consequence is deliberate and stated here because the numbers are
+	// visible: a run of 5.04 km renders five splits summing to 5,000 m, so the
+	// split table's own total is up to `SPLIT_TAIL_MIN_M` short of the run's
+	// headline distance. A wrong pace on a named row is worse than a total
+	// that is under one percent light on a 5 km.
 	if (splits.length > 0 || cumDist > 0) {
 		const lastPoint = track[track.length - 1];
 		const endTimeMs = lastPoint.ts ? Date.parse(lastPoint.ts) : NaN;
-		if (cumDist - splitStart.dist > 50) {
+		if (cumDist - splitStart.dist > SPLIT_TAIL_MIN_M) {
 			emit(cumDist, endTimeMs, lastPoint.ele ?? null);
 		}
 	}

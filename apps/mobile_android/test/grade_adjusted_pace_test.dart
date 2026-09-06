@@ -262,4 +262,89 @@ void main() {
       expect(gradeAdjustedPaceSecPerKm(track), isNull);
     });
   });
+
+  group('non-finite inputs', () {
+    test('a non-finite coordinate never throws out of a getter', () {
+      // The signature is `int?`. `segHoriz` goes NaN on a bad fix,
+      // `NaN < minSegmentM` is false so the walk enters the body, and the old
+      // `adjDistM <= 0` guard is false for NaN — so `.round()` was called on a
+      // non-finite double, which is an UnsupportedError, raised from inside a
+      // widget build. The web twin returned NaN out of a `number | null`.
+      final track = [
+        Waypoint(
+          lat: 51.5,
+          lng: -0.1,
+          elevationMetres: 10,
+          timestamp: DateTime.utc(2026, 1, 1),
+        ),
+        Waypoint(
+          lat: double.nan,
+          lng: -0.1,
+          elevationMetres: 20,
+          timestamp: DateTime.utc(2026, 1, 1, 0, 5),
+        ),
+        Waypoint(
+          lat: 51.5,
+          lng: -0.09,
+          elevationMetres: 30,
+          timestamp: DateTime.utc(2026, 1, 1, 0, 10),
+        ),
+      ];
+      final gap = gradeAdjustedPaceSecPerKm(track);
+      expect(gap == null || gap.isFinite, isTrue);
+    });
+
+    test('one bad fix does not erase the GAP of the run around it', () {
+      // The durable half. A single unusable segment is skipped the way a
+      // segment with no timestamps already is, rather than poisoning the
+      // accumulator and discarding every good segment in a three-hour ultra.
+      final good = gradedTrack(
+        points: 41,
+        stepM: minSegmentM * 1.5,
+        stepS: 12,
+        gradePct: 5,
+      );
+      final clean = gradeAdjustedPaceSecPerKm(good);
+      expect(clean, isNotNull);
+
+      final spoiled = List<Waypoint>.from(good);
+      spoiled[20] = Waypoint(
+        lat: double.infinity,
+        lng: good[20].lng,
+        elevationMetres: good[20].elevationMetres,
+        timestamp: good[20].timestamp,
+      );
+      final withBadFix = gradeAdjustedPaceSecPerKm(spoiled);
+      expect(withBadFix, isNotNull,
+          reason: 'one bad fix must not erase the whole run');
+      expect(
+        (withBadFix! - clean!).abs() < clean * 0.1,
+        isTrue,
+        reason: 'a single skipped segment should barely move GAP: '
+            '\$clean -> \$withBadFix',
+      );
+    });
+
+    test('a non-finite altitude is not a measured grade', () {
+      // The other way in: `be - ae` is NaN, `gradeFactor` clamps neither bound
+      // of a NaN, and the Minetti fit of NaN is NaN. The segment is skipped,
+      // so it also does not count as having SEEN elevation.
+      final base = gradedTrack(
+        points: 3,
+        stepM: minSegmentM * 1.5,
+        stepS: 12,
+        gradePct: 0,
+      );
+      final track = [
+        for (final w in base)
+          Waypoint(
+            lat: w.lat,
+            lng: w.lng,
+            elevationMetres: double.nan,
+            timestamp: w.timestamp,
+          ),
+      ];
+      expect(gradeAdjustedPaceSecPerKm(track), isNull);
+    });
+  });
 }
