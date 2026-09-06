@@ -26406,3 +26406,169 @@ That is the inversion. An absent secret is what a developer produces; an empty o
 **The suite contained both halves and each passed, because each exercised a different function.** `UniversalSettingsTest` asserted that a stored `80` parses to null, and forty lines later that `maxHrBpm = 80` yields cutoffs ending at 80. Neither test is wrong about the function it calls. What was missing is any test that the two agree — which is what a shared constant is for, and why the parse now reads `MAX_HR_BPM_RANGE` rather than a literal. The sanitisation test moved its out-of-range sample to 40, and a new test walks both ends of the shared range plus one either side.
 
 **Verification: host-run.** Restoring the narrow literal fails the new test; the full 752-test Gradle unit suite is green. The web and Dart rails were read directly to confirm both still say 80, so the three now state one number. No watch was involved.
+
+## 1314. The last two twin-claim forms are read, and they were never two mechanisms — the live defect sat in their intersection
+
+[§ 1243](#1243-check_twin_claims-reads-the-twin-claims-a-source-file-makes-not-the-ones-that-happen-to-sit-at-offset-zero) closed three of the five ways `check_twin_claims` could miss a
+declaration and filed the other two, each priced on its own. The filing was
+wrong in both halves, and wrong in the same direction.
+
+**Form four, a RELATIVELY-named counterpart.** Eleven of them sit in headers.
+Measured, all eleven resolve to exactly one file by suffix match against the
+source roots, six are already registered pairs and five are claims no registry
+could carry — so widening buys **zero** new pairs from the header alone, not the
+two the filing estimated. What it buys instead is the future: a header written
+this way is now READ, and the form is common enough that eleven of the tree's
+190 declarations use it.
+
+**Form five, a claim below the file's first statement.** The filing rated this
+"false NEGATIVES only" and low value. Measured over every comment in every
+source file, 14 anchored declarations sit outside the header, of which ten are
+member-level sentences ("Mirrors `core/data.ts:createClub`") that are claims
+about one call and not about a module. § 1243's pin — a claim 300 lines down is
+not a header — is right, and reading them all as declarations would have added
+six non-pairs to a register.
+
+**But the two forms intersect, and that is where the defect was.**
+`off_route_flag.dart` and `weigh_in_flag.dart` name their counterparts
+relatively AND put the claim under a documented top-level `const`, so each was
+invisible twice over; neither registry carried either pair (§ 1315). Pricing the
+two mechanisms separately is what hid them: each alone looked like a false
+negative over already-registered pairs.
+
+**What changed.** The relative form is resolved by unique suffix match, with an
+ambiguous or unresolvable suffix reported rather than guessed at — backticks
+REQUIRED for this form only, because dropping them lets the tail of an
+already-matched anchored path match as a second counterpart
+(`apps/mobile_android/lib/recurrence.dart` yields `e.dart`), which produced ten
+phantom declarations. `headerComment` steps over a documented top-level
+CONSTANT, which is data rather than the module's behaviour and is exactly what
+the three deploy-gate modules put between their imports and their doc block; a
+FUNCTION still ends the header, so § 1243's pin holds and its test still passes.
+Property 1 — the counterpart exists — is now checked over every comment block in
+the file, since a dangling path is dangling wherever it is written and no
+resolution guessing is involved; registration stays header-scoped for the reason
+above. The blocks are kept SEPARATE rather than folded into one string: a verb
+ending one block and a path opening the next would otherwise read as a
+declaration neither of them makes, which the guard's own suite now pins.
+
+Census 106 → 167 (§ 1243) → **190**, floor raised 155 → 178. Mutation-tested by
+reverting each change: disabling the relative reader drops the census to 174 and
+fails the floor plus 5 unit cases; reverting the constant step fails the case
+written for it; both were verified to fail before being restored.
+
+## 1315. `off_route_flag` and `weigh_in_flag` declared twins in their own headers and sat in neither registry, and their flag names are not the pair those headers claim
+
+Two live instances of the § 641 class — a pair whose divergence nothing can
+detect while its own header reads as though it is covered — found by § 1314's
+widened reader. Both are the same shape as `adaptive_fitness_flag`, which
+[§ 1244](#1244-eleven-existing-tsdart-pairs-registered-four-twin-claims-reworded-because-they-were-not-pairs) registered a round earlier: a thin fail-closed binding of a deploy flag,
+kept deliberately OUT of the feature's own parity pair so the logic and its env
+binding move independently, both halves delegating the parse to `env_flag`. Both
+are now in CLAUDE.md's lockstep bullet and the syncer table.
+
+Neither has a Dart mirror suite and `off_route_flag` has none on either side, so
+the rows say so rather than naming a file that does not exist. That is a smaller
+debt than the one being closed: an unregistered pair is invisible to the only
+automated divergence detector this repo has, while an unsuited registered pair
+is merely untested.
+
+**And a fact the registration surfaced that neither header stated correctly.**
+The three gates were written to one convention — mobile drops the web-only
+`PUBLIC_` prefix — and two of them follow it. `weigh_in_flag` does not: web reads
+`PUBLIC_WEIGH_IN_ENABLED`, mobile reads `WEIGH_IN_GATE`, so the STEMS differ and
+an operator who has set one has not set the other. The Dart header says "Web
+spells the same flag `PUBLIC_WEIGH_IN_GATE`", which names a variable that exists
+nowhere in the repo — measured against `.env.example` on both sides, both
+source files, and the web guard test that pins the web name. The syncer row and
+the CLAUDE.md entry now state the real pair of names; correcting the header
+belongs to whoever owns `apps/mobile_android/lib`, and is filed.
+
+## 1316. A judgement that two files are NOT a pair is registered with the measurement that would flip it, not recorded by rewording a header
+
+§ 1244 answered "is this a lockstep pair?" with NO for four module pairs and
+recorded each answer by rewording the header; § 1243's `auth_gates` entry was
+closed the same way a round later. The rewording is correct — a header that
+overstates a relationship sends the next reader to the wrong place — but it
+leaves the judgement as prose that nothing re-derives. If `strava.dart` grows
+the native OAuth callback its own header anticipates, or `revenuecat.dart` and
+its web counterpart converge on a shared entitlement shape, the honest answer
+flips and only a reader notices.
+
+`NOT_PAIRS` in `check_twin_claims.mjs` is the register, in the shape
+`UNREGISTERED_DEFINER_RELATIONS` uses (§ 1273): a declared list, each entry
+carrying the two paths and the reason, which fails when it goes stale. Ten
+entries — § 1244's four, `auth_gates`, and five more the widened reader surfaced
+(a screen, a 12,000-line data module, render glue whose exclusion CLAUDE.md
+already states, a widget naming the module behind it, and a header naming the
+pair it DRIVES rather than a second half of itself).
+
+**The staleness test is a measurement, not a restatement.** Each entry records
+the set of top-level public names BOTH files declare — TypeScript's `export`ed
+ones, Dart's every top-level declaration not prefixed `_` — and the guard
+re-measures it on every run, comparing as an exact set. Growth is the
+convergence the entry exists to catch. Shrinkage is how a symbol reader that had
+gone blind would present itself, and is therefore also a failure; so is either
+file disappearing, and so is the pair turning up in a syncer row. An entry naming
+a file with NO public surface at all fails outright, because every entry would
+then measure an empty shared set and pass.
+
+**A shared name is not evidence of a pair, and the register says so.** The three
+deploy-gate pairs of § 1315 share NOTHING — web `isWeighInEnabled` against Dart
+`weighInGate` — and are registered pairs regardless, while `strava` shares three
+function names across three genuinely different implementations (`crypto.randomUUID`
+against 16 bytes of `Random.secure` hex; a redirect URI derived from the page
+origin against one passed in for a custom-scheme callback). The set is a change
+detector for a decision a person made, not a classifier. `strava` carries the
+widest shared surface of the ten and is named in its own entry as the one to
+re-judge first.
+
+Mutation-tested against the real tree: dropping one name from `strava`'s recorded
+set fails with the measured set printed beside the recorded one, and the four
+synthetic directions (growth, shrinkage, a missing file, a since-registered pair)
+each fail in the suite.
+
+## 1317. Reading whether a header NEGATES its twin claim was built, measured, and removed — the register answers both directions without reading the wording
+
+The first cut of § 1314's reader classified a NEGATED declaration —
+`gym_session_draft.dart` opens with "Not a twin of web's
+`gym_session_draft.ts`" — so the guard would neither read it as a pair claim
+(which accuses a correct header) nor drop it silently (which re-creates § 1316's
+residue). It worked on that file and was then measured against the rest of the
+tree, where it fails for a reason no amount of tuning fixes: **negation is not
+positional.** `rate_limit_message.dart` puts "is NOT part of the enforced
+lockstep" two clauses AFTER the path it names, and `gym_session_draft.dart` puts
+"Not a" immediately before the verb. A window that looks backwards from the verb
+reads one honest header and accuses the other; one that looks both ways reaches
+into sentences about something else.
+
+The rule that replaced it reads no wording at all: **every twin-shaped claim
+resolves either to a registered pair or to a NOT_PAIRS entry.** A header that
+denies a pair and a header that overstates one land in the same place — the
+register, where the judgement is written down once, carries its reason, and is
+re-measured. Four headers that read as declarations to the widened reader are
+correct English about relationships the registries cannot carry
+(`password_change.ts` names the screen its real Dart twin DRIVES;
+`this_week_strip.dart` names `current_week.dart`'s pair rather than its own),
+and under this rule none of them has to be reworded to satisfy a guard.
+
+The cost is stated rather than hidden: the guard no longer objects if a header
+reworded to CLAIM a pair sits over a NOT_PAIRS entry that denies one. Policing
+that would mean policing the verb, which is what was measured and rejected here.
+
+## 1318. Registration wants both halves in the same syncer row; the membership test that preceded it could not tell one pair from two
+
+`check_twin_claims` asked whether both files appear anywhere in the syncer
+table's two source columns, over the flattened union of every row. Its own error
+message said "no row of the shared-library-syncer table carries both files",
+which is the property that matters and is not the property it checked: two files
+each registered against some THIRD module are two pairs, not one, and the union
+test passes them.
+
+Nothing in the tree was in that state, so this is a latent hole closed rather
+than a defect found — but it is the hole a rename lands in. Moving a Dart half
+onto a new row while the old row keeps the web half leaves both paths in the
+union and the declaration reading as covered, which is precisely the § 641
+failure the guard exists to catch. The check is now per row, mutation-tested by
+splitting `off_route_flag`'s row across two decoy partners: the guard reports
+both resulting declarations as uncarried, where the union test reported nothing.
