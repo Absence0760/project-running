@@ -145,8 +145,10 @@ function scannedSources(dir: string, out: string[] = []): string[] {
 function seedsStorageBackedRun(text: string): boolean {
 	for (const helper of UPLOADERS) {
 		const call = new RegExp(`\\b${helper}\\s*\\(`, 'g');
-		let match: RegExpExecArray | null;
-		while ((match = call.exec(text))) {
+		// The match object is never read -- `exec` advances `lastIndex`, which is
+		// what the argument scan below walks from -- so binding it would be a
+		// useless assignment.
+		while (call.exec(text) !== null) {
 			let depth = 1;
 			let i = call.lastIndex;
 			while (i < text.length && depth > 0) {
