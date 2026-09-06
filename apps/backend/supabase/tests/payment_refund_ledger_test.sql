@@ -25,7 +25,7 @@
 -- donations_status_lock_test fail on a workstation CLI image (§ 799).
 
 begin;
-select plan(23);
+select plan(25);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -209,6 +209,17 @@ select lives_ok(
        where stripe_refund_id = 're_pr_failed' $$,
   'a terminal status can still be replaced by another terminal one'
 );
+
+-- The positive control has to be able to FAIL, and `lives_ok` alone cannot:
+-- the latch rewrites `new.status` rather than raising, so a latch widened to
+-- hold EVERY status would leave this update succeeding with the row unmoved
+-- and the control still green (decisions 1372).
+select is(
+  (select status from payment_refunds where stripe_refund_id = 're_pr_failed'),
+  'succeeded',
+  'the terminal replacement actually landed -- the latch did not silently hold'
+);
+
 update payment_refunds set status = 'failed', failure_reason = 'insufficient_funds'
   where stripe_refund_id = 're_pr_failed';
 
@@ -318,6 +329,14 @@ select lives_ok(
   $$ update payment_refunds set status = 'canceled'
        where stripe_refund_id = 're_pr_failed' $$,
   'the service role (the stripe-events webhook) can move a refund''s status'
+);
+
+-- MOVE, again read back rather than assumed: the write surviving is the role
+-- claim, the status changing is the latch's.
+select is(
+  (select status from payment_refunds where stripe_refund_id = 're_pr_failed'),
+  'canceled',
+  'the service role''s write moved the status, it was not latched back'
 );
 
 -- The privilege the sole writer depends on, STATED rather than inherited.

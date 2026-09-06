@@ -26,7 +26,7 @@
 -- donations_status_lock_test fail on a workstation CLI image (decisions § 799).
 
 begin;
-select plan(29);
+select plan(30);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -148,6 +148,18 @@ select lives_ok(
              '4efd0000-0000-0000-0000-000000000003', '2026-07-01 18:00+00', 'going',
              '4efd0000-0000-0000-0000-0000000000a2') $$,
   'a partially_refunded order still seats its attendee (20270522_001 stands)'
+);
+
+-- SEATS it, which is a claim about the stored status and not about the write
+-- surviving. `enforce_event_capacity` is a BEFORE trigger that may rewrite a
+-- `going` row to `waitlisted`, and the row count below cannot tell the two
+-- apart -- a waitlisted attendee is a row, and is not a seat (decisions 1372).
+select is(
+  (select status from event_attendees
+    where event_id = '4efd0000-0000-0000-0000-0000000000e1'
+      and user_id = '4efd0000-0000-0000-0000-000000000003'),
+  'going',
+  'the partially_refunded buyer holds a going seat, not a waitlist place'
 );
 
 select is(

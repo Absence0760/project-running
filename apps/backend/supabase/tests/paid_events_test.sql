@@ -11,7 +11,7 @@
 --     unaffected.
 
 begin;
-select plan(18);
+select plan(20);
 
 -- ── Fixtures: host (also club owner), buyer, stranger ──
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -115,6 +115,20 @@ select lives_ok(
   'going on a priced event with a matching paid order succeeds'
 );
 
+-- ...and the seat it takes is a SEAT. `enforce_event_capacity` is a BEFORE
+-- trigger that may rewrite a `going` row to `waitlisted`, so the `lives_ok`
+-- above cannot tell a paid attendee who is IN from one silently moved to the
+-- waitlist: both store, and both leave the money path reading as healthy. The
+-- stored status is therefore read back rather than assumed (decisions 1372).
+select is(
+  (select status from event_attendees
+    where event_id = 'cccc1111-0000-0000-0000-000000000001'
+      and user_id = 'aaaa1111-0000-0000-0000-000000000002'
+      and instance_start = '2026-07-01 18:00+00'),
+  'going',
+  'the paid seat is going, not silently waitlisted'
+);
+
 -- A free event needs no order.
 select lives_ok(
   $$ insert into event_attendees (event_id, user_id, instance_start, status)
@@ -164,6 +178,15 @@ select lives_ok(
         and user_id = 'aaaa1111-0000-0000-0000-000000000002'
         and instance_start = '2026-07-01 18:00+00' $$,
   'a partially refunded order still backs a re-asserted going seat'
+);
+
+select is(
+  (select status from event_attendees
+    where event_id = 'cccc1111-0000-0000-0000-000000000001'
+      and user_id = 'aaaa1111-0000-0000-0000-000000000002'
+      and instance_start = '2026-07-01 18:00+00'),
+  'going',
+  'the re-asserted seat is still going after the partial refund'
 );
 
 update event_orders set status = 'paid'
