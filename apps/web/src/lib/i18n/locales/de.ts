@@ -4282,6 +4282,7 @@ export const messages = {
 	"gym.catalogue.searchPlaceholder": "Übungen suchen",
 	"gym.catalogue.categoryLabel": "Kategorie",
 	"gym.catalogue.empty": "Keine Übung passt.",
+	"gym.catalogue.otherCategory": "„{name}“ ist bereits im Katalog, unter {category}.",
 	"gym.catalogue.customBadge": "Eigene",
 	"gym.catalogue.create": "„{name}“ als eigene Übung hinzufügen",
 	"gym.catalogue.createFailed": "Übung konnte nicht hinzugefügt werden.",

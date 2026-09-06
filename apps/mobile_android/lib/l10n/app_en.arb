@@ -13612,6 +13612,18 @@
   "gymCatalogueSearchPlaceholder": "Search exercises",
   "gymCatalogueCategoryLabel": "Category",
   "gymCatalogueEmpty": "No exercises match.",
+  "gymCatalogueOtherCategory": "“{name}” is already in the catalogue, under {category}.",
+  "@gymCatalogueOtherCategory": {
+    "description": "Shown when the typed name matches a catalogue entry the category filter is hiding",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "category": {
+        "type": "String"
+      }
+    }
+  },
   "gymCatalogueCustomBadge": "Custom",
   "gymCatalogueCreate": "Add “{name}” as a custom exercise",
   "@gymCatalogueCreate": {

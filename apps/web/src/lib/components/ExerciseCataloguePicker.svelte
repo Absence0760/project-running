@@ -2,7 +2,7 @@
 	import { untrack } from 'svelte';
 	import type { Exercise, ExerciseCategory } from '$lib/types';
 	import { createCustomExercise } from '$lib/core/data';
-	import { normaliseExerciseName } from '$lib/gym/gym_prs';
+	import { cataloguePickerView } from './exercise_catalogue_picker';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 
@@ -41,25 +41,15 @@
 	// without waiting for the host to reload the catalogue from the server.
 	let entries = $state<Exercise[]>(untrack(() => [...catalogue]));
 
-	// Both sides of the match fold through `normaliseExerciseName`, the one
-	// derivation of the exercise grouping key (§ 1175), as the mobile picker
-	// already does. `trim().toLowerCase()` matched strictly fewer names, and
-	// the shortfall was not merely a miss: `hasExact` below has always folded
-	// canonically, so an entry holding a U+00A0 or a U+0130 was invisible to
-	// the naive filter AND suppressed the create affordance the empty state
-	// exists to offer — the exercise could neither be found nor added
-	// (§ 1276).
-	//
-	// The sort stays on `localeCompare` over the DISPLAY name: ordering a
-	// human-facing list is not keying it, and a code-unit compare over folded
-	// keys files every accented custom after "z".
-	const filtered = $derived.by(() => {
-		const q = normaliseExerciseName(query);
-		return entries
-			.filter((e) => category === 'all' || e.category === category)
-			.filter((e) => q === '' || normaliseExerciseName(e.name).includes(q))
-			.sort((a, b) => a.name.localeCompare(b.name));
-	});
+	// The picker's three states — a result list, an explanation, a create
+	// affordance — are decided by `cataloguePickerView`, a pure module the unit
+	// suite can hold. They used to be three `$derived` expressions here, which
+	// is why the fix that closed § 1276's dead end shipped with no behavioural
+	// pin (§ 1278) and why the residual half of that dead end survived it: the
+	// exact-match test scanned the whole catalogue while the list also applied
+	// the category filter, so an exact name in another category rendered
+	// "No exercises match." beside no create button and no explanation.
+	const view = $derived(cataloguePickerView(entries, { query, category }));
 
 	function categoryLabel(c: ExerciseCategory): string {
 		return t(`gym.catalogue.category.${c}`);
@@ -67,15 +57,8 @@
 
 	let creating = $state(false);
 
-	// Show the create-custom affordance only when the search has no exact match
-	// by normalised key and the query is non-empty — the picker becomes the
-	// "can't find it? add it" path without a separate form.
 	const trimmed = $derived(query.trim());
-	const hasExact = $derived.by(() => {
-		const key = normaliseExerciseName(trimmed);
-		return key !== '' && entries.some((e) => normaliseExerciseName(e.name) === key);
-	});
-	const canCreate = $derived(trimmed !== '' && !hasExact && !creating);
+	const canCreate = $derived(view.canCreate && !creating);
 
 	async function create() {
 		const name = trimmed;
@@ -119,11 +102,9 @@
 		</label>
 	</div>
 
-	{#if filtered.length === 0 && !canCreate}
-		<p class="empty">{t('gym.catalogue.empty')}</p>
-	{:else}
+	{#if view.matches.length > 0}
 		<ul class="results" data-testid="catalogue-results">
-			{#each filtered as e (e.id)}
+			{#each view.matches as e (e.id)}
 				<li>
 					<button type="button" class="result" onclick={() => onpick(e)} data-testid="catalogue-pick">
 						<span class="name">{e.name}</span>
@@ -137,6 +118,15 @@
 				</li>
 			{/each}
 		</ul>
+	{:else if view.hiddenExact}
+		<p class="empty" data-testid="catalogue-other-category">
+			{t('gym.catalogue.otherCategory', {
+				name: view.hiddenExact.name,
+				category: categoryLabel(view.hiddenExact.category),
+			})}
+		</p>
+	{:else if !canCreate}
+		<p class="empty">{t('gym.catalogue.empty')}</p>
 	{/if}
 
 	{#if canCreate}
