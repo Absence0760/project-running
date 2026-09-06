@@ -33,10 +33,19 @@ import { fold } from '../segments/catalogue_browse';
 export const CLUB_SLUG_MAX_LEN = 48;
 
 /**
+ * The slug a caller substitutes when the fold leaves nothing — a club named
+ * entirely in Cyrillic, Greek, Hebrew, Arabic or CJK has no `[a-z0-9]` to
+ * build one from, and refusing to create it is not an option either client
+ * should take. It reaches `clubs.slug` and becomes a public URL, so it belongs
+ * to the pair rather than being written out at each call site; the create
+ * paths' collision retry is what keeps the second such club distinguishable.
+ */
+export const CLUB_SLUG_FALLBACK = 'club';
+
+/**
  * `name` as a slug, or the empty string when the name carries no character
- * that survives the fold. Empty is a real answer both callers act on: the web
- * substitutes a literal `club`, the phone refuses the save and says the name
- * has no usable characters.
+ * that survives the fold. Empty is a real answer, not a failure: both callers
+ * substitute `CLUB_SLUG_FALLBACK` for it.
  */
 export function clubSlug(name: string): string {
 	return (

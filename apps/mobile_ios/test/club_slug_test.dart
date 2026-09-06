@@ -57,10 +57,21 @@ void main() {
 
   test('a script the fold does not romanise yields the empty string', () {
     // Folding is accent + case only, so a name written entirely outside
-    // [a-z0-9] has no slug — the same answer on both platforms, which is what
-    // keeps the phone's "no usable characters" refusal honest.
+    // [a-z0-9] has no slug. Empty is the signal to substitute the fallback,
+    // NOT to refuse the club — see the next case.
     expect(clubSlug('Ελλάδα'), '');
     expect(clubSlug('Бегуны'), '');
+    expect(clubSlug('東京ランナーズ'), '');
+  });
+
+  test('the fallback slug is one shared literal, not one per client', () {
+    // It reaches `clubs.slug` and becomes a public URL, so two hand-written
+    // copies is the same class of defect as two hand-written derivations. A
+    // club named entirely in a non-Latin script gets it, and the create
+    // paths' collision retry distinguishes the second such club.
+    expect(kClubSlugFallback, 'club');
+    final derived = clubSlug('Бегуны Москвы');
+    expect(derived.isEmpty ? kClubSlugFallback : derived, 'club');
   });
 
   test('the slug is capped at kClubSlugMaxLen', () {

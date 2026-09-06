@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:ui_kit/ui_kit.dart' show ChoiceChipRow;
 
+import '../lib/club_slug.dart';
 import '../lib/social_service.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/club_form_sheet.dart';
@@ -317,7 +318,9 @@ void main() {
 
     testWidgets('a name with no alphanumerics surfaces the slug error',
         (tester) async {
-      // "!!!" slugifies to empty → friendly inline error, no API call.
+      // "!!!" carries no letter or digit in ANY script → friendly inline
+      // error, no API call. A name that merely has no ASCII (a Cyrillic one,
+      // say) is creatable — see the non-Latin case above.
       final fake = _CapturingSocialService();
       await _openSheet(tester, social: fake);
       await tester.enterText(find.widgetWithText(TextField, 'Name'), '!!!');
@@ -375,6 +378,25 @@ void main() {
 
       expect(fake.createCalled, isTrue);
       expect(fake.capturedSlug, 'izmir-kosu-kulubu');
+    });
+
+    testWidgets('a club named in a non-Latin script is creatable, under the '
+        'shared fallback slug', (tester) async {
+      // The refusal used to test the SLUG for emptiness, so every name written
+      // entirely in Cyrillic, Greek, Hebrew, Arabic or CJK was rejected on the
+      // phone — with a message claiming the name had no letter or digit, about
+      // a name made entirely of letters — while the web created it under the
+      // fallback slug (decisions § 1281).
+      final fake = _CapturingSocialService();
+      await _openSheet(tester, social: fake);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Name'), 'Бегуны Москвы');
+      await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+      await tester.pumpAndSettle();
+
+      expect(fake.createCalled, isTrue);
+      expect(fake.capturedName, 'Бегуны Москвы');
+      expect(fake.capturedSlug, kClubSlugFallback);
     });
 
     testWidgets(

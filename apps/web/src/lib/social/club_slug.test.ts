@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 
-import { clubSlug, CLUB_SLUG_MAX_LEN } from './club_slug';
+import { clubSlug, CLUB_SLUG_FALLBACK, CLUB_SLUG_MAX_LEN } from './club_slug';
 
 test('lower-cases and hyphenates a plain name', () => {
 	assert.equal(clubSlug('Brighton Road Runners'), 'brighton-road-runners');
@@ -55,10 +55,20 @@ test('a name with no character that survives the fold yields the empty string', 
 
 test('a script the fold does not romanise yields the empty string', () => {
 	// Folding is accent + case only, so a name written entirely outside
-	// [a-z0-9] has no slug — the same answer on both platforms, which is what
-	// keeps the phone's "no usable characters" refusal honest.
+	// [a-z0-9] has no slug. Empty is the signal to substitute the fallback,
+	// NOT to refuse the club — see the next case.
 	assert.equal(clubSlug('Ελλάδα'), '');
 	assert.equal(clubSlug('Бегуны'), '');
+	assert.equal(clubSlug('東京ランナーズ'), '');
+});
+
+test('the fallback slug is one shared literal, not one per client', () => {
+	// It reaches `clubs.slug` and becomes a public URL, so two hand-written
+	// copies is the same class of defect as two hand-written derivations. A
+	// club named entirely in a non-Latin script gets it, and the create
+	// paths' collision retry distinguishes the second such club.
+	assert.equal(CLUB_SLUG_FALLBACK, 'club');
+	assert.equal(clubSlug('Бегуны Москвы') || CLUB_SLUG_FALLBACK, 'club');
 });
 
 test('the slug is capped at CLUB_SLUG_MAX_LEN', () => {

@@ -19,7 +19,7 @@ import { challengesToRecomputeForRun } from '../social/challenge_progress';
 import { mergeMyProgress } from '../social/challenge_list';
 import { selectEffectivePricing } from '../social/event_instance';
 import { planHeadCopyFields, planWeekCopyRows, planWorkoutCopyRows } from './plan_copy';
-import { clubSlug } from '../social/club_slug';
+import { clubSlug, CLUB_SLUG_FALLBACK } from '../social/club_slug';
 import type {
 	Run,
 	Route,
@@ -2710,7 +2710,7 @@ export async function createClub(input: {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
 
-	const baseSlug = clubSlug(input.name) || 'club';
+	const baseSlug = clubSlug(input.name) || CLUB_SLUG_FALLBACK;
 	const inviteToken = input.join_policy === 'invite' ? genToken() : null;
 	// Retry with a short random suffix up to 3 times if the slug is taken —
 	// simpler than a SQL trigger and acceptable for the expected volume.

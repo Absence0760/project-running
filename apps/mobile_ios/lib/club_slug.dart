@@ -39,10 +39,18 @@ const int kClubSlugMaxLen = 48;
 final RegExp _nonSlug = RegExp(r'[^a-z0-9]+');
 final RegExp _edgeHyphen = RegExp(r'^-|-$');
 
+/// The slug a caller substitutes when the fold leaves nothing — a club named
+/// entirely in Cyrillic, Greek, Hebrew, Arabic or CJK has no `[a-z0-9]` to
+/// build one from, and refusing to create it is not an option either client
+/// should take. It reaches `clubs.slug` and becomes a public URL, so it
+/// belongs to the pair rather than being written out at each call site; the
+/// create paths' collision retry is what keeps the second such club
+/// distinguishable.
+const String kClubSlugFallback = 'club';
+
 /// [name] as a slug, or the empty string when the name carries no character
-/// that survives the fold. Empty is a real answer both callers act on: the
-/// phone refuses the save and says the name has no usable characters, the web
-/// substitutes a literal `club`.
+/// that survives the fold. Empty is a real answer, not a failure: both callers
+/// substitute [kClubSlugFallback] for it.
 String clubSlug(String name) {
   final stripped =
       fold(name).replaceAll(_nonSlug, '-').replaceAll(_edgeHyphen, '');

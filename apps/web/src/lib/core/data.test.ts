@@ -1499,8 +1499,13 @@ test('the club slug is derived by the shared helper, never re-spelled here', () 
 	const source = stripComments(read('src/lib/core/data.ts'));
 	assert.match(
 		source,
-		/import \{ clubSlug \} from '\.\.\/social\/club_slug'/,
+		/import \{[^}]*\bclubSlug\b[^}]*\} from '\.\.\/social\/club_slug'/,
 		'core/data.ts must import the shared clubSlug derivation.',
+	);
+	assert.match(
+		source,
+		/clubSlug\(input\.name\) \|\| CLUB_SLUG_FALLBACK/,
+		'the empty-slug substitute is the shared literal, not a copy of it here.',
 	);
 	assert.doesNotMatch(
 		source,
