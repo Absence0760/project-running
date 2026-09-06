@@ -7,7 +7,6 @@
 	import { formatISO } from '$lib/training/training';
 	import { m } from '$lib/i18n/store.svelte';
 	import PeriodSummary from '$lib/components/PeriodSummary.svelte';
-	import type { Run } from '$lib/types';
 
 	type PeriodType = 'week' | 'month' | 'all';
 
