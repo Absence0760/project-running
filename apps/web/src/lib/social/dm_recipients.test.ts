@@ -121,3 +121,23 @@ test('filtering does not mutate the list it was given', () => {
 	filterDmRecipients(all, 'ana');
 	assert.equal(all.length, 2);
 });
+
+test('filterDmRecipients: the search is not sigma-sensitive', () => {
+	// A Greek display name lowercases to a FINAL sigma (ς) at the end of a
+	// word, while the keyboard a reader types the query on produces the medial
+	// σ. The private fold this module used to carry skipped the collapse that
+	// reconciles them, so `οδοσ` did not reach `ΟΔΟΣ` — the one sigma-sensitive
+	// search key left in the product (decisions § 1340).
+	const list = [
+		{ id: 'a', displayName: 'ΟΔΟΣ', avatarUrl: null, relation: 'follower' as const }
+	];
+	assert.equal(filterDmRecipients(list, 'οδοσ').length, 1);
+	assert.equal(filterDmRecipients(list, 'οδος').length, 1);
+});
+
+test('filterDmRecipients: the search folds accents, like every other search key', () => {
+	const list = [
+		{ id: 'a', displayName: 'Zoë Müller', avatarUrl: null, relation: 'following' as const }
+	];
+	assert.equal(filterDmRecipients(list, 'zoe muller').length, 1);
+});
