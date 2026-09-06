@@ -25,6 +25,7 @@
 	import { formatDistance, getUnit } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import type { Route, RecurrenceFreq, Weekday, EventCategory, RefundPolicy, Event as ClubEvent } from '$lib/types';
+	import type { RouteListItem } from '$lib/routes/route_list_columns';
 
 	// Conversion factor for the unit label / pace target. The form
 	// keeps its working value in the user's preferred unit (km or mi)
@@ -61,7 +62,7 @@
 	// public, matching the clubs.is_public default).
 	let showVisibilityToggle = $derived(clubIsPublic !== false);
 
-	let myRoutes = $state<Route[]>([]);
+	let myRoutes = $state<RouteListItem[]>([]);
 	let clubRoutes = $state<Route[]>([]);
 
 	let category = $state<EventCategory>(untrack(() => existing?.category ?? 'run'));

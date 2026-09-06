@@ -51,6 +51,7 @@
 	import RouteTrackPreview from '$lib/components/RouteTrackPreview.svelte';
 	import type { GymRoutineSummary } from '$lib/core/data';
 	import type { Route, TrainingPlan, SessionPlan } from '$lib/types';
+	import type { RouteListItem } from '$lib/routes/route_list_columns';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import EventEditor from '$lib/components/EventEditor.svelte';
@@ -112,7 +113,7 @@
 		}
 	}
 	let clubRoutes = $state<Route[]>([]);
-	let transferableRoutes = $state<Route[]>([]);
+	let transferableRoutes = $state<RouteListItem[]>([]);
 	let showTransferModal = $state(false);
 	let showEditModal = $state(false);
 	let transferRouteId = $state('');
