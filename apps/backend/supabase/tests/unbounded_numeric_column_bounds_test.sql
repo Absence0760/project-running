@@ -211,9 +211,15 @@ select throws_ok(
   '23514', null,
   'a NaN route distance is rejected — it is the routes list sort key'
 );
+-- The two accepted inserts below carry an explicit `computed_at` on different
+-- days: `fitness_snapshots_user_day_uniq` (20270710000002) holds one snapshot
+-- per runner per UTC day, and both of these are the same runner. The subject
+-- here is the column's own bounds, so the day is fixture bookkeeping — but it
+-- has to be there, or the second insert fails on a constraint that is not
+-- what this file is asserting.
 select lives_ok(
-  $$ insert into fitness_snapshots (user_id, source, training_stress_bal, vo2_max)
-     values ('d1000000-0000-0000-0000-000000000001', 'client', -25.5, 52) $$,
+  $$ insert into fitness_snapshots (user_id, source, computed_at, training_stress_bal, vo2_max)
+     values ('d1000000-0000-0000-0000-000000000001', 'client', now() - interval '2 days', -25.5, 52) $$,
   'a negative training-stress balance is accepted — a runner mid-build has one'
 );
 select throws_ok(
@@ -229,8 +235,8 @@ select throws_ok(
   'a VO2 max past any recorded human one is rejected'
 );
 select lives_ok(
-  $$ insert into fitness_snapshots (user_id, source, vo2_max)
-     values ('d1000000-0000-0000-0000-000000000001', 'client', 90) $$,
+  $$ insert into fitness_snapshots (user_id, source, computed_at, vo2_max)
+     values ('d1000000-0000-0000-0000-000000000001', 'client', now() - interval '1 day', 90) $$,
   'and the column stays wider than vdotFromRun''s own 90 ceiling, so no shipped writer hits it'
 );
 

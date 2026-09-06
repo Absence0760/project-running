@@ -63,14 +63,22 @@ Confirm it's running with `supabase status`. The gotcha I keep hitting: `supabas
 
 **Reset the database** with `supabase db reset`. This drops and recreates the local DB, replays every migration in `supabase/migrations/`, runs `seed.sql`, and leaves you at a known-good state. Use this between destructive experiments.
 
-## The test user
+## The test users
 
-`seed.sql` provisions exactly one user:
+`seed.sql` provisions three users. `runner@test.com` is the one to sign in as;
+`alex@test.com` and `morgan@test.com` exist so the social surfaces (feed, follows,
+kudos, blocks, club membership) have a second and third party to act as.
 
 - Email: `runner@test.com`
 - Password: `testtest`
-- 12 runs across `app`, `strava`, `parkrun`, `healthkit` sources
-- 5 routes, 2 connected integrations, a profile with `preferred_unit = 'km'`
+- Runs and routes across five `source` values (`app`, `strava`, `parkrun`, `healthkit`, `race`).
+  **No count is stated here on purpose.** `seed.sql` carries a dozen-plus separate
+  `insert into runs` statements — several `insert … select` that fan out a range —
+  each staged for one e2e scenario, so any figure a reader could carry away would be
+  stale by the next spec that needs a row. Re-derive against a reset stack:
+  `psql "$DB_URL" -c "select source, count(*) from runs r join auth.users u on u.id = r.user_id where u.email = 'runner@test.com' group by 1"`
+  (251 runs / 45 routes in total, 225 / 43 of them this user's, measured 2026-09-05).
+- 2 connected integrations, a profile with `preferred_unit = 'km'`
 - Phase 4 multi-modal data: 3 gym workouts (23 sets, progressive overload so PR badges fire), 16 food-log entries spanning today + the prior 6 days, a 4-point body-metrics weight series, and `height_cm` / `date_of_birth` / `gender` + `nutrition_activity_level` / `nutrition_goal` prefs so `/nutrition` macro targets compute. These rows are `now()`-relative (unlike the fixed-date runs) so `/gym` + `/nutrition` stay populated on any reset.
 - Owns **Richmond Run Club** with one club-owned template of each kind so the club's Templates tab is populated: a training plan (`Beginner 5K — Club Plan`, `is_template` + `club_id`, 2 weeks of workouts), a session plan (`Post-Run Recovery Flow`, blocks + items), and a gym routine (`Club Strength — Lower Body`, exercises + planned sets). Fixed ids → idempotent across resets.
 - The active **Richmond Half 2026** training plan (id `a1a1eada-aaaa-…`) is **authored against fixed 2026 seed dates** (start `2026-03-29` .. race `2026-06-20`, 84 days) but a post-insert `DO` block at the end of the plan section **slides the whole window + every `plan_workouts.scheduled_date` forward by a `now()`-relative offset** (today maps to the seeded week-2 Wednesday, day 17 of 83), so the single active plan always covers TODAY with a FUTURE race on every reset — the dashboard plan-hero / `/plans` progressbar / current-week strip stay mid-plan. The shift runs **after** the two `completed_run_id` linkage UPDATEs, so those FKs survive (a pure date shift never touches them). e2e specs that look a row up by its literal seed date (`workout-runner-surfaces`, `workout-edit-intervals`, `calendar`) go through `tests-e2e/fixtures/plan-today.ts` → `seedDateToLive('2026-04-..')` / `liveMonthLabel(...)`, which re-applies the same offset read back off `training_plans.start_date`. If you change the anchor (the `current_date - 17` in seed.sql), nothing else needs editing — the helpers derive the offset live.
@@ -301,6 +309,40 @@ withheld column of a column-locked table must be registered with the reason it
 is withheld, so a column added after a lockdown (deny-by-default, since a
 re-grant is cumulative) or a table-wide `grant select` landing on a locked
 table both fail the pgtap job.
+
+### A lockdown that withholds `authenticated` must reach the `server_only` fixture
+
+`revoke execute ... from public, anon` is the house form (above). When a routine
+should reach no client role at all — the cron and job-queue family, the privacy
+oracles, the derived-cache refreshers, the secret deleters — `authenticated`
+goes on the revoke list too, and the pgtap suite's claim about that lives in the
+`server_only` fixture at the top of
+`apps/backend/supabase/tests/anon_execute_contract_test.sql`. Assertions (5) and
+(6) there are exactly as complete as that list: a routine it omits is a routine
+nothing asserts anything about.
+
+**It is derived now, so you do not edit it by hand — you run the guard and paste
+what it asks for.** `apps/backend/scripts/check_server_only_registry.mjs`
+replays every migration and fails the PR when a routine some migration revokes
+from `authenticated` is missing from the fixture, when a row names a routine no
+migration revokes, or when `keeps_service_role` disagrees with the grant the
+migrations state. It was hand-kept until `20270710` and had drifted to 26 rows
+against a family of 42, two of the missing sixteen sitting in the cron family
+the fixture is the positive control for (decisions § 1233).
+
+The derivation reads the migration TEXT and the pgtap assertions read the
+CATALOGUE, deliberately: a fixture derived from `pg_proc.proacl` would make (5)
+assert that routines without the privilege do not have the privilege.
+`keeps_service_role` comes from the replay for the same reason — on the CI image
+every fresh routine arrives with a `service_role` entry by name, so a `true`
+read off the catalogue there would say nothing.
+
+What the guard cannot demand is a revoke no migration wrote. That half is
+assertions (7) and (8) in the same file: every `public` routine `cron.job`
+schedules must be withheld from both client roles, with the population read off
+the schedule rather than off any list, so a new cron routine whose migration
+forgets `authenticated` fails even though nothing in the repo states it should
+be withheld.
 
 ### Every new function must pin `search_path`
 

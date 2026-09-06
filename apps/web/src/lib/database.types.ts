@@ -1427,6 +1427,7 @@ export type Database = {
           id: string
           notes: string | null
           qualifying_run_count: number
+          snapshot_day: string | null
           source: string
           training_stress_bal: number | null
           user_id: string
@@ -1441,6 +1442,7 @@ export type Database = {
           id?: string
           notes?: string | null
           qualifying_run_count?: number
+          snapshot_day?: string | null
           source?: string
           training_stress_bal?: number | null
           user_id: string
@@ -1455,6 +1457,7 @@ export type Database = {
           id?: string
           notes?: string | null
           qualifying_run_count?: number
+          snapshot_day?: string | null
           source?: string
           training_stress_bal?: number | null
           user_id?: string
@@ -5210,6 +5213,7 @@ export type Database = {
       }
       exercise_fold_case: { Args: { p_name: string }; Returns: string }
       expire_stale_export_jobs: { Args: never; Returns: number }
+      export_retention_overrun: { Args: { p_grace?: string }; Returns: Json }
       fetch_checkpoint_crossings_for_organiser: {
         Args: { p_event_id: string; p_instance_start: string }
         Returns: {
@@ -5261,6 +5265,16 @@ export type Database = {
           reviewed_at: string
           reviewed_by: string
           status: string
+        }[]
+      }
+      find_backlogged_jobs: {
+        Args: { p_queued_after?: string }
+        Returns: {
+          age: string
+          attempts: number
+          id: number
+          kind: string
+          scheduled_at: string
         }[]
       }
       find_failed_jobs: {
@@ -5487,6 +5501,7 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: string
       }
+      jobs_backlog_summary: { Args: { p_queued_after?: string }; Returns: Json }
       jobs_failed_summary: { Args: { p_failed_within?: string }; Returns: Json }
       jobs_stuck_summary: { Args: { p_stuck_after?: string }; Returns: Json }
       join_club_by_token: { Args: { token: string }; Returns: string }
@@ -5500,6 +5515,7 @@ export type Database = {
           id: string
           notes: string | null
           qualifying_run_count: number
+          snapshot_day: string | null
           source: string
           training_stress_bal: number | null
           user_id: string
