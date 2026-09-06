@@ -5728,6 +5728,16 @@ class ApiClient {
     if (r.fastestMarathonS != null) {
       metadata['fastest_marathon_s'] = r.fastestMarathonS;
     }
+    // Total ascent is the one column migration 20270302_001 promoted while
+    // KEEPING its bag key (kRunMirroredMetadataColumns), so writers populate
+    // both and the column is authoritative. Surfacing it was missed when the
+    // stashes above were added, and a `Run` carries no column of its own, so a
+    // row written with only the column reached every Dart reader of the bag —
+    // the recap total, the dashboard card, the run summary index — with no
+    // ascent at all (decisions § 1240).
+    if (r.elevationGainM != null) {
+      metadata[MetadataKeys.elevationM] = r.elevationGainM;
+    }
 
     return Run(
       id: r.id,

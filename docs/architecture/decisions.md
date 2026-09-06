@@ -23969,7 +23969,7 @@ the pair was 6 apart before this change and is now 1, the extra being the
 `recapSnapshotJson` case, which is the direction the pair's registry entry
 already documents.
 
-## 1240. The recap's Dart half cannot read the promoted ascent column, because the seam that surfaces every other promoted column drops that one
+## 1240. The recap's Dart half could not read the promoted ascent column, because the seam that surfaces every other promoted column dropped that one
 
 The filing said `recap.dart` reads the bag key where `recap.ts` reads the
 promoted `runs.elevation_gain_m` column first, and named
@@ -23992,20 +23992,43 @@ webhook), web `createManualRun`, mobile `runRowFromRun`, and `20270302_001`'s
 own backfill — while `parkrun-import`, `race-results-import` and the backup
 restore write neither. The gap opens the moment one writer sets only the column.
 The structural cause is that `run_row_shape_test.dart` guards the WRITE
-direction ("runRowFromRun fills every declared column") and nothing guards the
-read one; the fix and its guard both live in `packages/api_client`, which is
-another lane's tree this round, so the entry stays open with the owner tree
-corrected.
+direction ("runRowFromRun fills every declared column") and nothing guarded the
+read one, so the single omitted line had nothing to fail against.
 
-What did land here is the half that is `recap.dart`'s own. The comment calling
+**Fixed at the seam, which is the only place it can be fixed.** `_runFromRow`
+now stashes `elevation_gain_m` onto `MetadataKeys.elevationM` when present,
+beside the `fastest_*_s` stashes and under the same absent-key rule. The same
+probe now prints `{title, activity_type, is_dnf, elevation_m: 312.5}` and
+`totalElevationM: 312.5`. Patching `recap.dart` was never an option and
+patching only its caller would have left `dashboard_screen.dart`'s today-card
+and `RunSummary.fromRun`'s index entry reading the same absent key. The write
+direction was checked before touching the read one and is not implicated:
+`_runUpsertBody` strips nulls from the upsert body, so a round trip of a
+column-only run could not have cleared the column — the gap was read-side only.
+
+The missing guard is now the read-side twin of the write-side one, and it is
+derived rather than spelled: it builds a row from
+`kRunPromotedMetadataColumns` + `kRunMirroredMetadataColumns`, both of which
+live in `core_models` and neither of which can lose an entry without failing
+the write-side test, then asserts every declared key comes back on the bag
+carrying the column's value. A separate case fails when a newly promoted column
+has no sample row value, so a future promotion cannot be silently skipped
+instead of checked. Five mutations were planted and each caught: the fix
+reverted, the stash made unconditional so an absent column nulls its key, the
+bag copy made to win over the column, a *pre-existing* stash (`fastest_10k_s`)
+deleted — proving the guard is not elevation-specific — and a sample value
+removed, proving the coverage half is live.
+
+`recap.dart`'s own half landed with it. The comment calling
 `metadata.elevation_m` "the canonical key" has not been true since
 `20270302_001` and is precisely the belief under which the seam gap went
-unnoticed; it now names the seam. And `raw is num` admitted a non-finite value
-where the TS half's `Number.isFinite` does not — a NaN in the schemaless bag
-would have summed into the year total and taken every other run's climb with
-it. Not a fix for anything measured reachable (nothing on the phone writes that
-key, and `jsonDecode` cannot produce a NaN), but the two halves of a registered
-pair should not answer the same input differently; pinned, and verified failing
+unnoticed; it now says that reading the bag here is reading the column, and why.
+And `raw is num` admitted a non-finite value where the TS half's
+`Number.isFinite` does not — a NaN in the schemaless bag would have summed into
+the year total and taken every other run's climb with it. Not a fix for
+anything measured reachable (nothing on the phone writes that key, and
+`jsonDecode` cannot produce a NaN), but the two halves of a registered pair
+should not answer the same input differently; pinned, and verified failing
 without the guard.
 
 ## 1241. The relink picker's tie order was Dart's to lose, and the two clients were not even fetching in the same order to lose it from

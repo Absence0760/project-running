@@ -248,11 +248,10 @@ DateTime _currentAnchor(DateTime periodEnd, DateTime now) =>
 ///
 /// Migration `20270302_001` promoted total ascent to `runs.elevation_gain_m`
 /// and the TS half reads that column first, falling back to the bag key. A
-/// `Run` has no column to read: `ApiClient._runFromRow` surfaces
-/// `activity_type`, `is_dnf` and the four `fastest_*_s` back onto the bag but
-/// drops `elevation_gain_m`, so a row carrying only the column arrives here
-/// with no ascent at all. Filed against the seam rather than patched here,
-/// because every Dart reader of the bag key has the same gap.
+/// `Run` has no column to read, so the column-wins rule is applied one layer
+/// down instead: `ApiClient._runFromRow` surfaces `elevation_gain_m` back onto
+/// this key, alongside `activity_type`, `is_dnf` and the four `fastest_*_s`
+/// (decisions § 1240). Reading the bag here is therefore reading the column.
 ///
 /// A non-finite value is no reading, exactly as the TS half's `Number.isFinite`
 /// says: the bag is schemaless and a NaN summed into the year total takes every
