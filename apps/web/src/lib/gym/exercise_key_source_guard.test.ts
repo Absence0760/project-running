@@ -18,7 +18,7 @@ import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
-import { stripComments } from '$lib/core/strip_comments';
+import { stripComments } from '../core/strip_comments';
 
 const SRC = resolve('src');
 
