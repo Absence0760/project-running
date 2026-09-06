@@ -50,18 +50,38 @@ named in `incomplete`; it is never silently dropped, and never counted
 as whole. The CSV and GPX formats carry the same signal in the endpoint's
 JSON response (`count` / `total` / `complete`).
 
-**Row completeness is not column completeness, and the `runs` projection
-is short by seven** (found 2026-09-04, [decisions § 1135](../architecture/decisions.md)).
-Both transports read the run row through a hand-written column list, and
-neither list has been widened as columns were added: `concluded_at`,
-`elevation_gain_m`, `race_listing_id` and the four `fastest_*_s` PR-time
-columns reach neither `runs.csv` nor the backup's `runs.json`. The four
-PR times are the sharpest case — migration `20270325_001` promoted them
-out of `runs.metadata` into real columns **and stripped the keys from the
-bag**, so runs that used to export them inside the `metadata` column
-stopped exporting them at all. `manifest.json` cannot show this: it
-counts rows, and every row is present. Filed with the exact change; the
-gap is stated here rather than left for a data subject to discover.
+**Row completeness is not column completeness, so each format now
+declares what it OMITS** ([decisions § 1171](../architecture/decisions.md),
+closed 2026-09-04). Both transports used to read the run row through a
+hand-written column list that nobody widened as columns were added, and
+seven columns — `concluded_at`, `elevation_gain_m`, `race_listing_id` and
+the four `fastest_*_s` PR times — reached neither `runs.csv` nor the
+backup's `runs.json` (found the same day, § 1135). `manifest.json` could
+not show it: it counts rows, and every row was present.
+
+The direction is inverted now. Both rails select the whole table, and a
+format states the columns it declines and why, so a column added to
+`public.runs` reaches every archive without an edit:
+
+- **`runs.csv`** declines `user_id` (the archive is the subject's own,
+  and the id is theirs), `track_url` and `hr_series_url` (Storage keys
+  inside the owner's folder, of no use to a reader of a CSV).
+- **The backup archive's `runs.json`** declines `user_id` alone, so a
+  restore can re-home the archive into another account.
+- **The GPX zip's `runs.json`** is a manifest of what was exported rather
+  than a restorable record, so beside `user_id` it declines both Storage
+  paths — the GPX files are in the same archive — and `created_at` /
+  `updated_at`.
+
+Four guards hold it, and each fails on an omission that no longer names a
+real column as well as on a column neither carried nor declined:
+`TestExportRunProjectionCoversEveryRunsColumn` (the Go struct and the
+Edge Function's `RUNS_SELECT` both mirror the generated table type),
+`TestCSVCarriesEveryRunsColumnExceptTheOnesItDeclares` (which also
+compares the two rails' declined sets against each other),
+`TestRunsJsonProjectionsOmitOnlyWhatTheyDeclare` (driven off what a row
+actually serialises to, not off the source), and
+`TestExportRunRowMirrorsItsSelect`.
 
 **Known bounds, stated rather than hidden — and they now differ per
 rail.** The Edge Function streams; the Go worker does not yet. Whatever
@@ -136,16 +156,31 @@ and its exact statements are written out rather than described.
 export archives stamped nine days earlier. The reaper derives its
 worklist by listing, the list API reads `storage.objects`, and those
 rows are the ones the sweep already deleted — so every byte a past sweep
-orphaned is invisible to it by construction. Erasing that residue needs
-something outside the Storage API (an S3 lifecycle rule on the object
-prefix, or an operator pass with direct backend access), which is not a
-code change in this repo and is filed separately. The reaper stops the
-pile growing; it is not a remedy for the pile.
+orphaned is invisible to it by construction. The reaper stops the pile
+growing; it is not a remedy for the pile.
 
-The residual on the
-measurement is the backend: this was the local `file` backend, so what
-is proved is the MECHANISM, and confirming the byte residue on Cloud's
-S3 still means listing the bucket over the S3-compatible endpoint.
+**The remedy this document used to name does not exist for this
+project** ([decisions § 1173](../architecture/decisions.md), read out of
+the shipped `storage-api:v1.62.5`). An **S3 lifecycle rule** was the
+first half of it: on Supabase Cloud the storage backend bucket is
+Supabase's, not ours, so there is no bucket to attach a rule to, and on a
+self-hosted stack a prefix rule would take live objects with it — the
+survivors are interleaved with live ones under the same prefixes. The
+remedy on Cloud is a Supabase support request; on a stack the operator
+owns, it is a diff of the raw backend against `storage.objects`. And the
+orphan's backend key is `{bucket}/{name}<sep>{version}`, where `version`
+is the column that went with the deleted row, so even an operator with
+real backend credentials cannot compute an orphan's key from what the
+database still knows: enumerating the backend is the only entry.
+
+That also retracts § 1049's residual on its own measurement, which said
+confirming the residue on Cloud "still means listing the bucket over the
+S3-compatible endpoint". **That endpoint is a database query.**
+`S3ProtocolHandler`'s `listObjectsV2` runs `SELECT ... FROM
+storage.objects`, so it sees exactly what `list` sees — precisely the
+rows the sweep deleted — and can neither confirm an orphan nor erase
+one. The measurement itself stands: it was taken on the local `file`
+backend, so what it proves is the MECHANISM.
 **One bound is a deploy-time operator step, not code:** Supabase also
 enforces a project-level upload limit (50 MB by default) and the
 effective ceiling is the lower of the two, so until that is raised the
