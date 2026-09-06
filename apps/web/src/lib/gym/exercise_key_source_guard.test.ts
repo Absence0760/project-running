@@ -49,10 +49,6 @@ const BROAD_MODULES = ['lib/core/data.ts'];
 /// matching, so an exemption cannot outlive the site it excuses.
 const PENDING: { path: string; why: string }[] = [
 	{
-		path: 'lib/share/share_workout_meta.ts',
-		why: 'distinctExerciseCount for the share tile + og:description. followups.md, owner tree apps/web/src/lib/share/.',
-	},
-	{
 		path: 'lib/coach/context.ts',
 		why: 'the per-workout exercise tally in the coach prompt context. followups.md, owner tree apps/web/src/lib/coach/.',
 	},

@@ -19,6 +19,7 @@
 /// for the full argument.
 
 import { formatDateStable, normaliseSiteUrl } from './share_meta';
+import { distinctExerciseCount as countDistinctExercises } from '../gym/gym_prs';
 import { escapeHtml } from '../util/html_escape';
 import type { SharedWorkout, SharedWorkoutSet } from './share_workout_lookup';
 
@@ -43,12 +44,20 @@ export function formatKgStable(kg: number | null | undefined): string {
 	return `${Math.round(kg)} kg`;
 }
 
-/// Distinct exercises in a logged workout, matched case- and
-/// whitespace-insensitively so "Back Squat" and "back squat " count once.
-/// Shared with the share page so its summary tile and the og:description
+/// Distinct exercises in a logged workout, counted on the CANONICAL grouping
+/// key. Shared with the share page so its summary tile and the og:description
 /// can't disagree about the number.
+///
+/// The key has one derivation — `normaliseExerciseName` (§ 1175) — and this
+/// used to re-derive it as `trim().toLowerCase()` under a comment claiming
+/// case- and whitespace-insensitive matching. It was neither: measured, a
+/// workout logging "Bench  Press" beside "Bench Press", "Bench\u00a0Press"
+/// beside "bench press", or "\u0130ncline Press" beside "incline press"
+/// counted TWO where `gym_workout_summaries` and every keyed surface count
+/// one, and the number went out in an og:description to every unfurler that
+/// touched the link (§ 1274).
 export function distinctExerciseCount(sets: readonly SharedWorkoutSet[]): number {
-	return new Set(sets.map((s) => s.exercise_name.trim().toLowerCase())).size;
+	return countDistinctExercises(sets.map((s) => s.exercise_name));
 }
 
 export function buildWorkoutShareTitle(
