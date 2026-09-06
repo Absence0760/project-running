@@ -15,7 +15,10 @@ name: Security
 # Language coverage for this monorepo's mix:
 #   - javascript-typescript covers apps/web + apps/web/lambda/coach
 #     + apps/backend/supabase/functions (Deno EFs)
-#   - go covers apps/job_worker
+#   - go covers BOTH Go modules — apps/job_worker and apps/graph_cycle.
+#     The build step below enumerates them from the tree rather than
+#     naming them, because CodeQL analyses only what the build compiles
+#     and a module nobody builds is a module nobody scans (§ 1304).
 #   - java-kotlin covers apps/watch_wear (native Kotlin + Compose) plus
 #     apps/mobile_android/android (Gradle host)
 #   - actions covers every workflow under .github/workflows/
@@ -108,18 +111,64 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
+          # Both modules declare the same patch-level Go floor, so one
+          # toolchain serves both; `go build` would resolve a higher one
+          # per-module anyway if that ever stopped being true.
           go-version-file: apps/job_worker/go.mod
-          cache-dependency-path: apps/job_worker/go.sum
+          cache-dependency-path: |
+            apps/job_worker/go.sum
+            apps/graph_cycle/go.sum
       - uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
           languages: go
-      # CodeQL's Go autobuild detects modules and runs `go build ./...`
-      # in each one. Our only Go module is apps/job_worker; explicit
-      # build below makes the failure mode debuggable if a downstream
-      # dep ever goes ABI-incompatible.
-      - name: Build job_worker for CodeQL
-        working-directory: apps/job_worker
-        run: go build ./...
+      - name: Build every Go module for CodeQL
+        # Go has no build-less extraction: "CodeQL will analyze whatever
+        # source code is built by your specified build steps", so the set of
+        # modules built here IS the set of modules scanned.
+        #
+        # This step used to build apps/job_worker alone, under a comment
+        # asserting it was "our only Go module". apps/graph_cycle has been a
+        # second one since the route-loop sidecar landed — security.yml's own
+        # Trivy job builds its image, and ci.yml has a `Test graph_cycle
+        # sidecar (Go)` job — so its source went unscanned by CodeQL for the
+        # whole of its life while its dependencies were scanned, which is the
+        # worse half to be missing on a network-facing service (§ 1304).
+        #
+        # The single build was ALSO what suppressed the safety net. The
+        # analyze action's `runAutobuildIfLegacyGoWorkflow` runs autobuild —
+        # which walks every module — but skips when "at least one file of Go
+        # code has already been extracted", and building job_worker extracts
+        # plenty. So the explicit build did not merely fail to cover
+        # graph_cycle, it turned off the thing that would have.
+        #
+        # Enumerated from the tree, never from a roster: a third module is
+        # scanned the day it lands rather than the day someone remembers this
+        # file. The floor is what keeps that honest — a `find` that stopped
+        # matching would build nothing, and a Go database with no source
+        # extracted is exactly the state the legacy autobuild silently
+        # papers over.
+        shell: bash
+        run: |
+          set -euo pipefail
+          MODULES=$(find . -name go.mod \
+            -not -path './node_modules/*' \
+            -not -path './.git/*' \
+            -printf '%h\n' | sort)
+          COUNT=$(printf '%s' "$MODULES" | grep -c . || true)
+          if [ "$COUNT" -lt 2 ]; then
+            echo "::error::found $COUNT Go module(s) under the repo root; this repo has at least 2 (apps/job_worker, apps/graph_cycle). A walk that stopped matching would leave CodeQL analysing no Go source at all, so this fails rather than scanning nothing."
+            exit 1
+          fi
+          echo "Building $COUNT Go module(s) for the CodeQL extractor:"
+          printf '  %s\n' $MODULES
+          for m in $MODULES; do
+            echo "::group::go build ./... ($m)"
+            if ! (cd "$m" && go build ./...); then
+              echo "::error::go build ./... failed in $m, so CodeQL extracted none of its source. This is a build break, not a CodeQL finding; reproduce with: cd $m && go build ./..."
+              exit 1
+            fi
+            echo "::endgroup::"
+          done
       - uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
           category: '/language:go'
