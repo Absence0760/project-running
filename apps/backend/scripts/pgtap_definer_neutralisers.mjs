@@ -1058,10 +1058,10 @@ $neutralised$;`,
 //
 // Registering one costs a copy of a definition to keep in step with the schema,
 // and buys a measurement only where an empty result is a claim about access
-// control. Both of these are outside that, for two different reasons, and both
-// were checked rather than assumed - the operator was pointed at each and the
-// verdict it would produce is recorded beside it. The list is CLOSED: the
-// validation phase re-derives the same set from the suite and fails if a third
+// control. All three of these are outside that, for three different reasons,
+// and each was checked rather than assumed - the operator was pointed at it and
+// the verdict it would produce is recorded beside it. The list is CLOSED: the
+// validation phase re-derives the same set from the suite and fails if another
 // relation joins it, so the next assertion written over an unmeasured definer
 // relation is a decision someone makes on purpose rather than a chore the guard
 // hands them at merge time.
@@ -1077,5 +1077,12 @@ export const UNREGISTERED_DEFINER_RELATIONS = [
     assertion: 'activity_type=run filter excludes a walk (value 0)',
     reason:
       'the expectation is a zero VALUE rather than an emptiness - a leaderboard metric that summed nothing - and a widening mutation moves a value, so a kill would say the mutation changed an answer rather than that access control was hiding a row. Same class as the two assertions § 745 left outside the vocabulary',
+  },
+  {
+    relation: 'find_backlogged_jobs',
+    assertion:
+      'a job scheduled into the future is not backlogged -- the clock is scheduled_at, not created_at',
+    reason:
+      "the function carries no access-control filter to drop. It is a definer only so the ten-minute alert cron reads `jobs` without a policy, and its whole WHERE is `status = 'queued'` plus an age threshold - two subject selectors, the same shape as `fetch_pending_reports` above. Its three zero-count assertions each claim a predicate rather than a visibility: that the age is measured off `scheduled_at` and not `created_at` (or `defer_job`'s backing-off retries would read as a stalled queue), and that a running and a failed job belong to the stuck and failed alerts instead. Emptiness is not what any of them turns on either - assertions (1) and (2) in the same transaction are `results_eq` positives naming the rows the function DOES return, so a function that had gone silent would fail there first",
   },
 ];
