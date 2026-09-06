@@ -1,7 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 
-import '../catalogue_browse.dart' show fold;
+import '../catalogue_browse.dart' show compareFoldedNames;
 import '../gym_prs.dart';
 import '../l10n/gen/app_localizations.dart';
 import 'gym_compose_sheet.dart';
@@ -98,12 +98,8 @@ String categoryLabel(AppLocalizations l10n, String category) {
 /// Ties break on `id`, so the answer does not depend on sort stability —
 /// Dart's `List.sort` is not stable, and the folded compare calls two
 /// spellings of one name equal.
-int _byName(GymCatalogueEntry a, GymCatalogueEntry b) {
-  final c = fold(a.name).compareTo(fold(b.name));
-  if (c != 0) return c < 0 ? -1 : 1;
-  final byId = a.id.compareTo(b.id);
-  return byId == 0 ? 0 : (byId < 0 ? -1 : 1);
-}
+int _byName(GymCatalogueEntry a, GymCatalogueEntry b) =>
+    compareFoldedNames(a.name, a.id, b.name, b.id);
 
 class _ExerciseCataloguePickerScreenState
     extends State<ExerciseCataloguePickerScreen> {
