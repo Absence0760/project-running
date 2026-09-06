@@ -24251,12 +24251,12 @@ runs a guard is gated on `needs.changes.outputs.code == 'true'` except three,
 and the `changes` filter classifies `docs/`, `.claude/` and every `*.md` as a
 docs-only diff — so a doc-link guard in a gated job would be skipped on exactly
 the pull requests that break a doc link, and the `CI gate` counts a skip as a
-pass. That is [§ 764](#764)'s "green having tested nothing", and it is the
+pass. That is [§ 764](#764-the-bundled-job-was-filed-as-a-two-line-registry-edit-and-the-registry-was-the-defect-the-one-non-hermetic-step-was-five-call-sites-of-a-binary-this-repo-installed-nowhere)'s "green having tested nothing", and it is the
 documented reason `parity-matrix` is ungated. Both guards therefore run there,
 ahead of the Flutter setup, which is the only real cost that job pays.
 
 **A new job was considered and declined on the same measurement
-[§ 1129](#1129) and [§ 770](#770) already made.** A separate job buys a second
+[§ 1129](#1129-the-census-that-could-not-be-written-as-a-grep-is-an-instrument-and-the-first-thing-it-did-was-disprove-the-hand-triage-that-closed-the-last-one) and [§ 770](#770-four-guards-that-misread-their-own-input-the-one-filed-as-failing-in-the-safe-direction-passes-a-blocking-lock-on-runs-and-the-widening-nobody-had-measured-is-either-0-steps-or-89-depending-on-which-of-two-readings-you-take) already made.** A separate job buys a second
 runner and a second checkout+setup-node pair — GitHub bills by the minute,
 rounded up, so seconds of `node` costs a minute — to say nothing a per-step
 `::error::` does not already say, and it needs its own line in the `CI gate`
@@ -24281,7 +24281,7 @@ gate waiting for all 33 others, 2,196 shell lines clean; `actionlint
 
 ## 1264. gitleaks now gates a merge; folding CodeQL in would not have, and the measurement says why
 
-**Decided 2026-09-05.** [§ 1149](#1149) folded `terraform.yml` into `ci.yml`
+**Decided 2026-09-05.** [§ 1149](#1149-the-terraform-checks-are-called-by-ciyml-rather-than-triggered-because-a-needs-entry-cannot-name-a-job-in-another-workflow) folded `terraform.yml` into `ci.yml`
 as a called workflow so its three advisory rows could reach the one context
 branch protection requires. `gitleaks.yml` and `security.yml` were the two
 left, and the filing that raised them treated them as one problem with one
@@ -24375,7 +24375,7 @@ EMBED the shell at bundle time — `resolve(webRoot, 'build', 'index.html')`,
 hardcoded identically in `share-run`, `share-route`, `share-recap`,
 `share-badge` and `share-entity`'s `build.mjs`. Left as they are, the deploy
 bakes the LANDING PAGE into every share handler, for its 200 responses and for
-[§ 1036](#1036)'s `notFoundShell()` 404 body alike, so `/share/run/<id>` would
+[§ 1036](#1036-the-share-lambdas-404-body-is-the-apps-own-shell-which-is-what-makes-the-distributions-404-mapping-redundant)'s `notFoundShell()` 404 body alike, so `/share/run/<id>` would
 answer with marketing carrying the run's `og:*` spliced into it. That is a code
 dependency, not a sequencing one, and no deploy order addresses it.
 `apps/web/src/lib/share/spa_shell_head_signals.test.ts` reads the same path as
@@ -24387,7 +24387,7 @@ lane's and now name `200.html`, which is what makes the mismatch visible if the
 
 ## 1266. Two "argued, not measured" edge filings, measured — one settled against prod, the other shown to be unsettleable in the order it was filed
 
-**Decided 2026-09-05.** [§ 1084](#1084)'s `noindex` claim and [§ 1023](#1023)'s
+**Decided 2026-09-05.** [§ 1084](#1084-the-distributions-404-mapping-is-gone-and-the-guard-that-keeps-it-gone-reads-the-handlers-that-make-that-safe)'s `noindex` claim and [§ 1023](#1023-the-waf-scope-downs-decode-the-path-added-deliberately-without-a-live-measurement-because-the-failure-direction-is-one-way)'s
 `URL_DECODE` claim were both filed as repo-level statements with the same
 prescribed settling command, a `curl` against `preview.threkir.com`. Neither had
 been run. Both are now answered, and the answers differ.
@@ -24432,7 +24432,7 @@ a client route. Measured: `POST /api/coach/turn` returns `200 text/html`
 carrying the SPA shell. Any API caller that is rejected receives an HTML
 document with a success status, and a client doing `JSON.parse` on it gets a
 syntax error rather than the refusal. § 1084 removed the 404 mapping and named
-`/api/coach*` while doing it; the 403 one is still live, [§ 1022](#1022)
+`/api/coach*` while doing it; the 403 one is still live, [§ 1022](#1022-an-origins-404-is-answered-404-with-the-shell-body-which-is-a-better-fix-than-dropping-the-mapping)
 argues correctly that it must stay for deep links, and the two requirements
 cannot both be met by editing the mapping. Filed rather than fixed: the shape
 is a CloudFront Function or an origin that does not answer a bare 403 on the
@@ -24508,7 +24508,7 @@ than unfixed**: `configuration_aliases = [aws.us_east_1]` declares a provider
 the CALLER supplies, so a module carrying one cannot be a root module by
 construction, and both ways out (a `provider` block inside the module, or a
 throwaway wrapper root) are worse than the state. Its transitive coverage went
-from asserted to measured — [§ 1111](#1111) planted one undeclared-variable
+from asserted to measured — [§ 1111](#1111-terraform-fmt-was-scoped-per-stack-so-the-one-directory-outside-the-matrix-was-format-checked-by-nothing--and-the-transitive-validate-claim-that-excuses-the-exclusion-is-now-measured) planted one undeclared-variable
 reference in `waf.tf` and read `envs/prod`; this round planted one in `waf.tf`,
 `alarms.tf` and `outputs.tf` in turn and read BOTH env roots, six runs, all six
 exit 1 naming the module file.
