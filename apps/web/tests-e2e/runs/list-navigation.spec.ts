@@ -66,10 +66,14 @@ test.describe('/runs — navigation and toolbar', () => {
 		await page.goto('/runs');
 		await expect(page.getByTestId('runs-surface')).toBeVisible({ timeout: 15_000 });
 
-		// "All time" forces fetchMode = 'full', which is the mode the render
-		// window caps. Without a filter the list is DB-paginated and the cap
-		// does not apply.
+		// Two controls, two different jobs. "All time" widens the set to every
+		// seeded run (the default range leaves too few to overflow one page),
+		// and re-sorting is what puts the list in `full` mode -- `runsFetchMode`
+		// returns `full` when the view is NARROWED or REORDERED, and "all" is
+		// the un-narrowed value, so the range alone leaves it `paginated` and
+		// the render window this test is about never applies.
 		await page.getByLabel('Date range').selectOption('all');
+		await page.getByLabel('Sort').selectOption('oldest');
 		await expect(page.getByTestId('runs-surface')).toHaveAttribute(
 			'data-list-state',
 			'loaded-full',
@@ -110,6 +114,7 @@ test.describe('/runs — navigation and toolbar', () => {
 		await page.goto('/runs');
 		await expect(page.getByTestId('runs-surface')).toBeVisible({ timeout: 15_000 });
 		await page.getByLabel('Date range').selectOption('all');
+		await page.getByLabel('Sort').selectOption('oldest');
 		await expect(page.getByTestId('runs-surface')).toHaveAttribute(
 			'data-list-state',
 			'loaded-full',
