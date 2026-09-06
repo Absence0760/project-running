@@ -25561,3 +25561,219 @@ The test extension caught its own vacuity, which is the part worth recording. Si
 **And that same assertion is why the entry is not a suppression.** The guard's worry about a zero read from a definer relation is that it may be satisfied by a relation that returned nothing at all. In this file it cannot be: (1) and (2) are positives naming the rows the function *does* return in the same rolled-back transaction, so a `find_backlogged_jobs` that had gone silent fails there, two assertions before the first zero is read. That is a stronger footing than either existing entry stands on — both of those record an assertion as permanently unmeasurable and rely on the reason alone — and it is recorded in the entry rather than left to be rediscovered.
 
 **Verification.** `--validate-operators` green, and it re-derives the unreplaced set from the suite, so it confirms the declared list is now exactly the three relations the suite reads. The guard's own 29 unit tests pass, including the one asserting every entry still names a live assertion description and that no entry has a replacement as well. The full mutation run: 179 refusal assertions across 287 files, 5 survivors, all 5 expected — the same survivor set as before, so nothing joined it.
+
+---
+
+## 1304. CodeQL analysed one of the repo's two Go modules, and the explicit build was what turned off the fallback that would have caught the other
+
+**Decided 2026-09-06.** `security.yml`'s `codeql-go` job had one build step —
+`go build ./...` in `apps/job_worker` — under a comment reading "Our only Go
+module is apps/job_worker". It has not been the only one since the route-loop
+sidecar landed: `apps/graph_cycle` is a second module with its own `go.mod`,
+27 source files, a `Test graph_cycle sidecar (Go)` job in `ci.yml`, a
+`release-graph-cycle.yml`, and a Trivy job **in this same file** that builds
+its image. So the sidecar's dependencies were scanned and its source was not,
+which is the worse half to be missing on a service that terminates HTTP.
+
+Go has no build-less extraction — "CodeQL will analyze whatever source code is
+built by your specified build steps" — so the set of modules built is the set
+of modules scanned, and nothing about a database containing one module's code
+looks different from one containing two.
+
+**The single build was also what suppressed the safety net, which is why this
+went unnoticed.** `analyze-action.ts` at the pinned SHA carries
+`runAutobuildIfLegacyGoWorkflow`, a compatibility path that runs autobuild —
+which walks every module it finds — for Go workflows that declare no build.
+Read at that SHA, it skips when a build mode is specified, when autobuild has
+already run, when the Go database is finalized, or when **"at least one file of
+Go code has already been extracted"**. Building `job_worker` guarantees the
+last of those. So the explicit build did not merely fail to cover
+`graph_cycle`; it turned off the mechanism that would have covered it. Had the
+step never been added, both modules would have been scanned.
+
+**Enumerated from the tree, not from a roster.** The fix builds every `go.mod`
+directory `find` returns, so a third module is scanned the day it lands rather
+than the day someone remembers this file — the same reason § 1272's guard
+walks `apps/web/lambda` instead of listing five Lambdas. A population floor of
+two makes the walk honest: a `find` that stopped matching would build nothing,
+and a Go database with no source extracted is exactly the state the legacy
+autobuild silently papers over, so the job would go green having scanned
+nothing. The floor fails instead.
+
+Verification: both modules `go build ./...` clean; the enumeration returns
+exactly `apps/graph_cycle` and `apps/job_worker`; the floor was mutation-tested
+by pointing `find` at a name nothing matches, which refuses at `COUNT=0`.
+`actionlint` clean, and `check_toolchain_pins`, `check_ci_diagnostics`,
+`check_workflow_binaries`, `check_infra_coverage`, `check_infra_error_responses`
+and `check_infra_iam` all pass. This changes what CodeQL *looks at*; it does
+not make an alert block a merge, which is § 1305.
+
+## 1305. The CodeQL merge-gate ask is a repo setting, re-measured — and the reason it kept being re-litigated is that it had no written home
+
+**Decided 2026-09-06.** [§ 1264](#1264-gitleaks-now-gates-a-merge-folding-codeql-in-would-not-have-and-the-measurement-says-why) closed the gitleaks half of a filing by
+folding the workflow in as a called job, and left the CodeQL half with the
+conclusion that no fold can gate on a *finding*. That conclusion was put to
+this round as "the § 1149 caller-job precedent is very likely the shape of the
+answer here", so it was re-measured rather than inherited: read against the
+action's own `analyze/action.yml` at the pinned SHA, it declares 18 inputs —
+`check_name`, `output`, `upload`, `cleanup-level`, `ram`, `add-snippets`,
+`skip-queries`, `threads`, `checkout_path`, `ref`, `sha`, `category`,
+`upload-database`, `post-processed-sarif-path`, `wait-for-processing`, `token`,
+`matrix`, `expect-error` — and not one is a severity threshold. § 1264 stands.
+A fold would gate on the analysis completing and would re-key every analysis in
+the Security tab to buy it.
+
+**What was actually missing was not another measurement.** The ask has been
+correct since round 40 and has lived in a `followups.md` bullet, which is a
+place engineers read and operators do not — and the repo carried no document at
+all describing what protects `main`. `docs/ops/deployment.md` now has a
+`Merge gates` section: the required set is exactly the `CI gate` context, the
+gate waits on the other 34 jobs in `ci.yml`, two sibling workflows reach it by
+being called rather than triggered ([§ 1149](#1149-the-terraform-checks-are-called-by-ciyml-rather-than-triggered-because-a-needs-entry-cannot-name-a-job-in-another-workflow), § 1264), and CodeQL cannot join
+them for the measured reason above. It names the setting to enable — the
+code-scanning **results** requirement on the `CodeQL` tool, not the four
+`analyze` job names as required contexts — and it names the cheaper halfway
+option honestly rather than as a lesser version of the same thing: adding those
+job names gates on the scan *running*, which is worth having, because a broken
+extractor or a bad `queries:` value fails those jobs and nothing else in CI
+would notice. It also records the two things that must change *with* the
+setting, since nothing in the repo can observe it: the required set stops being
+exactly one context, and the root `CLAUDE.md` says it is.
+
+This is the same lesson § 1306 records one item over. A step no lane can
+execute is not finished by being measured; it is finished by being written
+where the person who *can* execute it will find it.
+
+**One correction to the original filing.** It asked for "a line in decisions
+§ 81 recording that the required set is no longer exactly one". § 81 is the
+custom watch's five-button input layout. There is no ADR describing the
+required-context set, which is why the record now sits in `docs/ops/` where
+the operator is, with this entry pointing at it.
+
+## 1306. A one-off deploy gate belongs beside the act that would trip it, not only in the runbook that explains it
+
+**Decided 2026-09-06.** [§ 1269](#1269-moving-the-spa-shells-filename-on-a-live-distribution-has-a-safe-order-and-it-is-not-one-of-the-two--1116-considered)'s three-step order for moving the SPA shell on a
+live distribution was written into `docs/ops/deployment.md` in round 40, and
+[§ 1268](#1268--is-prerendered-and-the-spa-shell-moved-to-200html--two-defects-at-once-each-of-which-hid-the-other-from-a-previous-diagnosis)'s repo half merged in the same PR. Two things were wrong with the
+result, and they are opposite failures of the same document.
+
+**It contradicted itself within a day.** The section's closing paragraph —
+"this order is necessary and not sufficient" — warned that all five share
+Lambdas still embedded `build/index.html`, so step 3 would bake the landing
+page into every share handler whatever the ordering, and listed the paths that
+"must move to `200.html`". True when written, and merged in the same commit
+that wrote it. Re-measured here: `svelte.config.js` emits
+`fallback: "200.html"`, all five `build.mjs` resolve `build/200.html`,
+`spa_shell_head_signals.test.ts` reads that artifact, and the
+`custom_error_response` names `/200.html`. An operator following the runbook
+today would have been told the repo is in a half-migrated state it left before
+the ink dried, and told to go fix files that are already correct — and § 1272's
+guard makes that regression impossible anyway. The paragraph now states the
+measured state and names the guard that holds it.
+
+**And nothing pointed the person who would trip it.** The gate is a
+precondition on publishing a `web@*` Release: do it before the pre-seed and the
+apply and CloudFront serves the *landing page* — broken, per [§ 1270](#1270-one-file-cannot-be-both-the-prerendered-landing-page-and-the-spa-fallback-for-two-independent-reasons-in-the-framework) — as
+the body of every deep link. `docs/ops/releasing.md`'s "Before cutting a
+release" list already carries exactly this shape of one-off gate (the Play
+Health-apps declaration, Android developer verification, the Supabase Auth URL
+configuration), and this one was not on it. It is now.
+
+Two things the section had not said and now does. The steps are
+**per-distribution** — `prod` and `preview` are cut over independently, and a
+runbook written in the singular invites doing it once. And an operator can find
+out which side of the cutover an environment is on without guessing, by reading
+`DistributionConfig.CustomErrorResponses` for the 403 entry's
+`ResponsePagePath`: `/index.html` means not yet, `/200.html` means steps 1 and
+2 are done. § 1269's one derived-not-measured claim — that the pre-seeded
+object survives the release's `--delete` sync — is restated as an instruction
+to falsify on the first run rather than as a footnote.
+
+## 1307. The distribution-wide 403 filing measured something real and named the wrong cause, and the unauthenticated status is what separates them
+
+**Decided 2026-09-06.** An open item records, measured against prod on
+2026-09-05, that `POST https://threkir.com/api/coach/turn` answers **HTTP 200,
+`content-type: text/html`, the SPA shell**, and attributes it to the
+distribution-wide `403 -> 200 -> /200.html` `custom_error_response` rewriting
+"a 403 from ANY origin on ANY path" — adding that the 403 in question "is the
+one that fires for an unauthenticated call, which is the normal case". The
+measurement is not disputed. **The cause cannot be right**, and the reason is
+one line of the handler.
+
+`apps/web/src/lib/coach/handler.ts` returns **401** for an unauthenticated
+call, at two separate exits. 401 is not mapped by any
+`custom_error_response` on this distribution, so it passes through untouched.
+The only 403 the coach path emits is the AI-disclosure consent refusal, which
+requires an authenticated caller with a profile row — unreachable by the
+request that was measured. And the behaviour is not the explanation either:
+`/api/coach*` has its own `ordered_cache_behavior` targeting `lambda-coach`
+with `POST` in `allowed_methods`, so CloudFront did not refuse the method.
+
+So the measured 200 text/html is **not** a coach 403 being rewritten. It is
+evidence that the request did not reach the Lambda — the shape `main.tf`'s own
+comment already documents as proven once (issue #590, 2026-07-21): with only
+one of the two OAC grants, the Function URL 403s *before invocation*, the
+mapping rewrites that to the shell at 200, and "the surface reads healthy while
+the Lambda never runs". A stale prod bundle, or a prod distribution whose
+`/api/coach*` behaviour does not match the repo, produce the same reading.
+Every one of those is a live coach outage, not a body-format nuisance, and
+**neither coach alarm can see it**: both key on Lambda `Errors` and `Duration`,
+metrics a request that is never invoked does not emit.
+
+**The diagnostic gets cheaper, not more expensive.** The filing proposed
+settling first whether `/api/coach*` has a live behaviour at all, via
+`aws cloudfront get-distribution-config`. Half of that is already answered from
+the repo — the behaviour is declared — and the half that matters needs no
+credentials whatsoever: an unauthenticated `POST /api/coach/turn` that reaches
+the Lambda answers **401 with a JSON body**. Anything else is proof it did not,
+independently of the mapping. That is one `curl` against a public endpoint.
+
+Not fixed here, and the scope is now different from the one filed. The
+distribution-wide mapping is still a real design problem worth solving — a
+refusal reaching a client as `200 text/html` breaks `JSON.parse` and reads as a
+success to a status-code monitor — but it is no longer the explanation for the
+one measurement behind the filing, and fixing it would have left the coach path
+in whatever state it is actually in. The entry is corrected rather than ticked.
+Owner: whoever holds prod credentials, starting with the `curl`.
+
+## 1308. The Terraform verification is a standing item because no lane has credentials, and this round it caught comment drift instead
+
+**Decided 2026-09-06.** Re-run for round 41 on Terraform v1.13.0:
+`terraform init -backend=false` + `terraform validate` in all five root stacks
+— `infra/bootstrap`, `infra/dns`, `infra/github-oidc`, `infra/envs/prod`,
+`infra/envs/preview` — every one `Success!`; `terraform fmt -check -recursive
+infra` exit 0, before and after this round's edits. Transitive module coverage
+re-measured rather than asserted, as [§ 1111](#1111-terraform-fmt-was-scoped-per-stack-so-the-one-directory-outside-the-matrix-was-format-checked-by-nothing--and-the-transitive-validate-claim-that-excuses-the-exclusion-is-now-measured) and the round-40 run did: an
+undeclared-variable reference planted in `modules/web-stack/main.tf` fails
+`validate` from **both** env roots naming the file and line, and the file
+restores byte-clean. [§ 1267](#1267-the-lambda-execution-roles-kmsdecrypt-and-the-deploy-roles-plaintext-read-are-one-fact-from-two-sides-and-closing-the-first-would-make-the-second-permanent)'s finding that the module cannot be
+validated standalone was not re-litigated — `configuration_aliases` makes a
+module a non-root by construction — and no stray `.terraform.lock.hcl` was
+created, because no standalone `init` was run.
+
+Still no `plan`: no lane holds AWS credentials by design, so nothing behind
+§§ 1021-1024, 1084-1085, 1111 or § 1268's `custom_error_response` has been
+planned against real state. That is why the item is re-filed rather than
+retired.
+
+**What the round found instead is what `validate` structurally cannot see.**
+The 403 `custom_error_response` block carried three false comments. Its opening
+line still read "SPA fallback — SvelteKit static fallback is index.html" while
+the paragraph 30 lines below it states the shell is `/200.html` and the
+resource sets exactly that. A second sentence described the distribution
+rewriting "a 404 to the shell at 404" — a mapping [§ 1022](#1022-an-origins-404-is-answered-404-with-the-shell-body-which-is-a-better-fix-than-dropping-the-mapping) added and
+[§ 1084](#1084-the-distributions-404-mapping-is-gone-and-the-guard-that-keeps-it-gone-reads-the-handlers-that-make-that-safe) removed, contradicting the block six lines beneath it that explains
+why no 404 mapping exists. The irony is worth recording: that same paragraph
+congratulates itself for having resolved an earlier pair of contradictory
+comments in this very file — "Two comments in one file cannot both be true;
+this is the one that was wrong" — and had since acquired two more.
+
+Terraform has no opinion about comments, `fmt` does not read them, and
+`check_infra_error_responses.mjs` parses the block's `error_code` and
+`response_page_path` rather than its prose. The general rule this suggests is
+the one § 1271 reached from the other direction: a claim survives only where
+something reads it. Nothing reads these, so the durable protection is to make
+the comment name the mechanism and cite the ADR that owns it, which is what the
+replacement does — and to point the deploy-order note at
+`docs/ops/deployment.md`, so the runbook and the resource that needs it are one
+link apart.
