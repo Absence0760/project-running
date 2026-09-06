@@ -232,10 +232,12 @@ retention cron referenced in a comment that was never created.
   (`migration_locks.md`), and keyset-paginate rather than re-running the
   predicate, which is O(n²/batch).
 - **Client writes are discarded:** by the same trigger, and unconditionally —
-  a client value is OVERWRITTEN, never refused. That is the difference from
-  `gym_routine_exercises.exercise_key`, where the client stamps the key under a
-  CHECK and mobile's older Unicode case table could therefore produce a 23514
-  on a legitimate save (decisions § 830). The trigger is not keyed on
+  a client value is OVERWRITTEN, never refused. That used to be the difference
+  from `gym_routine_exercises.exercise_key` and `exercises.name_key`, where the
+  client stamped the key under a CHECK and an older Unicode case table could
+  therefore produce a 23514 on a legitimate save (decisions § 830); since
+  `20270711000001` all three columns are stamped the same way and the entry
+  below records the other two (decisions § 1284). The trigger is not keyed on
   `current_user` as `20270704000003`'s freezes are: the value is a pure function
   of a column on the same row, so there is no writer, privileged or not, that
   should be allowed a different answer.
@@ -245,6 +247,46 @@ retention cron referenced in a comment that was never created.
   spellings as one exercise, and a mutation that moves a stored key with the
   trigger and CHECK dropped, proving the RPCs read the column rather than
   re-folding the name).
+
+## `gym_routine_exercises.exercise_key` / `exercises.name_key`
+
+- **What it caches:** the same exercise grouping key as the entry above, on the
+  two tables that PLAN rather than log — `normalise_exercise_name(exercise_name)`
+  binds a routine's planned exercise to the sets a lifter logs, and
+  `normalise_exercise_name(name)` is what the two partial unique indexes on
+  `exercises` make a custom catalogue entry unique by. Unlike `gym_sets`'
+  key these were never a read-path cost; they are persisted because they are the
+  join key and the uniqueness key.
+- **Authoritative recompute:** `public.normalise_exercise_name(<the name column>)`,
+  and the validated CHECKs `gym_routine_exercises_exercise_key_canonical` /
+  `exercises_name_key_canonical` (`20270623000001`) say so at the boundary. Each
+  column's own `length(… between 1 and 120)` CHECK bounds it at the name's own
+  120, which the fold cannot exceed.
+- **Maintained by:** `gym_routine_exercises_stamp_exercise_key()` and
+  `exercises_stamp_name_key()`, both BEFORE INSERT OR UPDATE, migration
+  `20270711000001`. Unqualified rather than `update of <name>`, for the same
+  reason as `gym_sets`: an UPDATE naming only the key is re-stamped instead of
+  hitting a 23514 the client cannot act on.
+- **Manual rebuild:** the `update … where <key> is distinct from
+  normalise_exercise_name(<name>)` shape of the entry above, per table. It has
+  never been needed: both CHECKs are VALIDATED, which is a statement about every
+  row, so no row can be outside the derivation to begin with.
+- **Client writes are discarded:** by the triggers, unconditionally. Before them
+  a client COMPUTED these keys and the CHECK REFUSED a disagreeing value, which
+  coupled the write to the client's Unicode version — 410 code points before
+  decisions § 1175, 465 after, 55 newly so (§ 1252). The CHECKs stay behind the
+  triggers on purpose: nothing can now violate them, so what they buy is that a
+  disabled or dropped trigger fails loudly instead of silently splitting a
+  lifter's history.
+- **Duplicates are allowed and that is deliberate:** there is no unique index on
+  `(routine_id, exercise_key)`. Two blocks of one lift in one routine is the
+  heavy-top-set-then-back-off pattern, and `computeRoutineAdherence` matches on
+  `(exerciseKey, stepIndex)` rather than on the key alone precisely so it works
+  (decisions § 1286).
+- **Pinned by:** `exercise_key_server_stamped_test.sql` (11 tests — the stamp on
+  a stale-client key, on an omitted key, on a key-only UPDATE and on a rename,
+  for both tables, plus a mutation that disables the trigger and requires the
+  CHECK to raise 23514) and `normalise_exercise_name_test.sql`.
 
 ## `user_coach_usage`
 
