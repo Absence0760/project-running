@@ -24,10 +24,18 @@
 // answered 403 by the verify-token gate whatever the secret gate did, and the
 // verify-token gate itself killed nothing in the file.
 //
-// COVERAGE IS ENFORCED. Every case the baseline ran must appear in some
-// mutation's `kills`, so a new case in handler_envelope.test.ts fails this
-// guard until a mutation names it. That obligation is the whole value: an
-// unmeasured integration case is exactly what § 815 closed.
+// COVERAGE IS ENFORCED, on three edges, and it took all three to make the
+// obligation true. `unmeasuredCases` requires every case the baseline RAN to
+// appear in some mutation's `kills`; `phantomKills` requires every named case
+// to have run. Those two alone left the claim this comment used to make - "a
+// new case fails this guard until a mutation names it" - false for a case that
+// does not run: `parseJunit` drops deno's `<skipped/>` entries, so a case whose
+// `ignore:` gate is never false in CI is in neither set and is measured by
+// nothing while reading as green. `declaredCases` + `unnamedDeclaredCases` are
+// the third edge, static and host-free: every case the FILE declares must be
+// killed by a mutation or carry an `UNMEASURED_CASES` reason it is not owed
+// one. With `ran ⊆ kills`, `kills ⊆ ran` and `declared ⊆ kills`, the three sets
+// are one. An unmeasured integration case is exactly what § 815 closed.
 //
 //   --report    print the per-mutation verdict table
 //   --json      machine-readable result
@@ -536,6 +544,202 @@ export function validateMutations(mutations, readFn) {
     }
   }
   return errs;
+}
+
+/**
+ * @typedef {{ name: string, ignore: string }} DeclaredCase
+ */
+
+/**
+ * Whitespace and `//` / block comments between two tokens.
+ * @param {string} src
+ * @param {number} i
+ * @returns {number}
+ */
+function skipTrivia(src, i) {
+  for (;;) {
+    while (i < src.length && /\s/.test(src[i])) i++;
+    if (src.startsWith('//', i)) {
+      const nl = src.indexOf('\n', i);
+      i = nl === -1 ? src.length : nl + 1;
+      continue;
+    }
+    if (src.startsWith('/*', i)) {
+      const end = src.indexOf('*/', i);
+      i = end === -1 ? src.length : end + 2;
+      continue;
+    }
+    return i;
+  }
+}
+
+/**
+ * One string literal starting at `i`, with its escapes resolved.
+ * @param {string} src
+ * @param {number} i
+ * @returns {{ value: string, end: number } | null}
+ */
+function readStringLiteral(src, i) {
+  const quote = src[i];
+  if (quote !== "'" && quote !== '"' && quote !== '`') return null;
+  let out = '';
+  let j = i + 1;
+  while (j < src.length) {
+    const ch = src[j];
+    if (ch === '\\') {
+      const esc = src[j + 1];
+      out += esc === 'n' ? '\n' : esc === 't' ? '\t' : esc;
+      j += 2;
+      continue;
+    }
+    if (ch === quote) return { value: out, end: j + 1 };
+    // A substitution makes the reported name unknowable from the source, and a
+    // name the census cannot key on is a case it cannot account for.
+    if (quote === '`' && ch === '$' && src[j + 1] === '{') return null;
+    out += ch;
+    j++;
+  }
+  return null;
+}
+
+/**
+ * A run of adjacent string literals joined by `+`, which is how every multi-line
+ * case name in the file is written. Splitting on `+` instead would cut the four
+ * names that carry a literal ` + ` of their own.
+ * @param {string} src
+ * @param {number} i
+ * @returns {{ value: string, end: number } | null}
+ */
+function readConcatenatedString(src, i) {
+  let j = skipTrivia(src, i);
+  const first = readStringLiteral(src, j);
+  if (!first) return null;
+  let value = first.value;
+  j = first.end;
+  for (;;) {
+    const k = skipTrivia(src, j);
+    if (src[k] !== '+') return { value, end: j };
+    const next = readStringLiteral(src, skipTrivia(src, k + 1));
+    if (!next) return { value, end: j };
+    value += next.value;
+    j = next.end;
+  }
+}
+
+/**
+ * Every `Deno.test` the file DECLARES, in source order, each with the
+ * expression its `ignore:` is gated on ('' when it carries none).
+ *
+ * The runtime half of this guard enumerates the cases that RAN, which is a
+ * strictly smaller set: `parseJunit` drops deno's `<skipped/>` entries, so a
+ * case whose `ignore:` gate is never false in CI is absent from `ran` — absent
+ * from `unmeasuredCases`, which filters `ran`, and absent from `phantomKills`
+ * unless some mutation happens to name it. Declared-but-never-run-and-unnamed
+ * is therefore a case that asserts nothing and reads as green, which is the
+ * exact shape § 815 closed one layer out. This is the source-side census that
+ * closes it: with `ran ⊆ kills` (unmeasuredCases), `kills ⊆ ran`
+ * (phantomKills) and `declared ⊆ kills` (here), the three sets are one.
+ *
+ * Refuses rather than skips on a form it cannot read: a parser that silently
+ * returned nothing would make the census vacuous, which is the failure it
+ * exists to prevent.
+ * @param {string} src
+ * @returns {DeclaredCase[]}
+ */
+export function declaredCases(src) {
+  /** @type {DeclaredCase[]} */
+  const out = [];
+  const marker = 'Deno.test(';
+  for (let i = src.indexOf(marker); i !== -1; i = src.indexOf(marker, i + 1)) {
+    const line = src.slice(0, i).split('\n').length;
+    let j = skipTrivia(src, i + marker.length);
+    if (src[j] !== '{') {
+      throw new Error(
+        `${TEST_FILE}:${line} declares a Deno.test in a form this census cannot read (expected ` +
+          'the object form `Deno.test({ name: ... })`). Write it in the object form, or teach ' +
+          'declaredCases the new one — leaving it unparsed makes the census silently miss a case.',
+      );
+    }
+    j = skipTrivia(src, j + 1);
+    if (!src.startsWith('name:', j)) {
+      throw new Error(
+        `${TEST_FILE}:${line} declares a Deno.test whose first property is not \`name:\`, so the ` +
+          'census cannot say which case it is. Put the name first.',
+      );
+    }
+    const nameTok = readConcatenatedString(src, j + 'name:'.length);
+    if (!nameTok) {
+      throw new Error(
+        `${TEST_FILE}:${line} declares a Deno.test whose name is not a string literal (a template ` +
+          'substitution or a variable). The census keys on the name deno reports, so it must be ' +
+          'written out.',
+      );
+    }
+    const rest = src.slice(nameTok.end, src.indexOf('fn:', nameTok.end) + 1);
+    const ig = /(?:^|[\s,{])ignore:\s*([^\n,]*)/.exec(rest);
+    out.push({ name: nameTok.value, ignore: (ig?.[1] ?? '').trim() });
+  }
+  return out;
+}
+
+/**
+ * Declared cases no mutation measures and none is owed, each with the reason.
+ *
+ * The § 1273 shape: a guard that demands a measurement demands either the
+ * measurement or a declared reason it is not owed, and `staleExemptions` fails
+ * the moment a reason stops describing the file.
+ * @type {{ name: string, reason: string }[]}
+ */
+export const UNMEASURED_CASES = [
+  {
+    name: 'handler-envelope tests skipped',
+    reason:
+      'not an assertion. It is registered only inside `if (SKIP)` — the branch taken when ' +
+      'SUPABASE_TEST_URL is unset — carries `ignore: true` and an empty body, and exists so ' +
+      '`deno test` prints one ignored case instead of "no tests". It cannot run on the path this ' +
+      'guard measures, and a mutation naming it would phantom on every honest run.',
+  },
+];
+
+/**
+ * Cases the file declares that no mutation kills and no exemption excuses.
+ * @param {DeclaredCase[]} declared
+ * @param {Mutation[]} mutations
+ * @param {{ name: string, reason: string }[]} exemptions
+ * @returns {string[]}
+ */
+export function unnamedDeclaredCases(declared, mutations, exemptions = UNMEASURED_CASES) {
+  const claimed = new Set(mutations.flatMap((m) => m.kills));
+  const excused = new Set(exemptions.map((e) => e.name));
+  return declared.map((d) => d.name).filter((n) => !claimed.has(n) && !excused.has(n));
+}
+
+/**
+ * Exemptions that have stopped describing the file: one naming a case that is
+ * gone, one whose case a mutation now measures (the exemption is spent, and
+ * leaving it lets a later rename slip back through unnamed), and one carrying
+ * no reason at all.
+ * @param {DeclaredCase[]} declared
+ * @param {Mutation[]} mutations
+ * @param {{ name: string, reason: string }[]} exemptions
+ * @returns {{ name: string, why: string }[]}
+ */
+export function staleExemptions(declared, mutations, exemptions = UNMEASURED_CASES) {
+  const names = new Set(declared.map((d) => d.name));
+  const claimed = new Set(mutations.flatMap((m) => m.kills));
+  /** @type {{ name: string, why: string }[]} */
+  const out = [];
+  for (const e of exemptions) {
+    if (!e.reason || !e.reason.trim()) {
+      out.push({ name: e.name, why: 'carries no reason, so nothing says why it is not owed one' });
+    }
+    if (!names.has(e.name)) {
+      out.push({ name: e.name, why: 'the test file no longer declares a case of that name' });
+    } else if (claimed.has(e.name)) {
+      out.push({ name: e.name, why: 'a mutation now measures it, so the exemption is spent' });
+    }
+  }
+  return out;
 }
 
 /**
