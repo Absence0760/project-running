@@ -63,6 +63,29 @@ List<File> _familyFiles() {
   return out;
 }
 
+/// The files the rule covers: the store family, plus every file under [_root]
+/// that reads a stored date-time through the strict reader.
+///
+/// The second half is what carries the rule past a family it could never
+/// have described — `local_run_store`, `social_service` and `race_controller`
+/// are not stores and no derivation from `extends OfflineSyncStore<` reaches
+/// them (decisions § 1377). A file joins by USING the reader rather than by
+/// being listed, so the next file a lane hardens is covered the day it lands;
+/// and having joined, it may not keep a raw parse beside the checked one,
+/// which is the regression this exists to refuse. Dropping the last strict
+/// read to leave again is caught by the call-site floor below, not here.
+List<File> _coveredFiles() {
+  final out = _familyFiles();
+  final seen = out.map((f) => f.path).toSet();
+  for (final f in dartFiles(_root)) {
+    if (seen.contains(f.path)) continue;
+    if (blankNonCode(f.readAsStringSync()).contains('parseIsoStrict')) {
+      out.add(f);
+    }
+  }
+  return out;
+}
+
 /// The nearest top-level `DateTime …(` declaration at or above [line], or ''.
 String _enclosingReader(List<String> lines, int line) {
   for (var i = line; i >= 0; i--) {
@@ -73,15 +96,18 @@ String _enclosingReader(List<String> lines, int line) {
 }
 
 void main() {
-  test('the store family reads a timestamp through one reader', () {
+  test('every covered file reads a date-time through one reader', () {
     expect(rootExists(_root), isTrue, reason: 'scan root $_root has moved');
 
-    final files = _familyFiles();
-    // The family was seven stores plus the base when this guard landed. A
-    // count that has COLLAPSED means the derivation stopped matching, and a
-    // guard scanning nothing passes for the wrong reason.
-    expect(files.length, greaterThanOrEqualTo(8),
-        reason: 'derived family is ${files.map((f) => f.path)}');
+    // The family was seven stores plus the base when this guard landed, and
+    // three more files joined by using the reader in § 1377. A count that has
+    // COLLAPSED means a derivation stopped matching, and a guard scanning
+    // nothing passes for the wrong reason.
+    expect(_familyFiles().length, greaterThanOrEqualTo(8),
+        reason: 'derived family is ${_familyFiles().map((f) => f.path)}');
+    final files = _coveredFiles();
+    expect(files.length, greaterThanOrEqualTo(11),
+        reason: 'covered set is ${files.map((f) => f.path)}');
 
     final offenders = <String>[];
     for (final file in files) {
@@ -99,9 +125,30 @@ void main() {
     }
 
     expect(offenders, isEmpty,
-        reason: 'read the column through parseServerTimestamp, or state a '
-            '`$_marker` reason why this site must keep the parsed zone:\n'
-            '${offenders.join('\n')}');
+        reason: 'read the column through parseServerTimestamp / '
+            'parseIsoStrictValue, or state a `$_marker` reason why this site '
+            'must keep the parsed zone:\n${offenders.join('\n')}');
+  });
+
+  test('the strict reader is still called where those files were hardened',
+      () {
+    // The covered-set floor above catches a file leaving the set outright.
+    // This catches the subtler half: a file that keeps ONE strict read as a fig
+    // leaf while reverting the rest, which leaves the set the same size and the
+    // rule doing nothing. Anchored on the COUNT for the reason § 1344 anchored
+    // its own — removing the check cannot remove the expectation. Seventeen
+    // when § 1377 landed: `social_service` 11, `race_controller` 3,
+    // `offline_sync_store` 2 (the two named readers), `local_run_store` 1.
+    var sites = 0;
+    for (final f in dartFiles(_root)) {
+      final code = blankNonCode(f.readAsStringSync());
+      sites += RegExp(r'parseIsoStrict(Value|Required)?\(')
+          .allMatches(code)
+          .length;
+    }
+    expect(sites, greaterThanOrEqualTo(15),
+        reason: 'a file that stops calling the strict reader leaves the '
+            'covered set, so this floor is what keeps it in');
   });
 
   test('the shared readers exist and the family actually uses them', () {

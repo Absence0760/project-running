@@ -485,14 +485,13 @@ class SocialService extends ChangeNotifier {
     if (raw is! List) return const [];
     return raw.map((r) {
       final row = Map<String, dynamic>.from(r as Map);
-      final paid = row['paid_at'] as String?;
       return DonationFeedEntry(
         displayName: row['display_name'] as String?,
         message: row['message'] as String?,
         amountCents: (row['amount_cents'] as num?)?.toInt() ?? 0,
         currency: (row['currency'] as String?) ?? 'usd',
         isAnonymous: (row['is_anonymous'] as bool?) ?? false,
-        paidAt: paid != null ? DateTime.tryParse(paid) : null,
+        paidAt: parseIsoStrictValue(row['paid_at']),
       );
     }).toList();
   }
@@ -1191,7 +1190,11 @@ class SocialService extends ChangeNotifier {
     for (final row in rows) {
       final event = row['events'] as Map<String, dynamic>?;
       if (event == null) continue;
-      final instance = DateTime.parse(row['instance_start'] as String);
+      // An unreadable occurrence cannot be checked against the cancellation
+      // list, so it is skipped rather than shown — the same fail-closed rule
+      // the comment above states (decisions § 1377).
+      final instance = parseIsoStrictValue(row['instance_start']);
+      if (instance == null) continue;
       final cancelled = cancelledByEvent[row['event_id'] as String] ?? const [];
       if (isOccurrenceCancelled(cancelled, instance)) continue;
       return EventView(
@@ -1352,7 +1355,7 @@ class SocialService extends ChangeNotifier {
       for (final rows in pages) {
         for (final r in (rows as List)) {
           final id = (r as Map)['event_id'];
-          final at = DateTime.tryParse('${r['instance_start']}');
+          final at = parseIsoStrictValue(r['instance_start']);
           if (id is! String || at == null) continue;
           (out[id] ??= <DateTime>[]).add(at.toUtc());
         }
@@ -1376,11 +1379,12 @@ class SocialService extends ChangeNotifier {
           .from('event_exceptions')
           .select('instance_start')
           .eq('event_id', eventId);
-      return {
-        for (final r in (rows as List))
-          if (DateTime.tryParse('${(r as Map)['instance_start']}') != null)
-            DateTime.parse('${r['instance_start']}').toUtc(),
-      };
+      final out = <DateTime>{};
+      for (final r in (rows as List)) {
+        final at = parseIsoStrictValue((r as Map)['instance_start']);
+        if (at != null) out.add(at.toUtc());
+      }
+      return out;
     } catch (e) {
       debugPrint('fetchCancelledInstances failed for $eventId: $e');
       return const <DateTime>{};
@@ -1489,7 +1493,7 @@ class SocialService extends ChangeNotifier {
           organiserApproved: r['organiser_approved'] as bool? ?? false,
           ageGradePct: (r['age_grade_pct'] as num?)?.toDouble(),
           note: r['note'] as String?,
-          createdAt: DateTime.parse(r['created_at'] as String),
+          createdAt: parseIsoStrictRequired(r['created_at'], 'created_at'),
         ),
     ];
   }
@@ -1683,7 +1687,7 @@ class SocialService extends ChangeNotifier {
       for (final r in (rows as List).cast<Map<String, dynamic>>())
         RecentRunRow(
           id: r['id'] as String,
-          startedAt: DateTime.parse(r['started_at'] as String),
+          startedAt: parseIsoStrictRequired(r['started_at'], 'started_at'),
           durationS: (r['duration_s'] as num).toInt(),
           distanceM: (r['distance_m'] as num).toDouble(),
           activityType: (r['activity_type'] as String?) ?? 'run',
@@ -1907,8 +1911,8 @@ class SocialService extends ChangeNotifier {
       scope: r['scope'] as String,
       goalValue: (r['goal_value'] as num?),
       activityType: r['activity_type'] as String?,
-      startsAt: DateTime.parse(r['starts_at'] as String),
-      endsAt: DateTime.parse(r['ends_at'] as String),
+      startsAt: parseIsoStrictRequired(r['starts_at'], 'starts_at'),
+      endsAt: parseIsoStrictRequired(r['ends_at'], 'ends_at'),
       isPublic: (r['is_public'] as bool?) ?? true,
       joined: joined,
       myValue: myValue,
@@ -1944,10 +1948,8 @@ class SocialService extends ChangeNotifier {
       counts[cid] = (counts[cid] ?? 0) + 1;
       if (uid != null && m['user_id'] == uid) {
         mine.add(cid);
-        final completedRaw = m['completed_at'] as String?;
-        if (completedRaw != null) {
-          myCompletedAt[cid] = DateTime.parse(completedRaw);
-        }
+        final completedAt = parseIsoStrictValue(m['completed_at']);
+        if (completedAt != null) myCompletedAt[cid] = completedAt;
       }
     }
     final enriched = rows
@@ -1990,12 +1992,11 @@ class SocialService extends ChangeNotifier {
     for (final p in parts) {
       if (uid != null && (p as Map)['user_id'] == uid) mineRow = p;
     }
-    final completedRaw = mineRow?['completed_at'] as String?;
     return _challengeFromRow(
       row.cast<String, dynamic>(),
       joined: mineRow != null,
       participantCount: parts.length,
-      completedAt: completedRaw == null ? null : DateTime.parse(completedRaw),
+      completedAt: parseIsoStrictValue(mineRow?['completed_at']),
       myTeamClubId: mineRow?['team_club_id'] as String?,
     );
   }
@@ -2087,14 +2088,13 @@ class SocialService extends ChangeNotifier {
   Future<List<ChallengeView>> myActiveChallenges() async {
     final raw = await _c.rpc('my_active_challenges');
     return ((raw ?? <dynamic>[]) as List).whereType<Map>().map((r) {
-      final completedRaw = r['completed_at'] as String?;
       return _challengeFromRow(
         r.cast<String, dynamic>(),
         joined: true,
         myValue: r['my_value'] as num?,
         myRank: (r['my_rank'] as num?)?.toInt(),
         participantCount: (r['participant_count'] as num?)?.toInt() ?? 0,
-        completedAt: completedRaw == null ? null : DateTime.parse(completedRaw),
+        completedAt: parseIsoStrictValue(r['completed_at']),
       );
     }).toList();
   }

@@ -52,6 +52,21 @@ DateTime? parseIsoStrict(String text) {
 DateTime? parseIsoStrictValue(dynamic v) =>
     v is String && v.isNotEmpty ? parseIsoStrict(v) : null;
 
+/// [parseIsoStrict] for a field a row cannot be shaped without, replacing
+/// `DateTime.parse(row['x'] as String)`.
+///
+/// Throws on exactly the values that cast-then-parse already threw on — a
+/// non-`String`, an empty field, text that is not ISO 8601 — and additionally
+/// on the out-of-range text `DateTime.parse` would have answered with a rolled
+/// over date. Refusing is what the caller already does with an unreadable
+/// column; the change is that an IMPOSSIBLE one is now unreadable too, rather
+/// than a confident wrong answer nothing downstream can question.
+DateTime parseIsoStrictRequired(dynamic v, String field) {
+  final at = parseIsoStrictValue(v);
+  if (at == null) throw FormatException('$field is not a usable date-time', v);
+  return at;
+}
+
 /// `DateTime.parse`'s own accepted shape, capturing every component so each
 /// can be range-checked. Mirrors the SDK pattern exactly — a narrower one
 /// would refuse text the platform accepts, which is a regression rather than a

@@ -53,6 +53,20 @@ class RunSummary {
     this.synced = false,
   });
 
+  /// A [Run.metadata] value of the expected type, or null.
+  ///
+  /// `metadata` is a jsonb bag with no schema and no type-level protection, so
+  /// a value of the wrong type is a thing it can hold — written by another
+  /// client, an import, or a hand-edited row. A hard cast made that throw out
+  /// of the projection, which the store's save path does not catch, so ONE
+  /// malformed bag value discarded the whole run rather than the one field it
+  /// applied to. `last_modified_at` is the worst of the five to lose that way:
+  /// it is the clock deciding which copy of a run survives a merge
+  /// (decisions § 1377).
+  static String? _string(dynamic v) => v is String ? v : null;
+
+  static num? _number(dynamic v) => v is num ? v : null;
+
   /// Project a full [Run] into a summary. [synced] comes from the store's
   /// sync-state sidecar, not the run itself.
   factory RunSummary.fromRun(Run run, {required bool synced}) {
@@ -63,14 +77,14 @@ class RunSummary {
       duration: run.duration,
       distanceMetres: run.distanceMetres,
       source: run.source,
-      activityType: meta?[MetadataKeys.activityType] as String?,
+      activityType: _string(meta?[MetadataKeys.activityType]),
       externalId: run.externalId,
-      avgBpm: (meta?[MetadataKeys.avgBpm] as num?)?.toDouble(),
-      elevationM: (meta?[MetadataKeys.elevationM] as num?)?.toDouble(),
+      avgBpm: _number(meta?[MetadataKeys.avgBpm])?.toDouble(),
+      elevationM: _number(meta?[MetadataKeys.elevationM])?.toDouble(),
       indoor: meta?[MetadataKeys.indoor] == true,
       routeId: run.routeId,
-      lastModifiedAt: meta?[MetadataKeys.lastModifiedAt] as String?,
-      createdByUserId: meta?[MetadataKeys.createdByUserId] as String?,
+      lastModifiedAt: _string(meta?[MetadataKeys.lastModifiedAt]),
+      createdByUserId: _string(meta?[MetadataKeys.createdByUserId]),
       synced: synced,
     );
   }

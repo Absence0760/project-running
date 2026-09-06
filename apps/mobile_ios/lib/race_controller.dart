@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -58,7 +59,7 @@ class PendingRaceResult {
         distanceM is! num) {
       return null;
     }
-    final parsed = DateTime.tryParse(instance);
+    final parsed = parseIsoStrict(instance);
     if (parsed == null) return null;
     return PendingRaceResult(
       eventId: eventId,
@@ -194,7 +195,8 @@ class RaceController extends ChangeNotifier {
       // of the slowest one rather than the sum of all of them.
       final sessionResults = await Future.wait(list.map((r) async {
         final eventId = r['event_id'] as String;
-        final inst = DateTime.parse(r['instance_start'] as String);
+        final inst =
+            parseIsoStrictRequired(r['instance_start'], 'instance_start');
         final res = await _c
             .from('race_sessions')
             .select('status, started_at')
@@ -214,9 +216,7 @@ class RaceController extends ChangeNotifier {
           eventId: s.eventId,
           instanceStart: s.inst,
           status: res['status'] as String,
-          startedAt: res['started_at'] == null
-              ? null
-              : DateTime.parse(res['started_at'] as String),
+          startedAt: parseIsoStrictValue(res['started_at']),
           eventTitle: title,
         );
         // Prefer running over armed if we somehow see both.
