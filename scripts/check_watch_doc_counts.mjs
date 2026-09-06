@@ -201,6 +201,39 @@ export function attributeCount(src, attr) {
 }
 
 /**
+ * The module names `core/src/lib.rs` declares, in declaration order.
+ *
+ * `lib.rs`'s own list is the population, not the directory listing: a `.rs`
+ * file no `mod` declares is not compiled and its tests do not run, so counting
+ * the directory would report tests that do not exist.
+ * @param {string} src @returns {string[]}
+ */
+export function declaredModules(src) {
+	const mods = [
+		...stripComments(src, 'rust').matchAll(/^\s*(?:pub\s+)?mod\s+([a-z_][a-z0-9_]*)\s*;/gm),
+	].map((m) => m[1]);
+	if (mods.length === 0) {
+		throw new Error('check_watch_doc_counts: no `mod` declarations in core/src/lib.rs');
+	}
+	return mods;
+}
+
+/**
+ * `#[test]` attributes in a Rust source, comments stripped.
+ *
+ * A grep is only trustworthy here because it was measured against the runtime:
+ * `cargo test --target <host> -p watch_core` reports 2428 for the lib target
+ * and this count is 2428, so the crate declares its tests plainly — no
+ * generated tests, no `#[cfg(feature)]`-gated ones. If that stops being true
+ * the two diverge and this number is no longer the one that runs, which is
+ * what the doc sentence it backs promises.
+ * @param {string} src @returns {number}
+ */
+export function testFnCount(src) {
+	return (stripComments(src, 'rust').match(/#\[\s*test\s*\]/g) ?? []).length;
+}
+
+/**
  * The variant names of `pub enum <name>`, in declaration order.
  *
  * Comments go first (a doc comment names other variants), then attributes
@@ -311,6 +344,23 @@ export function derivedValue(src, name, expr, value) {
 
 /** @type {Row[]} */
 export const REGISTRY = [
+	{
+		id: 'core.host_tests',
+		symbol: '`#[test]` fns across the modules `core/src/lib.rs` declares',
+		resolve: (read) => {
+			const lib = read(`${CORE}/lib.rs`);
+			let n = testFnCount(lib);
+			for (const m of declaredModules(lib)) n += testFnCount(read(`${CORE}/${m}.rs`));
+			return n;
+		},
+		phrases: ['{n} host tests in `watch_core`'],
+	},
+	{
+		id: 'privacy.host_tests',
+		symbol: '`#[test]` fns in `core/src/privacy.rs`',
+		resolve: (read) => testFnCount(read(`${CORE}/privacy.rs`)),
+		phrases: ['with {n} host tests'],
+	},
 	{
 		id: 'ble.characteristics',
 		symbol: '`#[characteristic(...)]` rows in `app/src/tasks/ble.rs`',
@@ -587,6 +637,7 @@ export const SWEEP_NOUNS = [
 	'-lap storage budget',
 	'-rung catalogue',
 	'text columns',
+	'host tests?',
 	'-sample elevation ring',
 ];
 
@@ -597,6 +648,23 @@ export const SWEEP_NOUNS = [
  * @type {Array<{ file: string, text: string, reason: string }>}
  */
 export const NOT_A_SYMBOL_COUNT = [
+	{
+		file: 'docs/custom_watch/roadmap.md',
+		text: '407 host tests',
+		reason:
+			'The tail of "2,407", and a WORKSPACE sweep figure — every crate plus the ' +
+			'integration binaries — not `watch_core`\'s own. It carries its command and its ' +
+			'measurement date in the same sentence, which is what makes it honest as a ' +
+			'dated snapshot; nothing here can re-derive it without running cargo.',
+	},
+	{
+		file: 'docs/custom_watch/quality_standards.md',
+		text: 'two host tests',
+		reason:
+			'Two named tests over `Recorder` that guarded the #330 re-anchor, not a count ' +
+			'of any symbol. The sentence is about which guards existed when the fixture ' +
+			'was written.',
+	},
 	{
 		file: 'docs/custom_watch/firmware.md',
 		text: 'two characteristics',

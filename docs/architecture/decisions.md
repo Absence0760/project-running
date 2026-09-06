@@ -24058,3 +24058,46 @@ confirm, in order: (1) `plutil -p …/WatchApp.app/Info.plist` after a build sho
 `WKWatchOnly` is removed and `WKCompanionAppBundleIdentifier` set to
 `com.threkir.app`; (4) `test-watch-ios` still installs on an unpaired watch
 simulator; (5) a paired physical device completes one run sync end to end.
+
+## 1257. The watch README's test counts are a chronology, so the fix is a present-tense figure that is guarded — not a correction
+
+`apps/custom_watch/README.md`'s dated batch notes state a count per ported core
+and a `watch_core` total per batch — "924 host tests" on 2026-07-11,
+`plan_replan` "13". Both are long stale. § 1181's rule says a measured count in
+prose is derived from the guard that measures it or it is not stated, and the
+filing offered two fixes: mark the notes as as-of, or move the counts into a
+present-tense table a guard can read.
+
+Neither, exactly. `check_watch_doc_counts.mjs`'s own header already answers half
+of it: a dated log is out of scope **deliberately** (§ 793), because a batch note
+records what was true on the day of the batch and rewriting it would misdescribe
+the batch it describes. So hand-correcting "924" is wrong twice — it rots again,
+and it falsifies a record. What was actually missing was a present-tense figure
+anywhere: nothing in the doc set stated the current count, so a reader had only
+the chronology to take one from. That figure now lives in
+`apps/custom_watch/CLAUDE.md` (which IS in `DOC_FILES`), the README's chronology
+carries one banner saying its counts are as-of and pointing there, and no
+historical number was touched.
+
+**The figure is derived, and the derivation was validated against the runtime
+before it was trusted.** A new registry row resolves `core.host_tests` as the
+`#[test]` attributes across the modules `core/src/lib.rs` DECLARES — lib.rs's
+own list, not the directory, because a `.rs` file no `mod` declares is not
+compiled and its tests do not run. That count is **2428**, and `cargo test
+--target x86_64-unknown-linux-gnu -p watch_core` reports `running 2428 tests` for
+the same target: the crate declares its tests plainly, so the static derivation
+and the runtime agree exactly and the doc sentence promises the number that
+actually runs. The whole-workspace sweep is a different population and is named
+as one — `bin/watch-test.sh`, measured 2,868 passed / 0 ignored — with no guard,
+because that one needs cargo.
+
+**Adding `host tests?` to `SWEEP_NOUNS` immediately found a stale count nobody
+had looked at**: `privacy.md` said `core/src/privacy.rs` has "nine host tests"
+and it has eight. Corrected and registered as its own row, so it cannot rot
+again. Two other numbered occurrences are exempted with written reasons rather
+than registered — `roadmap.md`'s workspace figure (which already carries its
+command and its measurement date, the honest form of a dated snapshot) and
+`quality_standards.md`'s "two host tests over `Recorder`", which names two
+specific guards rather than counting a symbol. Six new tests, three of them
+mutation runs against a throwaway copy: a bumped doc figure, a NEW unregistered
+numbered claim, and a planted `#[test]` in `privacy.rs` each exit non-zero.
