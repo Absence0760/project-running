@@ -8,6 +8,7 @@
 	import { untrack } from 'svelte';
 	import { trackDirty } from '$lib/core/form_dirty';
 	import { TEXT_LIMITS } from '$lib/core/text_limits';
+	import { clubNameNamesSomething } from '$lib/social/club_slug';
 	import UnsavedChangesGuard from './UnsavedChangesGuard.svelte';
 
 	interface Props {
@@ -60,6 +61,15 @@
 	async function submit(e: Event) {
 		e.preventDefault();
 		if (!name.trim() || busy) return;
+		// A name has to name something. Without this a club called `!!!` was
+		// creatable here and refused on the phone, and it landed under the
+		// `CLUB_SLUG_FALLBACK` slug — a permanent public URL of `club` for a club
+		// whose name spells nothing (decisions § 1338). The predicate is the
+		// pair's, not this component's, so the two clients cannot disagree.
+		if (!clubNameNamesSomething(name)) {
+			showToast(m('clubEditor.errNameNeedsCharacter'), 'error');
+			return;
+		}
 		busy = true;
 		try {
 			if (existing) {

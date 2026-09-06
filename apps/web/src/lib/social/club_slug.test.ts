@@ -5,7 +5,12 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 
-import { clubSlug, CLUB_SLUG_FALLBACK, CLUB_SLUG_MAX_LEN } from './club_slug';
+import {
+	clubNameNamesSomething,
+	clubSlug,
+	CLUB_SLUG_FALLBACK,
+	CLUB_SLUG_MAX_LEN,
+} from './club_slug';
 
 test('lower-cases and hyphenates a plain name', () => {
 	assert.equal(clubSlug('Brighton Road Runners'), 'brighton-road-runners');
@@ -90,4 +95,46 @@ test('the cap counts folded characters, not input characters', () => {
 	// `Ü` is one input character and one folded character; a cap applied
 	// before the fold would count the combining mark NFD produces.
 	assert.equal(clubSlug('Ü'.repeat(60)), 'u'.repeat(CLUB_SLUG_MAX_LEN));
+});
+
+// ── clubNameNamesSomething ───────────────────────────────────────────────
+//
+// The pre-flight both create forms run before `clubSlug`. It joined the pair
+// when the web editor turned out to accept a name the phone refused
+// (decisions § 1338).
+
+test('clubNameNamesSomething: a name in any script names something', () => {
+	// The accept side has to be script-agnostic, or § 1281 returns: the phone
+	// once refused every non-Latin club name.
+	for (const name of ['Riverside Runners', 'Бегуны Москвы', 'Αθήνα', '東京', 'نادي', '5']) {
+		assert.equal(clubNameNamesSomething(name), true, name);
+	}
+});
+
+test('clubNameNamesSomething: punctuation, symbols and blanks name nothing', () => {
+	for (const name of ['', '   ', '!!!', '- / .', '***', '\u00a0']) {
+		assert.equal(clubNameNamesSomething(name), false, JSON.stringify(name));
+	}
+});
+
+test('clubNameNamesSomething: control and format characters name nothing', () => {
+	// `Cc` and `Cf` are named explicitly in the class. `Cn` (unassigned) is
+	// deliberately absent — including it is what would make the predicate refuse
+	// a letter this runtime is too old to know.
+	assert.equal(clubNameNamesSomething('\t\n'), false);
+	assert.equal(clubNameNamesSomething('\u200d\u200b'), false);
+});
+
+test('clubNameNamesSomething: one nameable character anywhere is enough', () => {
+	assert.equal(clubNameNamesSomething('!!!a!!!'), true);
+	assert.equal(clubNameNamesSomething('   5   '), true);
+});
+
+test('clubNameNamesSomething: it is wider than the slug it guards', () => {
+	// A Cyrillic name yields no `[a-z0-9]` at all, so the slug is empty and the
+	// caller substitutes the fallback — but the NAME is perfectly good. Testing
+	// the slug for emptiness instead of the name is exactly § 1281's bug.
+	const name = 'Бегуны Москвы';
+	assert.equal(clubSlug(name), '');
+	assert.equal(clubNameNamesSomething(name), true);
 });

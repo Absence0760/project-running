@@ -1655,6 +1655,7 @@ export const en = {
 	"authReset.hint": "Pick something at least {min} characters long.",
 	"authReset.backToSignIn": "Back to sign in",
 	"clubEditor.createFailed": "Failed to create club",
+	"clubEditor.errNameNeedsCharacter": "Name needs at least one letter or digit.",
 	"clubEditor.name": "Name",
 	"clubEditor.namePlaceholder": "e.g. Riverside Runners",
 	"clubEditor.description": "Description",

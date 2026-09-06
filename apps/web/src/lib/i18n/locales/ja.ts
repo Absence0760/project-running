@@ -1639,6 +1639,7 @@ export const messages = {
 	"authReset.hint": "{min} 文字以上のものを選んでください。",
 	"authReset.backToSignIn": "ログインに戻る",
 	"clubEditor.createFailed": "クラブを作成できませんでした",
+	"clubEditor.errNameNeedsCharacter": "名前には少なくとも 1 文字または数字が必要です。",
 	"clubEditor.name": "名前",
 	"clubEditor.namePlaceholder": "例: Riverside Runners",
 	"clubEditor.description": "説明",

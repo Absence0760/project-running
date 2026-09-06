@@ -1644,6 +1644,7 @@ export const messages = {
 	"authReset.hint": "Elige algo de al menos {min} caracteres.",
 	"authReset.backToSignIn": "Volver a iniciar sesión",
 	"clubEditor.createFailed": "No se pudo crear el club",
+	"clubEditor.errNameNeedsCharacter": "El nombre necesita al menos una letra o dígito.",
 	"clubEditor.name": "Nombre",
 	"clubEditor.namePlaceholder": "p. ej. Riverside Runners",
 	"clubEditor.description": "Descripción",
