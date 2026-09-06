@@ -80,6 +80,41 @@ bool outsideFetchWindow(DateTime? at, DateTime? start, DateTime? end) {
   return false;
 }
 
+/// Reads a `timestamptz` column off a row map as an absolute instant,
+/// normalised to UTC.
+///
+/// The UTC step is the reason this is not a bare [DateTime.tryParse]:
+/// `tryParse` answers with a LOCAL `DateTime` whenever the text carries no
+/// zone designator, and every value read here is re-serialised through
+/// `toIso8601String()`, which then writes no zone designator either. The next
+/// reader re-anchors that wall clock in whatever zone it is in — Postgres
+/// among them, since it resolves a zone-less literal in the session's own
+/// TimeZone, so a stored crossing pushed from a device two hours east of UTC
+/// would land two hours off.
+///
+/// NOT for a `date` column. `gear.purchased_at` / `gear.retired_at` are
+/// `date`, whose zone-less text is a calendar DAY rather than an instant:
+/// parsing it gives local midnight, and converting THAT to UTC moves the day
+/// itself for every device west of Greenwich. [LocalGearStore] keeps its own
+/// reader for that reason (decisions § 1289).
+DateTime? parseServerTimestamp(dynamic v) {
+  if (v is String && v.isNotEmpty) return DateTime.tryParse(v)?.toUtc();
+  return null;
+}
+
+/// The modification clock a stored record carries, or `now` when it carries
+/// none this build can read.
+///
+/// Seven `fromJson` factories spelled this out, each casting the field with
+/// `as String?` before parsing it. So an absent clock, an empty one and an
+/// unparseable one all fell back to now, while a clock of the wrong TYPE threw
+/// — and the load and restore paths both catch, so the whole record was
+/// discarded instead. Nothing chose that: a record is not worth less than its
+/// clock, and on the restore path the record came out of a backup archive
+/// carrying work that exists nowhere else (decisions § 1290).
+DateTime storedClockOrNow(dynamic v) =>
+    parseServerTimestamp(v) ?? DateTime.now().toUtc();
+
 /// Disk-backed per-row sync-state machine shared by the gear / gym / food
 /// stores (decisions §73 + §122). One JSON file per row under
 /// `<appDocs>/<storeSubdir>/`, an in-memory `ChangeNotifier` so screens
@@ -828,7 +863,7 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
     final ids = <String>[];
     for (final summary in _summaries.values) {
       final raw = summary[key];
-      final at = raw is String ? DateTime.tryParse(raw) : null;
+      final at = parseServerTimestamp(raw);
       if (at == null) continue;
       if (!at.isBefore(from) && at.isBefore(to)) {
         ids.add(summary['id'] as String);
