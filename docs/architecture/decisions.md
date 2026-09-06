@@ -23876,7 +23876,6 @@ events total, the predicate admits 9 and excludes exactly the 3 finished
 one-offs, and PostgREST returns the same 9 through the client-facing path.
 
 
-<<<<<<< HEAD
 ## 1228. Both plan publishers copy a plan through one shared field list, and a new plan column now fails the build until it is copied or excused
 
 `publishPlanToLibrary` and `publishPlanAsTemplate` do the same thing in two
@@ -24839,7 +24838,7 @@ CommonMark's rule that no other ordinal may interrupt a paragraph, which is why
 "see § 77. Distinct from" is safe). And the reflow test is not a formatting
 nicety: it is the only check in the repo that exercises the fold against real
 content, and a lane adding registry prose should run it before committing.
-=======
+
 ## 1258. The `[§ N](#N)` citation idiom never resolved, so 263 links in `decisions.md` rendered as links and moved the reader nowhere
 
 Nothing in CI had ever read a prose link. Measured over every markdown file git tracks — 4,402 relative links across 324 files, a wider population than the filing's, which had not reached `.claude/` — **303 did not resolve**. The largest class is the in-file citation `[§ 739](#739)`: GitHub slugs `## 739. Title...` as `739-title...`, so a bare number was never an anchor and all 263 of them had been dead since the day the idiom was invented. Ten more had resolved once and stopped when someone reworded the heading, which is the silent half — the link still renders, still looks clickable, and lands the reader at the top of a 23,000-line file. And 30 named a file that is not there: every one of the 29 race-persona hunters walks up three levels to `reviews/README.md` from a directory five below the root, so all 29 landed inside `.claude/agents/`.
@@ -24875,4 +24874,3 @@ No client holds that method. The client-side "fetch the blob then clip the point
 `docs/product/parity.md`'s snap-to-road row still called `routing.dart` a "Dart port of `apps/web/src/lib/routes/routing.ts`", which § 1218 corrected everywhere else; § 1119 had deleted that file's `snapToRoad` / `fetchRoute` / `fetchFullRoute` because nothing imported them. Its test figure was stale too — `test/routing_test.dart` declares 36, not the 9 stated.
 
 The fourth filing in this group was **already fixed and never ticked**, which is § 1217's own pattern recurring. `apps/job_worker/deployment.md:229` was reported as opening five table columns against a three-column header from two unescaped pipes inside a code span; the pipes are escaped at the base commit this round was cut from, so the fix landed in the same PR that filed it. Re-measured rather than trusted, by the filing's own method: across all 369 markdown tables and 2,845 body rows in the repo, counting `|`-delimited cells with backslash escapes honoured, **zero** rows disagree with their header.
->>>>>>> test/789-r40-docs-links
