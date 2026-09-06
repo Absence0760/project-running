@@ -670,6 +670,9 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     ///   - the upload queue + its on-disk track files (`store`) — see
     ///     `LocalRunStore.clear` for why this is fail-closed against
     ///     cross-user upload
+    ///   - the crash checkpoint + its track file (`checkpoints`), which is
+    ///     the SAME payload on a parallel path and used to outlive the
+    ///     queue wipe entirely
     ///   - cached map tiles (`TileSource`)
     private suspend fun tearDownSession() {
         supabase.clearCredentials()
@@ -678,6 +681,25 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         // Drop unsynced runs (+ their track files) so they can't upload
         // under the next user's credentials. See LocalRunStore.clear.
         store.clear()
+        // And the crash checkpoint, on exactly the same reasoning. It is the
+        // same run payload — distance, start, laps, steps, privacy default and
+        // a track file — reached by a different door, and it survived the wipe
+        // above: `sweepOrphanTracks` deliberately KEEPS the file a checkpoint
+        // names, so after a sign-out `gradeRecovery` still graded `Offer` (no
+        // live recording, nothing queued, the file present) and the next user
+        // to sign in was shown a prompt carrying the previous user's distance.
+        // Accepting it queued that run and drained it under the NEW
+        // credentials — user A's GPS trace into user B's account and Storage
+        // prefix, public if A's privacy default was public. Fail-closed, at
+        // the cost of a crashed run that is never recovered because the runner
+        // signed out before recovering it (decisions § 1301).
+        val stranded = checkpoints.current()
+        checkpoints.clear()
+        if (stranded != null) {
+            withContext(Dispatchers.IO) {
+                runCatching { File(stranded.trackFilePath).delete() }
+            }
+        }
         // Drop cached map tiles too — prefetched route tiles reveal where
         // the signed-out user runs, so they don't carry over to the next
         // user on this watch.
@@ -696,6 +718,11 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             stage = Stage.PreRun,
             routes = emptyList(),
             selectedRoute = null,
+            // The prompt may already be on screen — `checkRecovery` runs from
+            // `init` — and it outlived the checkpoint it was raised for, so a
+            // tap after sign-out would have queued a run the store above just
+            // dropped.
+            pendingRecovery = null,
         )
     }
 
