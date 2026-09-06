@@ -28,7 +28,10 @@ import {
 	INGEST,
 	ROUTE_BRIDGE,
 	UNGUARDED_DESTRUCTIVE,
+	WEAR_COVERAGE,
 	check,
+	kotlinNumericConstant,
+	swiftNumericConstant,
 	confirmationDialogSpans,
 	dartInvokeKeys,
 	destructiveButtons,
@@ -62,6 +65,9 @@ const ROUTE_BRIDGE_ABS = join(REPO_ROOT, ROUTE_BRIDGE);
 const STAGED_INGEST = 'WatchIngestBridge.swift';
 /** …and of the Dart end of the route-push envelope. */
 const STAGED_ROUTE_BRIDGE = 'apple_watch_route_bridge.dart';
+/** …and of Wear OS's half of the heart-rate coverage contract. */
+const STAGED_WEAR_COVERAGE = 'HeartRateCoverage.kt';
+const WEAR_COVERAGE_ABS = join(REPO_ROOT, WEAR_COVERAGE);
 const ARMED = join('WatchApp', 'ArmedRoute.swift');
 const DIRECT = join('WatchApp', 'SupabaseService.swift');
 const PBX = join('WatchApp.xcodeproj', 'project.pbxproj');
@@ -82,6 +88,7 @@ function stage() {
 	}
 	cpSync(INGEST_ABS, join(dir, STAGED_INGEST));
 	cpSync(ROUTE_BRIDGE_ABS, join(dir, STAGED_ROUTE_BRIDGE));
+	cpSync(WEAR_COVERAGE_ABS, join(dir, STAGED_WEAR_COVERAGE));
 	return dir;
 }
 
@@ -93,7 +100,12 @@ function runMutated(mutate) {
 	const dir = stage();
 	try {
 		mutate(dir);
-		return check(dir, join(dir, STAGED_INGEST), join(dir, STAGED_ROUTE_BRIDGE));
+		return check(
+			dir,
+			join(dir, STAGED_INGEST),
+			join(dir, STAGED_ROUTE_BRIDGE),
+			join(dir, STAGED_WEAR_COVERAGE),
+		);
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}
@@ -908,4 +920,85 @@ test('buildSettingsBlocks brace-matches rather than running to the next block', 
 	assert.equal(blocks.length, 2);
 	assert.ok(blocks[0].includes('A = 1') && !blocks[0].includes('B = 2'));
 	assert.deepEqual(buildSettingsBlocks('nothing here'), []);
+});
+
+// ─────────────── claim (12): the two wrists' coverage figures ───────────────
+
+test('claim (12) refuses a coverage threshold that differs by wrist', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, STAGED_WEAR_COVERAGE, (s) =>
+			s.replace('const val MIN_AVG_BPM_COVERAGE = 0.5', 'const val MIN_AVG_BPM_COVERAGE = 0.6'),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('minAverageBPMCoverage') && e.includes('0.6')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (12) refuses a freshness window that differs by wrist', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, join('WatchApp', 'HealthKitManager.swift'), (s) =>
+			s.replace('static let sampleFreshInterval: TimeInterval = 30', 'static let sampleFreshInterval: TimeInterval = 45'),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('sampleFreshInterval') && e.includes('45000')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (12) compares the MEANING, not the spelling, across the unit change', () => {
+	// The two hold the window in different units on purpose. Spelling the Wear
+	// figure the way the Swift one is spelled is the divergence, not the fix:
+	// 30 ms is a window nothing survives, and a guard comparing raw literals
+	// would call it agreement.
+	const { errors } = runMutated((dir) => {
+		edit(dir, STAGED_WEAR_COVERAGE, (s) =>
+			s.replace('const val HR_SAMPLE_FRESH_MS = 30_000L', 'const val HR_SAMPLE_FRESH_MS = 30L'),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('Wear OS `HR_SAMPLE_FRESH_MS` is 30 ')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (12) reports rather than passes when a constant is renamed', () => {
+	// A rename is exactly the edit that would take the two figures apart with
+	// nothing watching, so the unreadable rail has to fail loudly rather than
+	// skip. Anchoring on the name is safe only because of this.
+	const { errors } = runMutated((dir) => {
+		edit(dir, join('WatchApp', 'HealthKitManager.swift'), (s) =>
+			s.replaceAll('minAverageBPMCoverage', 'minimumAverageBPMCoverage'),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('Claim (12) cannot read') && e.includes('minAverageBPMCoverage')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (12) reports rather than passes when a figure stops being a literal', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, STAGED_WEAR_COVERAGE, (s) =>
+			s.replace('const val HR_SAMPLE_FRESH_MS = 30_000L', 'const val HR_SAMPLE_FRESH_MS = 30L * 1000L'),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('Claim (12) cannot read') && e.includes('HR_SAMPLE_FRESH_MS')),
+		errors.join('\n'),
+	);
+});
+
+test('the two numeric-constant readers take the literal and nothing around it', () => {
+	assert.equal(swiftNumericConstant('    static let a = 0.5\n', 'a'), 0.5);
+	assert.equal(swiftNumericConstant('    static let b: TimeInterval = 30\n', 'b'), 30);
+	assert.equal(kotlinNumericConstant('const val C = 30_000L\n', 'C'), 30000);
+	assert.equal(kotlinNumericConstant('const val D: Double = 0.5\n', 'D'), 0.5);
+	// A prose mention is not a declaration, and a computed value is not a
+	// literal — both answer null so the caller can report rather than guess.
+	assert.equal(swiftNumericConstant('/// a is 0.5 on both wrists\n', 'a'), null);
+	assert.equal(kotlinNumericConstant('const val C = OTHER * 1000L\n', 'C'), null);
+	assert.equal(kotlinNumericConstant('const val C = 30_000L\n', 'MISSING'), null);
 });

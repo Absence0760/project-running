@@ -91,6 +91,19 @@
 //       with `WKCompanionAppBundleIdentifier`, so a session resolving the
 //       companion question must remove one while adding the other.
 //
+//  (12) The heart-rate coverage figures agree with Wear OS's. `avg_bpm` is
+//       SUPPRESSED below a coverage threshold and coverage itself is advanced
+//       against a sample-freshness window, and both watch clients write the
+//       same `runs.avg_bpm` / `runs.metadata.hr_coverage` on the same
+//       account. Two thresholds is one column with two meanings — the same
+//       run recorded on either wrist keeps its average on one and loses it on
+//       the other — and the two files have said so in each other's doc
+//       comments since § 1083 with nothing able to see a divergence. They are
+//       in NEITHER parity registry and cannot be: those pair web with mobile,
+//       and the watch clients are additive surfaces under § 24. So the rail
+//       is here, the way `check_shared_constants.mjs` carries the rails that
+//       are not two clients of one registry (decisions § 1348).
+//
 // WHAT THIS GUARD DOES NOT PROVE. It parses text. It does not compile Swift,
 // does not run it, and cannot see anything a type-checker would: claim (1)
 // matches a catalog key on the SHAPE of its interpolation, not on the type of
@@ -519,6 +532,82 @@ export const DELEGATE_IDENTITY_GATES = [
 ];
 
 /** The watch target's Xcode project, claim (10)'s second rail. */
+/**
+ * Wear OS's half of the heart-rate coverage contract, relative to the repo
+ * root rather than to `watchRoot` — it is the one file this guard reads
+ * outside the watchOS tier's own two ends, and it is read for the same reason
+ * claims (6) and (7) read the phone's: the figure is written by both and owned
+ * by neither.
+ */
+export const WEAR_COVERAGE = join(
+	'apps', 'watch_wear', 'android', 'app', 'src', 'main', 'kotlin',
+	'com', 'runapp', 'watchwear', 'recording', 'HeartRateCoverage.kt',
+);
+
+/**
+ * The two figures that decide what a finished run may say about its heart
+ * rate, as they are spelled on each wrist.
+ *
+ * `kotlinPerSwift` is how many Kotlin units make one Swift unit — the two
+ * files hold the freshness window in different units on purpose (a
+ * `TimeInterval` is seconds, an Android elapsed-realtime delta is
+ * milliseconds), and a guard that compared the raw literals would demand they
+ * be spelled the same rather than MEAN the same. Integer multipliers, applied
+ * to the Swift figure, so the comparison stays exact.
+ * @type {{ swift: string, kotlin: string, kotlinPerSwift: number, what: string }[]}
+ */
+export const COVERAGE_RAILS = [
+	{
+		swift: 'minAverageBPMCoverage',
+		kotlin: 'MIN_AVG_BPM_COVERAGE',
+		kotlinPerSwift: 1,
+		what:
+			'the share of a run the sensor must have covered for the mean of its ' +
+			'samples to be saved as the run\'s `avg_bpm`. A threshold that differs ' +
+			'by wrist means the same run keeps its average on one watch and loses ' +
+			'it on the other',
+	},
+	{
+		swift: 'sampleFreshInterval',
+		kotlin: 'HR_SAMPLE_FRESH_MS',
+		kotlinPerSwift: 1000,
+		what:
+			'how old the newest sample may be and still count as a delivering ' +
+			'sensor. A window that differs by wrist makes `hr_coverage` two ' +
+			'measurements under one column name — the figure a suppressed average ' +
+			'is then explained by',
+	},
+];
+
+/**
+ * The numeric literal a `static let <name>` is initialised to, or null.
+ *
+ * Deliberately refuses anything that is not a literal: a constant computed
+ * from another expression cannot be compared to the other wrist's by reading,
+ * and reporting "not found" is the honest answer rather than a silent pass.
+ * @param {string} src @param {string} name
+ */
+export function swiftNumericConstant(src, name) {
+	const m = new RegExp(
+		`static\\s+let\\s+${name}\\s*(?::\\s*[A-Za-z0-9_.]+\\s*)?=\\s*(-?[0-9][0-9_]*(?:\\.[0-9]+)?)\\s*$`,
+		'm',
+	).exec(src);
+	return m === null ? null : Number(m[1].replace(/_/g, ''));
+}
+
+/**
+ * The same for Kotlin's `const val <NAME>`, tolerating the `L` / `F` / `D`
+ * suffix and `_` digit separators the Wear side writes its milliseconds with.
+ * @param {string} src @param {string} name
+ */
+export function kotlinNumericConstant(src, name) {
+	const m = new RegExp(
+		`const\\s+val\\s+${name}\\s*(?::\\s*[A-Za-z0-9_.?<>]+\\s*)?=\\s*(-?[0-9][0-9_]*(?:\\.[0-9]+)?)[LlFfDd]?\\s*$`,
+		'm',
+	).exec(src);
+	return m === null ? null : Number(m[1].replace(/_/g, ''));
+}
+
 export const PBXPROJ = join('WatchApp.xcodeproj', 'project.pbxproj');
 
 /** The watch app's committed Info.plist, read by claims (3) and (10). */
@@ -865,9 +954,16 @@ export const UNGUARDED_DESTRUCTIVE = {
  *   for a caller that has no phone half staged.
  * @param {string | null} [routeBridgePath] absolute path to the phone's
  *   `apple_watch_route_bridge.dart`; null skips claim (7) alone.
+ * @param {string | null} [wearCoveragePath] absolute path to Wear OS's
+ *   `HeartRateCoverage.kt`; null skips claim (12) alone.
  * @returns {{ errors: string[], ok: string[] }}
  */
-export function check(watchRoot, ingestPath = null, routeBridgePath = null) {
+export function check(
+	watchRoot,
+	ingestPath = null,
+	routeBridgePath = null,
+	wearCoveragePath = null,
+) {
 	/** @type {string[]} */ const errors = [];
 	/** @type {string[]} */ const ok = [];
 	/** @param {string} rel */
@@ -1391,6 +1487,51 @@ export function check(watchRoot, ingestPath = null, routeBridgePath = null) {
 		}
 	}
 
+	// (12) The two watch clients agree about heart-rate coverage.
+	//
+	//      Neither parity registry can hold this pair and the two files have
+	//      only ever said so to each other in prose, so a tuning edit on one
+	//      wrist has never been visible from the other (decisions § 1348).
+	//      The rail is the FIGURES, not the spelling: the units differ on
+	//      purpose and `kotlinPerSwift` is what converts, so nothing here
+	//      pushes a `TimeInterval` into milliseconds to satisfy a guard.
+	if (wearCoveragePath !== null) {
+		const wear = stripSwiftComments(readFileSync(wearCoveragePath, 'utf8'));
+		let agreed = 0;
+		for (const rail of COVERAGE_RAILS) {
+			const a = swiftNumericConstant(hk, rail.swift);
+			const b = kotlinNumericConstant(wear, rail.kotlin);
+			if (a === null || b === null) {
+				// Not a skip. A renamed or computed constant is exactly the edit
+				// that would take the two figures apart unobserved, so it fails
+				// rather than passing quietly on a rail it can no longer read.
+				errors.push(
+					`Claim (12) cannot read ${a === null ? `\`${rail.swift}\` in ${HEALTHKIT}` : `\`${rail.kotlin}\` in the Wear OS HeartRateCoverage.kt`} ` +
+						'as a numeric literal. It is renamed, computed from something else, or ' +
+						'gone — and either way the two wrists can no longer be compared by reading, ' +
+						`which is the only way they are compared at all. The figure is ${rail.what}.`,
+				);
+				continue;
+			}
+			if (a * rail.kotlinPerSwift === b) {
+				agreed += 1;
+				continue;
+			}
+			errors.push(
+				`Heart-rate coverage disagrees between the two watch clients: watchOS ` +
+					`\`${rail.swift}\` is ${a}, Wear OS \`${rail.kotlin}\` is ${b}` +
+					(rail.kotlinPerSwift === 1
+						? ''
+						: ` (${a} × ${rail.kotlinPerSwift} = ${a * rail.kotlinPerSwift})`) +
+					`. Both write the same account's \`runs.avg_bpm\` and ` +
+					`\`runs.metadata.hr_coverage\`, so this is ${rail.what}.`,
+			);
+		}
+		if (agreed === COVERAGE_RAILS.length) {
+			ok.push(`${agreed} heart-rate coverage figures agree with Wear OS's`);
+		}
+	}
+
 	return { errors, ok };
 }
 
@@ -1400,6 +1541,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 		root,
 		process.argv[3] ?? join(REPO_ROOT, INGEST),
 		process.argv[4] ?? join(REPO_ROOT, ROUTE_BRIDGE),
+		process.argv[5] ?? join(REPO_ROOT, WEAR_COVERAGE),
 	);
 	for (const line of ok) console.log(`  ok: ${line}`);
 	if (errors.length > 0) {
