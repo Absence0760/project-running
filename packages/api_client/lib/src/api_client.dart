@@ -19,10 +19,6 @@ import 'segments_rank.dart';
 // raises 42501 because the role lacks SELECT on the revoked columns.
 // Every read site enumerates the safe columns. The mobile arch-guard
 // test grep-asserts no `from('clubs').select()` / `from('events').select()`.
-const String _clubSafeCols =
-    'id, owner_id, name, slug, description, avatar_url, location_label, '
-    'is_public, join_policy, created_at, updated_at';
-
 const String _eventSafeCols =
     'id, club_id, title, description, starts_at, duration_min, '
     'meet_label, route_id, distance_m, pace_target_sec, capacity, '
@@ -4720,35 +4716,6 @@ class ApiClient {
   }
 
   // ──────────────────── Clubs + events (P1.D) ────────────────────
-
-  /// Create a new club. `joinPolicy` is one of 'open' | 'request' |
-  /// 'invite'. The `enroll_club_owner` trigger auto-inserts the
-  /// owner's club_members row, so we don't add it here.
-  Future<ClubRow> createClub({
-    required String name,
-    required String slug,
-    String? description,
-    String? locationLabel,
-    bool isPublic = true,
-    String joinPolicy = 'open',
-  }) async {
-    final viewerId = _client.auth.currentUser?.id;
-    if (viewerId == null) throw Exception('Not authenticated');
-    final inserted = await _client
-        .from(ClubRow.table)
-        .insert({
-          ClubRow.colOwnerId: viewerId,
-          ClubRow.colName: name,
-          ClubRow.colSlug: slug,
-          ClubRow.colDescription: description,
-          ClubRow.colLocationLabel: locationLabel,
-          ClubRow.colIsPublic: isPublic,
-          ClubRow.colJoinPolicy: joinPolicy,
-        })
-        .select(_clubSafeCols)
-        .single();
-    return ClubRow.fromJson(inserted);
-  }
 
   /// Edit owner-side club fields.
   Future<void> updateClub({
