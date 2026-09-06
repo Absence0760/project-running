@@ -27187,3 +27187,29 @@ triggers would have to come off in the same change or every merge runs the
 analyses twice and two uploads to one SARIF category make the alert set
 flip-flop — the failure that merging `codeql.yml` into `security.yml` existed to
 escape. Declined for a third time on that basis, not foreclosed.
+
+## 1357. `toHaveText` against an SVG `<text>` IS a text assertion — § 1313's mechanism is refuted, and the non-determinism it saw was the un-awaited matched-track fetch
+
+[§ 1313](#1313-tohavetext-against-an-svg-text-is-not-a-text-assertion-and-the-matched-track-render-path-had-no-e2e-coverage-at-all) closed with a transferable rule: "`toHaveText` and `toContainText` are HTML-element assertions; against SVG they neither pass nor fail on the text." Round 42 was handed that as a class to sweep and guard. Measured instead, on the pinned `@playwright/test` and Chromium, against a `data:` page holding one `<text class="extreme-text">TRUE 505 m</text>`:
+
+- `'innerText' in el` is **false** and `el.constructor.name` is `SVGTextElement`, so the premise about the DOM is right;
+- `toHaveText('COMPLETELY WRONG 999 m')` **fails**, reporting `Received: "TRUE 505 m"`;
+- `toContainText('WRONG')` fails the same way;
+- the array form `toHaveText([/105\s*m/, /100\s*m/])` against two `<text>` elements fails, printing both received strings;
+- and a locator resolving to zero elements fails rather than passing vacuously.
+
+Playwright's element-text reader falls back to `textContent` for a node that is not an `HTMLElement`. So no guard was built: banning a matcher that works would fail correct code, which is the [§ 1251](#1251-the-residual-dart-case-gap-was-measured-against-the-wrong-instrument--in-european-text-its-whole-reachable-surface-is-one-code-point) shape in the other direction.
+
+**The observation § 1313 recorded was real; the diagnosis was not.** `/runs/[id]` fires `fetchRunMatchedTrack` **without `await`** — its own comment says "the map will swap to the matched line once it lands; until then it shows the raw track". The recorded band is therefore genuinely drawn first, and every Playwright text matcher auto-retries, so an assertion asking for the RECORDED band is satisfied by the first frame and passes, while on a faster run the window closes before the first poll and it fails. That is exactly "passing against the wrong band on one run and failing against the same band on the next". Reproduced: with the shipped assertion mutated to the recorded band and run five times under the old shape it survived **1 in 3**.
+
+The fix is a settle anchor, not a different reader. `runs/matched-track-render.spec.ts` now arms `page.waitForResponse` on the `.matched.json.gz` download **before** the navigation and awaits it before reading the labels, so every assertion is a claim about the settled page. The same mutation then fails **5 of 5**, and the unmutated spec passes 5 of 5. `extremeLabels` keeps reading `textContent` because it feeds `expect.poll` — the response resolving is one step ahead of Svelte's re-render — not because `toHaveText` cannot see an SVG.
+
+**The transferable rule that replaces the withdrawn one:** an auto-retrying matcher on a surface that renders an intermediate state is a claim about *some* frame, not about the final one. Anchor it on the event that ends the transition, or its negative control is satisfied by the transition itself. Not statically decidable, so no guard — which is why it is recorded here rather than in `fixtures/`.
+
+## 1358. A run is a row and up to three Storage objects; the teardown guard derives all three from `simulate.ts` rather than listing them
+
+`insertRun` uploads `{user_id}/{run_id}.json.gz` for a `track` and `{user_id}/{run_id}.hr.json.gz` for an `hrSeries`; `insertMatchedTrack` ([§ 1313](#1313-tohavetext-against-an-svg-text-is-not-a-text-assertion-and-the-matched-track-render-path-had-no-e2e-coverage-at-all)) added a third, `{user_id}/{run_id}.matched.json.gz`. Only `deleteRun` reads all three columns back before removing the objects. A spec disposing of the run with `admin.from('runs').delete()` takes the row — and by cascade the `run_matched_tracks` row naming the third object — while the gzipped objects stay in the bucket with nothing left that names them, and `supabase db reset` does not clear Storage either.
+
+Surveyed across `tests-e2e/`: **no offender exists today.** Every one of the eighteen files that seeds a Storage-backed run already tears down through `deleteRun` (two seed one and never delete at all, both being account-deletion specs where the removal is the feature under test). The forty-odd direct `from('runs').delete()` calls elsewhere are all on rows that wrote no object, and are not offences. The filing that named "several specs" was written without the survey and is refuted as a live defect.
+
+The rule is stated anyway, as `fixtures/storage-teardown.test.ts`, because the cost of it is one line at the point somebody adds the fourth object. **Nothing in it is a list**: the uploading helpers are found by scanning `simulate.ts` for an exported function whose body reaches `.upload(`; the option names that make them upload (`track`, `hrSeries`) are the `opts.X` guarding those calls; and the columns (`track_url`, `hr_series_url`, `matched_track_url`) are the `*_url` keys those bodies write. A fourth object needs no edit here, a renamed helper cannot leave the scan silently matching nothing, and a call passing a spread counts as seeding because the scan cannot see through it. Three claims follow: the derivations found something (or every assertion below is vacuous), `deleteRun` reads back every column the uploaders write, and no seeding file deletes a `runs` row directly. All four mutations were verified killing them — a planted `track:` beside a direct delete, a spread argument beside one, `deleteRun` losing its `matched_track_url` read, and `.upload(` renamed so nothing is found.

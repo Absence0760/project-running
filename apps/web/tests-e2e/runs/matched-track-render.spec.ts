@@ -21,11 +21,26 @@ import { USER_A } from '../fixtures/users';
  * canvas. The two tracks are given disjoint elevation bands so the extremes
  * name which track was drawn and cannot be reached from the other.
  *
- * Those extremes are SVG `<text>`, which has no `innerText` — so
- * `toHaveText` reads undefined off them and its verdict does not depend on
- * what they say. It was measured passing against the OTHER track's band, and
- * then failing against the same band on the next run. `extremeLabels` reads
- * `textContent` instead, polled so the assertion still waits for the chart.
+ * **Every assertion here is a claim about the SETTLED page, and has to be
+ * written as one.** `fetchRunMatchedTrack` is fired without `await` — the
+ * page draws the RECORDED track immediately and swaps when the second
+ * gzipped object lands. An auto-retrying matcher polls that transition, so
+ * one asking for the recorded band is satisfied by the first frame and
+ * passes; on a faster machine it misses the window and fails. That is the
+ * non-determinism [§ 1313](../../../../docs/architecture/decisions.md)
+ * recorded, and it is a race, not a matcher defect — the SVG explanation
+ * that ADR gave is refuted in § 1357. So the wait is anchored on the matched
+ * object's own download, armed before the navigation: past it the swap has
+ * happened and the labels can only be the matched band. Without it the
+ * inverse assertion — the one that proves this test is sensitive to the
+ * value at all — is satisfied by the first frame, and was measured passing
+ * on one run in three.
+ *
+ * `extremeLabels` reads `textContent` because it feeds `expect.poll` — the
+ * response resolving is a step ahead of Svelte's re-render, so the read
+ * still has to be retried. `toHaveText` would work on these SVG `<text>`
+ * elements too; it is simply the weaker assertion here, matching per element
+ * rather than on the whole normalised array.
  *
  * The `failed` case beside it is the control. Both tracks are renderable, so
  * a page that ignored the matched line entirely would still show a profile,
@@ -83,10 +98,18 @@ test.describe('/runs/[id] — the matched line is what renders', () => {
 	test('a matched run draws the matched elevations, not the recorded ones', async ({ page }) => {
 		await insertMatchedTrack({ run_id: runId, user_id: USER_A.id, track: matchedTrack });
 
+		// Armed before the navigation: this is the settle point the doc
+		// comment describes, and the page has already issued the request by
+		// the time `goto` resolves.
+		const matchedObjectFetched = page.waitForResponse(
+			(r) => r.url().includes('.matched.json.gz') && r.status() === 200,
+			{ timeout: 15_000 },
+		);
 		await page.goto(`/runs/${runId}`);
 		await expect(page.getByRole('heading', { name: 'Elevation Profile' })).toBeVisible({
 			timeout: 15_000,
 		});
+		await matchedObjectFetched;
 
 		// Max pill then min pill, in document order. Both come off the matched
 		// band; neither value exists anywhere in the recorded trace.
