@@ -4282,6 +4282,7 @@ export const messages = {
 	"gym.catalogue.searchPlaceholder": "Rechercher des exercices",
 	"gym.catalogue.categoryLabel": "Catégorie",
 	"gym.catalogue.empty": "Aucun exercice ne correspond.",
+	"gym.catalogue.otherCategory": "« {name} » est déjà dans le catalogue, dans {category}.",
 	"gym.catalogue.customBadge": "Perso",
 	"gym.catalogue.create": "Ajouter « {name} » comme exercice personnalisé",
 	"gym.catalogue.createFailed": "Impossible d’ajouter cet exercice.",

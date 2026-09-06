@@ -4277,6 +4277,7 @@ export const messages = {
 	"gym.catalogue.searchPlaceholder": "種目を検索",
 	"gym.catalogue.categoryLabel": "カテゴリ",
 	"gym.catalogue.empty": "該当する種目がありません。",
+	"gym.catalogue.otherCategory": "「{name}」はすでにカタログにあります（{category}）。",
 	"gym.catalogue.customBadge": "カスタム",
 	"gym.catalogue.create": "「{name}」をカスタム種目として追加",
 	"gym.catalogue.createFailed": "種目を追加できませんでした。",
