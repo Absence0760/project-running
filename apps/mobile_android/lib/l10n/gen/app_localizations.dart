@@ -12490,6 +12490,12 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get prefsCancel;
 
+  /// Inline error in a Preferences number dialog when the typed value falls outside the accepted range
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a value between {min} and {max}.'**
+  String prefsValueOutOfRange(int min, int max);
+
   /// Save button in Preferences dialogs
   ///
   /// In en, this message translates to:
