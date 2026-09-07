@@ -478,3 +478,21 @@ canonical hands the crawler a manifest pointing somewhere else.
 assembled with an exact count, so a new hand-spelled one fails. Note the
 one path that is not under `/share/`: a recap's public page is
 `/recap/share/[id]`, from `buildRecapShareCanonical`.
+
+**Build the JSON-LD with `serialiseJsonLd` from `$lib/util/json_ld` and never
+spell the escape again.** It stringifies and escapes in one step, because the
+two were previously composed by hand at twelve call sites over nine private
+copies of one three-line function — and a thirteenth builder that stringified
+and forgot would put a club name spelling `</script>` into the document as
+markup. The escape is JSON's own `\u003c`, never an HTML entity: a `<script>`
+is a raw-text element, so `&lt;` is not decoded there and would land inside the
+value instead. `util/json_ld_escaping.test.ts` censuses every exported
+`*JsonLd` builder in the tree and calls each with a hostile field, so a new
+builder fails the suite until it is registered with an invocation that proves
+it escapes.
+
+**Clip user text with `clipText` / `collapseAndClip` from `$lib/util/clip_text`.**
+A `<head>` budget is measured in UTF-16 code units, and a raw `slice` can cut
+between the halves of a surrogate pair — a lone surrogate has no UTF-8
+encoding, so a club description crossing the 160-character og:description
+budget mid-emoji reached the crawler with a U+FFFD on the end.
