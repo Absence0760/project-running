@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import '../lib/catalogue_browse.dart';
 import '../lib/exercise_fold_table.dart';
 import '../lib/gym_prs.dart';
 
@@ -37,6 +38,52 @@ void main() {
     test('case, trim, whitespace collapse', () {
       expect(normaliseExerciseName('  Bench  Press '), 'bench press');
       expect(normaliseExerciseName('bench press'), 'bench press');
+    });
+
+    test('the class this key collapses is one the display fold keeps apart', () {
+      // The key answers "is this the same exercise" and the catalogue fold
+      // answers "where does a reader look for it" — deliberately different
+      // questions (decisions § 1334). This measures where they part company,
+      // because the boundary is invisible from either function alone and a
+      // surface that renders a shadowed pair AS a group would inherit it.
+      //
+      // Derived from the class itself rather than listed, so widening
+      // kExerciseWhitespace re-measures instead of silently passing.
+      final members = <int>[];
+      for (var cp = 0; cp <= 0xffff; cp++) {
+        if (kExerciseWhitespace.hasMatch(String.fromCharCode(cp))) members.add(cp);
+      }
+      expect(members.length, 26);
+
+      for (final cp in members) {
+        expect(normaliseExerciseName('Bench${String.fromCharCode(cp)}Press'),
+            'bench press',
+            reason: 'the key unifies every member of its own class');
+      }
+
+      // 25 of the 26 survive the display fold as something other than a plain
+      // space: the fold is built on CANONICAL decomposition, and the only
+      // whitespace with one is U+2000 / U+2001 (to U+2002 / U+2003, still not
+      // U+0020). U+00A0 — the one a phone keyboard and a paste from a web page
+      // actually produce — is among them.
+      final unfolded =
+          members.where((cp) => fold(String.fromCharCode(cp)) != ' ').toList();
+      expect(unfolded.length, 25);
+      expect(unfolded.contains(0x00a0), isTrue);
+      expect(unfolded.contains(0x0020), isFalse);
+    });
+
+    test('two rows sharing a key are separated by the whole block between them', () {
+      // Not merely "not adjacent". Every whitespace member the fold keeps sorts
+      // ABOVE U+0020, so the second spelling files after every name sharing the
+      // first word — an unrelated exercise sits between two rows that are one
+      // exercise, and a reader scanning for a duplicate does not see one.
+      const plain = 'Bench Press';
+      const nbsp = 'Bench\u00a0Press';
+      expect(normaliseExerciseName(plain), normaliseExerciseName(nbsp));
+      expect(compareFoldedNames(plain, 'a', nbsp, 'b'), -1);
+      expect(compareFoldedNames('Bench Row', 'c', nbsp, 'b'), -1);
+      expect(compareFoldedNames(plain, 'a', 'Bench Row', 'c'), -1);
     });
   });
 

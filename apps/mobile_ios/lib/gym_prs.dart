@@ -119,6 +119,19 @@ const List<String> kExerciseCasePostFold = ['\u03c2', '\u03c3'];
 
 /// Normalise a free-text exercise name for grouping: trimmed, lower-cased,
 /// internal whitespace collapsed.
+///
+/// This is the KEY, not the display order. `catalogue_browse`'s `fold` answers
+/// the other question — where a reader looks for the name — and § 1334 records
+/// that keeping the two apart is deliberate. Where they part company is
+/// measured rather than left to be rediscovered: of the 26 code points
+/// [kExerciseWhitespace] collapses onto U+0020, the display fold leaves **25**
+/// distinct from it, because that fold is built on CANONICAL decomposition and
+/// the only whitespace carrying one is U+2000 / U+2001 (to U+2002 / U+2003,
+/// still not a plain space). So two names that share ONE key — `Bench Press`
+/// and `Bench` + U+00A0 + `Press`, which bind to the same PRs, the same routine
+/// rows and the same grouping — sort not merely apart but on opposite sides of
+/// every other name beginning `Bench`, since each kept member sorts above
+/// U+0020. `gym_prs_test.dart` pins both halves of that (decisions § 1496).
 String normaliseExerciseName(String name) =>
     _foldExerciseCase(name.replaceAll(kExerciseWhitespace, ' ').trim())
         .replaceAll(kExerciseCasePostFold[0], kExerciseCasePostFold[1])
