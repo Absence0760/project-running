@@ -1458,7 +1458,7 @@ class ApiClient {
         lat: 0,
         lng: 0,
         bpm: bpm.round(),
-        timestamp: ts is String ? DateTime.tryParse(ts) : null,
+        timestamp: parseIsoStrictValue(ts),
       ));
     }
     return out;
@@ -1524,9 +1524,7 @@ class ApiClient {
       status: status,
       algorithm: row['algorithm'] as String?,
       algorithmVersion: row['algorithm_version'] as String?,
-      matchedAt: row['matched_at'] == null
-          ? null
-          : DateTime.tryParse(row['matched_at'] as String),
+      matchedAt: parseIsoStrictValue(row['matched_at']),
       track: track,
       trackUnreachable: trackUnreachable,
     );
@@ -1746,7 +1744,7 @@ class ApiClient {
         lat: (m['lat'] as num).toDouble(),
         lng: (m['lng'] as num).toDouble(),
         elevationMetres: (m['ele'] as num?)?.toDouble(),
-        timestamp: m['ts'] != null ? DateTime.tryParse(m['ts'] as String) : null,
+        timestamp: parseIsoStrictValue(m['ts']),
         bpm: (m['bpm'] as num?)?.toInt(),
       );
 
@@ -4501,8 +4499,8 @@ class ApiClient {
             runId: maps[i]['run_id'] as String,
             userId: maps[i]['user_id'] as String,
             timeSeconds: (maps[i]['time_seconds'] as num).toDouble(),
-            startedAt: DateTime.parse(maps[i]['started_at'] as String),
-            createdAt: DateTime.parse(maps[i]['started_at'] as String),
+            startedAt: parseIsoStrictRequired(maps[i]['started_at'], 'started_at'),
+            createdAt: parseIsoStrictRequired(maps[i]['started_at'], 'started_at'),
           ),
           athlete: PublicProfile(
             id: maps[i]['user_id'] as String,
@@ -4674,7 +4672,7 @@ class ApiClient {
     for (final row in data) {
       final raw = row[CoachMessageRow.colArchivedAt] as String?;
       if (raw == null || !seen.add(raw)) continue;
-      out.add(DateTime.parse(raw));
+      out.add(parseIsoStrictRequired(raw, CoachMessageRow.colArchivedAt));
     }
     return out;
   }
@@ -5171,7 +5169,8 @@ class ApiClient {
       }),
       limit: limit,
       idOf: (r) => r[RunRow.colId] as String,
-      recencyOf: (r) => DateTime.parse(r[RunRow.colStartedAt] as String),
+      recencyOf: (r) =>
+          parseIsoStrictRequired(r[RunRow.colStartedAt], RunRow.colStartedAt),
     );
     if (runs.isEmpty) return const [];
 
@@ -5301,7 +5300,7 @@ class ApiClient {
       }),
       limit: limit,
       idOf: (w) => w['id'] as String,
-      recencyOf: (w) => DateTime.parse(w['started_at'] as String),
+      recencyOf: (w) => parseIsoStrictRequired(w['started_at'], 'started_at'),
     );
     if (workouts.isEmpty) return const [];
 
@@ -5322,7 +5321,7 @@ class ApiClient {
       final userId = w[GymWorkoutRow.colUserId] as String;
       return LiftFeedEntry(
         id: w['id'] as String,
-        startedAt: DateTime.parse(w['started_at'] as String),
+        startedAt: parseIsoStrictRequired(w['started_at'], 'started_at'),
         title: w['title'] as String?,
         setCount: (w['set_count'] as num?)?.toInt() ?? 0,
         volumeKg: (w['volume_kg'] as num?)?.toDouble() ?? 0,
@@ -5627,8 +5626,8 @@ class ApiClient {
             runId: maps[i]['run_id'] as String,
             userId: maps[i]['user_id'] as String,
             timeSeconds: (maps[i]['time_seconds'] as num).toDouble(),
-            startedAt: DateTime.parse(maps[i]['started_at'] as String),
-            createdAt: DateTime.parse(maps[i]['started_at'] as String),
+            startedAt: parseIsoStrictRequired(maps[i]['started_at'], 'started_at'),
+            createdAt: parseIsoStrictRequired(maps[i]['started_at'], 'started_at'),
           ),
           athlete: PublicProfile(
             id: maps[i]['user_id'] as String,
@@ -5777,9 +5776,7 @@ class ApiClient {
       elevationGainMetres: (row['elevation_m'] as num?)?.toDouble() ?? 0,
       isPublic: row['is_public'] as bool? ?? false,
       surface: row['surface'] as String?,
-      createdAt: row['created_at'] == null
-          ? null
-          : DateTime.parse(row['created_at'] as String),
+      createdAt: parseIsoStrictValue(row['created_at']),
       tags: (row['tags'] as List?)?.cast<String>() ?? const [],
       featured: row['is_featured'] == true,
       runCount: (row['run_count'] as num?)?.toInt() ?? 0,
@@ -6030,7 +6027,7 @@ class ApiClient {
     if (metadata is! Map) return null;
     final raw = metadata[MetadataKeys.expectedReturnAt];
     if (raw is! String) return null;
-    return DateTime.tryParse(raw)?.toLocal();
+    return parseIsoStrict(raw)?.toLocal();
   }
 
   // ─────────────────── Gym (Phase 4 multi-modal, decisions §63) ───────────────────
@@ -6079,19 +6076,37 @@ class ApiClient {
   /// composer can merge them into its autocomplete + bind a typed name to an
   /// exercise_id. Additive — a user who never picks a catalogue entry logs
   /// exactly as before (exercise_id stays null).
+  ///
+  /// One row per exercise: [dedupeShadowedExercises] resolves the shadowed pair
+  /// the two partial uniques on `name_key` deliberately allow, the owner's
+  /// custom winning over the seeded global it shadows. Applied HERE rather than
+  /// at each surface so no consumer carries the rule and none can disagree with
+  /// another about it — the composer used to bind a typed name to whichever of
+  /// the two rows its last-wins map happened to hold.
+  ///
+  /// **An unavailable catalogue is not an empty one, and this throws rather
+  /// than conflating them.** An empty catalogue is the state in which every
+  /// typed name looks free: the picker's exact-match test finds nothing, the
+  /// browse affordance hides itself, and the create path is offered for a name
+  /// the catalogue already holds — which then either succeeds against the
+  /// partial unique and mints a shadow, or 23505s against a row the client
+  /// cannot see. So a failed read must reach the caller as a failure; a `catch`
+  /// here that answered `const []` would erase the distinction for every
+  /// surface at once, and the caller's own state has to carry the third value.
   Future<List<ExerciseRow>> fetchExerciseCatalogue() async {
-    return readAllPages<ExerciseRow>((from, to) async {
-      final rows = await _client
+    final rows = await readAllPages<ExerciseRow>((from, to) async {
+      final page = await _client
           .from(ExerciseRow.table)
           .select()
           .order(ExerciseRow.colName, ascending: true)
           // A seeded global and a user's custom entry can carry the same name.
           .order(ExerciseRow.colId, ascending: true)
           .range(from, to);
-      return (rows as List)
+      return (page as List)
           .map((r) => ExerciseRow.fromJson(r as Map<String, dynamic>))
           .toList();
     });
+    return dedupeShadowedExercises(rows);
   }
 
   /// Create an owner-scoped custom catalogue entry (migration 20270222_001).
@@ -6104,6 +6119,18 @@ class ApiClient {
   /// RLS rejects any author_id other than the caller, so the returned row is
   /// always owned by the signed-in user. Returns null when signed out or on
   /// conflict/error (e.g. a duplicate name_key in the user's own customs).
+  ///
+  /// The blank test is `trim()` because in Dart that IS the rule, not because
+  /// blankness is Dart's idea of whitespace. The rule is `namesAnExercise` —
+  /// `normaliseExerciseName(name) != ''` — which this package cannot call, and
+  /// does not need to: the case fold maps code points to code points and never
+  /// deletes one, so a name folds to the empty key exactly when every code
+  /// point of it is in `kExerciseWhitespace`, and that class is Unicode
+  /// `White_Space` plus U+FEFF, which is `trim()`'s set verbatim.
+  /// `exercise_blank_name_guard_test.dart` measures the identity in both
+  /// directions over every assignable code point, so widening the class fails
+  /// there rather than letting a name that folds to `''` reach the server and
+  /// come back as a 23514 this method reports as an unexplained null.
   Future<ExerciseRow?> createCustomExercise({
     required String name,
     String category = 'other',
@@ -7226,7 +7253,7 @@ class ApiClient {
     }
     final res = await _client.rpc('grant_health_data_consent');
     if (res is! String) return null;
-    return DateTime.tryParse(res);
+    return parseIsoStrict(res);
   }
 
   /// Withdraw health-data consent (GDPR Art 7(3)) via the
@@ -7385,9 +7412,7 @@ class ApiClient {
         athleteId: r['athlete_id'] as String,
         displayName: r['display_name'] as String?,
         avatarUrl: r['avatar_url'] as String?,
-        lastRunAt: r['last_run_at'] == null
-            ? null
-            : DateTime.parse(r['last_run_at'] as String),
+        lastRunAt: parseIsoStrictValue(r['last_run_at']),
         runs7d: (r['runs_7d'] as num?)?.toInt() ?? 0,
         distance7dM: (r['distance_7d_m'] as num?)?.toDouble() ?? 0,
         loadAcute: (r['load_acute'] as num?)?.toDouble() ?? 0,
@@ -7423,10 +7448,8 @@ class ApiClient {
         id: r['id'] as String,
         status: r['status'] as String,
         note: r['note'] as String?,
-        createdAt: DateTime.parse(r['created_at'] as String),
-        acceptedAt: r['accepted_at'] == null
-            ? null
-            : DateTime.parse(r['accepted_at'] as String),
+        createdAt: parseIsoStrictRequired(r['created_at'], 'created_at'),
+        acceptedAt: parseIsoStrictValue(r['accepted_at']),
         userId: otherId,
         displayName: prof?.displayName,
         avatarUrl: prof?.avatarUrl,
@@ -7450,7 +7473,7 @@ class ApiClient {
         id: r['id'] as String,
         inviteToken: r['invite_token'] as String,
         note: r['note'] as String?,
-        createdAt: DateTime.parse(r['created_at'] as String),
+        createdAt: parseIsoStrictRequired(r['created_at'], 'created_at'),
       );
     }).toList();
   }
@@ -7496,7 +7519,7 @@ class ApiClient {
     return (data as List).cast<Map<String, dynamic>>().map((r) {
       return AthleteRunSummary(
         id: r['id'] as String,
-        startedAt: DateTime.parse(r['started_at'] as String),
+        startedAt: parseIsoStrictRequired(r['started_at'], 'started_at'),
         distanceM: ((r['distance_m'] as num?) ?? 0).toDouble(),
         durationS: ((r['duration_s'] as num?) ?? 0).toInt(),
         isPublic: (r['is_public'] as bool?) ?? false,
@@ -7740,7 +7763,7 @@ class EventPhotoView {
         thumb512Path: json['thumb_512_path'] as String?,
         caption: json['caption'] as String?,
         positionIdx: (json['position_idx'] as num).toInt(),
-        createdAt: DateTime.parse(json['created_at'] as String),
+        createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
         uploaderName: uploaderName,
       );
 }
@@ -8009,7 +8032,7 @@ class ActivityRow {
     if (id == null || id.isEmpty || startedAt == null || startedAt.isEmpty) {
       return null;
     }
-    final parsed = DateTime.tryParse(startedAt);
+    final parsed = parseIsoStrict(startedAt);
     if (parsed == null) return null;
     final rawSummary = row['summary'];
     return ActivityRow(
