@@ -10,10 +10,26 @@
 /**
  * At most `max` code units, with the last one spent on an ellipsis when
  * anything was dropped.
+ *
+ * A code-unit index can land between the two halves of a surrogate pair, and
+ * slicing there emits a lone surrogate — which is not text: it has no UTF-8
+ * encoding, so the response encoder substitutes U+FFFD and a club description
+ * cut mid-emoji reaches every crawler with a replacement character on the end.
+ * So the cut steps back off a high surrogate and drops the character whole.
+ * Postgres will not store an unpaired surrogate in `text` or in `jsonb`, so
+ * the cut is the only place one can be introduced.
+ *
+ * A grapheme CLUSTER can still be split — a ZWJ sequence, a base letter and
+ * its combining mark — which changes the glyph without making the string
+ * ill-formed. That is a rendering nicety and is deliberately not attempted
+ * here; it would need Intl.Segmenter and a budget in graphemes.
  */
 export function clipText(s: string, max: number): string {
 	if (s.length <= max) return s;
-	return `${s.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+	const at = Math.max(0, max - 1);
+	const before = at > 0 ? s.charCodeAt(at - 1) : 0;
+	const end = before >= 0xd800 && before <= 0xdbff ? at - 1 : at;
+	return `${s.slice(0, end).trimEnd()}…`;
 }
 
 /**

@@ -98,3 +98,12 @@ test('buildRouteOgSvg — a long route name is clipped to the card, ellipsis inc
 test('escapeHtml — escapes the five reserved characters', () => {
 	assert.equal(escapeHtml(`a<b>&c"d'e`), 'a&lt;b&gt;&amp;c&quot;d&#39;e');
 });
+
+test('buildRouteOgSvg — a route name cut mid-emoji does not reach the rasteriser broken', () => {
+	const svg = buildRouteOgSvg({
+		name: `${'a'.repeat(28)}\u{1F3C3} and more of the name`,
+		track: sampleTrack,
+	});
+	assert.equal(Buffer.from(svg, 'utf8').toString('utf8'), svg);
+	assert.doesNotMatch(svg, /[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+});

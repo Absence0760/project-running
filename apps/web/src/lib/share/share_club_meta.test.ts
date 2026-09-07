@@ -5,6 +5,8 @@ import {
 	buildClubShareDescription,
 	buildClubShareCanonical,
 	buildClubJsonLd,
+	buildShareClubHead,
+	renderShareClubHeadTags,
 } from './share_club_meta';
 import type { SharedClub } from './share_club_lookup';
 
@@ -80,4 +82,20 @@ test('buildClubJsonLd — escapes angle brackets so a name cannot break out of t
 	assert.ok(!json.includes('<'));
 	assert.ok(!json.includes('>'));
 	assert.equal(JSON.parse(json).name, '</script><b>x</b>');
+});
+
+// The description column holds 2,000 characters and the og:description budget
+// is 160, so this cut is routine — and it used to land between the halves of a
+// surrogate pair, which has no UTF-8 encoding: the crawler was served U+FFFD.
+test('buildShareClubHead — a description cut mid-emoji reaches the crawler intact', () => {
+	const description = `${'a'.repeat(158)}\u{1F3C3} and the rest of what the club wrote`;
+	const head = buildShareClubHead({
+		slug: 'hampstead-runners',
+		club: c({ description }),
+		siteUrl: 'https://threkir.com',
+	});
+	const tags = renderShareClubHeadTags(head);
+	assert.equal(Buffer.from(tags, 'utf8').toString('utf8'), tags);
+	assert.doesNotMatch(head.description, /[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+	assert.ok(head.description.endsWith('a…'));
 });
