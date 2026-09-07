@@ -96,7 +96,15 @@ export const WORKFLOW = join('.github', 'workflows', 'security.yml');
  * build step decides their scope. They are not unmeasured: `INTERPRETED` below
  * reads the narrowing their init steps declare instead.
  *
- * @typedef {{ language: string, marker: (name: string) => boolean, envKey: string | null, minSurfaces: number, label: string }} Surface
+ * `sourceExts` is what makes an exclusion's SIZE checkable. An excluded tree
+ * declares how much source it hides and this recomputes it, because "11 Kotlin
+ * files are unscanned" written in prose is a hand-count that stops being true
+ * the next time someone adds a bridge — and the file it stops being true about
+ * is a file no security scan reads. Equality rather than a ceiling: raising the
+ * figure is the moment the exclusion is re-decided, which is the whole point of
+ * declaring it.
+ *
+ * @typedef {{ language: string, marker: (name: string) => boolean, envKey: string | null, minSurfaces: number, label: string, sourceExts: string[] }} Surface
  */
 /** @type {readonly Surface[]} */
 export const SURFACES = [
@@ -106,6 +114,7 @@ export const SURFACES = [
 		envKey: null,
 		minSurfaces: 2,
 		label: 'Go module',
+		sourceExts: ['.go'],
 	},
 	{
 		language: 'java-kotlin',
@@ -113,6 +122,7 @@ export const SURFACES = [
 		envKey: 'CODEQL_KOTLIN_UNBUILT',
 		minSurfaces: 2,
 		label: 'Gradle project',
+		sourceExts: ['.kt', '.java'],
 	},
 ];
 
@@ -177,6 +187,44 @@ export function walkSurfaces(root, marker) {
 	};
 	visit(root);
 	return found.sort();
+}
+
+/**
+ * How many source files of the given extensions live under `dir`, recursively,
+ * skipping the vendored and generated trees `walkSurfaces` skips.
+ *
+ * This is the recomputation an exclusion's declared figure is measured against.
+ * It counts every file the extension names, test sources included: which of
+ * them a particular Gradle task would have compiled is not something this guard
+ * can know, and guessing would make the number softer than the prose it
+ * replaced.
+ *
+ * @param {string} root
+ * @param {string} dir
+ * @param {string[]} exts
+ * @returns {number}
+ */
+export function countSources(root, dir, exts) {
+	let total = 0;
+	/** @param {string} d */
+	const visit = (d) => {
+		/** @type {import('node:fs').Dirent[]} */
+		let entries;
+		try {
+			entries = readdirSync(d, { withFileTypes: true });
+		} catch {
+			return;
+		}
+		for (const e of entries) {
+			if (e.isDirectory()) {
+				if (!SKIP_DIRS.has(e.name)) visit(join(d, e.name));
+				continue;
+			}
+			if (e.isFile() && exts.some((ext) => e.name.endsWith(ext))) total++;
+		}
+	};
+	visit(join(root, dir));
+	return total;
 }
 
 /**
@@ -338,11 +386,19 @@ export function runEnumeration(expr, root) {
 }
 
 /**
+ * `<path>=<hidden-source-count>=<reason>`, one entry per line.
+ *
+ * The count is a field rather than a sentence on purpose. It used to be prose —
+ * "11 Kotlin files are unscanned" — which is a figure nothing recomputed, in a
+ * string whose only other reader is a shell `case` that matches on the path. A
+ * declaration a guard can compare is what separates an exclusion someone is
+ * still deciding from one they stopped looking at.
+ *
  * @param {string} declaration
- * @returns {{ entries: { path: string, reason: string }[], malformed: string[] }}
+ * @returns {{ entries: { path: string, hidden: number, reason: string }[], malformed: string[] }}
  */
 export function parseUnbuilt(declaration) {
-	/** @type {{ path: string, reason: string }[]} */
+	/** @type {{ path: string, hidden: number, reason: string }[]} */
 	const entries = [];
 	/** @type {string[]} */
 	const malformed = [];
@@ -355,7 +411,17 @@ export function parseUnbuilt(declaration) {
 			continue;
 		}
 		const path = line.slice(0, eq).trim().replace(/^\.\//, '');
-		entries.push({ path, reason: line.slice(eq + 1).trim() });
+		const rest = line.slice(eq + 1);
+		const eq2 = rest.indexOf('=');
+		if (eq2 < 0 || !/^\d+$/.test(rest.slice(0, eq2).trim())) {
+			malformed.push(line);
+			continue;
+		}
+		entries.push({
+			path,
+			hidden: Number(rest.slice(0, eq2).trim()),
+			reason: rest.slice(eq2 + 1).trim(),
+		});
 	}
 	return { entries, malformed };
 }
@@ -605,9 +671,11 @@ export function check(opts = {}) {
 		const { entries, malformed } = parseUnbuilt(declaration ?? '');
 		for (const line of malformed) {
 			errors.push(
-				`\`${surface.envKey}\` carries \`${line}\`, which is not \`<path>=<reason>\`. The ` +
-					`step's own skip loop matches on \`<path>=\`, so a line in any other shape ` +
-					`excludes nothing and the build it was meant to skip runs anyway.`,
+				`\`${surface.envKey}\` carries \`${line}\`, which is not ` +
+					`\`<path>=<hidden-source-count>=<reason>\`. The step's own skip loop matches on ` +
+					`\`<path>=\`, so a line missing the path excludes nothing and the build it was ` +
+					`meant to skip runs anyway; a line missing the count is an exclusion that has ` +
+					`stopped saying how much it hides.`,
 			);
 		}
 		for (const entry of entries) {
@@ -624,6 +692,20 @@ export function check(opts = {}) {
 					`\`${surface.envKey}\` excludes \`${entry.path}\` with a ${entry.reason.length}-character ` +
 						`reason. An exclusion here is a hole in a security scan, so it costs at least ` +
 						`${MIN_REASON_CHARS} characters saying what would have to change to close it.`,
+				);
+			}
+			if (!walked.includes(entry.path)) continue;
+			const actual = countSources(root, entry.path, surface.sourceExts);
+			if (actual !== entry.hidden) {
+				errors.push(
+					`\`${surface.envKey}\` says \`${entry.path}\` hides ${entry.hidden} ` +
+						`${surface.sourceExts.join('/')} file(s) and it now holds ${actual}. ` +
+						(actual > entry.hidden
+							? `Source has landed in a tree the ${surface.language} analysis does not read, ` +
+								`and the analysis reports clean over it either way. `
+							: `The exclusion covers less than it was granted for. `) +
+						`Raise or lower the figure deliberately — that edit is the exclusion being ` +
+						`re-decided, which is the only thing keeping it from being one nobody looks at.`,
 				);
 			}
 		}
@@ -643,7 +725,9 @@ export function check(opts = {}) {
 			`${surface.language}: the \`${jobs[0]}\` job enumerates all ${walked.length} ` +
 				`${surface.label}(s) from the tree; ${scanned.length} scanned` +
 				(entries.length > 0
-					? `, ${entries.length} declared unbuilt (${entries.map((e) => e.path).join(', ')})`
+					? `, ${entries.length} declared unbuilt (${entries
+							.map((e) => `${e.path}: ${e.hidden} file(s)`)
+							.join(', ')})`
 					: ''),
 		);
 	}

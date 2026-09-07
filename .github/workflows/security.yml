@@ -220,13 +220,19 @@ jobs:
       # which is the outcome the silent version never produced.
       - name: Build every Gradle project for the CodeQL extractor
         env:
-          # `<path>=<reason>`, one per line. Every entry must name a project
-          # the walk below actually finds, so an entry cannot outlive the
-          # directory it excuses; `scripts/check_codeql_coverage.mjs` in the
-          # `workflow-lint` job fails the PR on a stale one, on a walk that
-          # has stopped matching the tree, and on a reason left blank.
+          # `<path>=<hidden-source-count>=<reason>`, one per line. Every entry
+          # must name a project the walk below actually finds, so an entry
+          # cannot outlive the directory it excuses, and the count is
+          # RECOMPUTED from the tree rather than read: an exclusion that stops
+          # saying how much it hides is one nobody is deciding any more, and a
+          # bridge added to an excluded project has to be somebody's edit
+          # rather than nobody's (decisions § 1500).
+          # `scripts/check_codeql_coverage.mjs` in the `workflow-lint` job
+          # fails the PR on a stale entry, on a walk that has stopped matching
+          # the tree, on a reason left blank, and on a count that no longer
+          # matches the .kt/.java files under the path.
           CODEQL_KOTLIN_UNBUILT: |
-            apps/mobile_android/android=the Flutter Gradle host. settings.gradle.kts reads flutter.sdk out of a local.properties that only the Flutter tool writes, and :app compiles against every plugin subproject melos bootstraps, so building it here means adding the pinned Flutter SDK and a melos bootstrap to this job and paying those minutes on every PR and every weekly cron. Until that trade is taken, 11 Kotlin files are unscanned - MainActivity.kt, RunActionReceiver.kt (a BroadcastReceiver) and the platform-channel bridges that mediate health permissions, calendar access and foreground-service actions (decisions § 1352).
+            apps/mobile_android/android=11=the Flutter Gradle host, and what stands in the way is toolchain minutes rather than a missing file. settings.gradle.kts reads flutter.sdk out of a local.properties that only the Flutter tool writes, and :app compiles against every plugin subproject melos bootstraps, so building it here makes this job a second copy of ci.yml's build-mobile-android - the pinned Flutter SDK (a fourth site check_toolchain_pins.mjs then holds in lockstep), a melos bootstrap, the pub cache and a full Gradle configuration - paid on every PR and every weekly cron. The wrapper is no longer the blocker: decisions § 1439 committed apps/mobile_android/android/gradlew, so the loop below has an executable to run here. The cheaper close is to drive the extractor from build-mobile-android, which already pays for every one of those, and that is deliberately not taken blind: that job is in the CI gate's needs: list, so a tracer that misbehaves blocks every merge rather than one workflow, and its Kotlin task is UP-TO-DATE by the time it could run - which extracts no source and reports exactly as clean as a full scan, the state § 1304 and § 1352 exist to prevent. Unread meanwhile: MainActivity.kt, RunActionReceiver.kt (a BroadcastReceiver) and the platform-channel bridges mediating health permissions, calendar access and foreground-service actions (decisions § 1352, § 1500).
         shell: bash
         run: |
           set -euo pipefail
@@ -243,11 +249,18 @@ jobs:
           for p in $PROJECTS; do
             rel=${p#./}
             reason=""
+            hidden=""
             while IFS= read -r line; do
-              case "$line" in "$rel="*) reason=${line#*=} ;; esac
+              case "$line" in
+                "$rel="*)
+                  rest=${line#*=}
+                  hidden=${rest%%=*}
+                  reason=${rest#*=}
+                  ;;
+              esac
             done <<< "$CODEQL_KOTLIN_UNBUILT"
             if [ -n "$reason" ]; then
-              echo "::warning::$rel is NOT scanned by the java-kotlin analysis: $reason"
+              echo "::warning::$rel is NOT scanned by the java-kotlin analysis; $hidden source file(s) go unread: $reason"
               continue
             fi
             echo "::group::gradlew compileDebugKotlin ($rel)"
