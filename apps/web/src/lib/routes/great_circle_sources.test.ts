@@ -22,6 +22,11 @@
 // `turn_cues.ts`'s bearing and `TrackPreview.svelte`'s screen angle are
 // outside the anchor by construction rather than by exclusion.
 //
+// TEST FILES are outside the scan on purpose. `insert_index.test.ts` carries
+// its own arc inside a reference implementation of the midpoint heuristic it
+// exists to show the divergence from — an independent oracle is the one place
+// a second copy is the point rather than the defect.
+//
 // The table is the residue, not a blessing. Every entry but the canonical is
 // owed the same move, and each states what is stopping it.
 
