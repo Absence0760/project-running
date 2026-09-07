@@ -162,13 +162,6 @@ export const REGISTERED = [
 	{
 		kind: 'clone',
 		key:
-			'apps/web/src/lib/routes/gpx.ts:escapeXml|apps/web/src/lib/routes/route_gpx.ts:escapeXml|apps/web/src/lib/share/og_recap_image.ts:xmlEscape|apps/web/src/lib/share/og_route_image.ts:xmlEscape|apps/web/src/lib/share/og_run_image.ts:xmlEscape|apps/web/src/lib/share/recap_share_image.ts:xmlEscape|apps/web/src/lib/share/sitemap.ts:xmlEscape',
-		reason:
-			'Real duplicate, filed. Seven copies of XML entity escaping under two names. `route_gpx` is half of a registered parity pair, so the consolidated home has to be chosen with the Dart side in view.',
-	},
-	{
-		kind: 'clone',
-		key:
 			'apps/web/src/lib/share/share_event_meta.ts:renderShareEventHeadTags|apps/web/src/lib/share/share_race_meta.ts:renderShareRaceHeadTags|apps/web/src/lib/share/share_route_meta.ts:renderShareRouteHeadTags',
 		reason:
 			'Deliberate. Each renders the head tags for one `/share/{entity}` surface and they are identical only because the four surfaces currently carry the same tag set. They are per-entity by design (§ 205 gives each its own JSON-LD shape), so collapsing them would have to be undone the first time one surface needs a tag the others do not.',
