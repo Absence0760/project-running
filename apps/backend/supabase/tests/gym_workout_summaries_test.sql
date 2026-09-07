@@ -66,6 +66,20 @@ values
   ('dddddddd-dddd-dddd-dddd-dddddddddd06',
    '00000000-0000-0000-0000-0000000d0001', 'w6', now() - interval '1 day');
 
+-- `w2`'s second set is named with a lone TAB, and since 20270712000001 the
+-- database refuses that row: `gym_sets_exercise_key_nonempty_chk` fires on the
+-- empty key the stamping trigger derives from it. The claim assertion 6 makes
+-- -- that the readers exclude such a set from `exercise_count` while the
+-- trigger-maintained `set_count` and `volume_kg` still carry its work -- is now
+-- a claim about rows that PREDATE the constraint, and prod may still hold them.
+-- So the row is filed the only way it can still exist, with the constraint
+-- dropped for the span of this transaction; the rollback puts it back, and
+-- `gym_sets_exercise_key_test.sql` is where the refusal itself is pinned.
+reset role;
+alter table public.gym_sets drop constraint gym_sets_exercise_key_nonempty_chk;
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000d0001"}';
+
 insert into gym_sets (workout_id, set_index, exercise_name, reps, weight_kg)
 values
   ('dddddddd-dddd-dddd-dddd-dddddddddd01', 0, 'Bench Press', 5, 60),
@@ -78,9 +92,11 @@ values
   -- first sighting is a PR on all three metrics, so w2 joined this side's
   -- is_pr set and not that one (decisions § 790).
   ('dddddddd-dddd-dddd-dddd-dddddddddd02', 0, chr(9) || 'Bench Press', 5, 60),
-  -- A whitespace-only name passes the length(1..120) CHECK. A TAB rather than
-  -- a space for the same reason: the old blank-name filter
-  -- btrim(coalesce(name,'')) <> '' kept it as an exercise named " ".
+  -- A whitespace-only name passes `gym_sets_exercise_name_check`'s
+  -- length(1..120) and folds to the empty key, which is why the constraint
+  -- above had to come off to file it. A TAB rather than a space because the old
+  -- blank-name filter btrim(coalesce(name,'')) <> '' kept it as an exercise
+  -- named " ".
   ('dddddddd-dddd-dddd-dddd-dddddddddd02', 1, chr(9), 5, 50),
   ('dddddddd-dddd-dddd-dddd-dddddddddd03', 0, 'bench  press', 3, 62.5),
   ('dddddddd-dddd-dddd-dddd-dddddddddd04', 0, 'Pull-up', 12, null),
