@@ -1,16 +1,17 @@
 // Where the web tree is allowed to compute a great-circle distance, and why
 // each remaining place still does (decisions § 1470).
 //
-// The tree carried SEVENTEEN of them. Ten took the `atan2` form, six the
-// `asin(min(1, sqrt))` form, one the `asin` of a clamped `a` — three spellings
-// of one function, differing by at most 8.2e-8 m over the whole globe and
-// 2.3e-13 m on a leg under 1.5 km, and differing in exactly one place that
-// matters: where rounding pushes the haversine `a` a hair above 1, `sqrt(1-a)`
-// is NaN and the `atan2` form answers NaN where the clamped `asin` answers
-// half a circumference. That is § 305's recorded near-miss, and it was still
-// live in `route_snap.ts` — whose Dart twin has imported the clamped
-// `run_stats.dart:haversineMetres` all along, so the phone and the web
-// answered differently on the same polyline with nothing able to see it.
+// The tree carried SEVENTEEN of them, counted: eight took the `atan2` form,
+// seven `asin(min(1, sqrt))`, and two a bare `asin(sqrt)` of which only one
+// clamped `a` first. Three spellings of one function, agreeing to within
+// 8.2e-8 m over the whole globe and 2.3e-13 m on a leg under 1.5 km — and
+// splitting into TWO behaviours at the one input that matters. Where rounding
+// pushes the haversine `a` a hair above 1, `sqrt(1 - a)` is NaN: nine of the
+// seventeen answered NaN there and eight answered half a circumference. That
+// is § 305's recorded near-miss, and it was still live in `route_snap.ts` —
+// whose Dart twin has imported the clamped `run_stats.dart:haversineMetres`
+// all along, so the phone and the web answered differently on the same
+// polyline with nothing able to see it.
 //
 // ANCHORING. Keyed on the ARC, not on a name, a radius literal or a body
 // fingerprint: a great-circle distance has to take an `asin` or an `atan2` of
