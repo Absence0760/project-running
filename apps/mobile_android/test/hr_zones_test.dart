@@ -172,5 +172,20 @@ void main() {
       expect(defaultZoneCutoffs(maxHrBpm: 0), [114, 133, 152, 171, 190]);
       expect(defaultZoneCutoffs(maxHrBpm: -1), [114, 133, 152, 171, 190]);
     });
+
+    // The sibling HR pref. Unlike the max-HR range this one is write-side
+    // only — no zone reader consults it — so what the test can pin is the
+    // predicate and the fact that the range is the WIDER of the two the tree
+    // already shipped, and therefore refuses nothing the picker was writing
+    // before it was named (decisions § 1409).
+    test('isUsableRestingHrBpm bounds the resting pref inclusively', () {
+      expect(isUsableRestingHrBpm(null), isFalse);
+      expect(isUsableRestingHrBpm(0), isFalse);
+      expect(isUsableRestingHrBpm(kRestingHrBpmMin - 1), isFalse);
+      expect(isUsableRestingHrBpm(kRestingHrBpmMin), isTrue);
+      expect(isUsableRestingHrBpm(kRestingHrBpmMax), isTrue);
+      expect(isUsableRestingHrBpm(kRestingHrBpmMax + 1), isFalse);
+      expect(kRestingHrBpmMin <= 30 && kRestingHrBpmMax >= 120, isTrue);
+    });
   });
 }

@@ -37,7 +37,14 @@
 		weightBoundsIn,
 	} from '$lib/format/weight';
 	import { valueLimit, withinValueLimit } from '$lib/core/column_limits';
-	import { MAX_HR_BPM_MIN, MAX_HR_BPM_MAX, isUsableMaxHrBpm } from '$lib/training/hr_zones';
+	import {
+		MAX_HR_BPM_MIN,
+		MAX_HR_BPM_MAX,
+		isUsableMaxHrBpm,
+		RESTING_HR_BPM_MIN,
+		RESTING_HR_BPM_MAX,
+		isUsableRestingHrBpm
+	} from '$lib/training/hr_zones';
 	import {
 		ACTIVITY_LEVELS,
 		type ActivityLevel,
@@ -350,6 +357,22 @@
 	function saveMaxHr() {
 		if (maxHrOutOfRange) return;
 		autoSave({ max_hr_bpm: maxHrParsed });
+	}
+
+	// `resting_hr_bpm` is the same shape one field up: a jsonb prefs key with no
+	// column, an advisory min/max the onblur autosave never submits through, and
+	// a reader (`training_load`'s TRIMP calibration) that quietly changes what it
+	// does when the figure is not a resting heart rate. The bound is the named
+	// one rather than a third spelling of the two attributes (decisions § 1409).
+	const restingHrParsed = $derived(numberInputValue(restingHr));
+	const restingHrOutOfRange = $derived(
+		restingHrParsed !== null && !isUsableRestingHrBpm(restingHrParsed)
+	);
+	const restingHrBounds = { min: RESTING_HR_BPM_MIN, max: RESTING_HR_BPM_MAX };
+
+	function saveRestingHr() {
+		if (restingHrOutOfRange) return;
+		autoSave({ resting_hr_bpm: restingHrParsed });
 	}
 
 	// HR zones
@@ -1003,7 +1026,10 @@
 			<div class="form-grid">
 				<label>
 					<span class="label-text">{m('prefs.restingHr')}</span>
-					<input type="number" bind:value={restingHr} min="30" max="120" placeholder={m('prefs.restingHrPlaceholder')} onblur={() => autoSave({ resting_hr_bpm: restingHr ? parseInt(restingHr, 10) || null : null })} />
+					<input type="number" bind:value={restingHr} min={RESTING_HR_BPM_MIN} max={RESTING_HR_BPM_MAX} placeholder={m('prefs.restingHrPlaceholder')} aria-invalid={restingHrOutOfRange} data-testid="resting-hr" onblur={saveRestingHr} />
+					{#if restingHrOutOfRange}
+						<span class="field-error" data-testid="resting-hr-error">{m('limits.restingHrOutOfRange', restingHrBounds)}</span>
+					{/if}
 				</label>
 				<label>
 					<span class="label-text">{m('prefs.maxHr')}</span>

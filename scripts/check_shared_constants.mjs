@@ -1535,6 +1535,52 @@ export const REGISTRY = [
 		],
 	},
 	{
+		name: 'usable resting_hr_bpm range',
+		why:
+			'resting_hr_bpm is the second jsonb HR pref with no column and therefore ' +
+			'no CHECK. Both web write paths and the mobile picker now refuse a figure ' +
+			'outside this range, and two spellings of one bound is exactly what let ' +
+			'the max-HR rails disagree (decisions 1245, 1409). The number chosen is ' +
+			'the wider of the two the tree already shipped, so it refuses nothing any ' +
+			'rail accepted before it was named.',
+		match: 'all',
+		compare: 'ordered',
+		rails: [
+			{
+				label: 'web (apps/web/src/lib/training/hr_zones.ts)',
+				sites: (ctx) => {
+					const src = ctx.read('apps/web/src/lib/training/hr_zones.ts');
+					return [
+						{
+							key: 'range',
+							where: 'RESTING_HR_BPM_MIN / RESTING_HR_BPM_MAX',
+							values: [
+								...parseNamedInt(src, 'RESTING_HR_BPM_MIN'),
+								...parseNamedInt(src, 'RESTING_HR_BPM_MAX'),
+							],
+						},
+					];
+				},
+			},
+			{
+				label: 'mobile (apps/mobile_android/lib/hr_zones.dart)',
+				sites: (ctx) => {
+					const src = ctx.read('apps/mobile_android/lib/hr_zones.dart');
+					return [
+						{
+							key: 'range',
+							where: 'kRestingHrBpmMin / kRestingHrBpmMax',
+							values: [
+								...parseNamedInt(src, 'kRestingHrBpmMin'),
+								...parseNamedInt(src, 'kRestingHrBpmMax'),
+							],
+						},
+					];
+				},
+			},
+		],
+	},
+	{
 		name: 'exercise-name case fold',
 		why:
 			'The one fold applied around the frozen case-fold table. Final sigma is ' +

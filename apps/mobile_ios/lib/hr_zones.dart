@@ -79,6 +79,27 @@ const int kMaxHrBpmMax = 240;
 bool isUsableMaxHrBpm(int? value) =>
     value != null && value >= kMaxHrBpmMin && value <= kMaxHrBpmMax;
 
+/// The range a stored `resting_hr_bpm` has to fall in to be used as one. The
+/// second jsonb HR pref with no column and therefore no CHECK, so it is named
+/// beside the max-HR range rather than in `training_load` (its only reader):
+/// "what range is an HR pref allowed to be" having one home is the whole
+/// lesson of § 1245, where three separate spellings of the max-HR bound let
+/// one rail use a value the other two ignored.
+///
+/// 20..200 is the WIDER of the two ranges the tree already shipped — this
+/// screen's own picker took 20..200 while both web inputs carry an advisory
+/// `min="30" max="120"` that never reaches constraint validation — so naming
+/// it refuses nothing any rail accepts today.
+const int kRestingHrBpmMin = 20;
+const int kRestingHrBpmMax = 200;
+
+/// Whether a typed `resting_hr_bpm` may be stored as one. Unlike
+/// `isUsableMaxHrBpm` this is a WRITE-side test only: `training_load` reads the
+/// key with no bound of its own beyond requiring `rest < max`, so nothing here
+/// is claiming the readers ignore what it refuses.
+bool isUsableRestingHrBpm(int? value) =>
+    value != null && value >= kRestingHrBpmMin && value <= kRestingHrBpmMax;
+
 /// The age range Tanaka is applied over, for the same reason.
 const int kTanakaAgeMin = 5;
 const int kTanakaAgeMax = 120;
