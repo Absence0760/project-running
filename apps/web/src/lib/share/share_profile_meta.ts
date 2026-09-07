@@ -6,15 +6,9 @@
 import { normaliseSiteUrl } from './share_meta';
 import { escapeHtml } from '../util/html_escape';
 import type { SharedProfile } from './share_profile_lookup';
+import { serialiseJsonLd } from '../util/json_ld';
 
 const SITE_NAME = 'Threkir';
-
-function escapeJsonLd(json: string): string {
-	return json
-		.replace(/</g, '\\u003c')
-		.replace(/>/g, '\\u003e')
-		.replace(/&/g, '\\u0026');
-}
 
 function clean(raw: string | null | undefined, max: number): string {
 	const collapsed = (raw ?? '').replace(/\s+/g, ' ').trim();
@@ -65,7 +59,7 @@ export function buildProfileJsonLd(
 		url: canonical,
 		mainEntity: person,
 	};
-	return escapeJsonLd(JSON.stringify(graph));
+	return serialiseJsonLd(graph);
 }
 
 export interface ShareProfileMetaInput {

@@ -20,15 +20,9 @@ import { normaliseSiteUrl } from './share_meta';
 import { escapeHtml } from '../util/html_escape';
 import { expandSessionSteps } from '../social/session_steps';
 import type { SharedSession } from './share_session_lookup';
+import { serialiseJsonLd } from '../util/json_ld';
 
 const SITE_NAME = 'Threkir';
-
-function escapeJsonLd(json: string): string {
-	return json
-		.replace(/</g, '\\u003c')
-		.replace(/>/g, '\\u003e')
-		.replace(/&/g, '\\u0026');
-}
 
 function clean(raw: string | null | undefined, max: number): string {
 	const collapsed = (raw ?? '').replace(/\s+/g, ' ').trim();
@@ -126,7 +120,7 @@ function sessionShareName(
 /// page.
 ///
 /// Title, discipline, equipment, and display name are user-controlled, so
-/// the output goes through `escapeJsonLd` before it reaches the DOM.
+/// the output goes through `serialiseJsonLd` before it reaches the DOM.
 export function buildSessionJsonLd(
 	session: SharedSession | null | undefined,
 	opts: { id: string; base: string | null | undefined; displayName?: string | null },
@@ -148,7 +142,7 @@ export function buildSessionJsonLd(
 			],
 		},
 	};
-	return escapeJsonLd(JSON.stringify(graph));
+	return serialiseJsonLd(graph);
 }
 
 export interface ShareSessionMetaInput {

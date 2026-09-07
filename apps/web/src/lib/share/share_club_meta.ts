@@ -6,15 +6,9 @@
 import { normaliseSiteUrl } from './share_meta';
 import { escapeHtml } from '../util/html_escape';
 import type { SharedClub } from './share_club_lookup';
+import { serialiseJsonLd } from '../util/json_ld';
 
 const SITE_NAME = 'Threkir';
-
-function escapeJsonLd(json: string): string {
-	return json
-		.replace(/</g, '\\u003c')
-		.replace(/>/g, '\\u003e')
-		.replace(/&/g, '\\u0026');
-}
 
 function clean(raw: string | null | undefined, max: number): string {
 	const collapsed = (raw ?? '').replace(/\s+/g, ' ').trim();
@@ -70,7 +64,7 @@ export function buildClubJsonLd(
 		graph.image = club.avatar_url;
 	}
 	if (club?.location_label) graph.areaServed = clean(club.location_label, 120);
-	return escapeJsonLd(JSON.stringify(graph));
+	return serialiseJsonLd(graph);
 }
 
 export interface ShareClubMetaInput {

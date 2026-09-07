@@ -22,15 +22,9 @@ import { formatDateStable, normaliseSiteUrl } from './share_meta';
 import { distinctExerciseCount as countDistinctExercises } from '../gym/gym_prs';
 import { escapeHtml } from '../util/html_escape';
 import type { SharedWorkout, SharedWorkoutSet } from './share_workout_lookup';
+import { serialiseJsonLd } from '../util/json_ld';
 
 const SITE_NAME = 'Threkir';
-
-function escapeJsonLd(json: string): string {
-	return json
-		.replace(/</g, '\\u003c')
-		.replace(/>/g, '\\u003e')
-		.replace(/&/g, '\\u0026');
-}
 
 function clean(raw: string | null | undefined, max: number): string {
 	const collapsed = (raw ?? '').replace(/\s+/g, ' ').trim();
@@ -123,7 +117,7 @@ function workoutShareName(
 /// and pointing it at the brand card would misdescribe the page.
 ///
 /// Title + display name are user-controlled, so the output goes through
-/// `escapeJsonLd` before it reaches the DOM.
+/// `serialiseJsonLd` before it reaches the DOM.
 export function buildWorkoutJsonLd(
 	workout: SharedWorkout | null | undefined,
 	opts: { id: string; base: string | null | undefined; displayName?: string | null },
@@ -145,7 +139,7 @@ export function buildWorkoutJsonLd(
 			],
 		},
 	};
-	return escapeJsonLd(JSON.stringify(graph));
+	return serialiseJsonLd(graph);
 }
 
 export interface ShareWorkoutMetaInput {

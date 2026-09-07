@@ -16,17 +16,9 @@ import {
 } from './share_meta';
 import { escapeHtml } from '../util/html_escape';
 import type { SharedEvent } from './share_event_lookup';
+import { serialiseJsonLd } from '../util/json_ld';
 
 const SITE_NAME = 'Threkir';
-
-/// Escape the three characters that could break out of a
-/// `<script type="application/ld+json">` when injected verbatim.
-function escapeJsonLd(json: string): string {
-	return json
-		.replace(/</g, '\\u003c')
-		.replace(/>/g, '\\u003e')
-		.replace(/&/g, '\\u0026');
-}
 
 /// Collapse + truncate a user-set string for a meta tag so a
 /// pathological title/description can't blow out the head.
@@ -109,7 +101,7 @@ export function buildEventJsonLd(
 			name: clean(event.club_location, 120),
 		};
 	}
-	return escapeJsonLd(JSON.stringify(graph));
+	return serialiseJsonLd(graph);
 }
 
 export interface ShareEventMetaInput {

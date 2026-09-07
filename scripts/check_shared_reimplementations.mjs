@@ -54,7 +54,13 @@
 //   - Only a group with an EXPORTED `apps/web/src/lib/**` member is reported.
 //     Duplication with nothing shared to import is a different finding, and
 //     the house rule ("three similar lines is better than a premature helper")
-//     tolerates it. The nine copies of `escapeJsonLd` are invisible here.
+//     tolerates it. The nine copies of `escapeJsonLd` were the standing
+//     example until § 1475 made them one exported `serialiseJsonLd`, which is
+//     what brings a tenth copy into reach: measured, a private copy is caught
+//     both as a named function and as an inline replace chain. The residue
+//     this exemption still cannot see is a builder that omits the escape
+//     ENTIRELY, which is why `apps/web/src/lib/util/json_ld_escaping.test.ts`
+//     censuses the builders and calls each one.
 //   - Anchor A finds identical copies, not the whole equivalence class: the
 //     tree holds eleven haversines and only the two structurally identical
 //     ones are one group.
