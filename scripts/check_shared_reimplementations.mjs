@@ -521,7 +521,7 @@ export function declaredNames(fn) {
 		const t = fn.body[i];
 		if (t.kind !== 'ident') continue;
 		if (DECLARERS.has(t.text)) {
-			let j = i + 1;
+			const j = i + 1;
 			const opener = fn.body[j];
 			if (opener && opener.kind === 'punct' && (opener.text === '{' || opener.text === '[')) {
 				const close = opener.text === '{' ? '}' : ']';
@@ -533,7 +533,6 @@ export function declaredNames(fn) {
 					else if (x.kind === 'punct' && x.text === close) { d--; if (d === 0) { end = k; break; } }
 				}
 				for (const name of patternNames(fn.body.slice(j, end + 1))) names.add(name);
-				j = end;
 				continue;
 			}
 			if (opener && opener.kind === 'ident') names.add(opener.text);
@@ -633,6 +632,14 @@ export function distinctiveOperations(fn) {
 /**
  * The `<script>` bodies of a Svelte component, joined. Everything outside them
  * is markup, which holds no function declarations.
+ *
+ * Case-SENSITIVE on purpose, and CodeQL's `js/bad-tag-filter` is a false
+ * positive here: this is a Svelte parser helper reading a repo-committed
+ * `.svelte` file, not a sanitiser over untrusted HTML. Svelte decides
+ * component-vs-element on the tag's first letter, so only lowercase `script`
+ * is ever a script block — adding `i` would feed a `<Script>` COMPONENT's
+ * markup to the tokenizer as if it were JavaScript.
+ *
  * @param {string} src
  */
 export function svelteScript(src) {

@@ -48,7 +48,7 @@
 // Unit tests: `node --test scripts/check_gradle_test_coverage.test.mjs`
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { dirname, join, relative, sep } from 'node:path';
+import { dirname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
