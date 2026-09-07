@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { compareOrdinal } from '$lib/util/ordinal_compare';
 	import { formatDuration } from '$lib/format/time';
 	import { formatDateShort } from '$lib/format/time';
 	import { goto } from '$app/navigation';
@@ -165,7 +166,7 @@
 		out.sort((a, b) => {
 			const r = rank[a.status] - rank[b.status];
 			if (r !== 0) return r;
-			return b.start_date.localeCompare(a.start_date);
+			return compareOrdinal(b.start_date, a.start_date);
 		});
 		return out;
 	});

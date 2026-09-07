@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { compareOrdinal } from '$lib/util/ordinal_compare';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { handleTablistKeydown } from '$lib/util/tablist';
@@ -172,7 +173,7 @@
 		switch (sortKey) {
 			case 'newest':
 				out.sort((a, b) =>
-					(b.created_at ?? '').localeCompare(a.created_at ?? ''),
+					compareOrdinal(b.created_at ?? '', a.created_at ?? ''),
 				);
 				break;
 			case 'longest':
