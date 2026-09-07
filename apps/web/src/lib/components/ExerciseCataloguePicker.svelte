@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import type { Exercise, ExerciseCategory } from '$lib/types';
 	import { createCustomExercise } from '$lib/core/data';
 	import { cataloguePickerView } from './exercise_catalogue_picker';
+	import { dedupeShadowedExercises } from '$lib/gym/exercise_catalogue';
 	import { namesAnExercise } from '$lib/gym/gym_prs';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
@@ -43,9 +43,19 @@
 	let query = $state('');
 	let category = $state<ExerciseCategory | 'all'>('all');
 
-	// A local copy so a just-created custom appears in the list immediately,
-	// without waiting for the host to reload the catalogue from the server.
-	let entries = $state<Exercise[]>(untrack(() => [...catalogue]));
+	// Customs created here this session, so a new one appears in the list
+	// immediately without waiting for the host to reload. Held BESIDE the prop
+	// rather than merged into a snapshot of it: the host loads the catalogue
+	// asynchronously, so a snapshot taken while the read was still in flight
+	// stayed empty for the life of the picker — and an empty list makes every
+	// name look free, which is the fail-open state `unavailable` exists to
+	// prevent, reached by a different route.
+	let created = $state<Exercise[]>([]);
+
+	// The precedence rule the read applies (`dedupeShadowedExercises`) applies
+	// to this merge too, or a custom created against a stale list leaves the
+	// global it shadows in the picker beside it.
+	const entries = $derived(dedupeShadowedExercises([...catalogue, ...created]));
 
 	// The picker's three states — a result list, an explanation, a create
 	// affordance — are decided by `cataloguePickerView`, a pure module the unit
@@ -83,7 +93,7 @@
 			showToast(t('gym.catalogue.createFailed'));
 			return;
 		}
-		entries = [...entries, made];
+		created = [...created, made];
 		oncreated?.(made);
 		onpick(made);
 	}

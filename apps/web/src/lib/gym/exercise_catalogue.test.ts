@@ -69,3 +69,31 @@ test('the input array is not mutated', () => {
 	dedupeShadowedExercises(rows);
 	assert.deepEqual(rows.map((e) => e.id), before);
 });
+
+test('a custom created against a stale client list still resolves the shadow it makes', () => {
+	// Both editors merge the fetched catalogue with the customs created this
+	// session, and that list is a snapshot: the create affordance can be offered
+	// for a name the server already holds as a global, because the author's
+	// partial unique cannot see a row whose author_id is null. The insert then
+	// succeeds and mints exactly the pair the read's own dedupe removes, so the
+	// merge has to apply the rule too — a de-duplication by `id`, which is what
+	// both editors did instead, leaves both rows under one folded key.
+	const stale = [global_('Ab Wheel'), global_('Bench Press')];
+	const mine = custom('bench press');
+	assert.deepEqual(
+		dedupeShadowedExercises([...stale, mine]).map((e) => e.id),
+		['Ab Wheel', mine.id],
+	);
+});
+
+test('a row present in both the fetched list and the created one is listed once', () => {
+	// The host reloads the catalogue after a create, so the created row is in
+	// the prop AND still in the local list. Listing it twice would render one
+	// exercise as two; re-ordering it would move it under the reader.
+	const mine = custom('Bicep Curl');
+	const fetched = [global_('Ab Wheel'), mine, global_('Zercher Squat')];
+	assert.deepEqual(
+		dedupeShadowedExercises([...fetched, mine]).map((e) => e.name),
+		['Ab Wheel', 'Bicep Curl', 'Zercher Squat'],
+	);
+});

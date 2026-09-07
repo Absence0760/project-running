@@ -58,6 +58,14 @@ export interface ShadowableExercise {
  * two different places in the list. After the dedupe no catalogue surface holds
  * both, so the two can no longer be rendered as unrelated neighbours — and the
  * two functions keep answering the different questions § 1334 says they must.
+ *
+ * Applied to every list a surface works from, not only to the read. A custom
+ * created in the picker can shadow a global the CLIENT's list still carries,
+ * because that list is a snapshot and the author's partial unique cannot see a
+ * row whose `author_id` is null — so the insert succeeds and a merge of the two
+ * holds both. Folding the created customs in through here is what stops that
+ * being a second answer to which row a typed name binds to; a de-duplication by
+ * `id`, which is what both editors did instead, cannot see it at all.
  */
 export function dedupeShadowedExercises<E extends ShadowableExercise>(entries: readonly E[]): E[] {
 	const at = new Map<string, number>();
@@ -78,3 +86,4 @@ export function dedupeShadowedExercises<E extends ShadowableExercise>(entries: r
 	}
 	return out;
 }
+
