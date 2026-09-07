@@ -231,6 +231,22 @@ export function walkSurfaces(root, marker) {
  * @returns {number}
  */
 export function countSources(root, dir, exts) {
+	// TRACKED files where the root is a work tree, not what is on disk.
+	// `flutter build` and `flutter test` both drop a gitignored
+	// `GeneratedPluginRegistrant.java` into `apps/mobile_android/android`, so a
+	// filesystem walk answers 12 on a workstation that has built the app and 11
+	// in the `workflow-lint` job, which runs on a fresh checkout before anything
+	// Flutter touches it. A figure this guard recomputes has to be computed over
+	// the set CI sees, or the exclusion is re-decided by whoever last ran a
+	// build. The walk stays as the fallback for a fixture tree, which is not a
+	// repository and where every planted file is the point.
+	if (isWorkTree(root)) {
+		const out = execFileSync('git', ['ls-files', '-z', '--', dir], {
+			cwd: root,
+			encoding: 'utf-8',
+		});
+		return out.split('\0').filter((f) => f !== '' && exts.some((ext) => f.endsWith(ext))).length;
+	}
 	let total = 0;
 	/** @param {string} d */
 	const visit = (d) => {
@@ -251,6 +267,27 @@ export function countSources(root, dir, exts) {
 	};
 	visit(join(root, dir));
 	return total;
+}
+
+/**
+ * Whether `root` is inside a git work tree, which decides whether
+ * [countSources] can ask git what is tracked.
+ *
+ * @param {string} root
+ * @returns {boolean}
+ */
+function isWorkTree(root) {
+	try {
+		return (
+			execFileSync('git', ['rev-parse', '--is-inside-work-tree'], {
+				cwd: root,
+				encoding: 'utf-8',
+				stdio: ['ignore', 'pipe', 'ignore'],
+			}).trim() === 'true'
+		);
+	} catch {
+		return false;
+	}
 }
 
 /**
