@@ -6079,19 +6079,37 @@ class ApiClient {
   /// composer can merge them into its autocomplete + bind a typed name to an
   /// exercise_id. Additive — a user who never picks a catalogue entry logs
   /// exactly as before (exercise_id stays null).
+  ///
+  /// One row per exercise: [dedupeShadowedExercises] resolves the shadowed pair
+  /// the two partial uniques on `name_key` deliberately allow, the owner's
+  /// custom winning over the seeded global it shadows. Applied HERE rather than
+  /// at each surface so no consumer carries the rule and none can disagree with
+  /// another about it — the composer used to bind a typed name to whichever of
+  /// the two rows its last-wins map happened to hold.
+  ///
+  /// **An unavailable catalogue is not an empty one, and this throws rather
+  /// than conflating them.** An empty catalogue is the state in which every
+  /// typed name looks free: the picker's exact-match test finds nothing, the
+  /// browse affordance hides itself, and the create path is offered for a name
+  /// the catalogue already holds — which then either succeeds against the
+  /// partial unique and mints a shadow, or 23505s against a row the client
+  /// cannot see. So a failed read must reach the caller as a failure; a `catch`
+  /// here that answered `const []` would erase the distinction for every
+  /// surface at once, and the caller's own state has to carry the third value.
   Future<List<ExerciseRow>> fetchExerciseCatalogue() async {
-    return readAllPages<ExerciseRow>((from, to) async {
-      final rows = await _client
+    final rows = await readAllPages<ExerciseRow>((from, to) async {
+      final page = await _client
           .from(ExerciseRow.table)
           .select()
           .order(ExerciseRow.colName, ascending: true)
           // A seeded global and a user's custom entry can carry the same name.
           .order(ExerciseRow.colId, ascending: true)
           .range(from, to);
-      return (rows as List)
+      return (page as List)
           .map((r) => ExerciseRow.fromJson(r as Map<String, dynamic>))
           .toList();
     });
+    return dedupeShadowedExercises(rows);
   }
 
   /// Create an owner-scoped custom catalogue entry (migration 20270222_001).
