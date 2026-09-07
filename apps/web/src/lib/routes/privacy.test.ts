@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { clipPointsToZones, isInAnyZone, type PrivacyZone, type LatLng } from './privacy';
+import type { Json } from '../database.types';
 
 const home: PrivacyZone = { lat: 40.7128, lng: -74.006, radius_m: 200 };
 
@@ -78,4 +79,17 @@ test('clipPointsToZones — multiple zones', () => {
 	const out = clipPointsToZones(pts, [home, work]);
 	assert.equal(out.length, 1);
 	assert.equal(out[0], pts[1]);
+});
+
+test('a zone list is assignable to the jsonb column that stores it', () => {
+	// The assertion is the ASSIGNMENT, checked by `svelte-check`, not the
+	// `deepEqual` below it: `PrivacyZone` is an object type alias, so it
+	// carries an implicit index signature and satisfies `Json`. Declare it as
+	// an `interface` again and this line stops compiling — which is what used
+	// to push `persistZones` into restating `lat` / `lng` / `radius_m` by hand
+	// on the way into `user_settings.prefs`, a second copy of the § 33
+	// contract living where nobody would look for it.
+	const zones: PrivacyZone[] = [{ lat: 51.5, lng: -0.1, radius_m: 300 }];
+	const asJson: Json = zones;
+	assert.deepEqual(asJson, zones);
 });

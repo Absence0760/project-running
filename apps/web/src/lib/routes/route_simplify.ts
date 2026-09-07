@@ -11,11 +11,14 @@
  */
 import { lonDeltaDeg, unwrapLonDeg } from './geo';
 
-export interface LatLng {
+/// An alias rather than an interface for the reason `privacy.ts`'s
+/// `PrivacyZone` is: only an alias carries an implicit index signature, and a
+/// simplified track goes straight into the `Json` of `routes.waypoints`.
+export type LatLng = {
 	lat: number;
 	lng: number;
 	ele?: number | null;
-}
+};
 
 export function simplifyTrack(
 	points: LatLng[],
