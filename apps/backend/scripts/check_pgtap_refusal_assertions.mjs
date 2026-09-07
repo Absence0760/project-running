@@ -1034,12 +1034,85 @@ export function functionBodies(text) {
 }
 
 /**
- * The columns a trigger function assigns, split by whether the assignment sits
- * at the TOP LEVEL of the body — outside every `if` and `case`, so it cannot be
- * skipped — or inside a branch, where whether the supplied value survives
- * depends on the fixture.
+ * The trigger operations this scan models. DELETE is absent because a BEFORE
+ * DELETE trigger has no NEW to assign to, and TRUNCATE is statement-level.
+ * @typedef {'insert' | 'update'} TriggerOp
+ */
+export const TRIGGER_OPS = /** @type {TriggerOp[]} */ (['insert', 'update']);
+
+/**
+ * The operations an `if <cond>` branch admits when the condition is EXACTLY a
+ * `tg_op` comparison, split into the branch's own operations and the ones its
+ * `else` inherits. A `tg_op` guard narrows WHICH operation reaches the
+ * assignment without making the assignment fixture-dependent: under the
+ * operation it names, the branch always runs.
+ *
+ * `null` for every other condition — the branch then admits whatever its parent
+ * did, conditionally.
+ * @param {string} cond
+ * @returns {{ taken: Set<TriggerOp>, skipped: Set<TriggerOp> } | null}
+ */
+export function tgOpCondition(cond) {
+  /** @param {(op: TriggerOp) => boolean} pred */
+  const split = (pred) => ({
+    taken: new Set(TRIGGER_OPS.filter(pred)),
+    skipped: new Set(TRIGGER_OPS.filter((o) => !pred(o))),
+  });
+  /** @param {string} text */
+  const parse = (text) => {
+    const eq = /^tg_op (=|<>|!=) '([a-z]+)'$/.exec(text);
+    if (eq !== null) {
+      const named = eq[2];
+      return eq[1] === '=' ? split((o) => o === named) : split((o) => o !== named);
+    }
+    const inSet = /^tg_op (not )?in \(([^)]*)\)$/.exec(text);
+    if (inSet === null) return null;
+    const named = new Set([...inSet[2].matchAll(/'([a-z]+)'/g)].map((m) => m[1]));
+    return inSet[1] === undefined ? split((o) => named.has(o)) : split((o) => !named.has(o));
+  };
+  let text = cond.replace(/\s+/g, ' ').trim();
+  for (;;) {
+    const parsed = parse(text);
+    if (parsed !== null) return parsed;
+    // Unwrap only a genuinely enclosing pair. Stripping every leading `(` and
+    // trailing `)` would turn `tg_op in ('insert', 'update')` into an unbalanced
+    // fragment that parses as nothing.
+    if (!text.startsWith('(') || !text.endsWith(')')) return null;
+    const inner = text.slice(1, -1).trim();
+    let depth = 0;
+    for (const ch of inner) {
+      if (ch === '(') depth += 1;
+      else if (ch === ')') depth -= 1;
+      if (depth < 0) return null;
+    }
+    if (depth !== 0) return null;
+    text = inner;
+  }
+}
+
+/**
+ * The columns a trigger function assigns, split by the operation that reaches
+ * the assignment and by whether a row can be stored that the assignment did not
+ * touch.
+ *
+ * The second question is a must-assign one and is answered by walking the exits
+ * rather than by counting `if` nesting. A column is unconditional under an
+ * operation when EVERY path that both is reachable under that operation and
+ * ends in a stored row assigns it — so an `if`/`else` that assigns the same
+ * column on both arms is unconditional, and a column assigned after an earlier
+ * branch already did `return new` is unconditional too. Depth counting called
+ * the first conditional and the second unconditional, and both were wrong:
+ * `route_markers_set_position` assigns `position_m` on both arms of its null
+ * guard, and `freeze_user_profile_managed_columns` sits behind a
+ * `current_user not in ('anon', 'authenticated') then return new` that lets an
+ * unfrozen row through.
+ *
+ * A `tg_op` comparison is not a fixture condition at all. It selects the
+ * operation rather than describing the row, so an assignment under it is
+ * unconditional for the operation it names and absent for the other — which is
+ * why the result is split by operation (decisions 1485).
  * @param {string} body
- * @returns {{ unconditional: string[], conditional: string[] }}
+ * @returns {Record<TriggerOp, { unconditional: string[], conditional: string[] }>}
  */
 export function assignedColumns(body) {
   // One ordered pass rather than a per-line count: `end if` has to be read
@@ -1047,56 +1120,145 @@ export function assignedColumns(body) {
   // line has to close before the next assignment is judged. `elsif` carries no
   // word boundary before its `if`, so it never opens a second block.
   const clean = body.replace(/--[^\n]*/g, '').toLowerCase();
-  /** @type {Set<string>} */
-  const top = new Set();
-  /** @type {Set<string>} */
-  const branch = new Set();
-  let depth = 0;
-  const tokens = /\bend\s+if\b|\bend\s+case\b|\bcase\b|\bif\b|\bnew\.([a-z0-9_]+)\s*:=/g;
+  /** @param {Record<TriggerOp, Set<string>>} m */
+  const clone = (m) => ({ insert: new Set(m.insert), update: new Set(m.update) });
+  /** @type {Record<TriggerOp, Set<string>>} */
+  const seen = { insert: new Set(), update: new Set() };
+  /** @type {{ ops: Set<TriggerOp>, must: Record<TriggerOp, Set<string>> }[]} */
+  const exits = [];
+  /** @type {{
+   *   entry: Record<TriggerOp, Set<string>>,
+   *   entryOps: Set<TriggerOp>,
+   *   outerReturned: boolean,
+   *   decided: { taken: Set<TriggerOp>, skipped: Set<TriggerOp> } | null,
+   *   hasElse: boolean,
+   *   branches: { ops: Set<TriggerOp>, must: Record<TriggerOp, Set<string>> | null }[],
+   * }[]} */
+  const stack = [];
+  let must = { insert: new Set(), update: new Set() };
+  let ops = new Set(TRIGGER_OPS);
+  let returned = false;
+  const tokens =
+    /\bend\s+if\b|\bend\s+case\b|\bend\s+loop\b|\bcase\b|\bloop\b|\belsif\b|\belse\b|\bif\b|\breturn\b|\bnew\.([a-z0-9_]+)\s*:=/g;
   for (const m of clean.matchAll(tokens)) {
     if (m[1] !== undefined) {
-      (depth === 0 ? top : branch).add(m[1]);
+      if (returned) continue;
+      for (const op of ops) {
+        seen[op].add(m[1]);
+        must[op].add(m[1]);
+      }
       continue;
     }
-    if (/^end/.test(m[0])) depth = Math.max(0, depth - 1);
-    else depth += 1;
+    const token = m[0];
+    if (token === 'return') {
+      if (!returned) exits.push({ ops: new Set(ops), must: clone(must) });
+      returned = true;
+      continue;
+    }
+    if (token === 'if' || token === 'case' || token === 'loop') {
+      const then = token === 'if' ? /\bthen\b/.exec(clean.slice(m.index)) : null;
+      const decided =
+        then === null ? null : tgOpCondition(clean.slice(m.index + 2, m.index + then.index));
+      stack.push({
+        entry: clone(must),
+        entryOps: ops,
+        outerReturned: returned,
+        decided,
+        hasElse: false,
+        branches: [],
+      });
+      if (decided !== null) ops = new Set([...ops].filter((o) => decided.taken.has(o)));
+      must = clone(must);
+      returned = false;
+      continue;
+    }
+    if (token === 'else' || token === 'elsif') {
+      const frame = stack[stack.length - 1];
+      if (frame === undefined) continue;
+      frame.branches.push({ ops, must: returned ? null : clone(must) });
+      if (token === 'else' && frame.decided !== null) {
+        const { skipped } = frame.decided;
+        ops = new Set([...frame.entryOps].filter((o) => skipped.has(o)));
+        frame.hasElse = true;
+      } else {
+        // An `elsif` chain is not exhaustive without a final `else`, and the
+        // guard cannot read which operations it admits, so the whole frame
+        // falls back to the join every undecided condition gets.
+        ops = frame.entryOps;
+        frame.decided = null;
+        frame.hasElse = token === 'else';
+      }
+      must = clone(frame.entry);
+      returned = false;
+      continue;
+    }
+    const frame = stack.pop();
+    if (frame === undefined) continue;
+    frame.branches.push({ ops, must: returned ? null : clone(must) });
+    const joined = clone(frame.entry);
+    for (const op of TRIGGER_OPS) {
+      // A frame is exhaustive when every path through it is one of its
+      // branches: a `tg_op` split decides per operation which branch runs, and
+      // any other condition needs an `else` to cover the false case. Otherwise
+      // the block may not run at all and the entry state stands.
+      if (frame.decided === null && !frame.hasElse) continue;
+      /** @type {Record<TriggerOp, Set<string>>[]} */
+      const live = frame.branches.flatMap((b) => (b.ops.has(op) && b.must !== null ? [b.must] : []));
+      if (live.length === 0) continue;
+      for (const column of live[0][op]) {
+        if (live.every((b) => b[op].has(column))) joined[op].add(column);
+      }
+    }
+    must = joined;
+    ops = frame.entryOps;
+    returned = frame.outerReturned;
   }
-  // A column assigned BOTH ways is unconditional: the top-level assignment
-  // always fires, so the branch adds nothing to what the supplied value is
-  // worth.
-  return {
-    unconditional: [...top],
-    conditional: [...branch].filter((c) => !top.has(c)),
+  if (!returned) exits.push({ ops: new Set(ops), must: clone(must) });
+
+  /** @type {Record<TriggerOp, { unconditional: string[], conditional: string[] }>} */
+  const out = {
+    insert: { unconditional: [], conditional: [] },
+    update: { unconditional: [], conditional: [] },
   };
+  for (const op of TRIGGER_OPS) {
+    const reachable = exits.filter((e) => e.ops.has(op));
+    const always = [...seen[op]].filter(
+      (c) => reachable.length > 0 && reachable.every((e) => e.must[op].has(c)),
+    );
+    out[op].unconditional = always;
+    out[op].conditional = [...seen[op]].filter((c) => !always.includes(c));
+  }
+  return out;
 }
 
 /**
- * The columns a trigger function assigns at the TOP LEVEL of its body — outside
- * every `if` and `case`, so the assignment cannot be skipped.
- * @param {string} body
- * @returns {string[]}
- */
-export function unconditionalAssignments(body) {
-  return assignedColumns(body).unconditional;
-}
-
-/**
- * Every `<table>.<column>` a live BEFORE INSERT/UPDATE trigger stamps, mapped
+ * Every `<table>.<column>` a live BEFORE trigger stamps, per operation, mapped
  * to the trigger that stamps it. Built by replaying the migrations in version
  * order, so a `drop trigger` retires its entry and a `create or replace
  * function` re-reads the body.
+ *
+ * The operation comes from two places and both bind: the `create trigger`'s own
+ * `before insert or update` clause, and the `tg_op` guards inside the body. A
+ * `before insert` trigger cannot stamp an UPDATE however plainly it assigns,
+ * and a body that assigns only under `if tg_op = 'UPDATE'` cannot stamp an
+ * INSERT however broadly the trigger is armed.
+ *
+ * The `update of <cols>` clause narrows further — the trigger fires only when
+ * the statement names one of those columns — and is deliberately not modelled.
+ * Ignoring it can only leave a pair IN the population that a given write would
+ * not have reached, which over-reports rather than under-reports.
  *
  * [mode] picks the population: `unconditional` (the assignment always fires, so
  * the supplied value is always discarded) or `conditional` (it fires on a
  * branch, so whether the supplied value survives is a property of the fixture).
  * @param {{ name: string, text: string }[]} migrations
  * @param {'unconditional' | 'conditional'} [mode]
- * @returns {Map<string, string>}
+ * @returns {Record<TriggerOp, Map<string, string>>}
  */
 export function stampedColumns(migrations, mode = 'unconditional') {
   /** @type {Map<string, string>} */
   const bodies = new Map();
-  /** @type {Map<string, { table: string, fn: string }>} */
+  /** @type {Map<string, { table: string, fn: string, ops: Set<TriggerOp> }>} */
   const triggers = new Map();
   for (const { text } of migrations) {
     for (const [name, body] of functionBodies(text)) bodies.set(name, body);
@@ -1108,41 +1270,60 @@ export function stampedColumns(migrations, mode = 'unconditional') {
     for (const m of text.matchAll(
       /create\s+trigger\s+([a-z0-9_]+)\s+(before[^;]*?)\s+on\s+(?:public\.)?([a-z0-9_]+)([^;]*?)execute\s+(?:function|procedure)\s+(?:public\.)?([a-z0-9_]+)/gi,
     )) {
-      if (!/insert|update/i.test(m[2])) continue;
+      const ops = new Set(TRIGGER_OPS.filter((op) => new RegExp(`\\b${op}\\b`, 'i').test(m[2])));
+      if (ops.size === 0) continue;
       triggers.set(`${m[3].toLowerCase()}.${m[1].toLowerCase()}`, {
         table: m[3].toLowerCase(),
         fn: m[5].toLowerCase(),
+        ops,
       });
     }
   }
-  /** @type {Map<string, string>} */
-  const out = new Map();
-  for (const [key, { table, fn }] of triggers) {
+  /** @type {Record<TriggerOp, Map<string, string>>} */
+  const out = { insert: new Map(), update: new Map() };
+  for (const [key, { table, fn, ops }] of triggers) {
     const body = bodies.get(fn);
     if (body === undefined) continue;
-    for (const col of assignedColumns(body)[mode]) {
-      out.set(`${table}.${col}`, key.slice(table.length + 1));
+    const assigned = assignedColumns(body);
+    for (const op of ops) {
+      for (const col of assigned[op][mode]) {
+        out[op].set(`${table}.${col}`, key.slice(table.length + 1));
+      }
     }
   }
   return out;
 }
 
 /**
- * The conditionally stamped `<table>.<column>` set, with every pair some live
- * trigger also stamps UNCONDITIONALLY removed — that assignment always fires,
- * so the pair belongs to the stronger population rather than to this one.
+ * The conditionally stamped `<table>.<column>` set per operation, with every
+ * pair some live trigger also stamps UNCONDITIONALLY under that operation
+ * removed — that assignment always fires, so the pair belongs to the stronger
+ * population rather than to this one.
  * @param {{ name: string, text: string }[]} migrations
- * @returns {Map<string, string>}
+ * @returns {Record<TriggerOp, Map<string, string>>}
  */
 export function conditionallyStampedColumns(migrations) {
   const always = stampedColumns(migrations, 'unconditional');
-  /** @type {Map<string, string>} */
-  const out = new Map();
-  for (const [key, trigger] of stampedColumns(migrations, 'conditional')) {
-    if (always.has(key)) continue;
-    out.set(key, trigger);
+  const branch = stampedColumns(migrations, 'conditional');
+  /** @type {Record<TriggerOp, Map<string, string>>} */
+  const out = { insert: new Map(), update: new Map() };
+  for (const op of TRIGGER_OPS) {
+    for (const [key, trigger] of branch[op]) {
+      if (always[op].has(key)) continue;
+      out[op].set(key, trigger);
+    }
   }
   return out;
+}
+
+/**
+ * How many distinct `<table>.<column>` pairs a per-operation stamp map holds,
+ * for the guard's own summary line.
+ * @param {Record<TriggerOp, Map<string, string>>} stamped
+ * @returns {number}
+ */
+export function stampedPairCount(stamped) {
+  return new Set(TRIGGER_OPS.flatMap((op) => [...stamped[op].keys()])).size;
 }
 
 /** Read the migrations off disk in version order. */
@@ -1154,24 +1335,27 @@ export function readMigrations() {
 }
 
 /**
- * The stamped columns a statement supplies a value for. An INSERT is read off
- * its column list, an UPDATE off its SET list.
+ * The stamped columns a statement supplies a value for, each judged against the
+ * operation it is written under: an INSERT is read off its column list and
+ * measured against the INSERT stamps, an UPDATE off its SET list and measured
+ * against the UPDATE ones.
  * @param {string} sql
- * @param {Map<string, string>} stamped
- * @returns {{ table: string, column: string, trigger: string }[]}
+ * @param {Record<TriggerOp, Map<string, string>>} stamped
+ * @returns {{ op: TriggerOp, table: string, column: string, trigger: string }[]}
  */
 export function stampedValueWrites(sql, stamped) {
-  /** @type {{ table: string, column: string, trigger: string }[]} */
+  /** @type {{ op: TriggerOp, table: string, column: string, trigger: string }[]} */
   const out = [];
-  /** @param {string} table @param {string[]} cols */
-  const collect = (table, cols) => {
+  /** @param {TriggerOp} op @param {string} table @param {string[]} cols */
+  const collect = (op, table, cols) => {
     for (const col of cols) {
-      const trigger = stamped.get(`${table}.${col}`);
-      if (trigger !== undefined) out.push({ table, column: col, trigger });
+      const trigger = stamped[op].get(`${table}.${col}`);
+      if (trigger !== undefined) out.push({ op, table, column: col, trigger });
     }
   };
   for (const m of sql.matchAll(/insert\s+into\s+(?:public\.)?([a-z0-9_]+)\s*\(([^)]*)\)/gi)) {
     collect(
+      'insert',
       m[1].toLowerCase(),
       m[2].split(',').map((c) => c.trim().toLowerCase()),
     );
@@ -1180,6 +1364,7 @@ export function stampedValueWrites(sql, stamped) {
     /update\s+(?:public\.)?([a-z0-9_]+)\s+set\s+([\s\S]*?)(?:\bwhere\b|;|$)/gi,
   )) {
     collect(
+      'update',
       m[1].toLowerCase(),
       [...m[2].matchAll(/([a-z0-9_]+)\s*=/gi)].map((x) => x[1].toLowerCase()),
     );
@@ -1222,8 +1407,9 @@ export const STAMPED_VALUE_ASSERTIONS = [
 // population nobody looks at.
 //
 // So this is the same scan over that population, with a REGISTRY instead of a
-// ban. Each of the 13 is accounted for one of two ways, and the difference is
-// what the entry is worth:
+// ban. Twelve are left once the scan reads the operation as well as the column
+// (decisions 1485), and each is accounted for one of two ways, the difference
+// being what the entry is worth:
 //
 //   * `readBack` -- the assertion is followed by one that reads the stored
 //     value, so the pair together says accepted AND not rewritten. The named
@@ -1299,18 +1485,6 @@ export const CONDITIONALLY_STAMPED_ASSERTIONS = [
       'The positive control for the latch, and the one assertion in the file that MOST needed to ' +
       'be able to fail: the latch rewrites `new.status` rather than raising, so a latch widened to ' +
       'hold every status left this update succeeding with the row unmoved.',
-  },
-  {
-    file: 'payment_refund_ledger_test.sql',
-    description:
-      'a failed PARTIAL refund on an event order is recordable — the case event_orders ' +
-      'could not represent at all',
-    columns: ['payment_refunds.failure_reason', 'payment_refunds.status'],
-    readBack: "both ledgers' failed refunds answer one worklist query",
-    reason:
-      "This is an INSERT, and both of the lock trigger's assignments sit inside `if tg_op = " +
-      "'UPDATE'` -- the scan's model is (table, column) and carries no operation, so it cannot see " +
-      'that. The row is read back by the worklist assertion below in any case.',
   },
   {
     file: 'payment_refund_ledger_test.sql',
@@ -1422,9 +1596,11 @@ function main() {
           failures.push(
             `${file}:${call.line}  "${description}" supplies ${writes
               .map((w) => `${w.table}.${w.column}`)
-              .join(', ')}, which ${writes
+              .join(', ')} on ${[...new Set(writes.map((w) => w.op.toUpperCase()))].join(
+              ' / ',
+            )}, which ${writes
               .map((w) => w.trigger)
-              .join(' / ')} assigns unconditionally BEFORE the row is checked — so the value this assertion supplies never reaches the constraint and the assertion survives a server that stopped deriving it at all (decisions 1324). Stop supplying the column, read the stored value back through \`returning\`, or register the assertion in STAMPED_VALUE_ASSERTIONS with the reason its claim is unaffected.`,
+              .join(' / ')} assigns unconditionally under that operation BEFORE the row is checked — so the value this assertion supplies never reaches the constraint and the assertion survives a server that stopped deriving it at all (decisions 1324). Stop supplying the column, read the stored value back through \`returning\`, or register the assertion in STAMPED_VALUE_ASSERTIONS with the reason its claim is unaffected.`,
           );
         }
       }
@@ -1435,11 +1611,11 @@ function main() {
       const entry = conditionallyRegistered.get(key);
       if (entry === undefined) {
         failures.push(
-          `${file}:${call.line}  "${description}" supplies ${columns.join(', ')}, which ${[
-            ...new Set(branchWrites.map((w) => w.trigger)),
-          ].join(
+          `${file}:${call.line}  "${description}" supplies ${columns.join(', ')} on ${[
+            ...new Set(branchWrites.map((w) => w.op.toUpperCase())),
+          ].join(' / ')}, which ${[...new Set(branchWrites.map((w) => w.trigger))].join(
             ' / ',
-          )} assigns on a BRANCH before the row is checked — so whether the value this assertion supplies is the value that lands is a property of the fixture, and nothing here says which (decisions 1372). Read the stored value back and register the assertion in CONDITIONALLY_STAMPED_ASSERTIONS naming that read-back, or register it with the reason its claim survives the rewrite.`,
+          )} assigns on a BRANCH reachable by that operation before the row is checked — so whether the value this assertion supplies is the value that lands is a property of the fixture, and nothing here says which (decisions 1372). Read the stored value back and register the assertion in CONDITIONALLY_STAMPED_ASSERTIONS naming that read-back, or register it with the reason its claim survives the rewrite.`,
         );
         continue;
       }
@@ -1482,9 +1658,9 @@ function main() {
     report(
       failures,
       `${files.length} test files scanned for unpinned negatives, for positives emptied by one of ` +
-        `the ${stamped.size} unconditionally stamped columns, and for the ` +
+        `the ${stampedPairCount(stamped)} unconditionally stamped columns, and for the ` +
         `${CONDITIONALLY_STAMPED_ASSERTIONS.length} positives supplying one of the ` +
-        `${conditional.size} conditionally stamped ones`,
+        `${stampedPairCount(conditional)} conditionally stamped ones`,
     );
     return;
   }

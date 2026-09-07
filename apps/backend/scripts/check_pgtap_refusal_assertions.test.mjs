@@ -20,8 +20,9 @@ import {
   descriptionOf,
   readMigrations,
   stampedColumns,
+  stampedPairCount,
   stampedValueWrites,
-  unconditionalAssignments,
+  tgOpCondition,
   PREAMBLE,
   REFUSAL_VOCABULARY,
   TESTS_DIR,
@@ -478,32 +479,94 @@ test('no pgtap negative pins neither a SQLSTATE nor a message', () => {
 
 // ── Positives emptied by a correcting BEFORE trigger (decisions 1324) ────────
 
-test('unconditionalAssignments separates a stamp that always fires from one that may not', () => {
-	assert.deepEqual(
-		unconditionalAssignments('begin\n  new.name_key := f(new.name);\n  return new;\nend;'),
-		['name_key'],
-	);
+/** The unconditional / conditional pair for one operation, as arrays. */
+/** @param {string} body @param {'insert' | 'update'} op */
+const assignedUnder = (body, op) => assignedColumns(body)[op];
+
+test('assignedColumns separates a stamp that always fires from one that may not', () => {
+	assert.deepEqual(assignedUnder('begin\n  new.name_key := f(new.name);\n  return new;\nend;', 'insert'), {
+		unconditional: ['name_key'],
+		conditional: [],
+	});
 	// The whole distinction: inside an `if`, whether the supplied value survives
 	// depends on the fixture, and a caller may be asserting the branch does NOT
 	// fire. `enforce_event_capacity` and the privacy-zone clippers are this shape.
 	assert.deepEqual(
-		unconditionalAssignments(
-			'begin\n  if full then\n    new.status := 1;\n  end if;\n  return new;\nend;',
-		),
-		[],
+		assignedUnder('begin\n  if full then\n    new.status := 1;\n  end if;\n  return new;\nend;', 'insert'),
+		{ unconditional: [], conditional: ['status'] },
 	);
 	// A comment naming the shape is not the shape.
 	assert.deepEqual(
-		unconditionalAssignments('begin\n  -- new.name_key := f(new.name);\n  return new;\nend;'),
-		[],
+		assignedUnder('begin\n  -- new.name_key := f(new.name);\n  return new;\nend;', 'insert'),
+		{ unconditional: [], conditional: [] },
 	);
-	// An assignment after the `if` closes is back at the top level.
+	// An assignment after the `if` closes is back on every path.
 	assert.deepEqual(
-		unconditionalAssignments(
+		assignedUnder(
 			'begin\n  if x then\n    new.a := 1;\n  end if;\n  new.b := 2;\n  return new;\nend;',
+			'insert',
 		),
-		['b'],
+		{ unconditional: ['b'], conditional: ['a'] },
 	);
+});
+
+test('tgOpCondition reads only a condition that decides the operation by itself', () => {
+	assert.deepEqual(tgOpCondition("tg_op = 'insert'"), {
+		taken: new Set(['insert']),
+		skipped: new Set(['update']),
+	});
+	assert.deepEqual(tgOpCondition("(tg_op <> 'insert')"), {
+		taken: new Set(['update']),
+		skipped: new Set(['insert']),
+	});
+	assert.deepEqual(tgOpCondition("tg_op in ('insert', 'update')"), {
+		taken: new Set(['insert', 'update']),
+		skipped: new Set(),
+	});
+	// A condition that only MENTIONS tg_op still depends on the row, so it must
+	// not be read as deciding the operation — the branch stays fixture-dependent
+	// and keeps whatever operations its parent admitted.
+	assert.equal(tgOpCondition("tg_op = 'update' and old.status = 'pending'"), null);
+	assert.equal(tgOpCondition('new.status is not null'), null);
+});
+
+test('a tg_op branch stamps only the operation it names, and its else takes the other', () => {
+	// `lock_payment_refund_writes` in miniature: the assignment is unreachable on
+	// INSERT, which is what let payment_refund_ledger_test's INSERT be judged
+	// against an arm that only runs on UPDATE (decisions 1485).
+	const oneArm =
+		"begin\n  if tg_op = 'UPDATE' then\n    new.status := old.status;\n  end if;\n  return new;\nend;";
+	assert.deepEqual(assignedUnder(oneArm, 'insert'), { unconditional: [], conditional: [] });
+	assert.deepEqual(assignedUnder(oneArm, 'update'), { unconditional: ['status'], conditional: [] });
+
+	// `fitness_snapshots_set_day` in miniature: both arms assign, so the column
+	// is unconditional under both operations rather than conditional under one.
+	const split =
+		"begin\n  if tg_op = 'INSERT' then\n    new.day := now();\n  else\n    new.day := old.day;\n  end if;\n  return new;\nend;";
+	assert.deepEqual(assignedUnder(split, 'insert'), { unconditional: ['day'], conditional: [] });
+	assert.deepEqual(assignedUnder(split, 'update'), { unconditional: ['day'], conditional: [] });
+});
+
+test('an earlier return inside a branch makes what follows it skippable', () => {
+	// `freeze_user_profile_managed_columns`: the row reaches the table unfrozen
+	// whenever the guard returns, so the assignment below cannot be read as one
+	// the supplied value never survives.
+	const guarded =
+		"begin\n  if current_user not in ('anon') then\n    return new;\n  end if;\n  new.shadow_hidden := false;\n  return new;\nend;";
+	assert.deepEqual(assignedUnder(guarded, 'insert'), {
+		unconditional: [],
+		conditional: ['shadow_hidden'],
+	});
+
+	// But a branch that assigns the column BEFORE returning leaves every exiting
+	// path carrying it, which is `route_markers_set_position`'s null guard. Depth
+	// counting called this conditional.
+	const bothExits =
+		'begin\n  if v is null then\n    new.position_m := null;\n    return new;\n  end if;\n  new.position_m := 1;\n  return new;\nend;';
+	assert.deepEqual(assignedUnder(bothExits, 'insert'), {
+		unconditional: ['position_m'],
+		conditional: [],
+	});
 });
 
 test('stampedColumns replays the migrations rather than reading the last one', () => {
@@ -512,79 +575,127 @@ test('stampedColumns replays the migrations rather than reading the last one', (
 		`create or replace function public.${name}() returns trigger language plpgsql as $x$\n` +
 		`begin\n  new.${col} := 1;\n  return new;\nend;\n$x$;`;
 
+	/** @param {{name: string, text: string}[]} migrations */
+	const pairs = (migrations) => {
+		const out = stampedColumns(migrations);
+		return { insert: [...out.insert], update: [...out.update] };
+	};
+
 	// The drop-then-create pair every stamping migration opens with is a replace,
 	// not a removal.
 	assert.deepEqual(
-		[
-			...stampedColumns([
-				{
-					name: '001.sql',
-					text:
-						`${stamp('f', 'k')}\ndrop trigger if exists t on public.tbl;\n` +
-						'create trigger t before insert or update on public.tbl for each row execute function public.f();',
-				},
-			]),
-		],
-		[['tbl.k', 't']],
+		pairs([
+			{
+				name: '001.sql',
+				text:
+					`${stamp('f', 'k')}\ndrop trigger if exists t on public.tbl;\n` +
+					'create trigger t before insert or update on public.tbl for each row execute function public.f();',
+			},
+		]),
+		{ insert: [['tbl.k', 't']], update: [['tbl.k', 't']] },
+	);
+
+	// The trigger's own event clause binds: a `before insert` trigger cannot
+	// stamp an UPDATE however plainly its body assigns (decisions 1485).
+	assert.deepEqual(
+		pairs([
+			{
+				name: '001.sql',
+				text: `${stamp('f', 'k')}\ncreate trigger t before insert on public.tbl for each row execute function public.f();`,
+			},
+		]),
+		{ insert: [['tbl.k', 't']], update: [] },
 	);
 
 	// A trigger dropped in a later migration stops stamping.
 	assert.deepEqual(
-		[
-			...stampedColumns([
-				{
-					name: '001.sql',
-					text: `${stamp('f', 'k')}\ncreate trigger t before insert on public.tbl for each row execute function public.f();`,
-				},
-				{ name: '002.sql', text: 'drop trigger t on public.tbl;' },
-			]),
-		],
-		[],
+		pairs([
+			{
+				name: '001.sql',
+				text: `${stamp('f', 'k')}\ncreate trigger t before insert on public.tbl for each row execute function public.f();`,
+			},
+			{ name: '002.sql', text: 'drop trigger t on public.tbl;' },
+		]),
+		{ insert: [], update: [] },
 	);
 
 	// The body is re-read, so replacing the function moves the column with it.
 	assert.deepEqual(
-		[
-			...stampedColumns([
-				{
-					name: '001.sql',
-					text: `${stamp('f', 'k')}\ncreate trigger t before insert on public.tbl for each row execute function public.f();`,
-				},
-				{ name: '002.sql', text: stamp('f', 'other') },
-			]),
-		],
-		[['tbl.other', 't']],
+		pairs([
+			{
+				name: '001.sql',
+				text: `${stamp('f', 'k')}\ncreate trigger t before insert on public.tbl for each row execute function public.f();`,
+			},
+			{ name: '002.sql', text: stamp('f', 'other') },
+		]),
+		{ insert: [['tbl.other', 't']], update: [] },
 	);
 
 	// AFTER triggers cannot correct the row being written — NEW is already
 	// stored — so they are not this defect and must not be reported as it.
 	assert.deepEqual(
-		[
-			...stampedColumns([
-				{
-					name: '001.sql',
-					text: `${stamp('f', 'k')}\ncreate trigger t after insert on public.tbl for each row execute function public.f();`,
-				},
-			]),
-		],
-		[],
+		pairs([
+			{
+				name: '001.sql',
+				text: `${stamp('f', 'k')}\ncreate trigger t after insert on public.tbl for each row execute function public.f();`,
+			},
+		]),
+		{ insert: [], update: [] },
 	);
 });
 
-test('stampedValueWrites reads the supplied columns off an INSERT and an UPDATE', () => {
-	const stamped = new Map([['exercises.name_key', 'exercises_stamp_name_key_trigger']]);
+test('stampedValueWrites judges each statement against its own operation', () => {
+	const both = {
+		insert: new Map([['exercises.name_key', 'exercises_stamp_name_key_trigger']]),
+		update: new Map([['exercises.name_key', 'exercises_stamp_name_key_trigger']]),
+	};
 	assert.deepEqual(
-		stampedValueWrites('insert into exercises (author_id, name, name_key) values (a, b, c)', stamped),
-		[{ table: 'exercises', column: 'name_key', trigger: 'exercises_stamp_name_key_trigger' }],
+		stampedValueWrites('insert into exercises (author_id, name, name_key) values (a, b, c)', both),
+		[
+			{
+				op: 'insert',
+				table: 'exercises',
+				column: 'name_key',
+				trigger: 'exercises_stamp_name_key_trigger',
+			},
+		],
 	);
-	assert.deepEqual(stampedValueWrites('update public.exercises set name_key = x where id = 1', stamped), [
-		{ table: 'exercises', column: 'name_key', trigger: 'exercises_stamp_name_key_trigger' },
+	assert.deepEqual(stampedValueWrites('update public.exercises set name_key = x where id = 1', both), [
+		{
+			op: 'update',
+			table: 'exercises',
+			column: 'name_key',
+			trigger: 'exercises_stamp_name_key_trigger',
+		},
 	]);
 	// A write that supplies only columns nothing stamps is not this defect.
-	assert.deepEqual(stampedValueWrites('insert into exercises (author_id, name) values (a, b)', stamped), []);
+	assert.deepEqual(stampedValueWrites('insert into exercises (author_id, name) values (a, b)', both), []);
 	// The column belongs to a table, not to the suite: the same name on another
 	// table is untouched.
-	assert.deepEqual(stampedValueWrites('insert into other (name_key) values (a)', stamped), []);
+	assert.deepEqual(stampedValueWrites('insert into other (name_key) values (a)', both), []);
+
+	// And the operation binds. `payment_refund_ledger_test`'s INSERT was judged
+	// against an arm reachable only from an UPDATE, which is a guard agreeing
+	// with a defect rather than measuring one (decisions 1485).
+	const updateOnly = {
+		insert: new Map(),
+		update: new Map([['payment_refunds.status', 'payment_refunds_write_lock']]),
+	};
+	assert.deepEqual(
+		stampedValueWrites("insert into payment_refunds (id, status) values (a, 'failed')", updateOnly),
+		[],
+	);
+	assert.deepEqual(
+		stampedValueWrites("update payment_refunds set status = 'failed' where id = a", updateOnly),
+		[
+			{
+				op: 'update',
+				table: 'payment_refunds',
+				column: 'status',
+				trigger: 'payment_refunds_write_lock',
+			},
+		],
+	);
 });
 
 test('the stamped-column scan finds a population, so a broken parse cannot read as clean', () => {
@@ -592,13 +703,24 @@ test('the stamped-column scan finds a population, so a broken parse cannot read 
 	// below is what anchors this one — an empty `stamped` makes every entry go
 	// stale — but the population is asserted outright too.
 	const stamped = stampedColumns(readMigrations());
-	assert.ok(stamped.size >= 10, `only ${stamped.size} unconditionally stamped columns found`);
+	assert.ok(
+		stampedPairCount(stamped) >= 10,
+		`only ${stampedPairCount(stamped)} unconditionally stamped columns found`,
+	);
 	assert.equal(
-		stamped.get('gym_routine_exercises.exercise_key'),
+		stamped.insert.get('gym_routine_exercises.exercise_key'),
 		'gym_routine_exercises_stamp_exercise_key_trigger',
 	);
-	assert.equal(stamped.get('exercises.name_key'), 'exercises_stamp_name_key_trigger');
-	assert.equal(stamped.get('gym_sets.exercise_key'), 'gym_sets_stamp_exercise_key_trigger');
+	assert.equal(stamped.insert.get('exercises.name_key'), 'exercises_stamp_name_key_trigger');
+	assert.equal(stamped.update.get('gym_sets.exercise_key'), 'gym_sets_stamp_exercise_key_trigger');
+	// The operation is read off the trigger, not assumed: `safety_contacts_
+	// unconfirmed_on_insert` is armed for INSERT only, so an UPDATE supplying
+	// `confirmed_at` reaches nothing that would rewrite it.
+	assert.equal(
+		stamped.insert.get('safety_contacts.confirmed_at'),
+		'safety_contacts_unconfirmed_on_insert',
+	);
+	assert.equal(stamped.update.get('safety_contacts.confirmed_at'), undefined);
 });
 
 test('no pgtap positive supplies a value a BEFORE trigger overwrites, unless registered', () => {
@@ -637,13 +759,16 @@ begin
   end if;
   return new;
 end;`;
-	assert.deepEqual(assignedColumns(body), { unconditional: ['always'], conditional: ['status'] });
+	assert.deepEqual(assignedUnder(body, 'insert'), {
+		unconditional: ['always'],
+		conditional: ['status'],
+	});
 
 	// A column assigned BOTH ways belongs to the stronger population: the
 	// top-level assignment always fires, so the branch adds nothing to what the
 	// supplied value is worth.
 	assert.deepEqual(
-		assignedColumns('begin\n  new.k := 1;\n  if x then\n    new.k := 2;\n  end if;\nend;'),
+		assignedUnder('begin\n  new.k := 1;\n  if x then\n    new.k := 2;\n  end if;\nend;', 'insert'),
 		{ unconditional: ['k'], conditional: [] },
 	);
 });
@@ -664,7 +789,10 @@ test('conditionallyStampedColumns subtracts the columns some live trigger always
 	];
 	// `k` is stamped unconditionally by the second trigger, so whether the
 	// supplied value survives is not a fixture question at all; only `j` is.
-	assert.deepEqual([...conditionallyStampedColumns(migrations)], [['tbl.j', 'a']]);
+	const conditional = conditionallyStampedColumns(migrations);
+	assert.deepEqual([...conditional.insert], [['tbl.j', 'a']]);
+	// Both triggers are armed for INSERT only, so neither reaches an UPDATE.
+	assert.deepEqual([...conditional.update], []);
 });
 
 test('descriptionOf folds the implicit concatenation SQL applies to adjacent literals', () => {
@@ -691,14 +819,29 @@ test('assertionDescriptions reads the last argument of every pgtap assertion for
 
 test('the conditionally-stamped population is non-empty, so a broken parse cannot read as clean', () => {
 	// The same 510 floor the unconditional scan carries. The registry below
-	// anchors it - an empty set makes all thirteen entries go stale - but the
+	// anchors it - an empty set makes all twelve entries go stale - but the
 	// population is asserted outright too, named at the triggers the filing was
 	// about.
 	const conditional = conditionallyStampedColumns(readMigrations());
-	assert.ok(conditional.size >= 10, `only ${conditional.size} conditionally stamped columns found`);
-	assert.equal(conditional.get('event_attendees.status'), 'trg_enforce_event_capacity');
-	assert.equal(conditional.get('live_run_pings.ele'), 'live_run_pings_drop_in_zone_before_insert');
-	assert.equal(conditional.get('race_pings.coarse'), 'race_pings_drop_in_zone_before_insert');
+	assert.ok(
+		stampedPairCount(conditional) >= 10,
+		`only ${stampedPairCount(conditional)} conditionally stamped columns found`,
+	);
+	assert.equal(conditional.insert.get('event_attendees.status'), 'trg_enforce_event_capacity');
+	assert.equal(conditional.update.get('event_attendees.status'), 'trg_enforce_event_capacity');
+	assert.equal(
+		conditional.insert.get('live_run_pings.ele'),
+		'live_run_pings_drop_in_zone_before_insert',
+	);
+	assert.equal(conditional.insert.get('race_pings.coarse'), 'race_pings_drop_in_zone_before_insert');
+	// Both clippers are BEFORE INSERT triggers, so neither can rewrite an UPDATE.
+	assert.equal(conditional.update.get('live_run_pings.ele'), undefined);
+	assert.equal(conditional.update.get('race_pings.coarse'), undefined);
+	// The two arms of the refund lock sit inside `if tg_op = 'UPDATE'`, so an
+	// INSERT of a `payment_refunds` row supplies nothing the trigger can rewrite.
+	assert.equal(conditional.update.get('payment_refunds.status'), 'payment_refunds_write_lock');
+	assert.equal(conditional.insert.get('payment_refunds.status'), undefined);
+	assert.equal(conditional.insert.get('payment_refunds.failure_reason'), undefined);
 });
 
 test('every pgtap positive supplying a conditionally stamped column is registered and read', () => {
