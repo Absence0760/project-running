@@ -6095,15 +6095,17 @@ class ApiClient {
   }
 
   /// Create an owner-scoped custom catalogue entry (migration 20270222_001).
-  /// [nameKey] is `normaliseExerciseName(name)`, stamped by the caller so this
-  /// package stays decoupled from the gym_prs helper — it's the frozen identity
-  /// a logged set binds by. RLS rejects any author_id other than the caller, so
-  /// the returned row is always owned by the signed-in user. Returns null when
-  /// signed out or on conflict/error (e.g. a duplicate name_key in the user's
-  /// own customs).
+  ///
+  /// `name_key` is NOT sent: the `exercises_stamp_name_key` trigger derives it
+  /// from `name` on every write (20270711000001), so the caller no longer
+  /// computes the key and this package needs no `gym_prs` of its own. It was
+  /// the last of that migration's client-computed rails (decisions 1323).
+  ///
+  /// RLS rejects any author_id other than the caller, so the returned row is
+  /// always owned by the signed-in user. Returns null when signed out or on
+  /// conflict/error (e.g. a duplicate name_key in the user's own customs).
   Future<ExerciseRow?> createCustomExercise({
     required String name,
-    required String nameKey,
     String category = 'other',
     String modality = 'weight_reps',
   }) async {
@@ -6117,7 +6119,6 @@ class ApiClient {
           .insert(<String, dynamic>{
             ExerciseRow.colAuthorId: uid,
             ExerciseRow.colName: trimmed,
-            ExerciseRow.colNameKey: nameKey,
             ExerciseRow.colCategory: category,
             ExerciseRow.colModality: modality,
             ExerciseRow.colLastModifiedAt:

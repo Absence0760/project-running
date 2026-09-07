@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { createGymRoutine, type GymRoutineInput } from '$lib/core/data';
-	import { normaliseExerciseName } from '$lib/gym/gym_prs';
+	import { namesAnExercise, normaliseExerciseName } from '$lib/gym/gym_prs';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 	import { parseWeight, weightInputValue, weightUnitLabel } from '$lib/format/units.svelte';
@@ -170,7 +170,10 @@
 	function buildInput(): GymRoutineInput | null {
 		// Drop blank-named exercises first so superset linking only sees real
 		// rows (a blank row between two flagged blocks must not bridge them).
-		const named = exercises.filter((e) => e.name.trim() !== '');
+		// Blank on the KEY: gym_routine_exercises.exercise_key carries
+		// `length(...) between 1 and 120`, so a name the canonical fold empties
+		// but JS trim() does not reaches the user as an unactionable 23514.
+		const named = exercises.filter((e) => namesAnExercise(e.name));
 		if (named.length === 0) return null;
 		const groups = assignSupersetGroups(named.map((e) => e.supersetWithNext));
 

@@ -6,6 +6,7 @@ import {
 	computeExercisePrs,
 	distinctExerciseCount,
 	sameExerciseName,
+	namesAnExercise,
 	workoutPrs,
 	RunningPrTracker,
 	kE1rmMaxReps,
@@ -369,4 +370,38 @@ test('sameExerciseName: different lifts, and the blank cases', () => {
 	// grouping surfaces used to make.
 	assert.equal(sameExerciseName('', '   '), true);
 	assert.equal(sameExerciseName(null, undefined), true);
+});
+
+
+test('namesAnExercise: a spelling names a lift when its canonical key is non-empty', () => {
+	assert.equal(namesAnExercise('Bench Press'), true);
+	assert.equal(namesAnExercise('  Row  '), true);
+	assert.equal(namesAnExercise('İncline Press'), true);
+	assert.equal(namesAnExercise(''), false);
+	assert.equal(namesAnExercise('   '), false);
+	assert.equal(namesAnExercise(null), false);
+	assert.equal(namesAnExercise(undefined), false);
+	// Every member of the folded class, alone, is blank.
+	for (const cp of [0x09, 0x20, 0x85, 0xa0, 0x1680, 0x2000, 0x2028, 0x202f, 0x3000, 0xfeff]) {
+		assert.equal(namesAnExercise(String.fromCharCode(cp)), false, `U+${cp.toString(16)}`);
+	}
+	// U+001C-U+001F are deliberately outside the class (decisions 790), so they
+	// name a lift as any other character does.
+	assert.equal(namesAnExercise('\u001c'), true);
+});
+
+test('namesAnExercise: U+0085 is blank here and not blank to trim()', () => {
+	// The whole reason this is a function rather than `name.trim() === ''` at
+	// each call site. NEL is in the shared whitespace class and is not in the set
+	// JS strips, so the raw guard let a name through that every keyed surface
+	// downstream counts as nothing (decisions 1322, one layer out).
+	assert.equal('\u0085'.trim(), '\u0085');
+	assert.equal(namesAnExercise('\u0085'), false);
+	// Mixed with members JS DOES strip, the residue is still only NEL.
+	assert.equal(' \u00a0\u0085\u2028 '.trim(), '\u0085');
+	assert.equal(namesAnExercise(' \u00a0\u0085\u2028 '), false);
+	// A real name carrying one is still a real name, and the class collapses it
+	// to the separator every other member collapses to.
+	assert.equal(namesAnExercise('\u0085Row\u0085'), true);
+	assert.equal(normaliseExerciseName('Bench\u0085Press'), 'bench press');
 });

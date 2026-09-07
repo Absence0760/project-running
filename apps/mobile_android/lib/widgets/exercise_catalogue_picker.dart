@@ -165,18 +165,24 @@ class _ExerciseCataloguePickerScreenState
     return exact.any(_inCategory) ? null : exact.first;
   }
 
+  /// Blank on the KEY, as [_exact] already is: `exercises.name_key` carries
+  /// `length(...) between 1 and 120`, so an affordance offered on one test and
+  /// an insert attempted on the other is a 23514 the reader cannot act on
+  /// (decisions 1367).
   bool get _canCreate =>
-      widget.api != null && _query.isNotEmpty && _exact.isEmpty && !_creating;
+      widget.api != null &&
+      namesAnExercise(_query) &&
+      _exact.isEmpty &&
+      !_creating;
 
   Future<void> _create() async {
     final api = widget.api;
-    if (api == null || _query.isEmpty || _creating) return;
+    if (api == null || !namesAnExercise(_query) || _creating) return;
     final l10n = AppLocalizations.of(context);
     final name = _query;
     setState(() => _creating = true);
     final made = await api.createCustomExercise(
       name: name,
-      nameKey: normaliseExerciseName(name),
       category: _category == 'all' ? 'other' : _category,
     );
     if (!mounted) return;

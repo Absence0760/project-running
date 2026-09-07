@@ -256,7 +256,11 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
         setType: (s['set_type'] as String?) ?? 'working',
       );
       final last = blocks.isEmpty ? null : blocks.last;
-      if (last != null && last.name.text == name) {
+      // Adjacency on the canonical key, not the spelling: the web twin's
+      // initExercises has grouped this way since decisions 1322, and comparing
+      // raw strings here rendered one lift logged under two spellings as two
+      // editor blocks beside a header stat that counts one.
+      if (last != null && sameExerciseName(last.name.text, name)) {
         last.sets.add(row);
       } else {
         blocks.add(_EditExercise(name: name, sets: [row]));
@@ -277,7 +281,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
   void _addExercise() => setState(() => _exercises.add(_EditExercise()));
 
   bool _exerciseHasData(_EditExercise ex) {
-    if (ex.name.text.trim().isNotEmpty) return true;
+    if (namesAnExercise(ex.name.text)) return true;
     for (final s in ex.sets) {
       if (s.reps.text.trim().isNotEmpty) return true;
       if (s.weight.text.trim().isNotEmpty) return true;
@@ -359,7 +363,11 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
     final out = <GymSetInput>[];
     for (final ex in _exercises) {
       final name = ex.name.text.trim();
-      if (name.isEmpty) continue;
+      // Blank on the KEY, never on the trim. This runtime's trim() happens to
+      // strip exactly the folded class, so the two agree here -- and the web
+      // twin's does not, which is the whole reason the test has a name
+      // (decisions 1367).
+      if (!namesAnExercise(name)) continue;
       // Bind to a catalogue entry when the typed name matches by normalised
       // key; otherwise stay free-text (exerciseId null).
       final exerciseId = _catalogueByKey[normaliseExerciseName(name)];
@@ -634,7 +642,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           hintText: l10n.gymEditorExercisePlaceholder,
-          errorText: _needExercise && ex.name.text.trim().isEmpty
+          errorText: _needExercise && !namesAnExercise(ex.name.text)
               ? l10n.gymEditorNeedExercise
               : null,
         );

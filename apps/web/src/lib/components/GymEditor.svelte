@@ -7,7 +7,11 @@
 		type GymSetInput,
 	} from '$lib/core/data';
 	import type { Exercise, GymSetType } from '$lib/types';
-	import { normaliseExerciseName, sameExerciseName as sameExercise } from '$lib/gym/gym_prs';
+	import {
+		namesAnExercise,
+		normaliseExerciseName,
+		sameExerciseName as sameExercise,
+	} from '$lib/gym/gym_prs';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 	import { parseWeight, weightInputValue, weightUnitLabel } from '$lib/format/units.svelte';
@@ -229,7 +233,12 @@
 		const out: GymSetInput[] = [];
 		for (const ex of exercises) {
 			const name = ex.name.trim();
-			if (name === '') continue;
+			// Blank on the KEY, never on the trim: a name JS leaves non-empty but
+			// the canonical fold empties saves a set whose server-stamped
+			// exercise_key is '', which the header stat, the summaries view and
+			// the routine promotion all count as nothing while this editor keeps
+			// rendering it.
+			if (!namesAnExercise(name)) continue;
 			// Bind to a catalogue entry when the typed name matches one by
 			// normalised key; otherwise stay free-text (exercise_id null).
 			const exerciseId = catalogueByKey.get(normaliseExerciseName(name)) ?? null;

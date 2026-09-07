@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:run_recorder/run_recorder.dart';
 import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
+import '../gym_prs.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 
@@ -130,7 +131,9 @@ class _Band extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      step.exerciseName.isEmpty ? '—' : step.exerciseName,
+                      namesAnExercise(step.exerciseName)
+                          ? step.exerciseName
+                          : '—',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
