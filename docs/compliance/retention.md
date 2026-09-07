@@ -50,7 +50,9 @@ The GDPR Art 5(1)(e) storage-limitation principle requires retention to be "no l
 | `cleanup-stale-race-pings` (`cleanup_stale_race_pings()`) | every 30 min (`*/30`) | `race_pings` older than 48 h | `20261213_001_race_pings_retention.sql` |
 | `cleanup-stale-user-coach-usage` (`cleanup_stale_user_coach_usage()`) | hourly (`17 * * * *`) | `user_coach_usage` buckets older than 7 days | `20261215_001_user_coach_usage_retention.sql` |
 | `cleanup-stale-rate-limits` | hourly | `rate_limits` rows older than 24 h | `20260604_001_rate_limits.sql` |
-| `cleanup-stale-export-blobs` | 04:23 UTC daily | the `storage.objects` ROWS of data-export blobs older than 7 days, in the `exports` bucket **and** the legacy `runs/{user_id}/exports/` prefix — not the backing bytes, see the Art 20 row above | `20260720_001_cleanup_stale_exports.sql`, widened by `20270602_001_exports_storage_bucket.sql`, unblocked by `20270703000002_export_sweep_survives_storage_delete_guard.sql` |
+| `enqueue-export-blob-reap` | 04:13 UTC daily | enqueues one `export_blob_reap` job per export prefix; the Go worker then erases the archive BYTES older than 7 days through the Storage API, in the `exports` bucket **and** the legacy `runs/{user_id}/exports/` prefix. This is the Art 20 retention job — see the Art 20 row above | `20270708000010_route_export_blob_reap.sql` ([decisions § 1144](../architecture/decisions.md)) |
+| `cleanup-account-deletion-receipts` | hourly (`17 * * * *`) | `account_deletion_receipts` rows older than 30 days (the send-once guard only has to outlive a job's retry budget; keeping deleted-account hashes past that is data-minimisation debt) | `20270217_001_account_deletion_receipt.sql` |
+| `cleanup-stale-export-blobs` | **NOT SCHEDULED** — `20270709000001` ran `cron.unschedule` and kept the function as a `service_role` break-glass | would delete the `storage.objects` ROWS of export blobs older than 7 days, which orphans the bytes rather than erasing them; the reap job above owns this window now ([decisions § 1172](../architecture/decisions.md)) | `20260720_001_cleanup_stale_exports.sql`, widened by `20270602_001_exports_storage_bucket.sql`, unblocked by `20270703000002_export_sweep_survives_storage_delete_guard.sql`, unscheduled by `20270709000001_export_reap_owns_the_retention_sweep.sql` |
 | `cleanup-stale-webhook-events` | 04:17 UTC daily | `webhook_events` older than 30 days | `20260623_001_webhook_event_dedupe.sql` |
 | `cleanup-stale-app-quota` | 04:15 UTC daily | `app_quota` older than 2 days | `20261007_001_strava_app_quota.sql` |
 | `purge-stale-coach-messages` | 03:17 UTC daily | `coach_messages` older than 18 months | `20260922_001_data_retention_purge_jobs.sql` |
@@ -60,11 +62,17 @@ The GDPR Art 5(1)(e) storage-limitation principle requires retention to be "no l
 | `purge-stale-direct-messages` | 03:41 UTC daily | `direct_messages` older than 2 years (`created_at`) | `20261119_001_purge_stale_direct_messages.sql` |
 | `purge-stale-checkpoint-health-data` | 03:47 UTC daily | Scrubs (nulls) the Art 9 weigh-in / medical columns on `checkpoint_crossings` older than 90 days (`recorded_at`); the split-time rows survive | `20270317_001_checkpoint_health_retention.sql` |
 
-Thirteen `cron.schedule`d cleanup/purge jobs are live (every job above
-deletes rows — or, for the checkpoint health job, scrubs columns; the
-non-deleting scheduled jobs — MV refresh, token-refresh
-enqueue, event-reminder enqueue, and the jobs-stuck / jobs-failed alerts —
-are not retention jobs and are excluded). Window tightening is a
+Fourteen `cron.schedule`d retention jobs are live — every row above except
+`cleanup-stale-export-blobs`, which is deliberately unscheduled and is listed
+so nobody re-derives it as missing. Each live one deletes rows, except the
+checkpoint health job (scrubs columns) and the export reap (enqueues the job
+that erases Storage bytes). The other ten live schedules are not retention
+jobs and are excluded: `enqueue-token-refresh`, `enqueue-event-reminders`,
+`enqueue-weekly-digest`, `enqueue-lifecycle-drip`,
+`enqueue-safety-overdue-emails`, `sweep-challenge-completions`, the
+`jobs-stuck` / `jobs-failed` / `jobs-backlog` alerts and
+`export-retention-overrun-alert`. (`refresh-mv-weekly-mileage` is gone
+entirely — `20270530_001` dropped the materialized view and unscheduled it.) Window tightening is a
 single-file edit to the function body. The `gdpr_dsar_closeouts_test.sql`
 pgtap suite pins the existence of `purge-stale-jobs`; the matching pins for
 the others ride alongside their defining migrations.
