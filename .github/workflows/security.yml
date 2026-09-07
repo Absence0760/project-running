@@ -295,7 +295,11 @@ jobs:
           build-mode: none
           # The `actions` language only ships a `security-extended`
           # ceiling; CodeQL silently falls back to that when
-          # security-and-quality isn't available.
+          # security-and-quality isn't available. Asking for the broadest
+          # anyway is the right direction to fail in — the fallback is a
+          # superset of every narrower suite — but the fallback is silent, so
+          # the step below reads what actually ran out of the SARIF instead of
+          # leaving the workflow's request to stand as the record (§ 1503).
           queries: security-and-quality
           # Every entry below narrows this analysis, so each one carries its
           # reason in the comment lines directly above it — inside the block,
@@ -322,6 +326,56 @@ jobs:
       - uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
           category: '/language:actions'
+          # Kept on disk as well as uploaded, so the step below can read what
+          # ran. Nothing else in this workflow needs its SARIF locally.
+          output: sarif-results
+      - name: Report the query suite that actually ran
+        # `queries: security-and-quality` above is a REQUEST. CodeQL resolves
+        # it against what the language ships and falls back without saying so,
+        # which left the workflow asserting a suite nothing could confirm we
+        # got: if a release stopped honouring the fallback or renamed the
+        # suite, this leg would run something narrower and every guard reading
+        # the workflow would still be green (decisions § 1503).
+        #
+        # The SARIF is the record of what executed, and the discriminator is
+        # version-independent rather than a rule-id allowlist: the quality half
+        # of `security-and-quality` is exactly the queries tagged for
+        # maintainability / correctness / readability and NOT tagged security,
+        # so if none of those ran, the fallback happened. Reported rather than
+        # failed, because the fallback is CodeQL's decision and the suite we
+        # get is still the widest one available.
+        #
+        # An empty rule set IS a failure: a SARIF naming no queries is an
+        # analysis that ran none, and it reports exactly as clean as one that
+        # ran everything — the state §§ 1304 and 1352 exist to make loud.
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=$(find sarif-results -name '*.sarif' -type f | sort)
+          if [ -z "$files" ]; then
+            echo "::error::the actions analysis wrote no SARIF under sarif-results/, so nothing records which queries ran. A scan whose output cannot be read is one whose scope cannot be checked."
+            exit 1
+          fi
+          total=0
+          quality=0
+          for f in $files; do
+            t=$(jq '[.runs[]?.tool | (.driver.rules // []) + ([.extensions[]?.rules // []] | flatten)] | flatten | length' "$f")
+            q=$(jq '[.runs[]?.tool | (.driver.rules // []) + ([.extensions[]?.rules // []] | flatten)] | flatten
+                    | map(select((.properties.tags // []) | (any(startswith("security")) | not)
+                          and any(. == "maintainability" or . == "correctness" or . == "readability" or . == "reliability")))
+                    | length' "$f")
+            total=$((total + t))
+            quality=$((quality + q))
+          done
+          if [ "$total" -eq 0 ]; then
+            echo "::error::the actions analysis names 0 queries across $files. CodeQL reported over an empty rule set, which is indistinguishable from a clean scan of everything; treat this as a broken analysis, not a quiet result."
+            exit 1
+          fi
+          if [ "$quality" -eq 0 ]; then
+            echo "::warning::the actions leg asked for security-and-quality and ran $total queries, none of them from the quality half — so CodeQL resolved the request down to its security-extended ceiling, as the init step's comment expects. Nothing is wrong; this is the fallback being observed rather than assumed."
+          else
+            echo "::notice::the actions leg ran $total queries, $quality of them from the quality half, so security-and-quality resolved rather than falling back."
+          fi
 
   trivy-job-worker-image:
     name: Trivy (job_worker container)

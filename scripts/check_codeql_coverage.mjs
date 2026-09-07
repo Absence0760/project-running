@@ -53,6 +53,17 @@
 // subject reports more assurance than it has, which is the same defect one
 // level up from the one it was written for.
 //
+// The fourth half is what an interpreted leg CANNOT declare. `queries:` names a
+// suite CodeQL resolves at run time, and for a language shipping no such suite
+// it falls back without saying so — `actions` has a `security-extended`
+// ceiling, so the workflow asks for `security-and-quality` and gets something
+// else. No guard in `workflow-lint` can close that: the answer exists only once
+// a scan has run, and this job has neither CodeQL nor a network. What it can
+// refuse is a job that stopped looking, so a leg flagged `suiteMayDowngrade`
+// must keep its analyze SARIF on disk and read it back in the same job — the
+// measurement is the job's to write, its existence is this guard's to hold
+// (decisions § 1503).
+//
 // So every narrowing an interpreted leg DECLARES is read here and must earn
 // itself: a reason in the comment lines directly above it (a scan hole costs at
 // least MIN_REASON_CHARS of prose), and a target that still names something
@@ -141,7 +152,17 @@ export const MIN_REASON_CHARS = 40;
  * excludes nothing — it reads as a scoped-down scan while being a no-op, which
  * is the more dangerous of the two failure directions.
  *
- * @typedef {{ language: string, broadestSuite: string, idPrefixes: string[] }} Interpreted
+ * `suiteMayDowngrade` marks a leg whose `queries:` is a REQUEST rather than a
+ * record. CodeQL resolves the named suite against what the language ships and
+ * falls back silently when it does not ship one — `actions` tops out at
+ * `security-extended` — so for that leg the workflow can say what was asked for
+ * and nothing in it can say what ran. This guard cannot close that: it has no
+ * CodeQL and no network, and the answer only exists once a scan has finished.
+ * What it can do is refuse to let the job stop LOOKING, so a leg marked here
+ * must keep its analyze output on disk and read it back in the same job. Where
+ * the measurement lives is the job's business; that one exists is this guard's.
+ *
+ * @typedef {{ language: string, broadestSuite: string, idPrefixes: string[], suiteMayDowngrade?: boolean }} Interpreted
  */
 /** @type {readonly Interpreted[]} */
 export const INTERPRETED = [
@@ -150,7 +171,12 @@ export const INTERPRETED = [
 		broadestSuite: 'security-and-quality',
 		idPrefixes: ['js', 'ts', 'javascript'],
 	},
-	{ language: 'actions', broadestSuite: 'security-and-quality', idPrefixes: ['actions'] },
+	{
+		language: 'actions',
+		broadestSuite: 'security-and-quality',
+		idPrefixes: ['actions'],
+		suiteMayDowngrade: true,
+	},
 ];
 
 const SKIP_DIRS = new Set(['node_modules', '.git', 'build', '.dart_tool', 'target']);
@@ -791,6 +817,30 @@ export function check(opts = {}) {
 						`analysis and the result reads exactly as clean; it costs at least ` +
 						`${MIN_REASON_CHARS} characters saying which families and why.`,
 				);
+			}
+		}
+
+		if (leg.suiteMayDowngrade) {
+			const output = scalarEntry(block, 'output');
+			if (!output) {
+				errors.push(
+					`the \`${jobs[0]}\` job asks for \`queries: ${queries?.value ?? leg.broadestSuite}\` ` +
+						`on ${leg.language}, a suite CodeQL resolves and silently falls back from, and ` +
+						`keeps no SARIF to check what it got: its analyze step declares no ` +
+						`\`output:\`. The request would then be the only record, and a release that ` +
+						`stopped honouring the fallback or renamed the suite would narrow this scan ` +
+						`with every guard still green.`,
+				);
+			} else {
+				const dir = output.value.replace(/^['"]|['"]$/g, '');
+				if (!runScripts(block).some((script) => script.includes(dir))) {
+					errors.push(
+						`the \`${jobs[0]}\` job writes its ${leg.language} SARIF to \`${dir}\` and no ` +
+							`\`run:\` step in the job reads it. Saving the record and never opening it ` +
+							`is the same state as not saving it — the suite that actually ran stays ` +
+							`unmeasured while the workflow reads as if it were checked.`,
+					);
+				}
 			}
 		}
 

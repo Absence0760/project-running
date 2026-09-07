@@ -58,7 +58,18 @@ const GO_STEP = `      - name: Build every Go module for CodeQL
 /// does not fail on the reason floor.
 const REASON = '# a reason long enough to say what would have to change to close this narrowing';
 
-/** @param {{ jsWith?: string, actionsWith?: string }} [opts] */
+/// The analyze step plus the reader that measures what the `actions` suite
+/// resolved to — the pair `suiteMayDowngrade` requires of that leg.
+const ACTIONS_TAIL = `      - uses: github/codeql-action/analyze@abc
+        with:
+          category: '/language:actions'
+          output: sarif-results
+      - name: Report the query suite that actually ran
+        run: |
+          find sarif-results -name '*.sarif' -type f
+`;
+
+/** @param {{ jsWith?: string, actionsWith?: string, actionsTail?: string }} [opts] */
 function interpretedJobs(opts = {}) {
 	const jsWith =
 		opts.jsWith ?? `          languages: javascript-typescript
@@ -78,10 +89,10 @@ ${jsWith}  codeql-actions:
     steps:
       - uses: github/codeql-action/init@abc
         with:
-${actionsWith}`;
+${actionsWith}${opts.actionsTail ?? ACTIONS_TAIL}`;
 }
 
-/** @param {{ kotlinStep?: string, jsWith?: string, actionsWith?: string }} [opts] */
+/** @param {{ kotlinStep?: string, jsWith?: string, actionsWith?: string, actionsTail?: string }} [opts] */
 function workflow(opts = {}) {
 	const kotlin =
 		opts.kotlinStep ??
@@ -221,7 +232,7 @@ test('runScripts and jobsDeclaring read the shapes the workflow actually uses', 
 	const text = workflow();
 	assert.deepEqual(jobsDeclaring(text, 'go'), ['codeql-go']);
 	assert.deepEqual(jobsDeclaring(text, 'java-kotlin'), ['codeql-kotlin']);
-	assert.equal(runScripts(text).length, 2);
+	assert.equal(runScripts(text).length, 3);
 });
 
 test('parseUnbuilt refuses a line the step’s own skip loop could not match', () => {
@@ -267,6 +278,45 @@ test('countSources counts the language’s files under a tree and skips generate
 	writeFileSync(join(root, 'apps/watch_wear/android/src/Legacy.java'), '');
 	assert.equal(countSources(root, 'apps/watch_wear/android', ['.kt', '.java']), 3);
 	assert.equal(countSources(root, 'apps/watch_wear/android', ['.go']), 0);
+});
+
+test('a downgradable suite that keeps no SARIF, or never reads it, fails', () => {
+	// `queries: security-and-quality` on the actions leg is a request CodeQL
+	// resolves down without saying so, so the workflow's own text can never be
+	// the record of what ran. This guard cannot read the answer — no CodeQL, no
+	// network — but it can refuse a job that stopped looking for it.
+	const root = fixtureRoot(TREES);
+	const noOutput = check({
+		root,
+		workflowText: workflow({
+			actionsTail: `      - uses: github/codeql-action/analyze@abc
+        with:
+          category: '/language:actions'
+`,
+		}),
+	});
+	assert.equal(noOutput.errors.length, 1);
+	assert.match(noOutput.errors[0], /declares no `output:`/);
+
+	const unread = check({
+		root,
+		workflowText: workflow({
+			actionsTail: `      - uses: github/codeql-action/analyze@abc
+        with:
+          output: sarif-results
+`,
+		}),
+	});
+	assert.equal(unread.errors.length, 1);
+	assert.match(unread.errors[0], /no `run:` step in the job reads it/);
+});
+
+test('a leg not flagged as downgradable owes no SARIF reader', () => {
+	// The javascript leg's suite is the one it asks for, so demanding a
+	// measurement of it would be a claim about nothing.
+	const root = fixtureRoot(TREES);
+	const { errors } = check({ root, workflowText: workflow() });
+	assert.deepEqual(errors, []);
 });
 
 test('walkSurfaces skips vendored and build trees', () => {
