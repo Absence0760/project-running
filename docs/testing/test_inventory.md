@@ -616,7 +616,7 @@ Run with `npx tsx --test src/lib/learn/guides.test.ts src/lib/learn/learn_meta.t
 
 `sitemap.test.ts` is also extended with `learnEntries` coverage (hub 0.8 / category 0.6 / guide 0.7 + frontmatter lastmod, and the lastmod survives `buildSitemap`).
 
-### `apps/web/src/lib/routes/privacy.test.ts` — 9 tests
+### `apps/web/src/lib/routes/privacy.test.ts` — 10 tests
 
 TypeScript unit tests for the pure privacy-zone clipper (`lib/privacy.ts`, decisions §33). Run with `npx tsx --test src/lib/privacy.test.ts` from `apps/web`.
 
@@ -706,7 +706,7 @@ Every `await res.json()` / `.text()` in production web source must sit inside a 
 
 `parseRunSource` defensive-fallback contract — every valid `RunSource` value passes through; null, undefined, empty string, unknown string, and case-mismatched input all fall back to `'app'`.
 
-### `apps/web/src/lib/routes/route_simplify.test.ts` — 23 tests
+### `apps/web/src/lib/routes/route_simplify.test.ts` — 24 tests
 
 Mirror of `apps/mobile_android/test/route_simplify_test.dart`. Pure tests for the Ramer-Douglas-Peucker simplifier in `lib/route_simplify.ts`. Covers the short-track passthrough (< 3 points), the clean straight-line collapse to two endpoints, sharp-corner preservation above epsilon, sub-epsilon jitter collapse on a straight line, the first/last retention contract, the no-mutation guarantee, and `computeElevationGain` (positive-delta-only sum, descending-only profile = 0, null-elevation skip with chain-breaking, empty / single-point input).
 
@@ -845,7 +845,7 @@ The chunked following-feed reads (was 12). Three added cases: `FEED_FOLLOWEE_CHU
 
 Both gained a non-vacuity control (was 5 and 2). Each guard reports an empty offender list when it works AND when it sees nothing at all, and only the matcher half had fixtures: a walk that reaches no file, an `aria-live` filter that stops matching the app's own markup, or a `<TrackPreview` matcher that stops seeing a mount each turns the guard into a green check over an unscanned tree ([§ 762](../architecture/decisions.md)'s rule, applied to two guards that predate it). The `TrackPreview` control is a POSITIVE one taken off the real permitted wrappers rather than a fixture, so it cannot drift away from what it checks.
 
-### `apps/watch_wear/android/app/src/test/kotlin/**/*Test.kt` — 784 Wear OS Kotlin/JUnit tests across 76 files
+### `apps/watch_wear/android/app/src/test/kotlin/**/*Test.kt` — 802 Wear OS Kotlin/JUnit tests across 79 files
 
 Run with `cd apps/watch_wear/android && ./gradlew testDebugUnitTest`. Pure-JVM tests — no Android instrumentation, no Robolectric. **Six of them read files outside this Gradle build** (the phone's two `Wear*Bridge.kt`, `apps/web/src/lib/core/env_flag.ts`, `docs/backend/metadata.md`, the `activity_type` migration and the two client label catalogues), plus the manifest, and none was a declared input of the test task until [decisions § 946](../architecture/decisions.md) — so a local run reported UP-TO-DATE and SUCCESSFUL on exactly the drift those guards exist to catch. They are declared now; if you add a guard that reads anything outside `app/src`, add it to `guardedCrossTreeFiles` / `guardedCrossTreeSets` in `app/build.gradle.kts` in the same change or it will not re-run when its subject changes. `ScreenWiringTest` also now pins the pre-run signed-out notice ([decisions § 948](../architecture/decisions.md)): the `!authed` branch renders `not_signed_in` and NOT `offline`, read branch-scoped so the sibling `!online && authed` branch a few lines above cannot satisfy it — two conditions sharing one string breaks nothing, so only an assertion about which branch says which can see it. The team deliberately avoided UI-test infrastructure (see `apps/watch_wear/CLAUDE.md`'s "layouts can't be unit-tested without Robolectric"); the pattern is to extract pure helpers from the Android-bound classes and exercise them at the JVM level.
 
@@ -1296,7 +1296,7 @@ The script uploads a Melbourne-region track, inserts a run (firing the trigger t
 
 This is **not** wired into CI — both the OSM extract download and the OSRM build are too heavy for the GitHub runner. It's a developer-machine sanity check before shipping a matcher change.
 
-### `apps/web/src/lib/segments/catalogue_browse.test.ts` — 46 tests (13 added)
+### `apps/web/src/lib/segments/catalogue_browse.test.ts` — 47 tests (13 added)
 
 The catalogue browse shaping, plus a new `fold` block. Every vector in that block is one the Dart twin's hand-written fold table answered differently: Vietnamese tone marks over a barred D that must NOT fold, Greek breathings, the two sigmas, the pinyin tone letters, Cyrillic, a spacing diacritic deleted outright, a combining mark outside the five blocks the old table knew, a Georgian Mtavruli capital, a CJK compatibility ideograph, a Hangul syllable decomposing to jamo, the stroke and ligature letters that stay unfolded, and the widening property the whole helper rests on. The Dart suite carries the same 14, so the pair's agreement is visible rather than asserted ([decisions § 852](../architecture/decisions.md)).
 
@@ -2255,3 +2255,33 @@ The seven raw stamp parses in `social.dart`, two of which are SMS-opt-in stamps 
 ### `apps/mobile_android/test/settings_preferences_pick_int_test.dart` — 4 tests (mirrored on the iOS twin)
 
 The Preferences screen's shared `_pickInt` dialog, which used to pop `null` on a refusal — the same value Cancel pops. Pins that an out-of-range figure and unparseable text each keep the dialog open with the range named in the field's own `errorText`, that Cancel is still distinguishable from both, and that correcting the entry clears the message and lets the save land.
+
+## #789 round 45 (2026-09-07)
+
+### `apps/web/src/lib/routes/great_circle_sources.test.ts` — 4 tests
+
+The great-circle census the clone guard cannot take. `check_shared_reimplementations.mjs` reports a group only when its members' normalised bodies match, so it saw two of the seventeen copies and none of the three spellings; this reads the CLASS instead, anchored on the arc of a square root so a bearing's own `atan2(y, x)` is excluded by construction. Nine residue rows, each with its reason, and a stale row fails.
+
+### `apps/web/src/lib/segments/parity_collation_guard.test.ts` — 3 tests
+
+A registered parity-pair half may not order with `localeCompare`: the Dart runtime ships no collator, so a collation on the web side gives the two platforms different lists from the same rows. Carries `import_failures` as a stated pending exemption with a staleness test, because its one-line fix is in another tree.
+
+### `apps/web/src/lib/util/clip_text.test.ts` — 11 tests
+
+The single meta-tag clipper the eight copies became, including the case the copies got wrong: a cut on a UTF-16 code-unit index splits a surrogate pair, and a lone surrogate has no UTF-8 encoding, so a description crossing the 160-character `og:description` budget mid-emoji reached the crawler as U+FFFD.
+
+### `apps/web/src/lib/util/json_ld.test.ts` — 6 tests · `json_ld_escaping.test.ts` — 2 tests
+
+`serialiseJsonLd` stringifies and escapes in one call, because all twelve call sites spelled the two together and the ordering was the hazard. The escaping file is the census half: a builder that omits the escape entirely is invisible to every clone guard, so all twelve exported `*JsonLd` builders are enumerated and each is called with a hostile field.
+
+### `apps/web/src/routes/coaching/roster_sort.test.ts` — 5 tests
+
+The coach roster's column sort, extracted from `+page.svelte` because a `$derived` cannot be exercised without booting SvelteKit and the property worth pinning — that the order never depends on `Array.prototype.sort`'s stability — is one a render never shows twice.
+
+### `packages/core_models/test/exercise_catalogue_test.dart` — 9 tests · `packages/api_client/test/exercise_catalogue_read_test.dart` — 4 tests
+
+The Dart half of the exercise-catalogue pair (§ 1460). The nine mirror the web suite's eight plus one the web half cannot express — two rows sharing a display name but not a stored key, which must both survive because the index still serves both. The read suite pins the paged walk and that an unavailable catalogue throws rather than answering an empty list.
+
+### `apps/watch_wear/.../SyncFaultTest.kt` — 5 · `DiscardRunTest.kt` — 6 · `AuthFaultTest.kt` — 7
+
+The wrist's two classified faults and the PostRun discard. Counted in the Wear OS glob row above (802 across 79 files); listed here because the three are what moved it.

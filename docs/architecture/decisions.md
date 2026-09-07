@@ -27691,3 +27691,500 @@ Seven sorts compared ISO timestamps through `localeCompare`. Over ASCII digits a
 `ordinalCompare` is the instrument, and the seventh site — sorting BCP-47 tags to pick between two same-language guide variants — takes it for a different reason: there the point is that the answer stops being a property of the host's ICU data.
 
 The title sort in `guides_index` deliberately stays a collation. It orders prose for a reader, which is the criterion § 1400 states: collate where the surface is web-only and the reader's own order is the correct one, fold or compare by code unit where the value is an identifier or a Dart twin must agree.
+
+## 1460. The phone's exercise catalogue gains the shadow resolution, and it keys on the STORED `name_key` rather than re-deriving it
+
+§ 1419 gave the web read `dedupeShadowedExercises`, and `apps/web/src/lib/gym/exercise_catalogue.ts` was written to be twinned — its own header said outright that no Dart half existed. It does now: `packages/core_models/lib/src/exercise_catalogue.dart`, registered in both registries, the fourth pair after `profile_query`, `strava_sync_result` and `import_completeness` to live in the shared package rather than under `apps/mobile_android/lib/`, because `api_client` consumes it and it therefore owes no iOS-twin mirror.
+
+The rule is the web half's verbatim: `exercises` carries two PARTIAL uniques on `name_key` — `exercises_global_name_key` on `(name_key) where author_id is null` and `exercises_author_name_key` on `(author_id, name_key) where author_id is not null` — so a user's custom may shadow a seeded global under one name exactly as migration 20270222_001 says it intends, and a read legitimately returns two rows for one exercise while every consumer binds a typed name to one `exercises.id`. The owner's row wins, because a shadow exists only where the user deliberately created a custom under a name the catalogue already held; RLS is what makes that cheap to recognise, since the read policy returns seeded globals plus the caller's own customs and nothing else, so a non-null `author_id` in a result set is by construction the caller's and no user id is taken.
+
+The KEY is the one deliberate difference, and it is not an accommodation. Web folds `name` through `normaliseExerciseName`; this half reads the row's own `name_key`. Three reasons, in ascending order of weight. `normaliseExerciseName` lives in `apps/mobile_android/lib/gym_prs.dart` beside the 1,488-entry frozen fold table and a package cannot import an app, so re-deriving here would mean a fourth copy of the table the tree spent § 1175 and § 1176 reducing to three. `name_key` is the column the two partial uniques are enforced ON, so it is by definition what makes two rows a shadow pair, where a client fold is a second opinion about the same question. And the two agree only while the client's frozen table matches the server's. **The obvious version of that third reason is wrong, and the correction is the interesting part**: a stored key cannot be stale, because migration 20270709000010 backfills every `name_key` and then adds `exercises_name_key_canonical` NOT VALID and VALIDATEs it, so on any migrated database the stored value already equals what the current SQL fold produces. What is real is the WINDOW: a client deploy and a migration are not atomic, and a client carrying a newer or older frozen table than the database's is exactly the state a regeneration passes through. In it, a re-deriving client splits a pair the unique index will not let anyone add a third row to. Reading the column the uniques are built on has no such window.
+
+Two idiomatic shape differences beside it, neither a divergence: web's structurally-bounded `E extends ShadowableExercise` generic is a concrete `List<ExerciseRow>` here, because `ExerciseRow` is emitted by `scripts/gen_dart_models.dart` and cannot be given an `implements` clause; and the 9 Dart cases are the web suite's 8 plus one the web half cannot express — two rows sharing a display name but not a stored key, which must both survive because the index still serves both. All three mutations of the reducer (drop the precedence, always replace, key on `name`) fail a case.
+
+## 1461. The catalogue shadow is resolved at the READ on the phone too, not at each surface
+
+`ApiClient.fetchExerciseCatalogue` now returns through `dedupeShadowedExercises`, which is where web applies it and for the same reason: every consumer downstream treats a name as identifying one exercise, so an unresolved pair leaves the binding to whichever row that particular consumer's own map happens to keep. Resolving per surface is not a smaller version of resolving once — it is a licence for two surfaces to disagree about one lift, which is the state § 1384 describes and the state the phone was in while web was fixed. Nothing else about the read moved: the explicit-range paging through `readAllPages` and the `(name, id)` total order were already there and are still what a range demands.
+
+That closes the ordering divergence filed separately. It was true that web ordered by `name` alone and the phone by `(name, id)`, and true that the two therefore bound a shadowed name to different rows; it is no longer reachable from either side, because neither answer now depends on the order at all — both platforms resolve the pair before any consumer sees it.
+
+## 1462. An unavailable catalogue throws rather than answering an empty list, and the Dart read deliberately does NOT take web's `{ catalogue, error }` shape
+
+An empty catalogue is the state in which every typed name looks free: the picker's exact-match test finds nothing, the browse affordance hides itself, and the create path is offered for a name the catalogue already holds — where the insert then either succeeds against the partial unique and mints a shadow, or 23505s against a row the client cannot see. So "unavailable" and "empty" must not be one value.
+
+The filings said the phone's read "returns `[]` on error". Measured, it never did: `readAllPages` propagates and `fetchExerciseCatalogue` has no catch, so the failure already reached the caller. The `[]` is `gym_screen.dart`'s — it catches, logs and leaves `_catalogue` at its previous value, which on a first load is `const []`. The API layer's contribution is therefore to keep the distinction representable and to say so: the method's doc comment now states that a failed read is a failure and that a catch here would erase the third state for every surface at once, and `exercise_catalogue_read_test.dart` refuses `try` / `catch` / `catchError` anywhere in its body. Both mutations — dropping the dedupe, and adding a catch that answers `const []` — fail it.
+
+Web's `{ catalogue, error }` was not copied, and the reason is not scope. A throw is the stronger contract of the two: web's record can be destructured for `catalogue` and have `error` ignored, silently, which is what a value-shaped failure invites; a throw cannot be ignored without writing the catch that ignores it, which is a visible act at the call site. The Dart signature also has one caller and two test fakes today, and changing it would have edited three files in another lane's tree this round for no gain the throw does not already give. The surface half — a loaded / empty / unavailable state on `gym_screen.dart` and a create affordance that fails closed while the catalogue is unknown — is filed, and is what actually closes the both-platforms entry.
+
+## 1463. `packages/api_client` reads every stored date-time through the strict parser, and each package now carries its own instrument
+
+§ 1377 put `parseIsoStrict` in `core_models` below every consumer and § 1430 converted 181 of the 202 sites that still took the rollover. The remaining 21 were all in `packages/api_client/lib/src/api_client.dart` and are now converted: nine nullable reads through `parseIsoStrictValue`, nine required ones through `parseIsoStrictRequired`, three `String`-in-hand reads through `parseIsoStrict`. `DateTime.tryParse` does not answer "no value" for an impossible column — it rolls the components through the calendar and answers a confident wrong instant that passes every downstream non-null check, which is worse than an absent one (§ 1344).
+
+Two of the converted sites changed a throw into a null rather than into a stricter throw, deliberately: `matchedAt` and a route summary's `createdAt` were already written as "null when the column is null, parse otherwise", the model fields are nullable, and the surrounding read shapes a whole list — so an unreadable stamp costing that one field is better than an exception that costs the list, and it is exactly what `parseIsoStrictValue` means everywhere else in the tree.
+
+The coverage claim needed its own instrument, because the app's guard (`store_timestamp_reader_guard_test.dart`) derives its covered set from files under `apps/mobile_android/lib`, so no package has ever been in it — `api_client` held 21 raw parses the whole time that guard was green. Each package now carries one that scans its entire `lib/` rather than a list, so a reader added tomorrow is covered the day it lands. `api_client`'s has no per-site escape hatch at all: nothing there needs one, and an unused exemption is a hole waiting for the first caller who would rather not explain itself. `core_models`' has exactly two, both derived rather than listed — `iso_parse.dart`, which the suite fails if it stops holding a raw parse, and the generated `part` files, recognised by the marker their own generator writes. That second exemption rests on provenance and the provenance was checked: `Run.fromJson` and `Route.fromJson` are reached only from `local_run_store.dart` and `local_route_store.dart` reading files this build's own `toJson` wrote, and the archive-restore path in `backup.dart` constructs the model directly rather than through them. Both guards were mutation-tested by planting a raw parse in an unrelated file of each package.
+
+## 1464. The exercise blank test is PROVED to be the folded class rather than relocated to reach it
+
+`ApiClient.createCustomExercise` decides blankness with `name.trim()`, and § 1367 recorded that as the rule stated by a runtime coincidence: the class that actually governs is `kExerciseWhitespace`, spelled out by code point because the three runtimes that persist this key disagree about whitespace past ASCII (§ 790), and `packages/` cannot reach the function that applies it. The filed durable fix was to relocate `normaliseExerciseName`, `namesAnExercise` and the frozen fold table into `core_models`. That is still the right move for the general reach, and it is still owed — but it is not what this particular call site needs, and the measurement is why.
+
+The case fold maps code points to code points and never deletes one, so `normaliseExerciseName(s)` is empty exactly when every code point of `s` is in the whitespace class. Blankness is a property of the CLASS alone; the 1,488-entry table is irrelevant to it and only ever mattered for grouping. And the class is Unicode `White_Space` plus U+FEFF, which is Dart's `trim()` verbatim. So `trim().isEmpty` is not an approximation of the rule here, it is the rule — and the thing that was missing was not a relocation but a proof.
+
+`exercise_blank_name_guard_test.dart` reads the class out of its own declaration rather than restating it (a second copy would be the fourth rail the guard exists to avoid), then measures the identity in both directions over every assignable code point: nothing `trim()` strips is outside the class, and nothing in the class survives `trim()`. Widening the class now fails here — which is the case that matters, since U+001C-U+001F sit deliberately outside it while Postgres folds them under one collation provider, and a name that folded to the empty key would otherwise pass this blank test, reach the server, and come back as a 23514 the method reports as an unexplained null. Mutation-tested by adding U+001C to the class (two assertions fail) and by deleting the call site's refusal (the third fails).
+
+## 1465. A collation is not a total order, and three of the four people sorts were relying on it being one
+
+`comparePeopleRank`, the inline sort in `fetchSuggestedPeople` and the coach roster's column sort each ended on `localeCompare`, and a collation answers 0 for two DIFFERENT strings — two runners genuinely called `John Smith`, or one display name stored precomposed as U+00C5 against another stored decomposed as `A` + U+030A, which compare equal under every locale. `Array.prototype.sort` is stable, so the order then fell through to whatever the query returned, and nothing in these paths makes that unique: `search_user_profiles` orders on exact-handle-first and prefix rank, the suggested-people list is hydrated from a `Set` of ids, and `coach_roster_summary` carries no `ORDER BY` at all. The same result set therefore rendered in a different order between two loads. `dmRecipientCandidates` was the fourth sort and already carried an id tiebreak with the reason written beside it; that reason is now the module's, as `search_ranking.ts`'s `comparePersonName`, and the two people surfaces end on it rather than each spelling the collation out.
+
+The roster is the wider case, and the reason its comparator moved out of the markup. The name column is the one the filing named, but every one of the five ties readily — two athletes with no runs logged are equal under `lastRun`, two on 0 acute load under `load`, two on 0 % under `plan` — so the `athlete_id` tiebreak sits after the switch and covers all five rather than only the collated one. It is deliberately outside the direction multiplier: reversing a column reverses the ranked groups, it does not scramble the members of a tie. A `$derived` in `+page.svelte` cannot be exercised without booting SvelteKit, so the comparator is now `routes/coaching/roster_sort.ts` and the total-order property is pinned there over all five keys in both directions — the same shape `routes/runs/fetch_mode.ts` already uses for a route's own pure logic.
+
+## 1466. The three exercise writes in `data.ts` decided blankness on the spelling, and the tree-wide guard spares that file by name
+
+`createCustomExercise`, `replaceGymSets` and `createGymRoutine` each tested `name.trim()` before writing a row keyed on a column the SERVER derives from that name — `exercises.name_key` (migration `20270222_001`), `gym_routine_exercises.exercise_key` (`20270101_001`) and `gym_sets.exercise_key` (`20270712000001`), each trigger-stamped and each under a length CHECK of at least one character. The fold's whitespace class is not the set ECMAScript's `trim()` strips: U+0085 is `White_Space` in Unicode and is in the class all three `normaliseExerciseName` rails fold, but it is neither a `WhiteSpace` nor a `LineTerminator` in the spec, so a name of one survives the trim, mints an empty key the column refuses, and reaches the composer as a 23514 naming a column it never sent. That is § 1367's finding; these three sites were outside the change that closed it, and their guards had been spelling-based since the features were written.
+
+`lib/gym/exercise_key_source_guard.test.ts` scans the whole tree for exactly this shape and spares `lib/core/data.ts` by name — its heuristic is file-scoped ("a file that names an exercise") and a 12,000-line module also holding club names, checkpoint names and meal-template names would drown it in false positives. The narrower claim that file is exempt from therefore lives in `data.test.ts`: a blankness test whose RECEIVER names an exercise, anywhere in `data.ts`. Both the scan and the three call sites are mutation-tested, the scan against the four shapes it must catch and the five it must spare.
+
+`replaceGymSets` also stamped `set_index` from the map index and dropped afterwards, so a blank in the middle of a composed workout shipped 0, 2, 3 — the surviving sets claiming positions that were never their order in the saved workout, on the column every read orders by and `computeRoutineAdherence` matches planned against logged on. It drops first now, and the ordering of the two steps is pinned rather than left to be rediscovered.
+
+## 1467. Seventeen reads carried a hand-written row type beside an inline select, and nothing compared the two
+
+The claim § 1294 / § 1327 / § 1329 made for `routes`, `events` and `clubs` — that a narrowed select and the type it is read as must name the same columns in BOTH directions — was enforced only where the projection is a shared `*_SELECT_COLS` constant and the type a `types.ts` overlay, because that is what the guard could read. The gym-routine, meal-template and recipe fetchers are the other shape: an inline select literal beside a purpose-built interface in `data.ts` itself, which is § 641's two-declaration problem with no instrument pointed at it. Seventeen reads across eight interfaces had been measured equal once, by hand, and never again.
+
+The guard now derives both halves from the source: the select's columns are parsed at paren depth so an embedded resource is separated from the top-level list, and the interface's keys are read from its declaration. It also checks every selected column against `database.types.ts`, so a migration that drops or renames one fails at the read rather than answering nothing — the same failure a stale type promises, arriving from the other side. Four exceptions exist and each states its reason: `public_gym_routines` redacts `last_modified_at` so `created_at` stands in, `GymRoutineExercise.sets` is assembled from a second read, `routine_exercise_id` is the sets' grouping key rather than a field of a set, and `GymSetWithDate.started_at` arrives through the `gym_workouts!inner` embed the RLS-scope filter needs. A stale exception fails as loudly as a drifted column: an `absent` key the select has started fetching, or an `extra` the type has started declaring, is reported by name.
+
+## 1468. `RunColumns` was `keyof Run`, and two of those keys are not columns
+
+The browser client took the `Database` generic, which is what makes a projection checkable at all — but `RunColumns` was `readonly (keyof Run)[]`, and the `Run` overlay adds two keys that no `runs` column answers to: `track`, the lazy Storage download the row has never carried, and `has_track`, a field only the `public_runs` view projects. Either in a tuple passed to `fetchRuns` compiled, and reaches PostgREST as a 42703 that fails the WHOLE read — the runner sees no runs at all, not a run missing a field. Intersecting `keyof Run` with the generated `runs` row refuses both at the declaration, which is where § 1330 put the check in the first place. Two `@ts-expect-error` directives pin the refusals and svelte-check reports them unused the moment the type is widened back.
+
+`Join<RunColumns, D>` stood beside the select and evaluated to `string`: the type spells a literal for a TUPLE and `RunColumns` is an unbounded array, so the cast read as if the literal survived a join it cannot survive. It is gone, along with the header that still described the client as untyped. What is true instead is stated there: these columns are a caller's parameter, known only at the call site, so the check lives at the tuple's own `satisfies` and the row type is `Pick`ed from that same tuple — one declaration, two derivations, which is what § 1330 was for. Every other narrowed read in the file takes its columns from a module constant that `Join<T, D>` can re-state as a real literal, and those do infer.
+
+## 1469. Taking one `any` off an embed surfaced the club read that never narrowed its join policy
+
+`fetchMyClubsWithError` read its club rows through a `club_members` embed and mapped them with `(row: any) => row.clubs`. With the client typed, dropping the annotation reported the mismatch the annotation had been suppressing: that read alone skipped `asClub`, so `join_policy` reached `enrichClubs` as the bare `string` the generated row gives a CHECK-constrained column, under a type promising the union. `asClub`'s own doc comment had stated the rule — every club read narrows through `parseJoinPolicy`, which falls back to `request`, the value that neither opens a club nor makes it unjoinable — and two of the three other reads followed it.
+
+Three further sites asserted the column into the union behind a `?? 'open'` fallback: the `search_clubs` RPC row projection, `createClub`'s returned row, and a re-assert inside `enrichClubs` that was dead code besides, since a `Club` reaching it has already been narrowed. `open` is the policy that admits anyone without approval, so an unreadable or unrecognised value was being presented as a club free to join — a fail-open default on a membership gate. All four now go through `parseJoinPolicy`, and the guard makes two claims rather than one: no line in `data.ts` asserts a value into `JoinPolicy`, and each of the five club reads names the narrower. The first claim is what a fifth read cannot quietly get around.
+
+## 1470. Seventeen great-circle distances in three spellings, and the two the clone guard could see were the least of it
+
+The filing said eleven, and named `PrivacyZonePicker.svelte` among them — which computes the inverse (metres to degrees, to draw a zone circle) and is not a great-circle distance at all. Counted rather than recalled, `apps/web/src/lib` carried **seventeen**: eight `R * 2 * atan2(sqrt(a), sqrt(1 - a))`, seven `2 * R * asin(min(1, sqrt(a)))`, and two bare `2 * R * asin(sqrt(a))` of which only one — `runs/run_stats.ts` — clamped `a` into [0, 1] first. `routes/route_geometry.ts` was in none of the filing's eleven.
+
+The three spellings are one function. Measured over 400,000 random global pairs the largest disagreement between the `atan2` and clamped-`asin` forms is 8.2e-8 m, a relative 4.1e-15; on legs under about 1.5 km it is 2.3e-13 m. They part company at exactly one input: where rounding pushes `a` a hair above 1, `sqrt(1 - a)` is NaN and so is `atan2(x, NaN)`, while `asin` of a clamped root is half a circumference. Nine of the seventeen answered NaN there; eight answered 20,015,086.796 m. So the census is not "duplication in two formulas" but one formula with two behaviours, and the behaviour the tree wants was already decided in § 305.
+
+Which module is canonical was likewise already decided — on the Dart side. `run_stats.dart:haversineMetres` clamps, and nine Dart modules import it (`embedded_bests`, `grade_adjusted_pace`, `pace_analysis`, `route_geometry`, `route_loop`, `route_overlap`, `route_snap`, `screens/route_builder_screen`, `widgets/snap_to_start`). Web's `runs/run_stats.ts` exports the identical function, its doc comment already says it is exported so the twin can be pinned on both sides, and `grade_adjusted_pace.ts` already imports it. Nothing was invented: seven web copies were deleted and the modules import the same function their Dart twins do — `routes/route_snap.ts`, `routes/route_geometry.ts`, `routes/geocoding_math.ts`, `routes/routing_quality.ts`, `routes/nearest_track_point.ts`, `integrations/import.ts`, `integrations/garmin-fit.ts`. Seventeen is now ten.
+
+The clone guard could not have found this and says so: `check_shared_reimplementations.mjs` groups byte-identical normalised bodies, and its own header lists "the tree holds eleven haversines and only the two structurally identical ones are one group" as a stated false negative. So the class needs an anchor of its own, and the anchor is the ARC: a great-circle distance has to take an `asin` or an `atan2` of a square root, and no rename, reformat or re-derivation removes that. `routes/great_circle_sources.test.ts` walks `apps/web/src`, strips whitespace, and matches `Math.(asin|atan2)(…Math.sqrt(` with at most one wrapping call between them — which admits the `min(1, …)` clamp and excludes, by construction rather than by exclusion list, `turn_cues.ts`'s bearing and `TrackPreview.svelte`'s screen angle, neither of which takes an arc of a root. Test files are outside the scan on purpose: `insert_index.test.ts` carries its own arc inside a reference implementation of the heuristic it exists to show the divergence from, and an independent oracle is the one place a second copy is the point. The registration naming the two byte-identical copies is deleted from `check_shared_reimplementations.mjs` in the same commit, which its own staleness rule requires.
+
+## 1471. `route_snap`'s two halves were computing different functions, and only the Dart one clamped
+
+Not duplication — a live divergence in a registered parity pair. `route_snap.dart` has imported the clamped `haversineMetres` from `run_stats.dart` since it was written; `route_snap.ts` carried a private unclamped `atan2`. On a polyline leg whose haversine `a` rounds past 1, the phone returned a real `alongM` and the web returned NaN, out of a field typed `number`. Every consumer renders it: the course-marker editor's distance readout, the along-route preview. `route_geometry` was the same asymmetry one step less severe — the Dart half imports the canonical, the web half carried its own `asin(min(1, sqrt))`, which agrees everywhere except at a negative `a` no coordinate on the globe produces.
+
+This is the shape § 305 records and it survived because nothing looks for it. `check_parity_pair_registry.mjs` compares the two registries, not the two behaviours (§ 852); each half's own suite tests only its own platform; and neither suite had an antipodal case. The pin added here is behavioural rather than a source read — a near-antipodal polyline through `snapToPolyline`, asserting `alongM` and `offsetM` are finite. Mutation-verified: it fails against the pre-change module with "alongM must be a number, got NaN".
+
+The same reasoning refuses the other nine sites rather than sweeping them. Five are web halves of parity pairs whose DART halves each carry their own copy too — `integrations/race_match.ts`, `routes/privacy.ts`, `routes/roadbook.ts`, `routes/route_description.ts`, `routes/turn_cues.ts` — and moving only the web half is exactly what the `addDays` registration in `check_shared_reimplementations.mjs` already refuses, because it breaks the one-file-per-pair correspondence the syncer agent reads. Those move on both platforms in one change or not at all. Two more are in `lib/components/` and two in `lib/segments/`, other trees. Each of the nine is a row in the guard's table with the reason it is still there, and the guard fails when a row goes stale — so the residue is visible and self-retiring rather than remembered.
+
+## 1472. A shape adapter onto the canonical is a door, not a second copy
+
+`routing_quality.haversineM` takes `{lng, lat}` objects and `nearest_track_point.haversineMetres` takes `[lng, lat]` pairs, because that is the coordinate shape their nine call sites — the route builder, the loop generator, `RunMap`, the detour ratio — already hold. Both keep their exported names and signatures and now have one-line bodies delegating to `haversineMetres`. Deleting them and rewriting every caller into four positional numbers would have been more churn for less clarity, and two of the caller files are other lanes' trees.
+
+The rule the guard encodes is therefore about the ARC, not about how many functions there are: a module that computes an arc of a square root is a second implementation, and a module that reorders four arguments is not. That is why the guard counts arcs per file rather than functions per file, and why an adapter needs no table entry.
+
+## 1473. A fixture that lands on a window boundary is answering the question the algorithm was asked
+
+Consolidating `garmin-fit.ts` onto the shared distance broke one test, and the break was informative rather than incidental. `embedded_best_efforts.test.ts` built a track of a hundred nominal-100 m steps at the equator and asserted a 5 km and a 10 km best effort out of it. `fastestWindowSeconds` compares an accumulated float sum against the window exactly, and the sum of a hundred such legs carries about 4e-12 m of rounding. Measured on the identical track: the private copy the module used to carry summed to 5000.0000000000018 m at step 50 and 10000.000000000015 m at step 100, and the shared one to 4999.9999999999982 m and 9999.9999999999964 m. Neither is more correct — the difference is the last bit of `x * (Math.PI / 180)` against `(x * Math.PI) / 180` interacting with accumulated longitudes — but the first clears both windows and the second clears neither, so the assertions were decided by double rounding rather than by the code under test. With the shared distance the fixture reported `fastest_5k_s: 1020` and no 10 km best at all.
+
+The fixture moved, not the algorithm. Its step is now 100.01 m, so the fifty-step prefix clears 5 km and the whole track clears 10 km by half a metre — eleven orders of magnitude above the arithmetic's noise and still inside the test's own five-second tolerances. Widening `fastestWindowSeconds` to an epsilon comparison was considered and refused: it would change what every imported run reports in order to accommodate a synthetic track, and no real GPS trace lands on a window boundary to within a picometre.
+
+## 1474. `PrivacyZone` and `LatLng` are type aliases, because only an alias carries an implicit index signature
+
+TypeScript gives an object type an implicit index signature only when it is a type alias; an `interface` stays open to declaration merging and therefore never gets one, so an interface-shaped value is refused as the generated `Json` however JSON-shaped it is (§ 1363). `routes/privacy.ts`'s `PrivacyZone` and `LatLng` and `routes/route_simplify.ts`'s `LatLng` were interfaces, and both go straight into jsonb — the zone list into `user_settings.prefs`, a simplified track into `routes.waypoints`. The consequence was never a failed write; it was that each writer restated the fields by hand, so `persistZones` carried its own three-field literal of what a privacy zone is and `saveRunAsRoute` its own annotation of what a waypoint is. A second declaration of the § 33 privacy contract, living where nobody would look for it.
+
+The declarations are aliases now, and the change is pinned where it can regress: each module's suite assigns a value of the type to a `Json` and asserts on it, so the compile is the assertion. Mutation-verified — restoring `interface PrivacyZone` fails `svelte-check` with "Index signature for type 'string' is missing in type 'PrivacyZone'", which is a CI job rather than a reading. The restatements the change makes deletable are in `core/data.ts` and `routes/settings/preferences/+page.svelte`, other trees, and stay owed.
+
+## 1475. Nine copies of the JSON-LD escape become one `serialiseJsonLd`, and serialising is half of it
+
+`escapeJsonLd` was written out nine times — `learn/learn_meta.ts` and eight modules under `share/` — and `check_shared_reimplementations.mjs` was blind to every one of them by design: it reports a group only when one member is an exported `apps/web/src/lib/**` function, and none of these was. § 1450 closed the XML half of the same filing and left this half open on the house rule that duplication with nothing to import is tolerated. Nine is past where it is tolerated, and the shape of the fix follows from what the twelve call sites actually spelled: every one of them was `escapeJsonLd(JSON.stringify(graph))`. So the canonical is `util/json_ld.ts`'s `serialiseJsonLd(graph)`, which stringifies AND escapes, because they were never two decisions — a thirteenth builder that stringified and forgot would be an injection with no local sign of one, and there is no caller that wants one step without the other.
+
+The escape stays JSON's own `<` and is deliberately NOT `util/html_escape`'s entity form, which is the neighbouring module and the wrong instrument. A `<script>` is a raw-text element, so the HTML parser does not decode entity references inside it: `&lt;` would reach the JSON parser as those four characters and land inside the value, corrupting the data while making it no safer. `<` is the character that matters — it is what lets a value spelling `</script>` terminate the element, and what lets `<!--` switch the tokenizer into the script-data-escaped state where the close tag is read differently again. `>` and `&` are unreachable by either route once `<` is gone; they are escaped anyway so the same payload stays inert in an XHTML document, where script content is parsed as character data.
+
+Making the escape an EXPORT is what brings the class into the reimplementation guard's reach for the first time, which was measured rather than argued: a private `escapeJsonLdCopy` beside it is caught (three shared distinctive operations against `MIN_SHARED_OPS = 2`), and so is the same three replaces inlined into a builder's own body, which anchor A alone would have missed. The residue is § 1476.
+
+`docs/features/learn_pages.md` had told the next author to do the opposite in three places — "duplicate the 3-line escape — conventions discourage premature abstraction" — and cited the house rule for it. That instruction is how there came to be nine, and it is now corrected rather than left standing.
+
+## 1476. A builder that omits the escape entirely is invisible to every guard, so the JSON-LD builders are censused and called
+
+Consolidating the escape closes the copy case and leaves a sharper one open, and the difference was measured on the same probe: a `buildProbeJsonLd` returning a bare `JSON.stringify(graph)` passes `check_shared_reimplementations.mjs` clean and exits 0. It has to — omitting a step leaves nothing to match, and both of that guard's anchors read what a function DOES. Yet that is the dangerous shape, not the duplicate one: nine copies of a correct escape are untidy, while one builder without it puts a club name spelling `</script>` into the document as markup.
+
+`apps/web/src/lib/util/json_ld_escaping.test.ts` states the property the guard cannot. It walks `src/` and `lambda/` for exported `*JsonLd` builders, requires the set to equal a REGISTER exactly, and calls each registered builder with a hostile field, asserting no literal `<`, `>` or `&` survives and that the value still round-trips through `JSON.parse` intact — escaped, not stripped. Twelve builders across nine modules today. A thirteenth fails the census until it is registered, and it cannot be registered without an invocation that proves it escapes; a builder that is deleted fails too, so the register cannot rot. The canonical serialiser is the one export skipped by name, since it is what the builders must reach rather than a builder itself.
+
+Both halves were mutation-tested. Replacing one builder's `serialiseJsonLd(graph)` with `JSON.stringify(graph)` fails exactly that builder's case, 12 of 13 still green; adding an unregistered exported builder fails the census alone. The per-builder escaping assertions that already lived in each module's own suite are kept — they are not what this replaces. What they could not do is notice a builder nobody wrote a suite for.
+
+## 1477. Eight copies of the meta-tag clipper become one, and the odd one out was the correct one
+
+Six byte-identical `clean(raw, max)` under `share/`, plus `share_meta.ts`'s `cleanShareTitle` and `og_route_image.ts`'s `truncate`, all collapse whitespace and cut user text to a budget with an ellipsis. None was importable, so — exactly as with § 1475's escape — `check_shared_reimplementations.mjs` saw none of them. They are now `util/clip_text.ts`'s `clipText(s, max)` and `collapseAndClip(raw, max)`, the second being the first with the whitespace collapse in front of it.
+
+Behaviour is unchanged everywhere any caller reaches, and that is measured rather than asserted: 4,132 strings — every three-atom combination of an alphabet holding an empty string, spaces, a tab, a newline, an accented letter, a BMP CJK character, a lone emoji, a ZWJ emoji sequence, leading and trailing whitespace and an ellipsis, plus long runs — crossed with every budget any call site uses (1, 2, 3, 5, 10, 30, 40, 60, 80, 90, 120, 160) gives 107,440 comparisons and zero differences against all three old forms.
+
+The one divergence the sweep found is at a budget of ZERO, which no caller passes, and it settles which copy was right. `clean`'s unguarded `max - 1` becomes `slice(0, -1)`, which in JavaScript counts from the END: `clean('abcdef', 0)` returns `'abcde…'`, nearly the whole string, from a budget that asked for nothing. `truncate`'s `Math.max(0, max - 1)` returns `'…'`. Six copies of one function and one lone variant disagreed, and the variant was the correct one — which is the argument for the consolidation stated in miniature, since nothing in the tree could have compared them.
+
+`cleanShareTitle` survives as a one-line delegate rather than being deleted: it names the 80-character budget for a run caption arriving from the untyped `runs.metadata.title` bag, and its `unknown` parameter is the reason `collapseAndClip` takes `unknown` too. `truncate` is deleted outright — it was exported only for its own test, and that test now asserts the route name is clipped in the SVG the module actually emits, which is the behaviour at the call site rather than a helper's arithmetic.
+
+## 1478. A share description cut mid-emoji reached the crawler as U+FFFD
+
+The clipper cut on a UTF-16 code-unit index, which can land between the two halves of a surrogate pair. A lone surrogate is not text: it has no UTF-8 encoding, so the response encoder substitutes U+FFFD. Measured on a club whose `description` crosses the 160-character `og:description` budget mid-emoji — `Buffer.from(out, 'utf8').toString('utf8') !== out`, the string ends `d83c` followed by the ellipsis, and the unfurl reads `…aa�…`.
+
+Reachable, not theoretical, and on the two surfaces where it is least recoverable. `clubs.description` holds 2,000 characters against a 160-character budget, so this cut happens on any club that writes more than a couple of sentences; the result goes into `<meta name="description">` and `og:description` on a page whose whole purpose is being scraped by someone else. `og_route_image.ts` clips a route name to 30 for the card title, where the broken code unit goes to the SVG rasteriser instead. The JSON-LD path degrades differently and no less badly: `JSON.stringify` escapes the lone surrogate to `\ud83c`, so the payload is well-formed ASCII and `JSON.parse` hands the consumer the ill-formed value back.
+
+The cut now steps back off a high surrogate and drops the character whole, so the budget is a ceiling rather than a target. Postgres will not store an unpaired surrogate in `text` or in `jsonb`, so the cut is the only place one can enter — the fix is at the only door. A grapheme CLUSTER can still be split (a ZWJ sequence, a base letter and its combining mark), which changes a glyph without making the string ill-formed; that is a rendering nicety, needs `Intl.Segmenter` and a budget in graphemes, and is stated in the module rather than attempted. Three of the four new cases fail against the pre-fix cut, as do both surface assertions — the club head's UTF-8 round-trip and the route card's SVG.
+
+## 1480. The session-draft builders return the bag they already proved is JSON, and the two casts they forced are gone
+
+`gym_session_draft.ts` builds the metadata a gym session is resumed from and writes it straight into `gym_workouts.metadata`, a jsonb column. Both entry points declared `Record<string, unknown>`, which is not assignable to `Json` however JSON-shaped its contents are, so `GymSessionRunner.svelte` and `routes/gym/+page.svelte` each carried an `as JsonObject` and a comment naming the fix.
+
+The claim the declarations were failing to make is one each of them had already established. `draftMetadata` builds a literal whose every value is a string, a number, a null or an array of those; `stripSessionDraft` runs the module's own `isJsonObject` guard over its input before copying it — the guard that exists because `typeof x === 'object'` is true for an array and the marker's shape is a cross-platform contract three rails read.
+
+Retyping both to `JsonObject` needed one thing beyond the return annotations, and it is the § 1363 technicality rather than anything about drafts: `GymSessionDraft` and `GymSessionDraftResult` were `interface` declarations, and TypeScript gives an object type an implicit index signature only when it is a type **alias** — an interface stays open to declaration merging and therefore never gets one. Both are now aliases, which is behaviour-neutral, has no Dart analogue at all, and is what makes the `satisfies GymSessionDraft` literal inside `draftMetadata` assignable.
+
+The pin is an annotation rather than an assertion, because there is nothing to observe at runtime: the suite runs under `tsx --test`, which transpiles without checking, but `src/**/*.test.ts` is inside `.svelte-kit/tsconfig.json`'s include, so `npm run check` reads it. A test that assigns both results to a `JsonObject` fails the typecheck if either return widens again or either draft shape goes back to being an interface — instead of pushing an `as JsonObject` back out to the call sites.
+
+## 1481. The catalogue picker snapshotted its prop, which is a second route into the fail-open state `unavailable` exists to close
+
+§ 1419 gave `fetchExerciseCatalogue` an error channel and made the picker's create affordance fail closed on it, on the rule that every claim the picker makes about a name being free is a claim about the whole catalogue. `ExerciseCataloguePicker.svelte` then defeated it from the other side: its list was `let entries = $state(untrack(() => [...catalogue]))`, a mount-time snapshot of a prop the host fills **asynchronously**.
+
+The reachable sequence is the ordinary one. The page renders with `catalogue = []` and `catalogueUnavailable = true`; a reader who opens the browse affordance before the read lands gets a picker whose `entries` is empty forever. `unavailable` is a separate prop and IS reactive, so it flips to false the moment the read succeeds — at which point the picker is claiming a known-complete catalogue while holding none of it. Every name then looks free, the create button is offered for every seeded global, and the insert **succeeds**: `exercises_author_name_key` is partial on `author_id is not null` and cannot see the global being shadowed. So the state § 1419 was built to prevent was reachable by a route that never touched the error channel.
+
+The fix is that the picker honours its prop: `created` holds only this session's customs and `entries` is a `$derived` merge. Both editors were doing that merge themselves and **neither applied the precedence rule** — `GymEditor` de-duplicated by `id`, the picker not at all — so § 1419's "the owner's row wins" was a property of one call site rather than of the catalogue. A de-duplication by `id` cannot see the case that matters: a created custom and the global it shadows are two different rows with two different ids and one folded key. Both merges now run through `dedupeShadowedExercises`, the same reducer the read uses.
+
+`GymEditor`'s own id pass turned out to be dead once the key reducer was in place — two rows sharing an id necessarily share a name and therefore a key — and was deleted rather than kept, which is also why no wrapper function was introduced: the merge is `dedupeShadowedExercises([...catalogue, ...created])` at both sites, one line each, and a one-line helper over an existing export is the abstraction the house rule refuses. The reducer's own doc carries the reason, since it is now a property of the function rather than of one caller.
+
+**No user-facing sentence is owed, and that is a finding rather than an omission.** With the read, both merges and the create gate all resolving a shadow to the owner's row, the web client can no longer mint one, and a shadow arriving from elsewhere — the phone, or a global seeded after a user's custom — resolves the one way the user asked for. Telling a reader that their own custom is hiding a built-in exercise is noise about a decision they made deliberately.
+
+**The reducer keys on the STORED `name_key`, not on a re-derivation of the name, and that came from the other platform.** The api-client lane, writing the Dart half this round, keyed on the column and reported the asymmetry. It is right, and the reason is narrower than "one of them is wrong". `name_key` is the column BOTH partial uniques are built on, so "the database considers these two rows one exercise" is not something a client should infer — it is a value the read already returns, since `fetchExerciseCatalogue` selects `*`. On any migrated row the two instruments agree and the schema is built so they must: `exercises_stamp_name_key` re-stamps on every insert and update, `exercises_name_key_canonical` (`name_key = public.normalise_exercise_name(name)`) is added NOT VALID and then VALIDATED, `20270709000010` batch-backfills the column before re-proving it — which is exactly what makes regenerating the frozen fold table a migration rather than a codegen refresh (§ 1176) — and `check_shared_constants.mjs` proves the SQL rail folds identically to both client tables. So the filing's literal claim, that a row stamped before the last regeneration can carry a key the current table would not produce, is refuted for a database the migration has run against. **It is not refuted for the window between a client deploy and that migration**, which are not atomic: there a re-derivation splits a pair the unique index will not let anyone add a third row to — the very two-rows-one-key state this reducer exists to remove, produced by the reducer itself. Reading the column has no such window, costs nothing, and makes the two platform halves answer identically by construction rather than by both re-deriving correctly. `ShadowableExercise` therefore carries `name_key` instead of `name` and the module imports nothing: the key is read, not computed. Nothing else moved — `GymEditor`'s `catalogueByKey` still re-derives, correctly, because a name the user TYPED has no stored key and must be folded with the current table on both sides of that lookup. The fixtures stamp `name_key` exactly as the trigger does, so every existing case still expresses the property it was written for; the case that separates the two instruments is new and could not be written any other way — two rows with one display name and different stored keys stay two, and two rows with different spellings and one stored key become one.
+
+## 1482. The fold-vs-collate criterion is a guard now, not a fifth derivation
+
+Four rounds each measured the same question from scratch and none of them left the answer where a tool could read it: § 1276 chose `localeCompare` for the exercise picker, § 1334 and § 1337 chose the fold for the mobile picker and the routes list, § 1383 moved the web picker onto the fold, and § 1400 declined to move four web-only display-name sorts. The round-43 filing that named this observed § 1400 supplies the deciding term — fold where a Dart twin exists, collate where the surface is web-only — and asked for it to be applied.
+
+Applied, it changes nothing: § 1383 had already moved the one module the criterion demanded, and § 1400's four surfaces are the ones it permits. So the work is not a change of instrument but making the criterion checkable, and the checkable form is narrower than the criterion and stronger where it bites: **no half of a registered TS↔Dart parity pair may order with a collation.** Dart ships no collator, so this is not a heuristic about display names — it is a module asking a question only one of its two runtimes can answer.
+
+`apps/web/src/lib/segments/parity_collation_guard.test.ts` reads the pair list out of `.claude/agents/shared-library-syncer.md` through that registry's own parser, so registering a pair puts its web half under the rule the same day rather than the day someone remembers. Measured across all **125** registered pairs, exactly **one** web half collates: `integrations/import_failures.ts` orders equal-count buckets with `reason.localeCompare` where the Dart half uses `reason.wire.compareTo`. It is not a live divergence — the underscore is the only character the two instruments rank differently over that vocabulary, and no pair of the seven reasons is decided by one — so it is a stated PENDING exemption with a staleness test rather than a silent carve-out, and the fix is filed against the tree that owns it.
+
+The other half of the criterion needs no guard because it permits rather than requires, and it stays permitted automatically: a web-only module is not in the registry. Mutation-verified three ways — a pair half that starts collating fails, a stale exemption fails, and a moved repo root fails rather than reporting a clean sweep.
+
+## 1483. The blankness scan could not see the picker's create path, and resolving the `$derived` — the fix the filing proposed — would not have changed that
+
+§ 1368 recorded that `blankSpellingTestHits` chases a bare identifier through its `const` declaration and stops at the first expression that is not one, so `ExerciseCataloguePicker`'s `const trimmed = $derived(query.trim())` is out of reach and a regression at that call site would not fail CI. The filing proposed resolving `$derived` / `$props` initialisers.
+
+Measured, that would not have closed it. The chase already reaches `$derived(query.trim())` and returns it whole, so a rune wrapper is not a blind spot for the evidence tests at all — `NAMES_A_DISPLAY_FIELD` would still find the `.name` in `$derived(ex.name.trim())`. Unwrapping the rune here yields `query.trim()`, and chasing `query` further reaches `$state('')`. There is no name evidence anywhere on that path, because the value did not come off a row: it was typed into a search box.
+
+The evidence is the **subject**, not the origin. Inside a file that names an exercise, a value called `name` is the same evidence as a `.name` read — the difference between the two is a spelling taken off a row and a spelling typed by the user, and the typed one is the whole reason the create path exists. `IS_A_NAME_IDENTIFIER` is anchored at the start of the subject so `name.trim() === ''`, the form the defect usually wears, is the same subject; the word boundary is what keeps `named.length === 0` — a count of blocks, the case the length-shape carve-out exists for — outside it, which is also why this term, unlike the `.name` one it sits beside, is judged on the length shape too.
+
+The whole-tree scan reports **no new offenders**, so the widening costs nothing today. The mutation battery gained the three spellings of the picker regression and, instead of the "known-spared edge" assertion it replaces, reads the picker file **from disk** and plants the regression into it — because what makes that call site reachable is a property of the file rather than of a snippet, and a restatement would keep passing after the file stopped having it.
+
+## 1484. The display fold and the exercise key disagree about whitespace, and the repair that tempts a reader would re-order two platforms to fix a catalogue problem
+
+`normaliseExerciseName` collapses the shared whitespace class; `catalogue_browse`'s `fold` does not. So `Bench Press` and `Bench<U+00A0>Press` are ONE exercise — same PRs, same routine rows, same grouping — and two orderable names, filed in two places by `compareFoldedNames`. The round-43 filing that recorded this proposed no fix and was right not to: § 1334 states that the two functions answer deliberately different questions, the key asking whether two spellings are the same exercise and the fold asking where a reader looks for a name.
+
+The residual was stated only from the catalogue side, in a module a reader of the comparator has no reason to open. It is now stated at `compareFoldedNames`, with the reason the obvious repair is wrong: `fold` is read by the famous-segment catalogue, the region dropdown, the routes list on both platforms and the exercise picker on both, so collapsing whitespace there would silently re-order every route and every segment on two platforms to fix a problem that belongs to one catalogue — and that catalogue already fixes it, because `dedupeShadowedExercises` reduces to one row per KEY before anything orders the result, so no surface holds both spellings to file apart.
+
+Pinned from both sides in one test, which is the shape that makes the asymmetry deliberate rather than accidental: the two spellings are one key, they are two folds, and the comparator does not call them equal. Mutation-verified — adding a whitespace collapse to `fold` fails it.
+
+## 1485. The conditional-stamp scan's model was `(table, column)` with no operation, so an INSERT was judged against a trigger arm that only runs on UPDATE
+
+**Decided 2026-09-07.** § 1324 taught `check_pgtap_refusal_assertions.mjs` which columns a live BEFORE trigger assigns, and § 1372 registered the thirteen `lives_ok` calls supplying one on a branch. Both derived the population as a set of `<table>.<column>` pairs, and a pair carries no operation — so `payment_refund_ledger_test.sql:281`, an INSERT of a `payment_refunds` row, was measured against `lock_payment_refund_writes`' `new.status := old.status`, which sits inside `if tg_op = 'UPDATE'` and cannot run on an insert at all. § 1372's own registry entry says so in prose and excuses the site on that ground. A guard that has to be told in prose why its own finding is wrong is a guard agreeing with a defect rather than measuring one, and the same conflation was live in the UNCONDITIONAL population with no instance only by luck.
+
+The operation is now read from both places that bind it. `stampedColumns` reads the `create trigger`'s own event clause — it previously only tested it for a `insert|update` match and then treated every trigger as arming both — so `safety_contacts_unconfirmed_on_insert`, the two privacy-zone ping clippers and `event_results_set_approval_before_insert` no longer stamp anything on an UPDATE. And `assignedColumns` reads the `tg_op` guards inside the body, returning `{insert, update}` sets rather than one, so the refund latch's two assignments are reachable only from an UPDATE. Both populations are then keyed by operation and each statement in a `lives_ok` is judged against its own: 24 unconditionally stamped pairs and 23 conditionally stamped ones, against 24 and 26 before. § 1372's thirteenth registry entry — the one that existed to say the scan could not see this — is deleted, and twelve remain.
+
+**The unconditional/conditional split moved with it, in both directions, and depth counting had both backwards on real triggers.** A `tg_op` comparison selects the operation rather than describing the row, so an assignment under one is unconditional for the operation it names: `payment_refunds.updated_at` and both arms of `fitness_snapshots_set_day` are promoted. Conversely the split is no longer computed by counting `if` nesting at all but as a must-assign question over the body's exits — a column is unconditional under an operation when every path reachable under it that ends in a stored row assigns it. That is what an `if`/`else` assigning the same column on both arms means (`route_markers_set_position`'s null guard, `route_conditions_position_trigger`, `routes_geom_trigger`), and it is also what an earlier `return new` inside a branch denies (`freeze_user_profile_managed_columns` and its four siblings sit behind `current_user not in ('anon', 'authenticated') then return new`, which lets an unfrozen row through and is the only reason those columns were ever in the weaker population).
+
+The `update of <cols>` clause narrows further and is deliberately not modelled: ignoring it can only leave a pair in the population that a given write would not have reached, which over-reports rather than under-reports.
+
+**Verification.** Four mutations, each restored and re-run green. Replacing the event-clause read with the old `insert|update` test fails four unit tests, two of them against the real migrations (`safety_contacts.confirmed_at` gaining an UPDATE stamp, `live_run_pings.ele` gaining an UPDATE branch stamp). Making every `if` undecided fails three, and reproduces the original false positive verbatim — `payment_refund_ledger_test.sql:281 ... supplies payment_refunds.failure_reason, payment_refunds.status on INSERT`. Dropping the exit snapshot at a branch `return` fails nine and puts both `exercise_key_server_stamped_test` assertions into the conditional population. And a throwaway pgtap file supplying `payment_refunds.status` was flagged on an UPDATE and clean on an INSERT — same column, same trigger, opposite verdicts by operation.
+
+## 1486. An RPC argument is now resolved to the column it lands in, because for two tables the RPC is the only write surface there is
+
+**Decided 2026-09-07.** The scan above reads INSERT column lists and UPDATE SET lists out of the `lives_ok`'s own SQL, so a value handed to a FUNCTION matched neither pattern. `checkpoint_crossings` and `event_results` carry no INSERT or UPDATE policy at all — the RPC is the whole write surface — so their entire positive-assertion surface sat outside both populations, and `select upsert_checkpoint_crossing(…, true, 64.5, …)` supplied four Art 9 columns to a function that filters them with nothing measuring it. The filing that recorded this priced the close as "a real static-analysis step and not a regex" and offered a cheaper first move: fail on a `lives_ok` calling a known single-writer RPC unless it is registered. The cheaper move is a list of function names, which is a guard keyed on spelling; the step itself turned out to be about eighty lines.
+
+An argument is resolved through the function's declared parameter list — positionally, or by a `p_x =>` named argument — to the column that parameter reaches, under which operation, and whether it arrives unchanged. A parameter that lands VERBATIM answers the same question a direct write does and is handed to the trigger scan exactly as one. A parameter that lands through any expression at all does not: `case when v_allow_health then p_body_weight_kg end` drops it, `coalesce(cc.runner_name, p_runner_name)` lets the stored row win, `jsonb_build_object('user_id', p_user_id)` stores something that is not the argument — so what a server that stopped computing that expression would leave behind still satisfies the `lives_ok`. Those go to `FILTERED_RPC_ARGUMENTS` under the same discipline as § 1372's registry: `columns` matched exactly, and a named `readBack` that must still exist as an assertion in the same file.
+
+**"Not the bare parameter" is deliberately the whole test.** It is decidable from the expression, needs no vocabulary of discarding constructs, and cannot miss the next one written. It also costs a false positive that is worth taking rather than special-casing: `enqueue_data_export` composes `p_user_id` into `jobs.payload` and is reported, which is correct — a `lives_ok` there proves nothing about the payload — and the registry entry says which claim the assertion was actually making.
+
+Two sites, and only one of them was excused. `checkpoint_crossings_test.sql`'s organiser-write assertion gets the read-back it was owed — the crossing stored the bib, name, `in_time` and NULL `out_time` handed over — because the merge arm decides all three through `least` / `greatest` / `coalesce` and a `lives_ok` cannot tell an insert from a merge. `data_export_jobs_test.sql`'s is registered with a reason: its subject is the in-flight slot being per-user, and the `data_export_jobs` row it is about is read back around it.
+
+**Verification.** Collapsing every landing to verbatim fails three unit tests and makes both registry entries stale. Ignoring which arguments a call site actually supplies fails two and widens the checkpoint entry's column set to all seven the RPC can filter, including the four Art 9 ones the call does not pass. Renaming the read-back assertion fails the guard by name. A throwaway `lives_ok` passing `true, 64.5` to `upsert_checkpoint_crossing` — the filing's own example — is reported unregistered.
+
+## 1487. `notify_event_rsvp_organisers_test`'s read-back was a claim about a second trigger's control flow, and the fan-out could be widened without noticing
+
+**Decided 2026-09-07.** § 1372 registered `'a member can RSVP going to the event'` against `enforce_event_capacity`, which may rewrite a supplied `going` to `waitlisted`, and named the three notification counts beneath it as the read-back: `notify_event_rsvp` returns early on any status other than `going`, so all three would read 0 had the row been waitlisted. That is a real proof today. It is also a proof about ANOTHER trigger, and telling the organiser about a waitlisted RSVP is a plausible product change — arguably the one they want — which would falsify the entry's reason while the guard stayed green, because the named assertion still exists.
+
+One `is((select status …), 'going', …)` beside it, and the registry entry now names that instead. The indirect proof is left standing and described as the second, weaker one it is.
+
+**Verification.** The isolating mutation, run against the live stack: give the event `capacity = 0` so the RSVP waitlists, AND widen `notify_event_rsvp` to fan out on any status. All five pre-existing assertions pass — the `lives_ok`, both notification counts that must be 1, and both that must be 0 — and only the new read-back fails, `have: waitlisted / want: going`. That is the guard's whole claim reproduced: without the direct assertion, that database passes this suite.
+
+## 1488. `checkpoint_crossings_test`'s seven-point header claimed a whole Art 9 gate it covers half of
+
+**Decided 2026-09-07.** Its point 6 read "the Art 9 health value persists ONLY when the checkpoint requires_weigh_in AND the caller consented" — accurate for that file, which pins `body_weight_kg` on the INSERT branch, and no longer the whole of the gate. `weigh_in_health_gate_test.sql` carries the other three health columns (`medical_hold` is `not null default false`, so its closed-gate answer is `false` rather than NULL and a supplied `true` has to be actively discarded) and the MERGE branch, whose `else cc.<col>` arms decide what a second volunteer's write does to an existing crossing and had never run at all. A previous round left the header alone deliberately, reasoning that rewriting a neighbouring suite's header to advertise a new file reads as scope creep. The header is now touched for its own reasons — the file gained the read-back of § 1486 — so the fold is free, and a contract that overstates its own coverage is the more expensive kind of stale: a reader who checks point 6 and finds it stops looking.
+
+## 1489. The negative filing against a unique index on `gym_routine_exercises (routine_id, exercise_key)` still holds, and round 44 did not touch it
+
+**Decided 2026-09-07.** § 1286 filed a NEGATIVE — do not add that index — because two rows of one routine sharing a key is the heavy-top-set-then-back-off pattern the tree names by that name and has already paid to support. Re-verified against the tree as it now stands, because round 44 added `gym_sets_exercise_key_nonempty_chk` and a new constraint on a neighbouring exercise-key column is exactly the kind of change that makes a stale negative look ripe.
+
+It changes nothing here. The new constraint is `length(exercise_key) >= 1` on `gym_sets`, a different table, and it exists to mirror the `>= 1` half of `gym_routine_exercises_exercise_key_check`, which `gym_routine_exercises` already had. It is a floor, not a uniqueness claim, and nothing in either migration reasons about duplicates. Read off the live catalogue: the only unique index on `gym_routine_exercises` is the primary key on `id`; `gym_routine_exercises_routine_idx` and `gym_routine_exercises_key_idx` are both non-unique, and no constraint mentions uniqueness. The reason the filing gave is also still live on every rail — `gym_adherence.ts` and `gym_adherence.dart` still match on `(exerciseKey, stepIndex)` with the same header explaining that the per-block `setIndex` restarts inside each exercise block, and `gym_workout_review.test.ts` still carries a fixture whose comment is "one exercise in two blocks". The filing stands as written; no action wanted.
+
+## 1490. The wrist's sync failure is a classified fault, not the throwable's own message
+
+`RunUiState.syncError` held `e.message ?: e.javaClass.simpleName`, straight off whatever the drain loop caught, and `PostRunScreen` rendered it verbatim in `caption3`. So a runner in any of the seven locales could be shown `Unable to resolve host "…supabase.co"` or `SocketTimeoutException` on a 1.4-inch display — English, technical, and unbounded in length where every other caption on that screen is a resource. One path already did the right thing (the unreadable-queue read set the localized `sync_queue_unreadable`), so the field carried two different kinds of value depending on which failure produced it.
+
+`SyncFault` is now what the field holds: `QueueUnreadable`, `Offline`, `ServerBusy`, `SignInRequired`, `Refused`, `Unknown`. The vocabulary is the runner's next move rather than the wire's status code — two failures are one member wherever the runner would do the same thing about them, and separate members wherever they would not. `Offline` and `ServerBusy` both clear themselves, but one is fixed by walking somewhere with signal and the other by nothing at all, so they are not one member; `Refused` and `Unknown` are both permanent to the loop, but telling a runner the server refused their run is a claim about a server that, in the `Unknown` case, may never have been reached.
+
+`syncFaultFor` reads the same two discriminants `classifyDrainError` reads, because a wrist that says "will retry" over a run the loop has permanently skipped leaves the runner waiting for a retry that will never happen, and the reverse tells them to discard a run the next pass would have landed. `SyncFaultTest` runs both over one corpus of throwables and fails when they disagree. `syncFaultMessage` is a `when` over the enum, so the compiler is what makes the mapping total: a member added without a sentence to say does not build.
+
+The raw text is not lost, which was the other half of the requirement. `DrainQueueLoopResult` gained `failures` — every failure the pass met, in order, carrying the throwable itself — and `drainQueueLocked` logs each one with `Log.e`. That is strictly more than the field ever preserved: it survives a trailing success (which clears the banner by design, § 1347), it carries the stack rather than only the message, and a pass that refuses four runs and drains a fifth now leaves four log lines where the banner can only ever have said one thing.
+
+## 1491. The PostRun discard advances the stage whether or not the drop succeeded
+
+`discard()` ran its whole body under `launchGuarded`, whose handler only logs. A DataStore read or write that threw therefore aborted the coroutine before `startNextRun()`, and the runner was left on PostRun with a confirm they had already given and no visible result — the moment they most want off the screen. This was pre-existing and unchanged by § 1388: the previous shape threw at `store.remove(id)` for the same reason and reached `startNextRun()` no more often.
+
+The question the filing left open was whether a `×` that could not remove the entry should advance at all, since the run is then still queued and will drain later. It should. A failed destructive action leaving the run queued is the safe direction, and holding the runner on the screen buys nothing against what it costs — § 1107 already refused to pay that price on the recovery prompt, where Discard stays live precisely because stranding somebody who wants to record NOW behind a corrupt file takes the next run as well as this one. What the failure buys instead is a sentence, on the screen they land on rather than the one they just left: the fault raises `queueUnreadable`, which is the PreRun arc's `Unreadable` slot and its retry.
+
+Raising that flag for a failed WRITE is not an analogy. DataStore applies a write by reading the file, editing and replacing it, so an `edit` that throws has failed on the same file the flag is about, and the count on the arc no longer stands either way.
+
+The decision is now `discardRun`, extracted for the reason `drainQueueLoop` was extracted from `drainQueue`: the method needs an Android runtime, so the one thing that mattered about it could not be exercised at all. `DiscardRunTest` evaluates the outcomes and pins the caller's half with a source grep anchored on NESTING DEPTH rather than on position — `startNextRun()` must appear exactly once, at the coroutine body's own indent. The first version of that guard compared the advance's position to the failure branch's closing brace, and a planted `else { startNextRun() }` passed it, which is the exact defect being guarded against.
+
+## 1492. The same fix one screen over: `authError` was GoTrue's English prose, and half of one sentence was translated
+
+Looking for § 1490's defect elsewhere found it immediately. `RunUiState.authError` held `e.message ?: e.javaClass.simpleName`, and `SupabaseClient` throws `HttpException(code, humanErrorMessage(body))` — which is GoTrue's own `msg` / `error_description` field, English server prose. It rendered on two surfaces, the PreRun arc under "Not signed in" and the sign-in form itself. The refresh path was worse rather than better: it interpolated that prose into the localized `token_refresh_failed` frame, so the half of the sentence carrying the meaning stayed English while the half around it was translated.
+
+`AuthFault` is the same shape as `SyncFault`, with one difference that is the whole point of the entry: **the same status code means different things on the two grants**, so there are two entry points rather than one function with a flag. GoTrue answers 400 to a wrong password and 400 to a spent refresh token. `signInFaultFor` reads a 4xx as `InvalidCredentials`; `refreshFaultFor` reads it as `SessionExpired`. Telling a runner their password is wrong when they have not typed one is worse than saying nothing, and a single classifier could only have been right about one of the two. The half both endpoints answer identically — 429, 5xx, and a failure below HTTP — is shared, because those are facts about the transport and the server rather than about which endpoint was asked.
+
+`RateLimited` is its own member for the same reason `Offline` is: 429 sits inside the 4xx band, so a bare "4xx means bad credentials" rule tells a rate-limited runner to retype, which is the one action that extends the lockout.
+
+`token_refresh_failed` is deleted from all seven catalogues rather than left declared — `StringResourceContractTest` fails an unreferenced key, and a half-translated frame is not a string worth keeping for a future call site to inherit.
+
+## 1493. The transient-network marker list has one home, because two callers now ask it
+
+`classifyDrainError` carried the OkHttp / `java.net` marker list inline — "Failed to connect to …", "Connection reset", "unexpected end of stream" and the rest, mirroring the Go worker's `isTransient`. § 1492's sign-in classifier asks the same question of the same OkHttp stack, and a second copy would have answered it differently the first time a marker was added to only one of them. `isTransientNetworkFailure` is that test, extracted with its reasoning intact; `classifyDrainError` and `AuthFault`'s shared half both call it, and `syncFaultFor` gets it transitively through `classifyDrainError` rather than as a third reader.
+
+## 1495. `describeRecurrence` gets its Dart rail, and the port found no divergence — which is the result, not a null one
+
+§ 1444 decomposed the `recurrence` pair's 30-web / 25-Dart counts case by case and isolated five web-only cases as a real gap: all four `describeRecurrence` cases and `nextInstanceAfter` past `recurrence_until`. All five are now ported to `apps/mobile_android/test/recurrence_test.dart`, case for case, and all five pass against `recurrence.dart` unchanged.
+
+That the port surfaced nothing is worth recording rather than filing as an empty result. `describeRecurrence` is a lockstep half whose output is hard-coded English on both platforms, live on the phone at `screens/event_detail_screen.dart`, and until now measured on exactly one of them — the § 641 shape, where a pair's divergence is undetectable rather than absent. Two properties a passing behavioural test cannot see were checked by hand for the same reason: the ` · ` separator is U+00B7 MIDDLE DOT on both rails (UTF-8 `c2 b7`, not a lookalike bullet or dot operator), and `One-off event` / `Repeats monthly` / `Every other week` / `Every week` are byte-identical literals. A lookalike separator would have rendered a different sentence on the phone with every ported assertion still green, because each half asserts against its own literal.
+
+The two suites are now **30 and 30**. The count that started the enquiry is equal, and equal because the sets are, not by coincidence: the decomposition becomes 28 direct mirrors, 2 Dart-only source guards (web steps its cursor with `Date.setDate()`, calendar-based natively, where Dart's `add(Duration(days: n))` is absolute — so no behavioural test can fail on it under a UTC CI), and 2 web-only cases a differently-shaped Dart case already covers. Both registries carry the old decomposition and have to move with this.
+
+## 1496. Where the exercise key and the display fold part company, measured: 25 of the 26
+
+The filing that came out of the shadow investigation named one code point — `Bench Press` and `Bench` + U+00A0 + `Press` are one exercise key and two places in the catalogue list. § 1334 is explicit that keeping the two instruments apart is the point: the key answers "is this the same exercise", the fold answers "where does a reader look for it", and the round-40 and round-41 filings both went wrong by proposing one where the other belonged. So the fix is not to make them agree. What was missing is the boundary itself, which is invisible from either function alone and which the filing had found by accident.
+
+Measured on both rails, identical: `kExerciseWhitespace` holds **26** code points, and the display fold leaves **25** of them distinct from U+0020. The fold is built on CANONICAL decomposition, and the only whitespace in the class carrying one is U+2000 / U+2001 (to U+2002 / U+2003 — still not a plain space). U+00A0 is therefore not a special case; it is simply the member a phone keyboard and a paste from a web page actually produce.
+
+The consequence is stronger than "not adjacent", and that is the part worth having written down. Every kept member sorts **above** U+0020, so the second spelling files after every name sharing the first word: `Bench Press`, then the whole `Bench …` block, then `Bench` + U+00A0 + `Press`. A reader scanning for a duplicate does not see one, and neither does a curator.
+
+`gym_prs_test.dart` pins both halves, deriving the class from `kExerciseWhitespace` itself rather than listing it, so widening the class re-measures instead of passing silently. Nothing changed behaviourally, deliberately: the durable fix belongs to whichever surface first renders a shadowed pair AS a group, and it is to group by key and order by fold — not to widen the fold, which is shared with the region dedupe, the routes list, the club slug and the food-search key, and which refuses compatibility equivalences on purpose (§ 856).
+
+## 1497. A declared exception that lives only in the guard is not declared, and this one was half-true from the day it was written
+
+Both `weigh_in_flag` halves call themselves "the client half of a defence-in-depth pair, not the sole guard", and neither named the file that measures the other half — `apps/backend/supabase/tests/weigh_in_health_gate_test.sql`, which covers all four Art 9 health columns and the merge branch no client can reach. That is the state that let the SQL half go unpinned in the first place: a claim about a guard nobody can find is a claim nobody checks. Both headers now name it.
+
+Verifying the entry's second claim found a live instance of the same defect. `deploy_gate_names_test.dart`'s `_knownExceptions` justifies the weigh-in gate's broken stem — web `PUBLIC_WEIGH_IN_ENABLED` against mobile `WEIGH_IN_GATE`, so an operator who sets one has NOT flipped the other platform's Art 9 surface — with the reason "Both headers now say so outright". The Dart header did. The web header named neither the mobile key nor the exception, so a reader who flipped the web flag had no way to learn the phone was still closed. § 1354 fixed exactly this shape on the Dart side and left the web side asserting it.
+
+So the declaration is now MEASURED rather than asserted: for every entry in `_knownExceptions`, each side must NAME the other's key, checked in both directions. Mutation-tested both ways — removing either name fails the PR with the sentence that names the file and the key. The web mirror `safety/deploy_gate_names.test.ts` carries the identical unmeasured reason string and is filed rather than fixed, being another lane's tree.
+
+## 1498. A mirror-count claim wrong on both its numbers, and self-contradictory besides
+
+`catalogue_browse_test.dart`'s header read "41 tests here against web's 42"; CLAUDE.md's pair entry reads "41 mirror tests each — web's extra case pins … the Dart extra pins …". Both suites are **46**. The registry sentence cannot be true as written either: if each side carries an extra, they are not 41 mirrors of one set — the two claims in it were describing different quantities under one number.
+
+Found while placing the § 1496 measurement. The stale count is what steered that test into `gym_prs_test.dart` — a pair with no count claim in either registry, where the case can land without a registry edit — rather than into the file whose subject it half is. A count claim that is wrong therefore costs more than its own accuracy: it is read as a constraint, and it moves work.
+
+The Dart header now states the shape rather than a number pair: equal counts, sets differing by one case each way, each extra named and its reason given. The CLAUDE.md half is filed for the integrator, whose tree it is.
+
+(1499 unused.)
+
+## 1500. An exclusion declares how much it hides, and the guard recomputes it — for both of the repo's exclusion lists
+
+**Decided 2026-09-07.** `CODEQL_KOTLIN_UNBUILT` bought its exclusion with a
+reason, and the reason ended "11 Kotlin files are unscanned - MainActivity.kt,
+RunActionReceiver.kt (a BroadcastReceiver) and the platform-channel bridges".
+That figure was correct when it was written and nothing recomputed it. The next
+bridge to land under `apps/mobile_android/android` would have been unscanned by
+the java-kotlin analysis, unmentioned by the sentence claiming to say how big
+the gap was, and invisible to `check_codeql_coverage.mjs`, which read the
+exclusion's path and its reason's LENGTH and nothing else. § 1352 built that
+guard on the principle that a gap should be a value a guard reads rather than a
+sentence a reader has to notice; the size of the gap was still a sentence.
+
+The declaration is now `<path>=<hidden-source-count>=<reason>`, and the count is
+compared against a walk of the excluded tree for the language's own extensions —
+11 `.kt` files, 0 `.java`. Equality rather than a ceiling, because the point is
+not to bound the gap but to put it in front of whoever grows it: raising the
+figure is the exclusion being re-decided, which is the only thing standing
+between a declared trade-off and one nobody looks at any more. A count field
+rather than a number lifted out of prose, because parsing an English sentence
+for an integer is a guard keyed on spelling, and the two failure directions
+carry different sentences (source landed in a tree no scan reads / the exclusion
+covers less than it was granted for).
+
+The same change lands on `GRADLE_UNTESTED`, not by analogy but because the two
+lists share `parseUnbuilt`: `check_gradle_test_coverage.mjs` imports it, and
+changing the format for one guard broke eight of the other's fixtures the moment
+it was tried. They are the same declaration answering the same question — how
+much does this excuse hide — so they keep one parser and one format, and the
+Gradle side's count is compared against `testSources().length` exactly as the
+CodeQL side's is against the source walk. That list is empty today (§ 1439 wired
+up its last entry), so this rail currently guards nothing; that is the state it
+is meant to end in, not a reason to leave the rule unwritten.
+
+## 1501. The Kotlin leg still does not reach the Flutter host, and the cheaper way to close it is refused for the reason the guard exists
+
+**Decided 2026-09-07.** § 1439 committed `apps/mobile_android/android/gradlew`,
+which removed the mechanical blocker under `codeql-kotlin`'s exclusion: the
+step's command is `./gradlew --no-daemon compileDebugKotlin` and, until that
+commit, that file did not exist for this project, so anyone lifting the
+exclusion would have failed on a missing executable rather than on the
+configuration error the reason described. The exclusion's reason is rewritten to
+say so, and to state the cost as it now actually stands rather than as it stood
+in § 1352.
+
+That cost is no longer "a lot of setup" in the abstract. `ci.yml`'s
+`build-mobile-android` already pays every part of it — the pinned Flutter SDK,
+`melos bootstrap`, the pub cache, a warm Gradle cache and a full Gradle
+configuration — so putting the same sequence in `codeql-kotlin` makes that job a
+second copy of one that already exists, and adds a fourth site
+`check_toolchain_pins.mjs` must hold in Flutter-version lockstep. The cheaper
+close is therefore to drive the extractor from `build-mobile-android` instead.
+
+That is deliberately not taken here, and the reason is § 1304's own thesis
+rather than caution. Two things make it unsafe to ship without executing it, and
+neither can be executed from this repo: `build-mobile-android` is in the `CI
+gate` aggregator's `needs:` list, so a build tracer that misbehaves blocks every
+merge rather than one workflow; and the Kotlin compile task is UP-TO-DATE by the
+time an extractor could run after `flutter build apk --release`, which extracts
+no source and produces a database that reports exactly as clean as a full scan.
+A declared exclusion is honest about a gap. An unverified build step that
+extracts nothing is a scan reporting success over source it never read, which is
+the state §§ 1304 and 1352 were both written about. The gap stays declared, and
+§ 1500 makes it a figure that fails the PR when it grows.
+
+One measurement correction the filing was carrying: the tree holds 11 `.kt`
+files under that project, of which 3 are test sources (`HealthRoutePermission-
+BridgeTest`, `WearAuthBridgeArgsTest`, `WearRoutesBridgeArgsTest`) and 8 are main
+source. "11 platform-channel bridges" was never right; it is 8 main-source files,
+`MainActivity.kt` and `RunActionReceiver.kt` among them.
+
+## 1502. `checkNode`'s exactness rule was a sentence in three places and code in none
+
+**Decided 2026-09-07.** § 1214 moved 22 `actions/setup-node` steps from
+`node-version: 24` to `24.20.0` by hand and recorded that no other file needed
+changing, because `check_toolchain_pins.mjs`'s cross-step rule — every step names
+a version and all of them agree — was satisfied by the pin exactly as it had been
+by the line. That is true and it is the whole problem: the rule that was
+satisfied is not the rule § 1214 decided. A sweep back to `24` passes it. Every
+step names a version, all of them agree, and `.tool-versions` saying `nodejs 24`
+compares equal under § 1216's exact comparison, because both halves moved
+together. Measured rather than reasoned: the pre-change guard, run over a tree
+with all 22 steps and `.tool-versions` swept to `24`, exits 0 and prints
+`22 setup-node step(s) on Node 24` as a success line.
+
+Three places in the repo already asserted the rule — the guard's own header
+("the version is an EXACT `MAJOR.MINOR.PATCH` rather than a bare major"),
+`.tool-versions`' comment ("exact, not a major"), and § 1214 itself — while a
+fourth, the doc comment on `checkDeno`, asserted the opposite ("unlike Node,
+where a major is enough because the runner image resolves the rest") and had
+been false since § 1214. A guard file carrying two opposite claims about one
+question is how the enforced half went four rounds without existing.
+
+`EXACT_NODE` is now the same shape as `EXACT_DENO`, refusing `24`, `v24`,
+`24.x`, `lts/*`, `latest` and `node`, and normalising a leading `v` so the
+`.tool-versions` comparison sees one spelling. The stale comment is corrected
+rather than deleted, because what it claimed is the thing a future reader would
+otherwise re-derive.
+
+## 1503. The `actions` leg's query suite is read out of its SARIF, because the workflow's `queries:` is a request and not a record
+
+**Decided 2026-09-07.** `queries: security-and-quality` on the `actions` leg is
+asking for a suite that language does not ship — its ceiling is
+`security-extended` — and CodeQL resolves the request downward without saying
+so. § 1392's guard reads the value in the workflow, so it can confirm we asked
+for the broadest suite and can confirm nothing about what ran. If a release
+stopped honouring the fallback, or renamed the suite, this leg would run
+something narrower with every guard still green.
+
+The observable is in the run, not in the file, so no `workflow-lint` guard can
+close it: that job has no CodeQL and no network, and the answer does not exist
+until a scan has finished. The filing proposed a periodic manual check or a
+scheduled job reading the last run's SARIF through the API. Neither is
+necessary. `codeql-action/analyze` already writes the SARIF, so the job keeps it
+(`output: sarif-results`) and reads it back in the same run.
+
+The discriminator is version-independent rather than a rule-id allowlist that
+would rot with the query pack: the quality half of `security-and-quality` is
+exactly the queries tagged `maintainability` / `correctness` / `readability` /
+`reliability` and NOT tagged `security`, so if the SARIF names none of those, the
+fallback happened. Rules are read from `tool.driver.rules` and
+`tool.extensions[].rules` together, because CodeQL uses either depending on
+version. The fallback is reported as a `::warning::` and a resolved suite as a
+`::notice::` — neither is a defect, and asking for the broadest suite is the
+right direction to fail in, since the fallback is a superset of every narrower
+one. What IS an error is a SARIF naming zero rules, or no SARIF at all, or one
+`jq` cannot read: an analysis over an empty rule set reports exactly as clean as
+one over everything, which is §§ 1304 and 1352's failure mode arriving by a
+different road. The two abort-without-a-diagnosis cases are handled explicitly —
+`find` on a missing directory exits non-zero and `set -e` would otherwise kill
+the step before any of its messages printed.
+
+`check_codeql_coverage.mjs` holds the measurement in place rather than reading
+its result: a leg flagged `suiteMayDowngrade` must declare an analyze `output:`
+and some `run:` step in the same job must reference that path. Deleting the
+reader, or the output, fails the PR. Where the measurement lives is the job's
+business; that one exists is the guard's.
+
+## 1504. Batch scripts take the CRLF rule that is the mirror of the shell scripts' LF one, and the two `gradlew.bat` collapse onto one blob
+
+**Decided 2026-09-07.** `.gitattributes` carried `*.sh text eol=lf` with the
+reason "CRLF breaks shebangs" and no rule for the mirror case. `cmd.exe`
+resolves `goto` and `call` labels by seeking within the file, so an LF-only
+`.bat` can land it mid-line — the same class of hazard in the other direction —
+and the tree shipped one of each: `apps/watch_wear/android/gradlew.bat` was
+added before `* text=auto eol=lf` and its blob still held CRLF, while § 1439's
+`apps/mobile_android/android/gradlew.bat` was normalised to LF on add.
+
+`*.bat text eol=crlf` sets the direction the file class wants: the blob stays LF
+like everything else, so diffs and this repo's Linux tooling see one canonical
+form, and the working copy is CRLF where a Windows shell would read it. What was
+checked before choosing, because the entailment is not visible in the attribute:
+under that rule `apps/watch_wear/android/gradlew.bat` renormalises, and the blob
+it renormalises TO is `a51ec4f5`, byte-identical to the one
+`apps/mobile_android/android/gradlew.bat` already holds. The two files are the
+same wrapper stored twice with different line endings, and after the rule the
+index holds one blob for both paths.
+
+The renormalisation had to land in the same change. `git status` was clean
+before it only because of the stat cache: the first operation to touch that
+file's mtime — a checkout, a rebase, an editor save — makes git re-read it and
+report it modified, in every one of the repo's worktrees, until someone commits
+the conversion. Shipping the attribute alone would have been strictly worse than
+shipping neither.
+
+## 1505. The register of locally-unpassable specs, and the dead route mock one of them was hiding
+
+Two Playwright cases were filed in the same round as "cannot pass on this workstation", each having cost a run to diagnose, and the filings asked for one place in `docs/testing/` naming them so a third run is not spent. That place is now `docs/testing/testing.md § Troubleshooting → Specs that cannot pass on this workstation`, and the register carries its own fail-closed rule: anything **not** listed is a real failure until proven otherwise, which keeps it from becoming a place to park a flake.
+
+The `heatmap-pins.spec.ts` half is exactly as filed. Every migration defining `clubs_in_bbox` revokes EXECUTE `from public` and grants it `to anon, authenticated` — `20260911_001`, re-emitted by `20260912_001`, and `20270128_001` / `20270218_001` `create or replace` it without dropping, so they inherit that ACL. `service_role` is never granted by name, so the RPC answers the spec's admin client only when the CLI image's own bootstrap hands `service_role` a default EXECUTE; CI's pinned 2.84.2 does and the 2.109.1 on this workstation's PATH does not. The register states the fix that must **not** be taken — a `grant execute … to service_role` in a migration widens a production grant, whose real client traffic is anon/authenticated, to silence a local artifact.
+
+The `account.spec.ts` half was filed as environmental and is only half environmental, which is why the register documents the mechanism rather than the symptom. "a valid new address requests the change and shows the pending state" intends to fulfil `PUT /auth/v1/user` itself, and its `page.route('**/auth/v1/user', …)` has never matched the request: `handleChangeEmail` passes `emailRedirectTo`, `@supabase/auth-js` appends it as a `?redirect_to=…` query string, and Playwright anchors a glob at both ends — `**/auth/v1/user` compiles to `^(.*/)auth/v1/user$`, checked against playwright-core 1.62.1's own `globToRegexPattern`, which matches the bare URL and not the one carrying a query. So the request reaches live GoTrue, GoTrue calls the `[auth.hook.send_email]` hook, and there is no `supabase_edge_runtime_project-running` container on this workstation at all — not an exited one, none — so the hook times out and `pendingEmail` is never set. The missing container is the proximate cause and the dead mock is the reason the case is exposed to it; fixing the mock removes the dependency entirely. The sibling case's `expect(sawRequest).toBe(false)` runs through the same never-matching pattern and therefore cannot fail, which is filed separately because the spec tree is not this lane's.
+
+## 1506. The host-is-merchant-of-record claim outlived § 769's sweep in five more documents
+
+§ 769 established that the host is not the merchant of record — naming the settlement merchant is `on_behalf_of`, no call site sends it, and Stripe is explicit that the platform is then the business of record and is debited for disputes either way — and corrected the four places it had counted: the two Edge Function comments, `club_events.md § Money movement`, and (as an open question) `/terms` §6. The count was low. A sweep for the phrase across the whole tree finds it standing in five further documents, each stating it as settled fact: `docs/backend/api_database.md`'s Slice P1 ledger header, `club_events.md`'s own anti-pattern 9 ("don't make the platform merchant of record … host is merchant of record"), the Appendix A **proposed** ADR that is meant to be lifted into `decisions.md` verbatim, the `parity.md` Slice P1 row, and `docs/testing/local_testing_stubs.md`'s Stripe Connect stub section. All five now say what the code does and point at `club_events.md § Money movement`.
+
+Two of the five are worth naming individually. The anti-pattern list is the document's own instruction to a future implementer, and it instructed them to preserve a property the built code has never had. The Appendix A draft is worse than a stale sentence: it is queued for verbatim promotion into the ADR log, so leaving it would have re-enshrined in `decisions.md` the exact claim § 769 disproved — the appendix intro now says the clause was corrected, so a later lift does not quietly restore it.
+
+Deliberately unchanged: `club_events.md` lines describing what `/terms` §6 tells the buyer, and the `on_behalf_of` pre-deploy checklist item, which are accurate reports of an open question rather than claims about the code. `paywall.md`'s "tax as merchant of record" is about Apple and Google on the IAP rail and is unrelated. The remaining false statements are outside `docs/` and are filed: the host-facing `payouts.merchantNote` string, which tells an instructor they own refunds and chargebacks when the platform issues the one and is debited for the other, and the header comment of the applied migration `20261229_001`.
+
+## 1507. A retention register that listed an unscheduled sweep as live, and had no guard to notice
+
+`docs/compliance/retention.md`'s "Auto-deletion / purge jobs" table listed `cleanup-stale-export-blobs` as running "04:23 UTC daily". `20270709000001` ran `cron.unschedule` on it and kept the function only as a `service_role` break-glass (§ 1172), because its row delete orphaned the bytes it was supposed to retire. The same table omitted `enqueue-export-blob-reap` (`13 4 * * *`, § 1144) — the job that actually enforces the Art 20 window now — and omitted `cleanup-account-deletion-receipts` (`17 * * * *`, `20270217_001`), a live retention job deleting `account_deletion_receipts` rows past 30 days. So the register under-reported the retention surface by two jobs and over-reported it by one, in a document whose purpose is to be the answer to a regulator.
+
+The unscheduled row is kept rather than deleted, marked **NOT SCHEDULED** with the migration that unscheduled it, because the prose above it explains at length why the row delete is not an erasure; a reader who finds the explanation and no row would re-derive the job as missing. The closing count moved from thirteen to fourteen live, and the parenthetical listing the non-retention schedules was re-derived rather than patched: it named five, there are ten, and it named `refresh-mv-weekly-mileage`, which `20270530_001` unscheduled when it dropped the materialized view.
+
+Nothing compares this table with the migration tree, which is why a `cron.unschedule` landed without touching it. Every fact in it is mechanically derivable — `cron.schedule('name', 'expr'` and `cron.unschedule('name')` across `apps/backend/supabase/migrations` — so the durable shape is a guard in the `workflow-lint` family rather than another hand pass; filed.

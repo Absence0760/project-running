@@ -4,15 +4,17 @@ import '../lib/catalogue_browse.dart';
 import '../lib/catalogue_fold_table.dart';
 
 /// Mirror suite for `apps/web/src/lib/segments/catalogue_browse.test.ts`.
-/// 46 tests on each side. One of web's is not mirrored — it pins the PostgREST
-/// stringly-`numeric` coercion, which `GlobalSegmentRow.fromJson` already
-/// performs at this side's own boundary, so the Dart helper never sees a
-/// string (its sibling, a value that does not resolve to a finite number, is
-/// covered below) — and one of this file's is not mirrored either, pinning the
+/// 47 tests web against 46 here, and three of them are unmirrored by design.
+/// One of web's pins the PostgREST stringly-`numeric` coercion, which
+/// `GlobalSegmentRow.fromJson` already performs at this side's own boundary, so
+/// the Dart helper never sees a string (its sibling, a value that does not
+/// resolve to a finite number, is covered below). One of this file's pins the
 /// generated table's own shape, which web computes at runtime and has no
-/// analogue for. So the count is equal and the SETS differ by one case each
-/// way; the header said 41 against 42 for long enough that both numbers were
-/// wrong.
+/// analogue for. The third is web's own record of where the display fold and
+/// the exercise key part company (§ 1484); this side measures the same
+/// asymmetry from the key's end, in `gym_prs_test.dart` (§ 1496), because that
+/// is where `normaliseExerciseName` lives. The header said 41 against 42 for
+/// long enough that both numbers were wrong, and 46-each for exactly one round.
 ///
 /// The `fold` group is the half that used to diverge: every case in it is one
 /// the hand-written fold table answered differently from web (decisions § 852).
