@@ -45,6 +45,14 @@ export interface DmRecipient {
 /// Ordering is by display name, unnamed last, with the id as a total tiebreak
 /// so two renders of the same follow graph list people in the same order
 /// regardless of which of the two fetches resolved first.
+///
+/// The name comparison is a COLLATION and stays one, unlike the search above
+/// it, which folds. The two answer different questions: the filter must widen
+/// (a sender typing `elevation` should reach `Élévation`), while the order
+/// should be the reader's own — folding would hand every reader the English
+/// order, filing `Åsa` before `Zoe` for the Swede who expects the reverse.
+/// § 1337's reason for folding the routes list was its Dart twin, whose
+/// runtime ships no collator; this list has no twin (decisions § 1400).
 export function dmRecipientCandidates(
 	followers: readonly DmCandidateProfile[],
 	following: readonly DmCandidateProfile[],

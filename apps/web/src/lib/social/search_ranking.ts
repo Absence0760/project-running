@@ -24,5 +24,10 @@ export function comparePeopleRank(a: RankablePerson, b: RankablePerson): number 
 	if (b.shared_clubs !== a.shared_clubs) {
 		return b.shared_clubs - a.shared_clubs;
 	}
+	// A collation, deliberately, and NOT the folded compare § 1337 put on the
+	// routes list: that pair has a Dart twin whose runtime ships no collator,
+	// and this surface has none. Folding would hand every reader the English
+	// order — `Åsa` before `Zoe` for the Swede who expects the reverse
+	// (decisions § 1400).
 	return (a.display_name ?? '').localeCompare(b.display_name ?? '');
 }
