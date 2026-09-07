@@ -25,10 +25,12 @@
  * row with a non-null `author_id` in a result set is by construction the
  * caller's. No user id is needed and none is taken.
  *
- * The Dart half is `packages/api_client/lib/src/exercise_catalogue.dart`, whose
- * `dedupeShadowedExercises` must answer identically. It is NOT a registered
- * parity pair yet — registering one edits `CLAUDE.md` and the syncer table,
- * which is its own change (see `followups.md`).
+ * There is NO Dart half yet, and that is the state to know rather than assume:
+ * `ApiClient.fetchExerciseCatalogue` still returns the shadowed pair unresolved
+ * and still degrades a failed read to an empty catalogue, so the phone's picker
+ * can offer to create a name the catalogue already holds. Writing that half is
+ * what would make this a registered parity pair — which edits `CLAUDE.md` and
+ * the syncer table too — and it is filed in `followups.md`, not done here.
  *
  * Pure module — no Supabase, no runes. Entries are matched structurally, so the
  * caller's row type needs no relationship to this file.
