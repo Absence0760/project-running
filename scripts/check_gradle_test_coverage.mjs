@@ -80,8 +80,11 @@ export const ROOT = process.env.GRADLE_TEST_COVERAGE_ROOT ?? REPO_ROOT;
 
 export const WORKFLOW_DIR = join('.github', 'workflows');
 
-/// The value carrying `<path>=<reason>` lines for projects whose tests nothing
-/// runs. Named once, here and in the workflow that declares and echoes it.
+/// The value carrying `<path>=<untested-source-count>=<reason>` lines for
+/// projects whose tests nothing runs. Named once, here and in the workflow that
+/// declares and echoes it. No workflow declares one today — § 1439 wired up the
+/// last excused project and deleted the entry — so this rail currently guards
+/// an empty list, which is the state it is meant to end in.
 export const UNTESTED_KEY = 'GRADLE_UNTESTED';
 
 /**
