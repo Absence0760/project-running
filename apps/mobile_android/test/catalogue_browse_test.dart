@@ -4,11 +4,15 @@ import '../lib/catalogue_browse.dart';
 import '../lib/catalogue_fold_table.dart';
 
 /// Mirror suite for `apps/web/src/lib/segments/catalogue_browse.test.ts`.
-/// 41 tests here against web's 42: the extra web case pins the PostgREST
+/// 46 tests on each side. One of web's is not mirrored — it pins the PostgREST
 /// stringly-`numeric` coercion, which `GlobalSegmentRow.fromJson` already
 /// performs at this side's own boundary, so the Dart helper never sees a
-/// string. Its sibling — a value that does not resolve to a finite number —
-/// is covered below.
+/// string (its sibling, a value that does not resolve to a finite number, is
+/// covered below) — and one of this file's is not mirrored either, pinning the
+/// generated table's own shape, which web computes at runtime and has no
+/// analogue for. So the count is equal and the SETS differ by one case each
+/// way; the header said 41 against 42 for long enough that both numbers were
+/// wrong.
 ///
 /// The `fold` group is the half that used to diverge: every case in it is one
 /// the hand-written fold table answered differently from web (decisions § 852).
