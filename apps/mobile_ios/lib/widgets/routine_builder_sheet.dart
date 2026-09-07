@@ -647,7 +647,7 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           hintText: l10n.gymEditorExercisePlaceholder,
-          errorText: _needExercise && ex.name.text.trim().isEmpty
+          errorText: _needExercise && !namesAnExercise(ex.name.text)
               ? l10n.gymRoutineEditorNeedExercise
               : null,
         );

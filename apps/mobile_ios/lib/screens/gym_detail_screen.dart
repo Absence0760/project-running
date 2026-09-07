@@ -830,7 +830,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
               runSpacing: 4,
               children: [
                 Text(
-                  block.name.isEmpty ? '—' : block.name,
+                  namesAnExercise(block.name) ? block.name : '—',
                   style: theme.textTheme.titleSmall,
                 ),
                 for (final kind in prs) _prChip(kind, theme, l10n),

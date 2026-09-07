@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 
+import 'gym_prs.dart';
 import 'offline_sync_store.dart';
 
 /// Sync state for a single routine. Alias of the shared [SyncState] so the
@@ -245,7 +246,7 @@ class LocalRoutineStore extends OfflineSyncStore<StoredRoutine> {
     final id = OfflineSyncStore.newUuid();
     final now = DateTime.now().toUtc();
     final kept = exercises
-        .where((e) => e.exerciseName.trim().isNotEmpty)
+        .where((e) => namesAnExercise(e.exerciseName))
         .toList(growable: false);
     final row = <String, dynamic>{
       'id': id,
