@@ -468,6 +468,7 @@ export const en = {
 	"onboarding.weightPlaceholder": "e.g. {example}",
 	"limits.weightOutOfRange": "Enter a weight between {min} and {max} {unit}.",
 	"limits.heightOutOfRange": "Enter a height between {min} and {max} cm.",
+	"limits.maxHrOutOfRange": "Enter a max HR between {min} and {max} bpm.",
 	"onboarding.healthConsent": "I consent to Threkir using my gender and date of birth to power the gender + age-band segment leaderboards and the calibrated pace + calorie estimates (GDPR Art 9(2)(a)). I can withdraw consent in Settings any time.",
 	"onboarding.step5Title": "Who can see your runs?",
 	"onboarding.step5Hint": "Sets the default for every new run. You can override per-run before sharing, or change the default in Settings.",

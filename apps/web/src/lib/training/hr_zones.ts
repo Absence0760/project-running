@@ -25,6 +25,16 @@ export type ZoneCutoffs = [number, number, number, number, number];
 export const MAX_HR_BPM_MIN = 80;
 export const MAX_HR_BPM_MAX = 240;
 
+/// Whether a stored `max_hr_bpm` may be used as one. Every reader ignores a
+/// value outside the range, so every WRITER has to refuse the same one, or the
+/// runner types a figure the app accepts and then silently declines to use
+/// (decisions § 1407). Stating the test once is the point: the bound was
+/// already named per rail, and it was the three separate spellings of it that
+/// let the Wear OS rail apply a value the other two ignored (§ 1245).
+export function isUsableMaxHrBpm(value: number | null | undefined): value is number {
+	return typeof value === 'number' && value >= MAX_HR_BPM_MIN && value <= MAX_HR_BPM_MAX;
+}
+
 /// The age range Tanaka is applied over, for the same reason.
 export const TANAKA_AGE_MIN = 5;
 export const TANAKA_AGE_MAX = 120;
@@ -51,7 +61,7 @@ export function defaultZoneCutoffs(opts: {
 	ageYears?: number | null;
 }): ZoneCutoffs {
 	const { maxHrBpm, ageYears } = opts;
-	if (typeof maxHrBpm === 'number' && maxHrBpm >= MAX_HR_BPM_MIN && maxHrBpm <= MAX_HR_BPM_MAX) {
+	if (isUsableMaxHrBpm(maxHrBpm)) {
 		return zoneCutoffsFromMaxHr(maxHrBpm);
 	}
 	if (typeof ageYears === 'number' && ageYears >= TANAKA_AGE_MIN && ageYears <= TANAKA_AGE_MAX) {

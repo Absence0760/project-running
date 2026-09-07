@@ -456,6 +456,7 @@ export const messages = {
 	"onboarding.weightPlaceholder": "ex.: {example}",
 	"limits.weightOutOfRange": "Introduza um peso entre {min} e {max} {unit}.",
 	"limits.heightOutOfRange": "Introduza uma altura entre {min} e {max} cm.",
+	"limits.maxHrOutOfRange": "Introduza uma FC máxima entre {min} e {max} bpm.",
 	"onboarding.healthConsent": "Autorizo o Threkir a utilizar meu género e data de nascimento para alimentar os rankings de segmentos por género e faixa etária e as estimativas calibradas de ritmo e calorias (RGPD Art. 9(2)(a)). Posso retirar o consentimento em Definições quando quiser.",
 	"onboarding.step5Title": "Quem pode ver suas corridas?",
 	"onboarding.step5Hint": "Define a predefinição para cada nova corrida. Pode substituí-la por corrida antes de partilhar, ou alterar a predefinição em Definições.",

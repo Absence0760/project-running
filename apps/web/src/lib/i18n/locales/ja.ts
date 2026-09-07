@@ -452,6 +452,7 @@ export const messages = {
 	"onboarding.weightPlaceholder": "例: {example}",
 	"limits.weightOutOfRange": "{min}〜{max}{unit}の範囲で体重を入力してください。",
 	"limits.heightOutOfRange": "{min}〜{max}cmの範囲で身長を入力してください。",
+	"limits.maxHrOutOfRange": "最大心拍数は{min}〜{max}bpmの範囲で入力してください。",
 	"onboarding.healthConsent": "Threkir が私の性別と生年月日を、性別・年齢区分のセグメントランキングおよび調整済みのペース・カロリー推定に使用することに同意します（GDPR 第9条(2)(a)）。同意は設定からいつでも撤回できます。",
 	"onboarding.step5Title": "あなたのランを誰が見られますか？",
 	"onboarding.step5Hint": "新しいランごとの初期設定を決めます。共有前にランごとに変更したり、設定で初期値を変更したりできます。",

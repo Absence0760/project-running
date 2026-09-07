@@ -341,6 +341,18 @@ export function parseNamedInt(src, declName) {
 	return decl ? [decl[1]] : [];
 }
 
+/**
+ * Both ends of a Kotlin `val NAME = <lo>..<hi>` range declaration. A range is
+ * one declaration where the other rails need two constants, so it cannot be
+ * read by `parseNamedInt` — that stops at the first integer and would compare
+ * the watch's floor against the others' ceiling.
+ * @param {string} src @param {string} declName @returns {string[]}
+ */
+export function parseKotlinIntRange(src, declName) {
+	const decl = new RegExp(`\\b${declName}\\b[^=\\n]*=\\s*(-?\\d+)\\s*\\.\\.\\s*(-?\\d+)`).exec(src);
+	return decl ? [decl[1], decl[2]] : [];
+}
+
 // ── Entry: the rate-limit bucket vocabulary ─────────────────────────────────
 
 const RATE_LIMIT_CALL =
@@ -1460,6 +1472,65 @@ export const REGISTRY = [
 						values: parseNamedInt(ctx.read('apps/mobile_android/lib/wear_routes_bridge.dart'), 'kMaxRoutesPerPush'),
 					},
 				],
+			},
+		],
+	},
+	{
+		name: 'usable max_hr_bpm range',
+		why:
+			'max_hr_bpm is a jsonb prefs key with no column and therefore no CHECK, ' +
+			'so this range is the only thing anywhere that decides whether a stored ' +
+			'figure is a heart rate. Three rails each name it, and it was the three ' +
+			'separate spellings that let the watch derive zones from a 300 the phone ' +
+			'and the web both ignored (decisions 1245). The web write paths now refuse ' +
+			'what the readers ignore (1407), which only holds while all three agree.',
+		match: 'all',
+		compare: 'ordered',
+		rails: [
+			{
+				label: 'web (apps/web/src/lib/training/hr_zones.ts)',
+				sites: (ctx) => {
+					const src = ctx.read('apps/web/src/lib/training/hr_zones.ts');
+					return [
+						{
+							key: 'range',
+							where: 'MAX_HR_BPM_MIN / MAX_HR_BPM_MAX',
+							values: [
+								...parseNamedInt(src, 'MAX_HR_BPM_MIN'),
+								...parseNamedInt(src, 'MAX_HR_BPM_MAX'),
+							],
+						},
+					];
+				},
+			},
+			{
+				label: 'mobile (apps/mobile_android/lib/hr_zones.dart)',
+				sites: (ctx) => {
+					const src = ctx.read('apps/mobile_android/lib/hr_zones.dart');
+					return [
+						{
+							key: 'range',
+							where: 'kMaxHrBpmMin / kMaxHrBpmMax',
+							values: [
+								...parseNamedInt(src, 'kMaxHrBpmMin'),
+								...parseNamedInt(src, 'kMaxHrBpmMax'),
+							],
+						},
+					];
+				},
+			},
+			{
+				label: 'watch (apps/watch_wear .../SupabaseClient.kt)',
+				sites: (ctx) => {
+					const src = ctx.read('apps/watch_wear/android/app/src/main/kotlin/com/runapp/watchwear/SupabaseClient.kt');
+					return [
+						{
+							key: 'range',
+							where: 'MAX_HR_BPM_RANGE',
+							values: parseKotlinIntRange(src, 'MAX_HR_BPM_RANGE'),
+						},
+					];
+				},
 			},
 		],
 	},

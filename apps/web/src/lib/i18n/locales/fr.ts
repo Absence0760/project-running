@@ -457,6 +457,7 @@ export const messages = {
 	"onboarding.weightPlaceholder": "p. ex. {example}",
 	"limits.weightOutOfRange": "Indique un poids entre {min} et {max} {unit}.",
 	"limits.heightOutOfRange": "Indique une taille entre {min} et {max} cm.",
+	"limits.maxHrOutOfRange": "Indique une FC max entre {min} et {max} bpm.",
 	"onboarding.healthConsent": "J'autorise Threkir à utiliser mon genre et ma date de naissance pour alimenter les classements de segments par genre et tranche d'âge ainsi que les estimations calibrées d'allure et de calories (RGPD Art. 9(2)(a)). Je peux retirer mon consentement à tout moment dans les réglages.",
 	"onboarding.step5Title": "Qui peut voir tes courses ?",
 	"onboarding.step5Hint": "Définit la valeur par défaut pour chaque nouvelle course. Tu peux la modifier course par course avant de partager, ou changer la valeur par défaut dans les réglages.",
