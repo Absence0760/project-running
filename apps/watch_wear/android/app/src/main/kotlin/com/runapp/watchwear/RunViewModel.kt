@@ -138,12 +138,20 @@ data class UiState(
     val authError: String? = null,
     val signInLoading: Boolean = false,
     val syncing: Boolean = false,
-    val syncError: String? = null,
+    /// Why the last sync attempt did not get through, as a member of a
+    /// catalogued vocabulary rather than as the throwable's own message.
+    ///
+    /// It held `e.message ?: e.javaClass.simpleName` — English, technical and
+    /// unbounded, on a 1.4-inch display where every other caption is a
+    /// `caption3` resource, and in all seven locales alike. The raw text is
+    /// still what a bug report needs, so it goes to `Log.e` at the point of
+    /// failure instead of to the wrist (decisions § 1490).
+    val syncFault: SyncFault? = null,
     /// True when the last COMPLETED drain pass stopped on a transient failure
     /// — a 5xx, a timeout, a dropped connection — which is also what arms
     /// `drainBackoff`.
     ///
-    /// Deliberately not carried on [syncError], which is the PostRun banner
+    /// Deliberately not carried on [syncFault], which is the PostRun banner
     /// and a fact about one pass: `startNextRun` clears it, and PreRun is the
     /// screen the runner is on for every drain but the first, so the banner's
     /// lifetime is exactly wrong for the surface that needed it. This is the
@@ -1057,7 +1065,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             bpm = null,
             hrAvailability = HeartRateAvailability.Off,
             lapCount = 0,
-            syncError = null,
+            syncFault = null,
             thisRunId = runId,
             thisRunSynced = false,
             offRouteDistanceM = null,
@@ -1342,7 +1350,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
 
     fun sync() {
         launchGuarded {
-            _state.value = _state.value.copy(syncing = true, syncError = null)
+            _state.value = _state.value.copy(syncing = true, syncFault = null)
             drainQueue(force = true)
             _state.value = _state.value.copy(syncing = false)
         }
@@ -1353,7 +1361,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             stage = Stage.PreRun,
             thisRunId = null,
             thisRunSynced = false,
-            syncError = null,
+            syncFault = null,
         )
     }
 
@@ -1483,8 +1491,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             // the reverse.
             _state.value = _state.value.copy(
                 queueUnreadable = true,
-                syncError = getApplication<Application>()
-                    .getString(R.string.sync_queue_unreadable),
+                syncFault = SyncFault.QueueUnreadable,
             )
             return
         }
@@ -1526,14 +1533,23 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             drainBackoff.onSuccess()
         }
-        // `syncError` keeps its clear-on-success semantics — a trailing
+        // Every failure the pass met, with its throwable, because this is the
+        // only place the raw text survives now that the wrist states a
+        // catalogued fault instead (decisions § 1490). Logged per failure
+        // rather than once at the end: a pass that refuses four runs and then
+        // drains a fifth clears the banner and still has four things a bug
+        // report needs.
+        for (failure in result.failures) {
+            Log.e(TAG, "drain failed for ${failure.runId} (${failure.fault})", failure.error)
+        }
+        // `syncFault` keeps its clear-on-success semantics — a trailing
         // success clearing the banner is a stated decision, pinned twice in
         // `DrainQueueLoopTest`, and this does not reverse it. The permanent
         // rejections ride a separate field precisely because they must
         // survive that clear: the banner is about this pass, a refused entry
         // is about the queue (decisions § 1347).
         _state.value = _state.value.copy(
-            syncError = result.lastError,
+            syncFault = result.lastFault,
             syncFailed = result.anyTransientFailure,
             rejectedRunIds = rejectedAfterPass(
                 previouslyRejected = _state.value.rejectedRunIds,
@@ -1573,8 +1589,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                 Log.e(TAG, "run queue unreadable — discard skipped", e)
                 _state.value = _state.value.copy(
                     queueUnreadable = true,
-                    syncError = getApplication<Application>()
-                        .getString(R.string.sync_queue_unreadable),
+                    syncFault = SyncFault.QueueUnreadable,
                 )
                 return@launchGuarded
             }
@@ -1583,7 +1598,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             }
             _state.value = _state.value.copy(
                 rejectedRunIds = emptySet(),
-                syncError = null,
+                syncFault = null,
             )
         }
     }

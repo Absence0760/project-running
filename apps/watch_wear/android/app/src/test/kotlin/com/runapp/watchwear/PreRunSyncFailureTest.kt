@@ -8,7 +8,7 @@ import org.junit.Test
 /// Source-level guard over the one thing the PreRun top arc could not say: the
 /// last drain pass stopped on a TRANSIENT failure (decisions § 1390).
 ///
-/// `syncError` renders on `PostRunScreen` alone, and `startNextRun` clears it —
+/// `syncFault` renders on `PostRunScreen` alone, and `startNextRun` clears it —
 /// so on the screen a runner is on for every drain but the first, a 5xx or a
 /// dead socket looked exactly like a successful sync of nothing: the count did
 /// not fall, `drainBackoff` was armed behind it, and no surface named a reason.
@@ -59,14 +59,14 @@ class PreRunSyncFailureTest {
 
     @Test
     fun `the drain records a transient failure as a standing fact, not as the banner`() {
-        // `lastError` is about the PASS — a trailing success clears it, and so
+        // `lastFault` is about the PASS — a trailing success clears it, and so
         // does `startNextRun`. `anyTransientFailure` is about the QUEUE, which
         // is the lifetime this surface needs. The same split § 1347 drew for
         // the permanently-rejected ids.
         val drain = vmBody("private suspend fun drainQueueLocked(")
         assertTrue(
             "the drain must publish the pass's own transient verdict — deriving it " +
-                "from `lastError` would raise the notice for a permanent rejection too, " +
+                "from `lastFault` would raise the notice for a permanent rejection too, " +
                 "and clear it on any trailing success",
             Regex("""syncFailed = result\.anyTransientFailure""").containsMatchIn(drain),
         )
@@ -79,12 +79,12 @@ class PreRunSyncFailureTest {
     @Test
     fun `leaving PostRun does not take the notice with it`() {
         // This is the whole defect in one line. `startNextRun` clears
-        // `syncError` because the banner belongs to the run just finished; if
+        // `syncFault` because the banner belongs to the run just finished; if
         // it cleared this too, the runner would land on PreRun with a count
         // that will not fall and nothing saying why — which is the state that
         // was shipped.
         val next = vmBody("fun startNextRun()")
-        assertTrue("the reset must still clear the PostRun banner", next.contains("syncError = null"))
+        assertTrue("the reset must still clear the PostRun banner", next.contains("syncFault = null"))
         assertFalse(
             "`startNextRun` must NOT reset the transient-failure notice: PreRun is the " +
                 "screen the runner reaches through it, and clearing it here is exactly " +

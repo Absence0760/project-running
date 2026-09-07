@@ -126,6 +126,11 @@
     <string name="cancel">Cancelar</string>
     <string name="token_refresh_failed">Error al renovar el token: %1$s</string>
     <string name="sync_queue_unreadable">Carreras guardadas ilegibles</string>
+    <string name="sync_fault_offline">Sin conexión: se reintentará</string>
+    <string name="sync_fault_server">Servidor ocupado: se reintentará</string>
+    <string name="sync_fault_sign_in">Inicia sesión de nuevo para sincronizar</string>
+    <string name="sync_fault_refused">El servidor rechazó esta carrera</string>
+    <string name="sync_fault_unknown">Error de sincronización</string>
 
     <string name="no_gps_time_only">Sin GPS — solo tiempo</string>
     <string name="gps_lost">GPS perdido</string>

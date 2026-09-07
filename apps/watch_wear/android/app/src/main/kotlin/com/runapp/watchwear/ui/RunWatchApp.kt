@@ -302,7 +302,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     preferredUnit = state.preferredUnit,
                     synced = state.thisRunSynced,
                     syncing = state.syncing,
-                    syncError = state.syncError,
+                    syncFault = state.syncFault,
                     onSync = vm::sync,
                     onStartNext = vm::startNextRun,
                     onDiscard = vm::discard,
@@ -2139,7 +2139,7 @@ private fun PostRunScreen(
     preferredUnit: com.runapp.watchwear.recording.DistanceUnit,
     synced: Boolean,
     syncing: Boolean,
-    syncError: String?,
+    syncFault: com.runapp.watchwear.SyncFault?,
     onSync: () -> Unit,
     onStartNext: () -> Unit,
     onDiscard: () -> Unit,
@@ -2226,9 +2226,9 @@ private fun PostRunScreen(
                         color = DuskPalette.success,
                     )
                 }
-                if (syncError != null) {
+                if (syncFault != null) {
                     Text(
-                        syncError,
+                        stringResource(com.runapp.watchwear.syncFaultMessage(syncFault)),
                         style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                         color = DuskPalette.error,
                         textAlign = TextAlign.Center,

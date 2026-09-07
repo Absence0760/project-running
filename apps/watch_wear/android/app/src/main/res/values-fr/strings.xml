@@ -126,6 +126,11 @@
     <string name="cancel">Annuler</string>
     <string name="token_refresh_failed">Échec de l\'actualisation du jeton : %1$s</string>
     <string name="sync_queue_unreadable">Courses enregistrées illisibles</string>
+    <string name="sync_fault_offline">Pas de connexion – nouvel essai</string>
+    <string name="sync_fault_server">Serveur occupé – nouvel essai</string>
+    <string name="sync_fault_sign_in">Reconnectez-vous pour synchroniser</string>
+    <string name="sync_fault_refused">Le serveur a refusé cette course</string>
+    <string name="sync_fault_unknown">Échec de la synchronisation</string>
 
     <string name="no_gps_time_only">Pas de GPS — durée seulement</string>
     <string name="gps_lost">GPS perdu</string>

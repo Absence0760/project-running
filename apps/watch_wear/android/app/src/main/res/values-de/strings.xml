@@ -126,6 +126,11 @@
     <string name="cancel">Abbrechen</string>
     <string name="token_refresh_failed">Token-Aktualisierung fehlgeschlagen: %1$s</string>
     <string name="sync_queue_unreadable">Gespeicherte Läufe nicht lesbar</string>
+    <string name="sync_fault_offline">Keine Verbindung – erneuter Versuch</string>
+    <string name="sync_fault_server">Server ausgelastet – erneuter Versuch</string>
+    <string name="sync_fault_sign_in">Zum Synchronisieren erneut anmelden</string>
+    <string name="sync_fault_refused">Server hat diesen Lauf abgelehnt</string>
+    <string name="sync_fault_unknown">Synchronisierung fehlgeschlagen</string>
 
     <string name="no_gps_time_only">Kein GPS — nur Zeit</string>
     <string name="gps_lost">GPS verloren</string>
