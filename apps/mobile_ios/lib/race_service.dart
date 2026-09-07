@@ -232,8 +232,12 @@ RaceImportProvider? raceImportProviderFor(String provider) =>
     _providerByToken[provider];
 
 /// All Supabase calls for the race calendar + results import (race_calendar.md).
-/// Mirrors the web `data.ts` race helpers; wire-level methods are exercisable
-/// against a real local Supabase via the `withClient` seam.
+/// Each method mirrors the like-named export in `apps/web/src/lib/core/data.ts`
+/// — `searchRaceListings`, `submitRaceListing`, `fetchRaceResultForRun`,
+/// `findRaceMatchCandidates`, `importRaceResult` — with
+/// `isProviderConfigured` standing in for its `isRaceImportProviderConfigured`.
+/// Wire-level methods are exercisable against a real local Supabase via the
+/// `withClient` seam.
 class RaceService extends ChangeNotifier {
   final SupabaseClient? _override;
 

@@ -5,6 +5,7 @@ import {
 	normaliseExerciseName,
 	computeExercisePrs,
 	distinctExerciseCount,
+	sameExerciseName,
 	workoutPrs,
 	RunningPrTracker,
 	kE1rmMaxReps,
@@ -351,4 +352,21 @@ test('normaliseExerciseName folds by code point, not by code unit', () => {
 	const deseret = '\u{10400}\u{10401}';
 	assert.equal(normaliseExerciseName(deseret), '\u{10428}\u{10429}');
 	assert.equal(normaliseExerciseName(`Bench ${deseret} Press`), `bench \u{10428}\u{10429} press`);
+});
+
+test('sameExerciseName: spellings the canonical fold merges are the same lift', () => {
+	assert.equal(sameExerciseName('Bench Press', 'bench press'), true);
+	assert.equal(sameExerciseName('Bench  Press', 'Bench Press'), true);
+	assert.equal(sameExerciseName('Bench\u00a0Press', 'bench press'), true);
+	assert.equal(sameExerciseName('\u0130ncline Press', 'incline press'), true);
+	assert.equal(sameExerciseName('  Row  ', 'row'), true);
+});
+
+test('sameExerciseName: different lifts, and the blank cases', () => {
+	assert.equal(sameExerciseName('Bench Press', 'Back Squat'), false);
+	assert.equal(sameExerciseName('Row', ''), false);
+	// Blank spellings match each other, as they did on the raw comparison the
+	// grouping surfaces used to make.
+	assert.equal(sameExerciseName('', '   '), true);
+	assert.equal(sameExerciseName(null, undefined), true);
 });

@@ -90,7 +90,13 @@ export type Run = Omit<RunRow, 'source' | 'metadata' | 'activity_type'> & {
 	has_track?: boolean;
 };
 
-export type Route = Omit<RouteRow, 'waypoints' | 'surface'> & {
+// `shadow_hidden` is omitted, not narrowed: it is server-/trigger-owned
+// moderation state (migration 20270218_001) and every read path in the client
+// strips it — `fetchRouteById` destructures it off the owner read, the
+// `public_routes` view projects it away, and the list projection never selects
+// it. The one column the read boundary is unanimous about must not be the one
+// the type promises on every path (§ 1327).
+export type Route = Omit<RouteRow, 'waypoints' | 'surface' | 'shadow_hidden'> & {
 	waypoints: TrackPoint[];
 	surface: RouteSurface | null;
 };
@@ -425,13 +431,33 @@ export type NotificationKind =
 export type Club = Omit<ClubRow, 'join_policy' | 'invite_token' | 'location_point'> & {
 	join_policy: JoinPolicy;
 };
-export type ClubMember = Omit<ClubMemberRow, 'role' | 'status'> & {
+// `activity_waiver_ack_at` is omitted for the same reason `Route` omits
+// `shadow_hidden` (§ 1327): both roster reads enumerate columns precisely to
+// leave it out — on a public club anyone may read the member list, and when a
+// member signed the liability waiver is their own business — so the type must
+// not promise it on every row it can never arrive on. The `joinClub` insert
+// still writes it; that is an object literal against the row's Insert shape,
+// not this read overlay.
+export type ClubMember = Omit<ClubMemberRow, 'role' | 'status' | 'activity_waiver_ack_at'> & {
 	role: ClubRole;
 	status: MembershipStatus;
 };
+// `host_user_id`, `meet_lat` and `meet_lng` are omitted, not narrowed: all
+// three are revoked from the `authenticated` and `anon` column grants on
+// `events` (migration 20270818_001's enumerated `grant select`, reaffirmed for
+// `host_user_id` by 20261230_001), so a client select naming one raises 42501.
+// A read type must not promise a column the reader is not allowed to fetch
+// (§ 1329). The precise meet point is reachable only through the member-gated
+// `get_event_meet_point` RPC, which returns its own row shape.
 export type Event = Omit<
 	EventRow,
-	'recurrence_freq' | 'recurrence_byday' | 'category' | 'gym_template'
+	| 'recurrence_freq'
+	| 'recurrence_byday'
+	| 'category'
+	| 'gym_template'
+	| 'host_user_id'
+	| 'meet_lat'
+	| 'meet_lng'
 > & {
 	recurrence_freq: RecurrenceFreq | null;
 	recurrence_byday: Weekday[] | null;

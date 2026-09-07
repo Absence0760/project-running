@@ -94,4 +94,57 @@ void main() {
     // before the fold would count the combining mark NFD produces.
     expect(clubSlug('Ü' * 60), 'u' * kClubSlugMaxLen);
   });
+
+  // ── clubNameNamesSomething ─────────────────────────────────────────────
+  //
+  // The pre-flight both create forms run before [clubSlug]. It joined the pair
+  // when the web editor turned out to accept a name this side refused
+  // (decisions § 1338).
+
+  test('clubNameNamesSomething: a name in any script names something', () {
+    // The accept side has to be script-agnostic, or § 1281 returns: this side
+    // once refused every non-Latin club name.
+    for (final name in [
+      'Riverside Runners',
+      'Бегуны Москвы',
+      'Αθήνα',
+      '東京',
+      'نادي',
+      '5',
+    ]) {
+      expect(clubNameNamesSomething(name), isTrue, reason: name);
+    }
+  });
+
+  test('clubNameNamesSomething: punctuation, symbols and blanks name nothing',
+      () {
+    for (final name in ['', '   ', '!!!', '- / .', '***', '\u00a0']) {
+      expect(clubNameNamesSomething(name), isFalse, reason: name);
+    }
+  });
+
+  test('clubNameNamesSomething: control and format characters name nothing',
+      () {
+    // `Cc` and `Cf` are named explicitly in the class. `Cn` (unassigned) is
+    // deliberately absent — including it is what would make the predicate
+    // refuse a letter this runtime is too old to know.
+    expect(clubNameNamesSomething('\t\n'), isFalse);
+    expect(clubNameNamesSomething('\u200d\u200b'), isFalse);
+  });
+
+  test('clubNameNamesSomething: one nameable character anywhere is enough', () {
+    expect(clubNameNamesSomething('!!!a!!!'), isTrue);
+    expect(clubNameNamesSomething('   5   '), isTrue);
+  });
+
+  test('clubNameNamesSomething: it is wider than the slug it guards', () {
+    // A Cyrillic name yields no `[a-z0-9]` at all, so the slug is empty and
+    // the caller substitutes the fallback — but the NAME is perfectly good.
+    // Testing the slug for emptiness instead of the name is exactly § 1281's
+    // bug.
+    const name = 'Бегуны Москвы';
+    expect(clubSlug(name), '');
+    expect(clubNameNamesSomething(name), isTrue);
+  });
+
 }

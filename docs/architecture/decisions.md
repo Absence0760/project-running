@@ -26620,3 +26620,596 @@ Nothing under `tests-e2e/` had ever planted a `run_matched_tracks.matched_track_
 `runs/matched-track-render.spec.ts` closes it with a pair: a run whose recorded trace sits at 100–105 m and whose matched line sits at 500–505 m, asserted through the elevation chart's corner pills (the one projection of `baseTrack` with numbers in the DOM — the map is a canvas), plus the `failed` case beside it as the control, since both tracks are renderable and a page that ignored the matched line entirely would still draw *a* profile. `insertMatchedTrack` derives the object path rather than taking it, because `run_matched_tracks_matched_track_url_shape` (migration `20260719_001`) pins it; it upserts, because `runs_enqueue_match_job_trigger` has already left a `pending` row; and `deleteRun` now removes that third object before the run's cascade takes the row naming it.
 
 **The assertion had to be rewritten before it meant anything.** `await expect(page.locator('.extreme-text')).toHaveText([/505\s*m/, /500\s*m/])` passed — and so did the same line asking for `[/105\s*m/, /100\s*m/]`, the *other* track's band, on the same page. `extreme-text` is an SVG `<text>`, and `innerText` is an `HTMLElement` property: Playwright reads undefined off it, so the matcher's verdict does not depend on what the element says. It was measured passing against the wrong band on one run and failing against the same band on the next. The spec reads `textContent` instead, through `expect.poll` so it still waits for the chart, and both mutations then fail: expecting the recorded band, and planting no matched object. Nothing else in `tests-e2e/` asserts text against an SVG element today — checked — but the shape is worth knowing: **`toHaveText` and `toContainText` are HTML-element assertions; against SVG they neither pass nor fail on the text.**
+
+## 1322. `routineFromWorkout` grouped on the display spelling, and the guard beside it dropped on the display spelling too -- one of the two was cosmetic and the other was a web/Dart divergence
+
+`routineFromWorkout` is the "Save as routine" promotion: it walks a logged session's sets and folds *consecutive* sets of one lift into a routine block. Adjacency is load-bearing and stays -- a superset alternates A/B/A and has to render as three blocks -- but both rails measured it as `last.exerciseName === name`, the raw trimmed DISPLAY spelling, and only then stamped `exerciseKey: normaliseExerciseName(name)` onto the block they had just decided to create. So one lift logged under two spellings inside one session ("Bench Press" then "bench press", or either against a U+00A0 or U+0130 variant) saved TWO `gym_routine_exercises` rows carrying the SAME `exercise_key`, and nothing refused them: [decisions 1286](decisions.md) keeps that column deliberately non-unique, because two blocks under one key is the heavy-top-set-then-back-off pattern the tree already pays to support.
+
+**The harm is cosmetic, and the filing that said otherwise was reading a stale signature.** The round-41 entry claimed `computeRoutineAdherence` "matches on `(exerciseKey, setIndex)`", so the two rows would compete for one logged set and the roll-up would double-count. It does not: it matches on `(exerciseKey, stepIndex)`, the ordinal in the EXPANDED step list, and has since the change 1286 records -- `refKey(exerciseKey, stepIndex)` is the only key builder in the module and `setIndex` is documented there as display-only and "NOT unique across a routine". Two blocks therefore occupy distinct step ordinals and grade independently. What the runner actually got was a routine that renders one lift as two blocks, prefills as two blocks on every later "Start routine", and counts as two toward `exercise_count`. Keying the adjacency test merges them without merging across an interleaved lift, and the first spelling wins as the block's display name.
+
+**The guard on the same loop was the sharper find.** Both rails dropped a set when `name.trim()` was empty, then derived a key from the surviving name -- so the drop decision and the persisted identity were made by two different functions. Measured over every assignable code point, exactly ONE reaches the gap: U+0085 (NEL) survives JS `trim()` (ECMAScript `WhiteSpace` does not include it) while `kExerciseWhitespace` folds it away, so on web a set named with a single NEL produced a block with `exerciseKey: ''` -- which `gym_routine_exercises`' own `length(exercise_key) between 1 and 120` CHECK refuses, a 23514 on a save the client believed valid. Dart's `String.trim()` strips Unicode `White_Space`, U+0085 included, so the phone dropped the same set silently. One input, two behaviours, on a registered parity pair whose suites both passed. Both rails now drop on the KEY, which subsumes the blank-name case, closes the divergence, and matches how `distinctExerciseCount` has treated a blank key since 1248.
+
+Three mirrored tests on each rail (28 each), two of which fail against the old code: the merge, the interleaved-lift control that pins adjacency against over-merging, and the empty-key drop.
+
+## 1323. Two client rails still computed an exercise key the server had taken over, and the count in the filing included a read
+
+Since `20270711000001` the two client-stamped key columns are derived by BEFORE triggers, and `20270711000001` also gave each a constant default so the generated `Insert` types stopped requiring them -- verified in `database.types.ts`: `exercise_key?: string` on `gym_routine_exercises`, `name_key?: string` on `exercises`. The clients kept sending values anyway. Harmless, since the value sent is the value the trigger writes, but each send is a rail that can drift from the fold the two partial unique indexes are actually built on, which is the whole reason the derivation moved server-side.
+
+Removed: `createCustomExercise`'s `name_key` and `createGymRoutine`'s `exercise_key` on web (the `normaliseExerciseName` import in `core/data.ts` went with the first -- it had no other caller in that file), and `ApiClient.createGymRoutine`'s `colExerciseKey` on the Dart side. `GymRoutineExerciseInput.exerciseKey` STAYS: the caller matches its own plan against its own log with it (`refKey(exerciseKey, stepIndex)`), so it is a client-side identity that happens to share a name with a column, not a value bound for one.
+
+**The filing counted three web sites and there are two.** `data.ts:9880` in that filing is `fetchGymRoutine`'s read mapping -- `exercise_key: e.exercise_key`, copying a served column onto the returned object -- not a write. Worth recording because the same drift is going to be re-derived by grep, and `exercise_key:` matches a read as readily as an insert.
+
+**No new test is owed and that is a conclusion, not an omission.** Nothing observable changes on either client, so there is no behaviour to pin; what has to hold is the SERVER's half, and `exercise_key_server_stamped_test.sql` already pins exactly it -- assertion 5 ("omitting exercise_key entirely stamps the canonical key"), assertion 10 for `name_key`, and assertion 11, which disables the trigger and requires the 23514 to come back, so the correction is proved to be the trigger's doing rather than a client that happened to send the right value.
+
+`apps/mobile_android/lib/gym_prs.dart` additionally still warned that a stale fold table meant a name "this rail could not write ... without a 23514". That refusal is gone. The stale table is still a defect and a worse-shaped one -- it now splits the bucket silently instead of failing the save -- so the comment states that rather than being deleted.
+
+`ApiClient.createCustomExercise` still takes a `required String nameKey` and sends it. Left in place: dropping the parameter changes a shared package's public signature and its one caller is the mobile catalogue picker, which another lane holds this round. Filed.
+
+## 1324. The population of positive pgtap assertions a correcting BEFORE trigger has emptied was invisible, so it is now enumerated -- 19 stamped columns, 4 assertions, 2 of them empty
+
+[decisions 1287](decisions.md) recorded the mechanism and left the general obligation open: adding the two exercise-key stamping triggers broke one assertion loudly and silently emptied two more, and nothing knew which other positive assertions sat downstream of a correcting trigger. A `lives_ok` whose whole content is "this client-supplied value satisfies the constraint" says nothing once a BEFORE trigger has replaced the value -- the row that meets the constraint is the row the TRIGGER built, so the assertion survives a server that had stopped folding, clipping or blanking entirely.
+
+It is not a refusal assertion, so `check_pgtap_refusal_assertions.mjs`'s mutation run does not touch it, and it is not a zero-or-empty read, so widening RLS says nothing about it. The check therefore lands in the same script's STATIC phase, beside the `throws_ok`-pins-its-error scan, which means it runs in the job that already exists rather than adding one -- [decisions 764](decisions.md)'s two obligations on a new CI job do not arise.
+
+**Static, deliberately, and the ADR says what that does and does not buy.** The stronger instrument is mutation -- disable the trigger and require the assertion to change -- and `exercise_key_server_stamped_test`'s own assertion 11 does exactly that by hand for these two columns. What generalises cheaply is the POPULATION: which positive assertions supply a value a trigger overwrites. That set was what nobody could see. It is derived by replaying the migrations in version order (`drop trigger` retires an entry, `create or replace function` re-reads a body, an AFTER trigger is not this defect) and taking, for each live BEFORE INSERT/UPDATE trigger, the columns its function assigns at the TOP LEVEL of the body.
+
+**Only unconditional assignments count, and that line is the whole judgement.** A `freeze_*_managed_columns`, `enforce_event_capacity` or a privacy-zone clipper assigns inside an `if`: whether the supplied value survives depends on the fixture, and a caller may legitimately be asserting the branch does NOT fire. An assignment at the top of the body always fires, so the supplied value is always discarded and the claim is always empty. Measured: 47 (table, column) pairs are assigned by some BEFORE trigger, 19 of them unconditionally; 224 `lives_ok` calls across the suite, 17 supply one of the 47 and 4 supply one of the 19.
+
+Of those 4, two are `exercise_key_server_stamped_test`'s own, where the acceptance IS the claim and the next assertion reads the stored value back -- registered in `STAMPED_VALUE_ASSERTIONS` with that reason. The other two were genuinely empty and are repaired by not supplying the column: `exercises_rls_test`'s "owner inserts their own custom entry", which is an RLS claim that never read the key, and `normalise_exercise_name_test`'s assertion 15, whose subject is the service_role EXECUTE grant on `normalise_exercise_name` (the CHECK still runs after the trigger stamps, so a missing grant still surfaces as 42501).
+
+**The registry doubles as the population floor.** [decisions 510](decisions.md)'s failure -- a scan whose input has moved reports nothing and reads as a clean sweep -- is closed without a separate count: an empty `stamped` set makes both registered entries go stale, and the staleness check fails. Mutation-tested four ways: re-supplying the column on assertion 15 is named with its line; renaming a registered description fails twice, once as an unregistered site and once as a stale entry; moving the migrations directory throws; and breaking the `create trigger` regex fails on both stale entries rather than passing.
+
+**Left for a later round, measured but not verified:** the 13 assertions supplying a CONDITIONALLY stamped column. Three look worth a read rather than a rule -- `paid_events_test`'s "going on a priced event with a matching paid order succeeds", which cannot tell a seated attendee from one `enforce_event_capacity` silently moved to `waitlisted`; and `unbounded_numeric_column_bounds_test`'s two live/race ping assertions, which cannot tell a stored coordinate from one the privacy-zone clipper coarsened. Each may well be fine on its fixture; none has been checked.
+
+## 1327. `shadow_hidden` left the `Route` overlay: the one column every read path strips was the one the type promised on every path
+
+`fetchRouteById` destructures `shadow_hidden` off the owner read and voids it, under a comment calling it server-owned moderation state the client has no business reading; the `public_routes` view projects it away; neither routes-list column tuple names it. Three read paths, unanimous — and `Route` declared it on all three, because the overlay was `Omit<RouteRow, 'waypoints' | 'surface'>` and moderation state is a column of `routes` like any other.
+
+That is the § 1294 defect with the sign flipped. There the type over-promised a column the query merely did not ask for; here it promises one the code deliberately removes, so the value is `undefined` at runtime on every path rather than on some of them, and a consumer that reads it gets `undefined` with the compiler's blessing and no read that could ever populate it.
+
+The overlay is now `Omit<RouteRow, 'waypoints' | 'surface' | 'shadow_hidden'>`. The one-word edit fails `core/mock-data.ts`'s `makeRoute`, which set `shadow_hidden: false` in an object literal typed `Route` — excess-property checking catches it, which is the fix landing its own second signal. `fetchRouteById` keeps the destructure: the wire still carries the column (the owner read is `select('*')`), so the strip is what makes the returned value that type rather than a cast over it.
+
+Pinned at compile time, because no runtime test can see an absent field: `AssertNever<Extract<keyof Route, 'shadow_hidden'>>` in `route_list_columns.test.ts`. Deliberately stated against `Route` and not only against `RouteListItem` — the existing `@ts-expect-error` on `r.shadow_hidden` is a claim about the list `Pick`, and re-adding the column to the overlay would put it back on `fetchRouteById`'s return while leaving that suppression correctly used and nothing else failing. Mutation-tested both ways: restoring the overlay fails the assertion (`Type '"shadow_hidden"' does not satisfy the constraint 'never'`) and independently fails `makeRoute`.
+
+## 1328. A `setof <view>` RPC is typed from the view, not from the table the view reads — the two catalogue readers had been casting seven columns into existence
+
+`nearby_routes` and `search_public_routes` are both declared `setof public_routes`, so the server fixes the projection at fifteen columns and the client's only job is to say what it is. Both readers instead ended `as Route[]`, which promised the caller `waypoints`, `is_starred`, `geom`, `geom_public`, `start_point`, `description` and `shadow_hidden` — every one of them `undefined` on every row, with `waypoints` the non-nullable `TrackPoint[]` whose absence was the whole of [§ 1229](#1229-the-saved-public-route-rows-are-filled-with-what-the-view-withholds-not-cast-to-the-type-they-are-not).
+
+Not live, and the reason it was not is worth recording: the sole consumer, `RouteExplorer.svelte`, happened to read only columns the view serves. Nothing enforced that. A card that wanted a route's `description` — a plausible next edit on the same component — would have compiled, shipped, and rendered nothing.
+
+`PublicRouteSummary` in `route_list_columns.ts` is now what both return. It is `Pick<Route, keyof PublicRouteViewRow & keyof Route>` — derived from the generated view row, so a migration that widens the view moves the type in the same regeneration, rather than enumerated as a third tuple beside the two already in that file. Two deliberate choices:
+
+**`Pick<Route, …>` and not the generated view row itself.** Postgres cannot prove a view column NOT NULL, so the generated `public_routes` row types all fifteen as nullable while the base columns behind them are not. Taking it verbatim would push a `string | null` id and a `number | null` run count into the card and buy handling for a case that cannot occur. `PublicRouteListRow` in the same file already took that decision for the same view; this is that view read through a different door.
+
+**The intersection is pinned, because an intersection cannot state its own second direction.** A view column `Route` does not have would be dropped silently and the type would still compile. `AssertNever<Exclude<keyof PublicRouteViewRow, keyof Route>>` is the claim; `viewWithheldReadsDoNotCompile` is the other end, one `@ts-expect-error` per withheld column, mutation-tested by widening `PublicRouteSummary` back to `Route` — five of the six directives then report unused, and the sixth is `shadow_hidden`, which § 1327 removed from `Route` outright.
+
+A third pin fell out of writing the second: `PublicListIsAViewSubset` says `PUBLIC_ROUTE_LIST_COLUMNS` names only view columns. The existing runtime check proves each name is a column of **`routes`**, which is a weaker claim than it reads as — the saved-route half selects from `public_routes`, so adding `waypoints` to that tuple passes the check and 400s at runtime.
+
+## 1329. `Event` and `ClubMember` declared five columns the client is not allowed to fetch — and the guard that would have caught it is the equality between a projection and its type
+
+Sweeping the rest of `core/data.ts` for § 1294's shape — a narrowed `.select()` handed back under the table's full row type — turned up two more instances and refuted a third.
+
+**`Event` promised three columns that are REVOKED, not merely unprojected.** SELECT on `events` is revoked wholesale from `authenticated` and `anon` and re-granted column by column (`20260818_001`, plus the later per-column grants for `category` / `discipline` / `gym_template` / `is_public` / `timezone` / `session_plan_id`). `host_user_id` — the paid-events payout recipient — is deliberately outside that set, restated in `20261230_001`; `meet_lat` / `meet_lng` are outside it because a precise meeting point leaks an organiser's home address, and are reachable only through the member-gated `get_event_meet_point` RPC. So `EVENT_SELECT_COLS` enumerates twenty-four of the twenty-seven columns and could not name the other three without raising 42501, while `Omit<EventRow, …>` declared all twenty-seven. That is the § 1327 shape with the strongest possible evidence: not a column the query happens not to ask for, one the reader is not permitted to ask for.
+
+**`ClubMember` promised `activity_waiver_ack_at`, which both roster reads enumerate columns precisely to leave out** — on a public club anyone may read the member list, and when a member signed the liability waiver is not public roster data. The comment above the select had said so since the column was added. Removing it from the overlay does not touch `joinClub`, which writes the column through an object literal against the row's Insert shape rather than through this read overlay.
+
+**`Club` is refuted.** The filing said `CLUB_SELECT_COLS` "enumerates eighteen columns of `clubs` and its rows are read as the full `Club`". It enumerates nineteen, and the `Club` overlay declares exactly those nineteen — `clubs` has twenty-one columns and the overlay already omits `invite_token` and `location_point`. There was no gap to close.
+
+The durable half is the guard, and it is an EQUALITY rather than a containment: the column set parsed out of the `.select()` literal must equal the key set of the overlay it is read as, derived from `types.ts`'s `Omit`/intersection crossed with `database.types.ts`. Nothing is restated — a literal repeated in the test would be a fourth declaration of the same thing ([§ 641](#641-a-turn-cues-angle-is-measured-across-the-corner-never-across-a-segment-the-thinning-invented)). Both directions matter: a column added to the overlay and not to the projection is the original defect, and one added to the projection and not the overlay is width paid for on the wire and unreadable. A third test replays every migration in filename order to reconstruct what `authenticated` may SELECT, and fails if either the projection or the overlay names a column outside it — which turns a 42501 that only a running stack can produce into a unit-test failure. Mutation-tested one column at a time: restoring `host_user_id` fails the equality and the grant check and leaves the roster check green; restoring `activity_waiver_ack_at` fails only the roster check; adding `meet_lat` to the projection fails the equality and the grant check.
+
+## 1330. `fetchRuns`'s `columns` was a free-form string under a fixed `Run[]`, so the caller narrowed the wire and the compiler kept promising all twenty-four columns
+
+`FetchRunsOptions.columns?: string` let a caller project whatever it liked while the return type stayed `Run[]`. Five call sites used it. The most extreme was `fetchRuns({ columns: 'started_at' })` — one column fetched, twenty-four declared — and `fetchRunsForPeriodSummary`, which backs the period drilldown a runner opens off any dashboard card, declared `Run[]` over five. Every consumer that read anything else got `undefined` with no throw, no error and a `{#if}` that could never be true.
+
+`columns` is now a tuple: `readonly (keyof Run)[]`, declared `as const satisfies RunColumns` at each site, and `fetchRuns` carries two overloads — no `columns` returns `Run[]`, a tuple returns `Pick<Run, C[number]>[]`. The select string is joined from the same tuple, so the query and the type it is read as cannot describe different sets, and `satisfies` refuses a name that is not a column, so a migration that drops one fails at the declaration rather than asking PostgREST for nothing. That is `route_list_columns.ts`'s shape ([§ 1294](#1294-the-routes-list-projection-is-one-declaration-and-both-the-select-string-and-the-row-type-are-derived-from-it)) applied to a projection whose column set varies per caller, which is why it is a generic rather than a second module of constants.
+
+The cascade was five type errors and all five were local annotations: `PeriodSummary.svelte`'s two props and its `fullRuns` state (the component reads exactly the five columns the constant names), the drilldown route's `runs`, the dashboard's `loadFullRunHistory`, and the gear page's backfill state — which now declares its own four-column tuple beside the fetch instead of an inline string, so `GearBackfillModal`'s already-structural `BackfillCandidate` prop is fed something that provably carries those fields. `PlanEditor` needed nothing: `recentRunVolume` takes a structural `RunForVolume`.
+
+**One call site is deliberately not narrowed, and that is the honest boundary of this change.** `fetchRunsForRecap` still declares `Run[]`, with the widening stated at the one line where it happens. Its rows go to `mergeRecapRuns` (web-only, and its own header says so), then to `buildYearInRunningRecap` and `computeRunStreaks` — `recap` and `streaks` are both registered TS↔Dart parity pairs, and narrowing the fetch moves the error into their `Run[]` parameters rather than removing it. Widening those to structural bounds is a change to the pairs, not to their callers, and it belongs in a change that carries the syncer. Filed rather than forced.
+
+Two source guards had to be re-anchored because they were keyed on the spelling the tuple replaced, and both were re-anchored to the tuple's CONTENTS rather than to the new spelling: `data.test.ts`'s period-summary check read `PERIOD_SUMMARY_RUN_COLUMNS`' first line and asserted no `*` in it — vacuously true the moment the constant became multi-line — and `gear_write_guard.test.ts` matched `columns: '…'`, which a named tuple no longer is. Both now parse the tuple and assert it does not name `metadata`, which is the thing that made the read expensive. The compile-time half is five `@ts-expect-error`s on `PeriodSummaryRun`, mutation-tested by widening it to `Run`: all five then report unused.
+
+## 1331. A followup that describes the diff it shipped alongside reads as work owed, and the cheapest test is `git log -S` on the phrase it says is missing
+
+Round 41's web-routes lane filed "`fetchRoutes` / `fetchRoutesWithError` still return `Route[]`, so the truthful list type is opt-in at the call site", with a precise remedy: import four names, change two return types, five internal annotations, one predicate, one cast, three consumer annotations. Every one of those was already true on `main` — in commit `856150274`, the commit that added the followup. `git log -S 'RouteListItem[]' -- apps/web/src/lib/core/data.ts` names exactly that one commit.
+
+The filing was not wrong about the defect; it was written from the plan and not re-read against the tree it landed in. That is a distinct failure mode from the mis-diagnosis [§ 1250](#1250-the-exercise-fold-guards-are-anchored-on-what-a-file-does-not-on-where-it-sits) records, and it costs the next round the same amount either way: a lane opens, reads the entry as an instruction, and has to prove a negative before it can move.
+
+**The check that catches it is mechanical and takes one command.** Before ticking a followup as open work, `git log -S '<the exact identifier the entry says is absent>' -- <the file>` on the branch the entry will land on. If the only commit it names is your own, the entry describes your diff rather than what remains after it. Applies equally to a "still casts", a "still returns", a "does not yet import" — each names a string, and a string is searchable. Round 42's sweep of the same file found the same shape twice more in one entry: `CLUB_SELECT_COLS` was said to enumerate eighteen columns of `clubs` read as the full `Club`; it enumerates nineteen, and `Club` declares exactly nineteen ([§ 1329](#1329-event-and-clubmember-declared-five-columns-the-client-is-not-allowed-to-fetch--and-the-guard-that-would-have-caught-it-is-the-equality-between-a-projection-and-its-type)).
+
+## 1332. The catalogue picker's dead end had a residual half, and narrowing the exact-match test to the visible set would have traded it for a duplicate-key write
+
+§ 1276 closed the case where an entry the naive filter could not see suppressed the create affordance that exists for a search with no match. What it left is the same dead end reached through the category dropdown instead of through a fold: the exact-match test scans the whole catalogue while the result list also applies the category filter, so selecting "legs" and typing the exact name of a chest exercise renders "No exercises match." beside no create button and no explanation. The exercise exists, is not shown, and cannot be added — § 1276's own sentence, one filter later.
+
+**The obvious repair is the wrong one and it is worth saying why.** The filing (and the brief this lane was handed) described the defect as `hasExact` scanning every row "rather than the filtered set", which reads as a one-word fix. It is not, and the reason is in the schema. `exercises` carries TWO partial unique indexes on the folded name (migration `20270222_001`): `exercises_global_name_key` on `(name_key) where author_id is null`, and `exercises_author_name_key` on `(author_id, name_key) where author_id is not null`. So an exact-match test narrowed to the visible set offers to create "Bench Press" a second time whenever the dropdown is not showing chest, and the offer resolves two different bad ways depending on who owns the hidden row.
+
+If it is a seeded GLOBAL, the insert **succeeds** — the author's partial index cannot see a row whose `author_id` is null, and `api_database.md` records that split as deliberate, "so a user may shadow a global name with a custom one" — and the catalogue then holds two entries under one key, one global and one personal. The picker lists both, `normaliseExerciseName` cannot tell them apart, and which `exercises.id` a logged set binds to becomes an accident of list order. If it is the user's OWN custom filed under another category, the insert hits `exercises_author_name_key`, `createCustomExercise` catches the 23505 and returns null, and the picker says "Couldn't add that exercise." — so the user is told the exercise does not exist and then told that adding it failed, with neither sentence mentioning the row that is sitting one dropdown away. Both are worse than the suppression they would replace.
+
+So the exact-match test stays catalogue-wide and the picker gains a THIRD state instead. `hiddenExact` is the entry the query names exactly while the category filter hides it, and it exists precisely because neither of the other two answers can express it: `matches` is empty and `canCreate` is false, and rendering that pair as a bare "No exercises match." is the untruth. It is always null under "all", where a key EQUAL to the query necessarily CONTAINS it — the same structural argument § 1276 used, applied to the filter it did not cover — so the new state is reachable only from the dropdown and cannot mask an ordinary empty search. The sentence names the category the entry is filed under, so the reader is told both why the list is empty and why there is no create button, in one line, and the action needed is the dropdown they are already looking at.
+
+## 1333. The web picker's behavioural pin is an extraction, not a component-test harness — § 1278 refused it for a reason that its own remaining defect dissolved
+
+§ 1278 recorded that the § 1276 fix shipped with no behavioural pin, considered three alternatives and refused all three: extraction would put a source `.ts` into `lib/components/` "to enable an assertion over `String.includes`", a source guard would be anchored to a spelling, and a Playwright spec could not be executed by the lane that owed it. Measured again with § 1332's state in hand, only the third of those still holds.
+
+The costs are not close. **A component-test harness** means vitest plus a Svelte plugin plus a DOM implementation plus a testing library — four devDependencies and a SECOND unit-test runner in a tree that deliberately has one, at which point `lib_structure_guards.test.ts`'s "the unit-test glob covers every suite under src" stops describing the suite, `scripts/check_workflow_binaries.mjs` wants the new binary declared, the CI lane running it has to be named in the `CI gate` aggregator's `needs:` list (§ 764), and every future session has to know which of two runners a given `.test.ts` belongs to. That is a permanent tax on 107 components to pin one. **A Playwright case** is the instrument the tree has for a rendered behaviour and remains owed — it is the only thing that can prove the sentence reaches the DOM — but it is a browser, a database and a dev server for a decision that touches neither. **The extraction** costs one file, no dependency, no runner, and lands the logic where the tree already keeps 107 pure modules.
+
+What changed since § 1278 is the subject. Three `$derived` expressions computing `String.includes` really were too thin to move, and extracting them then would have been the preemptive abstraction the conventions name. § 1332's third state is not that: it is a claim about the relationship between the visible set, the whole catalogue and the query, whose two failure modes are a dead end and a duplicate write. `cataloguePickerView` returns all three answers at once because they are one decision — a caller that computed them separately could disagree with itself, which is exactly what the component did. The suite that came with it was mutation-tested five ways: restoring the naive fold, dropping `hiddenExact`, narrowing the exact-match test to the visible set, sorting on the folded key and removing the id tiebreak each fail at least one case. The module lives at `apps/web/src/lib/components/exercise_catalogue_picker.ts`, beside its one consumer; `lib/gym/` is the more conventional home and the file is a one-import move away from it, but that tree was owned by another lane in the round that wrote this.
+
+One property fell out of the move rather than being sought. `localeCompare` reports 0 for names a collation calls equivalent, and the component then resolved those by input order — the order PostgREST happened to return — so a list holding two spellings of one name could reorder itself between reloads. The comparator now breaks ties on `id`, the same shape `catalogue_browse`'s `byName` uses and for the same stated reason.
+
+## 1334. Dart cannot collate, but it can fold — and on the eight names the filing measured, folding reproduces the web order exactly
+
+The mobile picker sorted on `normaliseExerciseName(a.name).compareTo(...)`, a UTF-16 code-unit compare over the exercise KEY. § 1276 measured what that does — over `['Ab Wheel', 'Bench Press', 'Élévation latérale', 'Overhead Press', 'Row', 'Überzug', 'źcisk', 'Zercher Squat']` it files all three accented names behind `Zercher Squat` and diverges from the web list at position 2 — and filed it against the mobile tree rather than fixing it by making the web list worse, on the grounds that ordering a human-facing list is not keying it and Dart ships no collator.
+
+Both halves of that reasoning survive; the conclusion drawn from the second was too pessimistic. Dart cannot run ICU collation, but it does not have to in order to stop filing `É` after `Z`: `fold` — the generated Unicode diacritic strip `catalogue_browse` carries for exactly this class of problem (§ 852) — turns the display name into something a code-unit compare orders the way a reader expects. Measured, the folded compare produces `[Ab Wheel, Bench Press, Élévation latérale, Overhead Press, Row, Überzug, źcisk, Zercher Squat]` for that list, which is byte-for-byte the order `localeCompare` produces on the web side. The divergence the filing described is closed on its own evidence.
+
+**It is closed, not eliminated, and the residual is worth naming so the next reader does not mistake this for lockstep.** A fold is not a collation. The letters Unicode gives no canonical decomposition — `ø`, `đ`, `ł`, `ß`, `æ` — stay unfolded (deliberately: folding them would invent an equivalence Unicode does not have), so a collation interleaves them where this compare still files them after `z`; punctuation and digits are compared at full weight here and at a lower one by ICU. The two platforms therefore agree on Latin text with diacritics, which is what a catalogue of exercise names is, and can still disagree on a name built out of the stroke letters. That is a smaller and better-understood residual than the one it replaces, and it is the best answer available without shipping a collation table to the phone.
+
+The KEY comparison is not what moved. `normaliseExerciseName` still derives every match, every exact test and every id binding; only the ORDER now reads the display name, through the display fold. Keeping those two instruments apart is the point: the key answers "is this the same exercise", the fold answers "where does a reader look for it", and the round-40 and round-41 filings both went wrong by proposing one where the other belonged.
+
+## 1337. The routes list searched on two runtimes' `toLowerCase` and sorted on two different orderings; the sort was the larger divergence by far
+
+`/routes` and `routes_screen.dart` both filtered with `name.toLowerCase().includes(query.toLowerCase())` and both sorted A–Z, and neither the filter nor the sort gave the same answer on the two platforms.
+
+**The search.** JS `toLowerCase` is Unicode full case mapping; Dart's is simple mapping from an older table. Measured over all 1,112,064 assignable scalar values they differ at **466 code points** — the figure § 854 already records — and the one reachable in ordinary Latin text is U+0130. `'İstanbul Loop'.toLowerCase()` is `i̇stanbul loop` in Node, an `i` followed by a combining dot, which does not contain `istanbul`; Dart drops the dot and does. So a route named `İstanbul Loop` was findable by typing `istanbul` on the phone and not on the web — the same reversal § 1249 recorded for the catalogue picker and § 1251 for the club slug.
+
+**The sort was worse, and the filing that said so was right.** Web used `localeCompare`, a collation whose answer depends on the host's ICU data; the phone used `toLowerCase().compareTo()`, which is UTF-16 code-unit order. These are not two roundings of one ordering. Sorting the **145,672** Unicode letters as single-character names both ways and counting pairs the two rank in strictly opposite directions gives **3,368,963,371 discordant pairs out of 10,610,092,956 — 31.75 %** — and **every one of the 145,672 code points** is ordered differently against at least one other. Restricted to the Latin/Greek/Cyrillic alphabet a route name realistically holds (830 code points), **59,777 of 344,035 pairs, 17.38 %**, still disagree. Concretely: `['Zaragoza', 'Åre', 'Ørsted']` sorts to `[Åre, Ørsted, Zaragoza]` on web and stays `[Zaragoza, Åre, Ørsted]` on the phone, because a collation puts `Å` beside `A` while a code-unit order puts it after `Z`.
+
+So the sort could not be "folded reflexively", as the filing warned — folding alone still leaves web collating. Both rails now compare **folded keys with `<` / `>`**, which is what `catalogue_browse`'s own `byName` had already chosen for exactly this reason and what its comment already explained. That comparator is now exported as `compareFoldedNames` and `byName` delegates to it, so the catalogue and the routes list on both platforms are one function rather than three copies. Ties break on `id`, which also removes a latent instability: Dart's `List.sort` is not stable, so two identically-named routes could previously swap between rebuilds.
+
+The residual is stated rather than hidden: a folded order is **not** a collation, so it is not the order a Swedish or Turkish reader would call alphabetical. That is deliberate and is the same trade `catalogue_browse` took — one order everywhere beats a per-host order that no test can pin and the phone cannot reproduce at all.
+
+## 1338. The club-name pre-flight became a shared predicate, and it is a refuse-list because an accept-list diverges 45x harder
+
+§ 1281 fixed the phone to test the club NAME for `[\p{L}\p{N}]` rather than testing the derived slug for emptiness, which is what unblocked every non-Latin club name there. It left the web editor gating on `!name.trim()` and nothing else, so a club called `!!!` was creatable on the web and refused on the phone — and it landed under `CLUB_SLUG_FALLBACK`, giving a club whose name spells nothing the permanent public URL `club`.
+
+The followup offered two readings and observed the code stated neither. **A name must name something** is the reading taken: the phone already held it, the sentence already exists in all seven ARBs, and the alternative means deleting a check that stops a nonsense public URL. The predicate moved out of `club_form_sheet.dart` and into the `club_slug` pair beside the slug it guards, so the registries' note that it was "a mobile-only affordance, NOT part of the pair" is now false and was corrected in both.
+
+**It is not the phone's regex.** A Unicode property class is answered by each runtime's own Unicode tables — the same mechanism as `toLowerCase`, and therefore the same class of bug. Measured over all 1,112,064 assignable scalar values:
+
+| predicate | Node vs Dart divergence | direction |
+|---|---|---|
+| `[\p{L}\p{N}]` (accept-list, the phone's) | **4,657** | Dart refuses letters Node knows |
+| `[\p{Z}\p{P}\p{S}\p{C}]` (refuse-list with `C`) | 4,699 | same — `Cn` is inside `C` |
+| `[^\p{Z}\p{P}\p{S}\p{Cc}\p{Cf}]` (shipped) | **104** | web refuses symbols Dart has not assigned |
+
+The accept-list is ten times worse than the fold this round exists to close, and it fails in the dangerous direction: every one of its 4,657 is a letter the newer table knows and the older does not, so the platform that is behind refuses a real name — § 1281's bug verbatim, re-imported by the very predicate that fixed it. The refuse-list fails **open**: a code point one runtime has not yet assigned belongs to none of `Z`/`P`/`S`, so it reads as nameable on both. The residual 104 are newly-assigned symbols that web refuses and the phone accepts, and only for a name made of nothing else.
+
+`\p{Cn}` therefore stays **out** of the class even though `\p{C}` would be shorter — including it is precisely what puts unassigned code points back on the refusing side. `Cc` and `Cf` are named individually, so a name of nothing but control or format characters is still refused. The costs here are asymmetric and that is what picks the shape: a false accept is a club named `!!!`, a false refuse is a person who cannot create their club at all.
+
+## 1339. Two write paths to one unique column, and the guard that replaced the deleted one is a count rather than a name
+
+`ApiClient.createClub` (`packages/api_client`) inserted directly into `clubs` with no retry on 23505 and never minted the `invite_token` an invite-only club needs to be shareable. It had **no caller** — every real create goes through `SocialService.createClub`, which retries four times with a random slug suffix and mints the token. `_clubSafeCols` existed only to serve it.
+
+`clubs.slug` is `text unique not null` and is derived from the NAME, so an unhandled collision is not a rare race: two people naming a club the same thing is the ordinary case, and the second would have taken a raw Postgres error. Deleted rather than repaired, because two write paths to one unique column is the defect and repairing it would have preserved that.
+
+**The guard is the durable half.** `architecture_guards_test.dart` now counts `.from('clubs' | ClubRow.table).insert(` sites across `apps/mobile_*/lib` and `packages/`, requires exactly one, and requires it to be in `social_service.dart`. It is a **count**, not a check for the deleted symbol, because a guard naming `ApiClient.createClub` would pass the moment the next duplicate is called something else — which is exactly how this one survived unnoticed. Mutation-verified: reintroducing a minimal second insert fails it, naming both sites.
+
+## 1340. `dm_recipients` carried a fourth private copy of the fold and had reintroduced the sigma-sensitivity the canonical one exists to remove
+
+Sweeping for the § 1337 class turned up `apps/web/src/lib/social/dm_recipients.ts`, which held its own `fold` — NFD, strip `\p{Diacritic}`, lowercase — identical to `catalogue_browse`'s except for the final step it omitted: the collapse of the Greek final sigma onto the medial one.
+
+That step is not cosmetic, and `catalogue_browse`'s comment already says why: `toLowerCase` implements Unicode's Final_Sigma rule, so `Σ` becomes `ς` at the end of a word and `σ` everywhere else, which makes any fold built on it depend on the characters AROUND the one being folded. `filterDmRecipients` is a **search**, so the consequence is reachable: a display name `ΟΔΟΣ` folds to a trailing `ς`, while a reader typing the query produces the medial `σ` their keyboard gives them, and `'οδος'.includes('οδοσ')` is false. Measured — the medial-sigma query matched nothing under the private fold and matches under the canonical one. This was the only sigma-sensitive search key left in the product, and it was a copy of the function written to remove that property.
+
+The copy is deleted and the canonical `fold` imported, which also gains this search the accent folding every other search key has. Web-only, no Dart twin, so no parity-pair obligation.
+
+**The transferable point is about copies, not about sigma.** The tree now has one fold and four consumers of it (`catalogue_browse`, `club_slug`, `food_search`, `dm_recipients`); a fifth written by hand would be undetectable by `check_parity_pair_registry.mjs`, which compares the two registries and not the two behaviours (§ 852). A private helper that reimplements a shared one is invisible to every guard the tree has.
+
+---
+
+## 1342. An unknown clock must lose, not win: the offline stores' fallback moves from `now` to the epoch
+
+**Decided 2026-09-06.** [§ 1290](#1290-a-record-is-not-worth-less-than-its-clock) made a
+wrong-TYPED `last_modified_at` behave like an absent one instead of discarding the whole
+record, and deliberately left the fallback VALUE alone. This closes that: `storedClockOrNow`
+is `storedClockOrEpoch`, and the four inputs it covers — absent, empty, unparseable,
+wrong-type — now read as `DateTime.utc(1970)` rather than as `DateTime.now().toUtc()`.
+
+`now` is not a neutral default; it is the single most favourable value the field can hold.
+Every `replaceFromServer` in the family decides with `local.lastModifiedAt.isAfter(serverTs)`,
+and `serverTs` is a stamp the server wrote in the past, so a `synced` row handed `now` wins
+that comparison against every stamp the server will ever have. `rewriteAll` then persists the
+winning clock, so the next cold load parses a perfectly valid timestamp that is still ahead of
+the server, and the row goes on winning across launches — the server copy can never reach it
+again. That is worse than the throw § 1290 removed, which at least let the next refresh re-add
+the row and self-heal. Three surfaces have a second symptom: `local_routine_store`,
+`local_recipe_store` and `local_meal_template_store` each order their library
+`b.lastModifiedAt.compareTo(a.lastModifiedAt)`, so an unreadable record claimed the head of
+the most-recently-used list — presented as the freshest thing the user owns.
+
+The epoch loses every comparison there is, which is the honest answer in both directions and
+costs nothing that matters. `replaceFromServer` sorts every non-`synced` row into `preserved`
+BEFORE the newer-wins comparison runs, so an unsent create/update/delete is still kept and
+still pushed whatever its clock says; only a `synced` row is affected, and a `synced` row
+losing to the server is the correct resolution when the local clock is unknown. In
+`local_routine_store`'s windowed variant the epoch reads as "older than anything the fetch
+could have returned", so the row is preserved rather than clobbered — also correct. The one
+place the value is now visibly different is the sort, where an undatable record goes last
+instead of first.
+
+The name moved with the behaviour. A helper called `storedClockOrNow` that returns the epoch
+is the class of stale name this tree keeps paying for, and renaming forced every one of the
+seven `fromJson` call sites to be re-read. `kUnknownStoredClock` is exported so the tests and
+the readers share one spelling of the sentinel instead of each writing `DateTime.utc(1970)`.
+
+Pinned by four tests in `offline_sync_timestamps_test.dart`: the four unusable inputs all
+equal `kUnknownStoredClock`; the sentinel loses `isAfter` against three server stamps
+including one a second past the epoch, with the old fallback's winning comparison asserted
+beside it as the control; and the sentinel sorts last under the library comparator. The
+`local_food_store` restore test that asserted the old `now` behaviour now asserts the epoch,
+with the reason it does not matter to a restored (pendingCreate) record stated in place.
+
+---
+
+## 1343. `instance_start` is normalised at the one boundary that serialises it, not at the one that mints it
+
+**Decided 2026-09-06.** [§ 1291](#1291-a-checkpoint-crossing-is-filed-under-an-instance_start-that-depends-on-the-readers-timezone-and-one-store-is-the-wrong-place-to-fix-it)
+traced a recurring occurrence being filed under the reader's wall clock on mobile and under
+the true instant on web, and left the choice open: either `api_client` normalises every
+`instance_start`, or `recurrence.dart` stops minting local instants. It is the first, and
+measuring the tree said so more clearly than the trace did.
+
+`expandInstances` is not wrong. For an event declaring no timezone it builds a LOCAL
+`DateTime`, which names exactly the absolute instant web's `new Date(y, m, d, h, mi, s)`
+names — the two platforms compute the same occurrence. The divergence is entirely in
+serialisation: a JS `Date` IS an instant and `toISOString()` always emits `Z`, while Dart's
+`toIso8601String()` writes no designator at all for a local `DateTime`, and Postgres then
+resolves the zone-less literal in the session's own TimeZone. So changing `recurrence.dart`
+would move one half of a registered parity pair away from a twin that is not wrong, to fix a
+defect that is not there.
+
+**The tree had already decided this and only api_client had missed it.** `social_service.dart`
+writes `instance_start` at eleven sites — the RSVP upsert, the going-count filters, the
+attendee delete, the results RPC, the race-session reads, the photo tag — and every one of
+them is already `instance.toUtc().toIso8601String()`. `race_controller.dart` persists its
+active race the same way. `api_client.dart` was the only writer that did not, at six sites:
+the run-photo insert and its gallery filter, `setEventRsvp` and `fetchEventAttendees`, the
+crossings filter and the `upsert_checkpoint_crossing` RPC. Two of those six sit on opposite
+ends of one feature — a photo is TAGGED to an occurrence through `social_service` (normalised)
+and READ BACK through `addRunPhoto`'s sibling filter in `api_client` (not), so an event gallery
+could fail to list the photos that same phone had just uploaded to it.
+
+All six now go through `instanceStartKey(DateTime) → at.toUtc().toIso8601String()`, with
+`instanceStartKeyOrNull` for the nullable photo tag (a photo attached to no occurrence stays
+null; it does not acquire an epoch). A no-op for a timezoned event and for a one-off's
+`startsAt`; only legacy zone-less recurring rows move, and they move onto the value web has
+been writing all along.
+
+**The store half is a second defect the same shape.** `local_crossings_store` compared
+`instance_start` as a STRING — `row['instance_start'] == instanceStart.toIso8601String()` — in
+both `rowsForCheckpoint` and `replaceFromServer`'s scope test. One occurrence has at least
+three spellings in that store: PostgREST answers `2026-06-14T07:00:00+00:00`,
+`CheckpointCrossingRow.toJson` re-serialises it as `…T07:00:00.000Z`, and a row the store
+wrote itself carries whatever `toIso8601String()` produced. So a server-fetched crossing did
+not match the instance the screen was asking about, and "who has already been stamped here" —
+the whole reason the offline store exists — listed only the stamps this phone had made. Both
+sites now compare instants through `sameInstance`, which is immune to spelling and to rows
+written before this change; `createLocal` stores the normalised key, and `pushCreate` reads
+it back through `parseServerTimestamp` rather than the raw `DateTime.parse` § 1291 had to
+leave marked, REFUSING a crossing whose stored instance is unreadable rather than filing it
+under a guessed occurrence (the drain isolates that per row and the stamp stays pending).
+
+Pinned by eight tests in `instance_start_key_test.dart` — five on the helper plus a
+source guard anchored on the COUNT of `instance_start` sites, so deleting the normalisation
+cannot delete its own requirement — and seven in `local_crossings_store_test.dart`, including
+all four spellings matching one occurrence and a control that a different occurrence of the
+same series is still excluded. Mutation-tested three ways: removing the `.toUtc()` from the
+helper fails four assertions, reverting one call site to a bare `toIso8601String()` fails the
+guard by name, and restoring the string equality fails the spelling test.
+
+Web needs no change and gets none. This is one-sided by construction: the platform that was
+already correct is the one the other is being brought onto.
+
+---
+
+## 1344. `DateTime.tryParse` answers an impossible date instead of refusing it, and the store family now refuses it in one place
+
+**Decided 2026-09-06.** `DateTime.tryParse` has two behaviours under one name. It refuses text
+it cannot recognise as ISO 8601 — and it ROLLS OVER anything it can, through the calendar,
+without complaint. `2026-13-45T99:99:99Z` is not an error; it is 2027-02-18T04:40:39Z.
+`2026-06-32` is the 2nd of July. `2026-02-30` is the 2nd of March. So an unusable column does
+not yield "no value": it yields a confident wrong one, which passes every downstream non-null
+and `> 0` check the tree has, and which no caller can distinguish from a real answer.
+
+The `OfflineSyncStore` family had that parse behind two readers. On the timestamp side it is
+arguably survivable — `parseServerTimestamp`'s callers only compare the result or store it —
+but on the DATE side it is not. `local_gear_store` read `purchased_at` / `retired_at` with a
+private `_parseDate`, and those values go straight back out through `api.createGear` /
+`api.updateGear`, which serialise them with `.toIso8601String().substring(0, 10)` into a
+`date` column. A rolled-over day therefore becomes the STORED day, and `gearBackfillCandidates`
+then measures a purchase date the user never entered. Nothing produces such a value today (the
+Material date picker cannot), so this is a robustness gap rather than a live defect — but it is
+the shape where a wrong answer is durable rather than transient.
+
+`parseIsoStrict` is now the single call to `DateTime.tryParse` in the family, and both readers
+go through it: `parseServerTimestamp` adds the `.toUtc()`, and the new shared
+`parseCalendarDate` deliberately does not. It parses first, then range-checks every component
+against the calendar the text claims to be in, using the SDK's own anchored grammar verbatim —
+a narrower pattern would refuse text the platform accepts, which is a regression dressed as a
+hardening. The day bound is the target month's own last day, so 29 February is a date in 2024
+and is not in 2027. The `2026-06-14T24:00:00Z` end-of-day form is refused too: it is legal ISO,
+nothing here emits it, and it is indistinguishable from the rollover this exists to catch.
+
+**Gear's private reader is gone rather than exempted.** § 1289 left `_parseDate` in place with a
+`zone-verbatim:` marker, which read as "one reader plus an exception". It is now
+`parseCalendarDate` beside `parseServerTimestamp`, two named readers in the shared file whose
+one difference — the `.toUtc()` — is stated once. `store_timestamp_reader_guard_test.dart`
+follows: its allowance moves to `parseIsoStrict`, and it gains an assertion that the shared
+file holds EXACTLY ONE raw-parse site and that its enclosing reader is that one. That count is
+what cannot be deleted along with the check it protects.
+
+**§ 1289's prose has the hemisphere backwards, and that is corrected here.** It says
+normalising a `date` to UTC "moves the day itself for every device west of Greenwich". It is
+the other way: local midnight at UTC−04:00 is 04:00 the SAME day in UTC, while local midnight
+at UTC+03:00 is 21:00 the PREVIOUS day. Measured with `TZ=America/New_York`,
+`TZ=Europe/Athens` and `TZ=Pacific/Auckland` against `DateTime.tryParse('2026-06-03').toUtc()`:
+day 3, day 2, day 2. The code comments now say "ahead of UTC". This also explains why the
+gear-store integration test cannot catch a `.toUtc()` added to `parseCalendarDate` — the
+workstation sits west of Greenwich, where the day does not move — so the load-bearing
+assertion is the zone-independent one in `offline_sync_timestamps_test.dart`
+(`isUtc == false` plus the y/m/d unchanged), which is the assertion that actually failed when
+that mutation was planted.
+
+Mutation-tested four ways: removing the day bound fails five assertions across two files;
+adding a second raw parse to the shared file fails the new count assertion by line number;
+reverting gear to its private marked reader fails the guard's reader-usage count AND the gear
+drain test with the exact rolled-over value (2026-07-02) the filing predicted; and normalising
+`parseCalendarDate` to UTC fails the calendar-day assertion.
+
+## 1347. A permanently-rejected watch run now says so on the wrist, and the transient banner keeps its clear-on-success semantics
+
+`drainQueueLoop` classifies a 400/404/409/422 as `SkipAndContinue` and leaves the entry queued, which is right — § 17 chose that over dropping a run silently. Nothing carried the verdict out. `lastError = null` runs on every success, so one clean run behind a refused one erased its message; `anyTransientFailure` stayed false, so the caller ran `drainBackoff.onSuccess()` and set `syncError = null`. Every Sync tap reported success while the queue count never fell. And the manual discard the loop's own comment pointed at is `RunViewModel.discard()`, which acts on `state.thisRunId` — the run just finished — so it stops existing the moment the runner leaves `PostRunScreen`.
+
+**The clear-on-success behaviour is not reversed.** `DrainQueueLoopTest` states it twice, in terms ("Skip-followed-by-success clears the banner", "Trailing success clears the banner even if a middle run was skipped"), and it is right about what it governs: the banner is a fact about the pass. A permanent rejection is a fact about the *queue*, with a different lifetime, and folding it into a field designed to be cleared is precisely how the false success arose. So `DrainQueueLoopResult` grew `rejectedIds` and `attemptedIds`, and `rejectedAfterPass` folds one pass into the carried set: a run this pass **attempted** takes this pass's verdict (a rejection that has since become a success or a transient stops being claimed), a run it **never reached** keeps the verdict of the last pass that did (a server going down before the loop reaches the stuck entry must not take the only notice of it off the screen), and anything no longer queued is dropped. `attemptedIds` exists for the middle rule alone — the loop breaks on the first transient, so the runs after it were never judged.
+
+**The other horn the filing offered — auto-dropping after N failed passes — was refused.** It destroys the runner's only copy of a run with no one asked, which is the same call § 1253 had just made in the opposite direction on the PostRun `×`. The remedy has to be one the runner chooses.
+
+On the wrist the rejected chip takes the PreRun top-arc slot **ahead of** the counted `Sync N` one, which is § 1104's precedent exactly: the count is right and the sentence around it is not, so the chip whose claim the state falsifies yields the slot. That costs the manual Sync of any run queued behind the stuck ones, and the order is intended — the entry that cannot move is what has to be cleared first, and the counted chip returns with the rest once it is. The discard is behind `confirmPress`, states the count in both states (a bare "Discard?" on a chip that said "2 can't sync" leaves the runner agreeing to a number they cannot see), names the stake while armed, and **disarms on a change in the count**, because a drain landing between the arm and the confirm changes which runs the second tap would destroy.
+
+This is not a feature pioneered on the wrist under § 24. Web has no watch queue: the stuck entry exists only because the watch has a durable local store, and this is its recovery affordance, the same class as § 1104's retry chip and § 1253's confirm.
+
+`dropQueuedRun` gives the entry-before-file ordering one home now that the drain is not its only caller — the two were byte-identical copies — and `UnsyncedRunDurabilityWiringTest` follows it there rather than reading whichever caller comes first, while additionally pinning that the drain still delegates. Eleven planted mutations were refused by `PreRunRejectedQueueTest` and the retargeted durability guard, including the two directions that matter most: a first press that fires the discard, and a discard that iterates the queue rather than the ids the last pass judged. **Rung: the Kotlin is host-tested and the module suite is green at 767 on this workstation; the 192 dp round-bezel layout of the armed chip plus its stake caption has not been rendered anywhere, because no Wear emulator was run here.**
+
+## 1348. The two watch clients' heart-rate coverage figures are held against each other, because no registry can hold them
+
+`avg_bpm` is SUPPRESSED below a coverage threshold and coverage is advanced against a sample-freshness window. Both watch clients write the same `runs.avg_bpm` and `runs.metadata.hr_coverage`, on the same account, for the same runner. Two thresholds is one column with two meanings — the same run keeps its average on one wrist and loses it on the other — and the two files had asserted the lockstep in each other's doc comments since § 1083 with nothing able to see a divergence. They are in **neither** parity registry and cannot be: those pair web with mobile, and the watch clients are additive surfaces under § 24. That is § 641's shape, again.
+
+The rail is claim (12) of `scripts/check_watch_ios_source.mjs`, chosen over `check_shared_constants.mjs` because that file is shared with every lane and this one already reads outside `apps/watch_ios` for the same reason (claims 6 and 7 read the phone's end of an envelope the watch does not own).
+
+Two design points. **It compares the figures, not the spelling.** The freshness window is a `TimeInterval` in seconds on one wrist and an elapsed-realtime delta in milliseconds on the other, deliberately, so a guard matching raw literals would demand they be *spelled* the same rather than *mean* the same — and respelling the Wear window as `30L` would be the divergence, not the fix. `kotlinPerSwift` is an integer multiplier applied to the Swift figure so the comparison stays exact. **A rail it cannot read FAILS.** A rename, or a value that stops being a literal, is exactly the edit most likely to take the two figures apart unobserved, so the unreadable case errors rather than skipping — which is the only thing that makes anchoring on the constant names safe at all.
+
+Six cases pin it, including the unit-aware one and both unreadable ones. Both source files' comments now name the rail instead of asserting a lockstep nothing checked.
+
+## 1349. The watch plist's companion declaration is held against the phone's build, in both directions
+
+§ 1256 settled the `WKWatchOnly` question and could not act on it. The key is a true description of `WatchApp.xcodeproj` and a false description of an app whose entire sync path is `WCSession.transferFile` into the phone; but `apps/mobile_ios/ios/Runner.xcodeproj/project.pbxproj` contains **zero** references to the watch product (re-measured this round, unchanged), so flipping the key alone would declare a companion relationship no build produces — moving the lie — and would assert it against `test-watch-ios`, which installs on an *unpaired* watch simulator. The remedy is the five-step build integration § 1256 lists, and it wants a Mac.
+
+What was missing was any way for that to stop being true without anyone noticing. Claim (10) now reads the phone project and requires the plist to follow the build **both ways**: `WKWatchOnly` beside an embed fails (the integration landed — flip the key), and a `WKCompanionAppBundleIdentifier` with no embed fails (the outcome § 1256 refused). The embed is recognised by Apple's Embed Watch Content destination, the built product name, or the watch's own bundle identifier read off its project rather than written down — three markers, because an embed cannot avoid naming at least one and a false positive here costs a sentence in a PR while a false negative costs the whole claim.
+
+The `ok` line states the standing situation rather than implying correctness: the declaration matches the build, *and the integration is owed rather than done*.
+
+## 1350. A Swift file in no target is an absence, not a red — so claim (13) refuses one
+
+A file Xcode never compiles produces no build error and no failing test. It is simply not there, and a **test** file that is not there takes its coverage with it while still reading as coverage in the repo. This has already happened once in this tree: `Complications/ActiveRunComplication.swift` is in no target, which is the entire reason claim (4) exists — `ComplicationFormatterTests` links the *other* copy of the duplicated formatters, so passing proves nothing about the copy the widget runs.
+
+The same slip on `HealthKitFailureTests.swift` would leave the macOS `test-watch-ios` job green having never run `HeartRateCoverageAccumulator` — the value type that decides whether a shipped run keeps its `avg_bpm`, and the only evidence the open `hr_coverage` item has. Claim (13) reads membership off the `… in Sources */` build-file entries, which is what membership IS in this format; a `PBXFileReference` alone puts a file in the navigator and in no build. `UNBUILT_SWIFT` declares the one exemption with its reason and fails **both** ways it can go stale: the file gaining a target, and the file ceasing to exist.
+
+Measuring it settled a standing claim. All 19 files under `WatchAppTests/` are members, `test-watch-ios` runs `xcodebuild test` on every diff outside `docs/` and `.claude/`, and it is one of the jobs the required CI gate needs — so the accumulator's nine cases **have** executed on a watchOS simulator since #859 landed on `main`. The round-41 filing's "the tests themselves have not run anywhere yet either" was true when written and is not now. **What is still owed is unchanged and is not a rung the workstation can reach**: a recorded run through a real `HKWorkoutSession`, with `hr_coverage` present and plausibly non-zero on the row. Unit tests executing on a simulator say nothing about whether HealthKit's sample timestamps are what the accumulator assumes on hardware.
+
+Claim (4) was made to report a missing formatter copy rather than throw an `ENOENT` stack, which is the same complaint this whole file exists to make about failures that do not name themselves.
+
+## 1352. CodeQL's Kotlin leg had the § 1304 defect too, and the fix is a guard that runs the workflow's own walk rather than reading it
+
+**Decided 2026-09-06.** § 1304 found `security.yml`'s `codeql-go` job building
+one of two Go modules. Looking for the same shape on the other compiled leg
+found it: `codeql-kotlin` had a single `working-directory:
+apps/watch_wear/android`, under a header claiming the language covered both
+Kotlin surfaces. CodeQL analyses what the build steps compile, so the 128
+Kotlin/Java files under `apps/watch_wear` were analysed and the 11 under
+`apps/mobile_android/android` were not — `MainActivity.kt`,
+`RunActionReceiver.kt` (a `BroadcastReceiver`), and the platform-channel
+bridges that mediate health permissions, calendar access and foreground-service
+actions. Two things that saved the Go leg are absent here and were checked
+rather than assumed: `runAutobuildIfLegacyGoWorkflow` is Go-specific with no
+Java/Kotlin analogue, and `build-mode: none` cannot stand in for a build,
+because CodeQL's buildless Java extractor does not process Kotlin at all
+("Detected X Kotlin files in your project that could not be processed without a
+build" is its own documented warning).
+
+**The scan itself is not extended here, and the reason is that it cannot be
+verified from this lane.** Covering the Flutter Gradle host means the pinned
+Flutter SDK and a `melos bootstrap` inside a CodeQL job — `settings.gradle.kts`
+reads `flutter.sdk` out of a `local.properties` only the Flutter tool writes,
+and `:app` compiles against every plugin subproject — paid on every PR and every
+weekly cron. That is a trade for the owner, and shipping an unverifiable
+multi-minute Gradle step into the security workflow would have been worse than
+the gap.
+
+**What did change is that the gap is now a value rather than a sentence.** The
+build step enumerates Gradle projects from the tree, exactly as § 1304's Go step
+does, and skips the ones named in a `CODEQL_KOTLIN_UNBUILT` declaration the same
+step's loop reads. A third Gradle project is therefore built the day it lands,
+and if it cannot be built here CI goes red and somebody decides — which is the
+outcome the silent version never produced. Four branches were mutation-tested
+against a stub tree: a walk that stopped matching refuses at the floor, an
+exclusion list that swallowed every project refuses, a failing build refuses
+with its own reproduce line, and a newly-planted third project is built without
+anyone editing the file.
+
+`scripts/check_codeql_coverage.mjs` (the `workflow-lint` job) is what keeps both
+legs honest, and its anchor is the point. It does not look for the WORDS of an
+enumeration — a guard keyed on spelling passes every way of getting this wrong.
+It lifts each build step's own `find` expression out of the workflow, **runs
+it**, and compares the answer against an independent walk of the tree, the same
+instrument `edge_functions_typecheck_coverage.test.mjs` already uses on the
+deno-check lane. Seven mutations were watched failing: reverting either leg to a
+hardcoded path, growing a `-not -path` that hides a tree, an exclusion naming a
+directory that is not a project, an exclusion bought with a four-character
+reason, an exclusion list covering everything, and a walk that finds fewer trees
+than the floor. The floor is under the WALK, not the workflow, because a walk
+and a `find` that broke the same way would otherwise pass by agreeing with each
+other.
+
+## 1353. `terraform validate` re-run for round 42, and the module's transitive coverage re-measured
+
+**Re-run 2026-09-06.** The standing item, run as prescribed: `terraform init
+-backend=false` + `validate` in `infra/bootstrap`, `infra/dns`,
+`infra/github-oidc`, `infra/envs/prod` and `infra/envs/preview` — all five
+"Success! The configuration is valid." — plus `terraform fmt -check -recursive
+infra`, exit 0. Local Terraform is 1.13.0, which is the version
+`terraform.yml` pins for both its `fmt` and `validate` jobs, so this is the same
+binary CI runs and not an approximation.
+
+The module's transitive coverage was re-measured rather than asserted, per
+§ 1267 (`configuration_aliases` makes `modules/web-stack` a non-root by
+construction, so it cannot be validated standalone). An undeclared-variable
+reference planted in `modules/web-stack/outputs.tf` was reported by BOTH root
+stacks that consume it — "Error: Reference to undeclared input variable", naming
+`../../modules/web-stack/outputs.tf` and the line — and both exited 1. Restored
+and re-validated clean.
+
+Still nothing behind §§ 1021-1024, 1084-1085, 1111 or § 1268's
+`custom_error_response` has been `plan`ned against real state, because no lane
+holds AWS credentials by design; the item is re-filed on that basis, not
+retired. And what this class of check structurally cannot see is worth
+restating with a fresh example: the three stale `*_spa_shell.ts` comments closed
+in the same round described the CloudFront error-response contract wrongly and
+passed `validate` and `fmt` without a murmur, because neither reads a comment.
+
+## 1354. The `PUBLIC_` prefix convention was stated in four headers, false in one of them, and the one header that named the exception named a variable nothing reads
+
+**Decided 2026-09-06.** Every mobile deploy-gate module's header says the same
+thing: "web spells the same flag `PUBLIC_<X>`; mobile drops the web-only
+`PUBLIC_` prefix, as every other mobile deploy flag does." That is an
+operational claim, not a style one — an operator flipping a gate for a release
+reads one name and sets the other, so a pair whose STEMS differ means one
+platform has been signed off and the other has not, silently, in exactly the
+direction a fail-closed gate exists to prevent.
+
+It is false for `weigh_in_flag`: web reads `PUBLIC_WEIGH_IN_ENABLED`, mobile
+reads `WEIGH_IN_GATE`. Worse, the Dart header named the counterpart as
+`PUBLIC_WEIGH_IN_GATE` — a variable no file in this repo reads or sets — so the
+single place a reader could have learned about the exception told them its
+opposite, in the confident register of a header comment.
+
+**The convention is now measured rather than described.**
+`apps/web/src/lib/safety/deploy_gate_names.test.ts` and its Dart mirror read the
+`PUBLIC_*` key out of each web gate and the `k…EnvKey` constant out of each Dart
+gate — out of the SOURCE, never from a list of names, because a list of names
+goes stale exactly the way the header did — and make four claims: the two names
+differ only by the prefix, or the gate is a declared exception; a declared
+exception whose names have started agreeing FAILS, so the register can only
+shrink; no `PUBLIC_*` token appearing in any gate module is a name no web gate
+reads; and the census walks `src/lib` for `*_flag.ts` (and `lib/` for
+`*_flag.dart`), so a gate the file has never heard of fails instead of going
+unmeasured. That last claim earned itself immediately: the first draft listed
+three pairs and the walk found a fourth, `nearby_flag`, which nothing had been
+comparing.
+
+The dead-variable check also decided how to word the correction. The first fix
+left the header explaining that `PUBLIC_WEIGH_IN_GATE` was the name it used to
+carry — and the guard failed it, correctly: the token was still there, and a
+guard that reads negation to excuse it is the shape `check_twin_claims.mjs`
+already refuses. The header now states the two live names and points at the
+guard, and the dead one survives only in this ADR and the followup, where a
+reader cannot mistake it for a variable to set.
+
+## 1355. `off_route_flag` and `weigh_in_flag` get the mirror suites their registration promised
+
+**Decided 2026-09-06.** § 1315 registered both as parity pairs, which made their
+divergence detectable, and neither had a mirror suite — `off_route_flag` had
+none on either side. Registration and coverage are different properties: the
+syncer can tell you the two halves disagree, but nothing was pinning what either
+half is supposed to DO, and for a two-line env binding the thing worth pinning
+is not the parse (that belongs to `env_flag` and is pinned there) but the
+surface the gate fences.
+
+Both suites are therefore SOURCE guards in `adaptive_fitness_gate_guard`'s
+shape. `off_route_flag.test.ts` (3) / `off_route_flag_test.dart` (4) assert the
+gate delegates rather than carrying a parse, does not default to on, fails
+closed on an unreadable `dotenv`, and — the half that had nothing on it at all —
+that the escalation surface is unreachable while the flag is off: on web every
+affordance of the `/settings/safety` card sits inside `{#if offRouteEnabled}`
+and nowhere else, matched by block NESTING rather than by substring so an
+`{#each}` inside cannot close the block early; on mobile the run screen
+constructs the detector only under the conjunction of the gate, the runner's own
+opt-in and a selected route, and the else branch NULLS it rather than leaving
+one armed from a previous recording. The extra Dart case is that arming, which
+has no web analogue because recording is mobile-only.
+
+`weigh_in_flag_test.dart` (3) mirrors the web suite's claim on the Art 9
+surface: the sheet that collects body weight, the medical-hold flag and the
+organiser consent tick opens only under the gate, the checkpoint picker's
+weigh-in marker renders only under it, and the consent term starts `false` and
+is raised from exactly one writer — the sheet's own result. It also pins the
+COUNT of `weighInGate` reads on the screen at two, so a third affordance cannot
+be added without this guard being told about it; that is the assertion that
+turns "these two places are gated" into "these are the only places".
+
+Two mutations were watched failing on the web half — moving the off-route card
+out from behind the gate, and replacing the delegated parse with a
+`!== 'false'` default-on — and three on the naming guard. The Dart halves could
+not be executed from this lane (two other lanes held the Flutter budget), so
+every assertion was instead replayed against the real sources by an independent
+script, statement for statement; that found and fixed one wrong assertion, a
+negative lookahead that also matched the `var healthConsent = false;`
+declaration it was meant to exclude.
+
+## 1356. The CodeQL merge gate stays a repo setting, and the half of it a repo file CAN buy is now bought
+
+**Decided 2026-09-06.** § 1264 and § 1305 both concluded that folding
+`security.yml` into `ci.yml` — the § 1149 caller-job trick that made
+`terraform.yml`'s and `gitleaks.yml`'s red actually block a merge — does not
+gate a CodeQL FINDING, because `github/codeql-action/analyze` has no severity
+threshold and a fold would gate on the analysis completing. Round 42 was pointed
+at the same item again, so the claim was re-read first-hand against the action's
+own `action.yml` at the pinned SHA rather than inherited: 18 inputs, none of them
+a severity or alert threshold. The conclusion holds, and gating a finding remains
+a **repo setting** (the code-scanning results requirement on the `CodeQL` tool),
+which no file in this tree can read, set or verify.
+
+**What had not been noticed is that the two guarantees were being weighed as one.**
+`docs/ops/deployment.md` already recorded the cheaper halfway option — requiring
+the four `analyze` jobs, which gates on the scan RUNNING and is "worth doing if
+the worry is a scanner that silently stops working" — but framed it as another
+branch-protection change and therefore equally out of reach. The part of that
+worry which has actually bitten this repo is narrower and IS reachable: twice a
+compiled leg reported clean over source it had never read (§ 1304, § 1352), and
+in both cases the `analyze` job passed, so requiring it would have caught
+neither. `scripts/check_codeql_coverage.mjs` sits in `workflow-lint`, which is in
+the `CI gate`'s `needs:`, and fails the PR on exactly that state. The loud
+failure modes — an extractor that crashes, a bad `queries:` value — remain
+advisory, which is a far easier thing to notice than a green scan over nothing.
+
+The fold's cost is now written down in `deployment.md` rather than re-derived:
+it re-keys all four analyses, and `security.yml`'s own `push` / `pull_request`
+triggers would have to come off in the same change or every merge runs the
+analyses twice and two uploads to one SARIF category make the alert set
+flip-flop — the failure that merging `codeql.yml` into `security.yml` existed to
+escape. Declined for a third time on that basis, not foreclosed.
+
+## 1357. `toHaveText` against an SVG `<text>` IS a text assertion — § 1313's mechanism is refuted, and the non-determinism it saw was the un-awaited matched-track fetch
+
+[§ 1313](#1313-tohavetext-against-an-svg-text-is-not-a-text-assertion-and-the-matched-track-render-path-had-no-e2e-coverage-at-all) closed with a transferable rule: "`toHaveText` and `toContainText` are HTML-element assertions; against SVG they neither pass nor fail on the text." Round 42 was handed that as a class to sweep and guard. Measured instead, on the pinned `@playwright/test` and Chromium, against a `data:` page holding one `<text class="extreme-text">TRUE 505 m</text>`:
+
+- `'innerText' in el` is **false** and `el.constructor.name` is `SVGTextElement`, so the premise about the DOM is right;
+- `toHaveText('COMPLETELY WRONG 999 m')` **fails**, reporting `Received: "TRUE 505 m"`;
+- `toContainText('WRONG')` fails the same way;
+- the array form `toHaveText([/105\s*m/, /100\s*m/])` against two `<text>` elements fails, printing both received strings;
+- and a locator resolving to zero elements fails rather than passing vacuously.
+
+Playwright's element-text reader falls back to `textContent` for a node that is not an `HTMLElement`. So no guard was built: banning a matcher that works would fail correct code, which is the [§ 1251](#1251-the-residual-dart-case-gap-was-measured-against-the-wrong-instrument--in-european-text-its-whole-reachable-surface-is-one-code-point) shape in the other direction.
+
+**The observation § 1313 recorded was real; the diagnosis was not.** `/runs/[id]` fires `fetchRunMatchedTrack` **without `await`** — its own comment says "the map will swap to the matched line once it lands; until then it shows the raw track". The recorded band is therefore genuinely drawn first, and every Playwright text matcher auto-retries, so an assertion asking for the RECORDED band is satisfied by the first frame and passes, while on a faster run the window closes before the first poll and it fails. That is exactly "passing against the wrong band on one run and failing against the same band on the next". Reproduced: with the shipped assertion mutated to the recorded band and run five times under the old shape it survived **1 in 3**.
+
+The fix is a settle anchor, not a different reader. `runs/matched-track-render.spec.ts` now arms `page.waitForResponse` on the `.matched.json.gz` download **before** the navigation and awaits it before reading the labels, so every assertion is a claim about the settled page. The same mutation then fails **5 of 5**, and the unmutated spec passes 5 of 5. `extremeLabels` keeps reading `textContent` because it feeds `expect.poll` — the response resolving is one step ahead of Svelte's re-render — not because `toHaveText` cannot see an SVG.
+
+**The transferable rule that replaces the withdrawn one:** an auto-retrying matcher on a surface that renders an intermediate state is a claim about *some* frame, not about the final one. Anchor it on the event that ends the transition, or its negative control is satisfied by the transition itself. Not statically decidable, so no guard — which is why it is recorded here rather than in `fixtures/`.
+
+## 1358. A run is a row and up to three Storage objects; the teardown guard derives all three from `simulate.ts` rather than listing them
+
+`insertRun` uploads `{user_id}/{run_id}.json.gz` for a `track` and `{user_id}/{run_id}.hr.json.gz` for an `hrSeries`; `insertMatchedTrack` ([§ 1313](#1313-tohavetext-against-an-svg-text-is-not-a-text-assertion-and-the-matched-track-render-path-had-no-e2e-coverage-at-all)) added a third, `{user_id}/{run_id}.matched.json.gz`. Only `deleteRun` reads all three columns back before removing the objects. A spec disposing of the run with `admin.from('runs').delete()` takes the row — and by cascade the `run_matched_tracks` row naming the third object — while the gzipped objects stay in the bucket with nothing left that names them, and `supabase db reset` does not clear Storage either.
+
+Surveyed across `tests-e2e/`: **no offender exists today.** Every one of the eighteen files that seeds a Storage-backed run already tears down through `deleteRun` (two seed one and never delete at all, both being account-deletion specs where the removal is the feature under test). The forty-odd direct `from('runs').delete()` calls elsewhere are all on rows that wrote no object, and are not offences. The filing that named "several specs" was written without the survey and is refuted as a live defect.
+
+The rule is stated anyway, as `fixtures/storage-teardown.test.ts`, because the cost of it is one line at the point somebody adds the fourth object. **Nothing in it is a list**: the uploading helpers are found by scanning `simulate.ts` for an exported function whose body reaches `.upload(`; the option names that make them upload (`track`, `hrSeries`) are the `opts.X` guarding those calls; and the columns (`track_url`, `hr_series_url`, `matched_track_url`) are the `*_url` keys those bodies write. A fourth object needs no edit here, a renamed helper cannot leave the scan silently matching nothing, and a call passing a spread counts as seeding because the scan cannot see through it. Three claims follow: the derivations found something (or every assertion below is vacuous), `deleteRun` reads back every column the uploaders write, and no seeding file deletes a `runs` row directly. All four mutations were verified killing them — a planted `track:` beside a direct delete, a spread argument beside one, `deleteRun` losing its `matched_track_url` read, and `.upload(` renamed so nothing is found.

@@ -12,6 +12,11 @@ import {
 } from './pgtap_definer_neutralisers.mjs';
 import {
   EXPECTED_SURVIVORS,
+  STAMPED_VALUE_ASSERTIONS,
+  readMigrations,
+  stampedColumns,
+  stampedValueWrites,
+  unconditionalAssignments,
   PREAMBLE,
   REFUSAL_VOCABULARY,
   TESTS_DIR,
@@ -464,4 +469,155 @@ test('no pgtap negative pins neither a SQLSTATE nor a message', () => {
     }
   }
   assert.deepEqual(offenders, []);
+});
+
+// ── Positives emptied by a correcting BEFORE trigger (decisions 1324) ────────
+
+test('unconditionalAssignments separates a stamp that always fires from one that may not', () => {
+	assert.deepEqual(
+		unconditionalAssignments('begin\n  new.name_key := f(new.name);\n  return new;\nend;'),
+		['name_key'],
+	);
+	// The whole distinction: inside an `if`, whether the supplied value survives
+	// depends on the fixture, and a caller may be asserting the branch does NOT
+	// fire. `enforce_event_capacity` and the privacy-zone clippers are this shape.
+	assert.deepEqual(
+		unconditionalAssignments(
+			'begin\n  if full then\n    new.status := 1;\n  end if;\n  return new;\nend;',
+		),
+		[],
+	);
+	// A comment naming the shape is not the shape.
+	assert.deepEqual(
+		unconditionalAssignments('begin\n  -- new.name_key := f(new.name);\n  return new;\nend;'),
+		[],
+	);
+	// An assignment after the `if` closes is back at the top level.
+	assert.deepEqual(
+		unconditionalAssignments(
+			'begin\n  if x then\n    new.a := 1;\n  end if;\n  new.b := 2;\n  return new;\nend;',
+		),
+		['b'],
+	);
+});
+
+test('stampedColumns replays the migrations rather than reading the last one', () => {
+	/** @param {string} name @param {string} col */
+	const stamp = (name, col) =>
+		`create or replace function public.${name}() returns trigger language plpgsql as $x$\n` +
+		`begin\n  new.${col} := 1;\n  return new;\nend;\n$x$;`;
+
+	// The drop-then-create pair every stamping migration opens with is a replace,
+	// not a removal.
+	assert.deepEqual(
+		[
+			...stampedColumns([
+				{
+					name: '001.sql',
+					text:
+						`${stamp('f', 'k')}\ndrop trigger if exists t on public.tbl;\n` +
+						'create trigger t before insert or update on public.tbl for each row execute function public.f();',
+				},
+			]),
+		],
+		[['tbl.k', 't']],
+	);
+
+	// A trigger dropped in a later migration stops stamping.
+	assert.deepEqual(
+		[
+			...stampedColumns([
+				{
+					name: '001.sql',
+					text: `${stamp('f', 'k')}\ncreate trigger t before insert on public.tbl for each row execute function public.f();`,
+				},
+				{ name: '002.sql', text: 'drop trigger t on public.tbl;' },
+			]),
+		],
+		[],
+	);
+
+	// The body is re-read, so replacing the function moves the column with it.
+	assert.deepEqual(
+		[
+			...stampedColumns([
+				{
+					name: '001.sql',
+					text: `${stamp('f', 'k')}\ncreate trigger t before insert on public.tbl for each row execute function public.f();`,
+				},
+				{ name: '002.sql', text: stamp('f', 'other') },
+			]),
+		],
+		[['tbl.other', 't']],
+	);
+
+	// AFTER triggers cannot correct the row being written — NEW is already
+	// stored — so they are not this defect and must not be reported as it.
+	assert.deepEqual(
+		[
+			...stampedColumns([
+				{
+					name: '001.sql',
+					text: `${stamp('f', 'k')}\ncreate trigger t after insert on public.tbl for each row execute function public.f();`,
+				},
+			]),
+		],
+		[],
+	);
+});
+
+test('stampedValueWrites reads the supplied columns off an INSERT and an UPDATE', () => {
+	const stamped = new Map([['exercises.name_key', 'exercises_stamp_name_key_trigger']]);
+	assert.deepEqual(
+		stampedValueWrites('insert into exercises (author_id, name, name_key) values (a, b, c)', stamped),
+		[{ table: 'exercises', column: 'name_key', trigger: 'exercises_stamp_name_key_trigger' }],
+	);
+	assert.deepEqual(stampedValueWrites('update public.exercises set name_key = x where id = 1', stamped), [
+		{ table: 'exercises', column: 'name_key', trigger: 'exercises_stamp_name_key_trigger' },
+	]);
+	// A write that supplies only columns nothing stamps is not this defect.
+	assert.deepEqual(stampedValueWrites('insert into exercises (author_id, name) values (a, b)', stamped), []);
+	// The column belongs to a table, not to the suite: the same name on another
+	// table is untouched.
+	assert.deepEqual(stampedValueWrites('insert into other (name_key) values (a)', stamped), []);
+});
+
+test('the stamped-column scan finds a population, so a broken parse cannot read as clean', () => {
+	// 510: a scan whose input has moved reports nothing at all. The registry
+	// below is what anchors this one — an empty `stamped` makes every entry go
+	// stale — but the population is asserted outright too.
+	const stamped = stampedColumns(readMigrations());
+	assert.ok(stamped.size >= 10, `only ${stamped.size} unconditionally stamped columns found`);
+	assert.equal(
+		stamped.get('gym_routine_exercises.exercise_key'),
+		'gym_routine_exercises_stamp_exercise_key_trigger',
+	);
+	assert.equal(stamped.get('exercises.name_key'), 'exercises_stamp_name_key_trigger');
+	assert.equal(stamped.get('gym_sets.exercise_key'), 'gym_sets_stamp_exercise_key_trigger');
+});
+
+test('no pgtap positive supplies a value a BEFORE trigger overwrites, unless registered', () => {
+	const stamped = stampedColumns(readMigrations());
+	const registered = new Set(STAMPED_VALUE_ASSERTIONS.map((e) => `${e.file} ${e.description}`));
+	const matched = new Set();
+	const offenders = [];
+	for (const file of readdirSync(TESTS_DIR).filter((f) => f.endsWith('.sql'))) {
+		const text = readFileSync(join(TESTS_DIR, file), 'utf8');
+		for (const call of findCalls(text, 'lives_ok')) {
+			const sql = literalOf(call.argv[0]);
+			if (sql === null) continue;
+			if (stampedValueWrites(sql, stamped).length === 0) continue;
+			const key = `${file} ${literalOf(call.argv[1]) ?? ''}`;
+			if (registered.has(key)) matched.add(key);
+			else offenders.push(`${file}:${call.line}`);
+		}
+	}
+	assert.deepEqual(offenders, []);
+	for (const entry of STAMPED_VALUE_ASSERTIONS) {
+		assert.ok(
+			matched.has(`${entry.file} ${entry.description}`),
+			`STAMPED_VALUE_ASSERTIONS entry ${entry.file} / "${entry.description}" is stale`,
+		);
+		assert.ok(entry.reason.length > 40, `${entry.file} entry needs a real reason`);
+	}
 });

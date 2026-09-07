@@ -383,4 +383,47 @@ void main() {
       expect(fold('東京 5K'), '東京 5k');
     });
   });
+
+  // ── compareFoldedNames ──────────────────────────────────────────────
+  //
+  // The shared name order. Public because the routes list sorts through it
+  // too: it used to call `toLowerCase().compareTo()` here and `localeCompare`
+  // on the web, two orderings that disagree about 31.75 % of all pairs of
+  // Unicode letters (decisions § 1337).
+  group('compareFoldedNames', () {
+    test('orders on the folded name, not on a collation or a code-unit order',
+        () {
+      // Web's `localeCompare` sorts Å beside A; this side's only primitive is
+      // `String.compareTo`, a code-unit order that sorts it after Z because
+      // U+00C5 > U+005A. The fold gives both platforms the same answer.
+      expect(compareFoldedNames('Åre', 'a', 'Zaragoza', 'b'), -1);
+      expect(compareFoldedNames('Zaragoza', 'b', 'Åre', 'a'), 1);
+      // Pin the order it is NOT: raw code units put Zaragoza first.
+      expect('Åre'.compareTo('Zaragoza') > 0, isTrue);
+    });
+
+    test('case and accent do not decide the order', () {
+      // Folds equal, so the id breaks the tie rather than the spelling.
+      expect(compareFoldedNames('ÉCOLE', 'a', 'ecole', 'b'), -1);
+      expect(compareFoldedNames('ÉCOLE', 'b', 'ecole', 'a'), 1);
+    });
+
+    test('U+0130 sorts with i, not apart from it', () {
+      // The reachable half of the 466-code-point lower-case gap. A browser's
+      // `toLowerCase` emits i + a combining dot here, which sorts after a bare
+      // i and does not even contain it; the fold strips the mark on both
+      // platforms.
+      expect(fold('İstanbul'), fold('Istanbul'));
+      expect(compareFoldedNames('İstanbul', 'a', 'Istanbul', 'b'), -1);
+    });
+
+    test('ties break on id, so the order never depends on sort stability', () {
+      expect(compareFoldedNames('Loop', 'a', 'Loop', 'b'), -1);
+      expect(compareFoldedNames('Loop', 'b', 'Loop', 'a'), 1);
+    });
+
+    test('the same row compares equal to itself', () {
+      expect(compareFoldedNames('Loop', 'x', 'Loop', 'x'), 0);
+    });
+  });
 }

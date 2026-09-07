@@ -119,6 +119,21 @@ data class UiState(
     /// the read, and the two facts are orthogonal: the count is the last figure
     /// anyone saw, this is whether it still stands (decisions § 1104).
     val queueUnreadable: Boolean = false,
+    /// Queue entries the server has permanently REFUSED — a 400/404/409/422
+    /// that no retry will ever move. They stay in the queue by design (§ 17:
+    /// dropping one silently loses a run), so without this the count on the
+    /// PreRun chip never falls while every Sync tap reports success
+    /// (decisions § 1347).
+    ///
+    /// Ids rather than a count, because the only remedy is destructive and a
+    /// discard must name exactly the entries the last pass judged — not
+    /// "however many are queued now", which would take a run that has never
+    /// been tried with it.
+    ///
+    /// Not persisted. A cold start starts empty and the first drain pass
+    /// re-derives it, which is honest: the fact is a server verdict, not a
+    /// property of the file.
+    val rejectedRunIds: Set<String> = emptySet(),
     val authed: Boolean = false,
     val authError: String? = null,
     val signInLoading: Boolean = false,
@@ -1477,28 +1492,97 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                     false
                 }
             },
-            onSuccessfulDrain = OnSuccessfulDrain { id ->
-                // Queue entry first, file second. The reverse order lets a
-                // process death between the two leave an entry pointing at a
-                // payload that is gone, which the next drain would then
-                // re-post with a null track_url — clobbering the track it
-                // had in fact already uploaded. This way the only crash
-                // residue is a stranded file, swept by
-                // `reconcileTrackStorage`.
-                store.remove(id)
-                snapshot.firstOrNull { it.id == id }?.let { run ->
-                    withContext(Dispatchers.IO) {
-                        runCatching { File(run.trackFilePath).delete() }
-                    }
-                }
-            },
+            onSuccessfulDrain = OnSuccessfulDrain { id -> dropQueuedRun(id, snapshot) },
         )
         if (result.anyTransientFailure) {
             drainBackoff.onFailure()
         } else {
             drainBackoff.onSuccess()
         }
-        _state.value = _state.value.copy(syncError = result.lastError)
+        // `syncError` keeps its clear-on-success semantics — a trailing
+        // success clearing the banner is a stated decision, pinned twice in
+        // `DrainQueueLoopTest`, and this does not reverse it. The permanent
+        // rejections ride a separate field precisely because they must
+        // survive that clear: the banner is about this pass, a refused entry
+        // is about the queue (decisions § 1347).
+        _state.value = _state.value.copy(
+            syncError = result.lastError,
+            rejectedRunIds = rejectedAfterPass(
+                previouslyRejected = _state.value.rejectedRunIds,
+                queuedIdsBeforePass = snapshot.map { it.id },
+                result = result,
+            ),
+        )
+    }
+
+    /// Drop the queue entries the server has permanently refused, and their
+    /// tracks with them.
+    ///
+    /// The only exit from a stuck entry. `drainQueue` cannot clear it — the
+    /// server refuses it on every pass — and the PostRun `discard` acts on
+    /// `thisRunId`, the run the runner just finished, so it stops being
+    /// reachable the moment they leave that screen. Guarded by the estate's
+    /// two-press confirm at the call site (decisions § 1347).
+    ///
+    /// Scoped to the ids the last drain pass judged rather than to the queue
+    /// as it stands: a run saved between the pass and the tap has never been
+    /// tried, and clearing "everything queued" would destroy it unasked.
+    ///
+    /// Entry first, file second — the same ordering the drain uses, so a
+    /// process death between the two leaves a stranded file for
+    /// `sweepOrphanTracks` rather than an entry pointing at a payload that is
+    /// gone.
+    fun discardRejectedRuns() {
+        val ids = _state.value.rejectedRunIds
+        if (ids.isEmpty()) return
+        launchGuarded {
+            val snapshot = try {
+                store.queue.first()
+            } catch (e: Throwable) {
+                // Same surface the drain raises for the same fault, so the two
+                // readers of one file cannot leave the screen claiming
+                // different things about it.
+                Log.e(TAG, "run queue unreadable — discard skipped", e)
+                _state.value = _state.value.copy(
+                    queueUnreadable = true,
+                    syncError = getApplication<Application>()
+                        .getString(R.string.sync_queue_unreadable),
+                )
+                return@launchGuarded
+            }
+            for (id in ids) {
+                dropQueuedRun(id, snapshot)
+            }
+            _state.value = _state.value.copy(
+                rejectedRunIds = emptySet(),
+                syncError = null,
+            )
+        }
+    }
+
+    /// Drop one queue entry and the track file it points at, in that order.
+    ///
+    /// Queue entry first, file second. The reverse order lets a process death
+    /// between the two leave an entry pointing at a payload that is gone,
+    /// which the next drain would then re-post with a null `track_url` —
+    /// clobbering the track it had in fact already uploaded. This way the only
+    /// crash residue is a stranded file, swept by `reconcileTrackStorage`.
+    ///
+    /// One home for that ordering because both callers need it and neither is
+    /// the obvious owner: the drain drops a run it has just uploaded, the
+    /// rejected-queue discard drops one that never will. It was two
+    /// byte-identical copies until § 1347 added the second caller.
+    ///
+    /// `snapshot` is the queue as the caller read it — the path is looked up
+    /// there rather than re-read, so a concurrent write cannot make the delete
+    /// miss the file the entry named.
+    private suspend fun dropQueuedRun(id: String, snapshot: List<QueuedRun>) {
+        store.remove(id)
+        snapshot.firstOrNull { it.id == id }?.let { run ->
+            withContext(Dispatchers.IO) {
+                runCatching { File(run.trackFilePath).delete() }
+            }
+        }
     }
 
     private suspend fun pushRun(run: QueuedRun) {

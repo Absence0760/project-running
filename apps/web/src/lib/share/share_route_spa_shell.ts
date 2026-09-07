@@ -4,7 +4,7 @@
 /// scope. Mirror of share_run_spa_shell.ts.
 ///
 /// The strategy: at deploy time the share-route Lambda's bundler embeds
-/// `apps/web/build/index.html` -- adapter-static's SPA fallback, served for
+/// `apps/web/build/200.html` -- adapter-static's SPA fallback, served for
 /// any non-prerendered route -- as a string; per request the Lambda calls
 /// `injectShareRouteMeta` to splice in the route-specific tags. The strip and
 /// splice steps live once, in head_splice.ts.

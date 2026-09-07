@@ -34,7 +34,7 @@ class ActivePlanOverview {
 
 /// A public-library plan paired with its author's public handle. The
 /// browse + preview surfaces show the handle but never any other author
-/// data. Mirrors web `data.ts#PublicPlanLibraryEntry`.
+/// data. Mirrors web `core/data.ts:PublicPlanLibraryEntry`.
 class PublicPlanLibraryEntry {
   final TrainingPlanRow plan;
   final String? authorHandle;
@@ -181,7 +181,7 @@ class TrainingService extends ChangeNotifier {
 
   /// Publish one of the viewer's plans as a template under a club they
   /// admin. Returns the new template id. Mirrors the canonical web
-  /// path at `apps/web/src/lib/core/data.ts#publishPlanAsTemplate` — a
+  /// path at `apps/web/src/lib/core/data.ts:publishPlanAsTemplate` — a
   /// multi-table INSERT rather than an RPC (there is no
   /// `publish_plan_as_template` function server-side; only
   /// `clone_plan_template` exists, for the adopt direction).
@@ -302,7 +302,7 @@ class TrainingService extends ChangeNotifier {
   /// (migration 20270126_001). Optional case-insensitive name search.
   /// Each entry carries the author's public display name (handle) joined
   /// from user_profiles; no other author data is exposed. Mirrors web
-  /// `data.ts#fetchPublicPlanLibrary`.
+  /// `core/data.ts:fetchPublicPlanLibrary`.
   Future<List<PublicPlanLibraryEntry>> fetchPublicPlanLibrary({
     String query = '',
   }) async {
@@ -335,7 +335,7 @@ class TrainingService extends ChangeNotifier {
   /// Clone a public-library plan into a user-owned active plan, anchored
   /// at [startDate]. The clone_public_plan RPC authorises on public
   /// visibility server-side and strips the publisher's private fitness
-  /// data. Mirrors web `data.ts#clonePublicPlan`.
+  /// data. Mirrors web `core/data.ts:clonePublicPlan`.
   Future<String> clonePublicPlan({
     required String templateId,
     DateTime? startDate,
@@ -356,7 +356,7 @@ class TrainingService extends ChangeNotifier {
   /// sibling, leaving the original untouched (mirrors
   /// publishPlanAsTemplate, in the public direction). Publisher fitness
   /// data is stripped. Returns the new template id. Mirrors web
-  /// `data.ts#publishPlanToLibrary`.
+  /// `core/data.ts:publishPlanToLibrary`.
   Future<String> publishPlanToLibrary({required String planId}) async {
     final uid = _uid;
     if (uid == null) throw Exception('Not authenticated');
@@ -472,7 +472,7 @@ class TrainingService extends ChangeNotifier {
   /// every later week + the plan end date back by 7 days. The
   /// (plan_id, week_index) re-index is atomic server-side (duplicate_plan_week
   /// RPC) — a client-side multi-update would transiently break the unique
-  /// index. Mirrors web `data.ts#duplicatePlanWeek`. Returns the new week id.
+  /// index. Mirrors web `core/data.ts:duplicatePlanWeek`. Returns the new week id.
   Future<String> duplicatePlanWeek(String planId, int weekIndex) async {
     final newId = await _c.rpc(
       'duplicate_plan_week',

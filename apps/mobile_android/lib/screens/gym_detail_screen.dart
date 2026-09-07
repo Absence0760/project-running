@@ -526,7 +526,10 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
     for (var i = 0; i < w.sets.length; i++) {
       final s = w.sets[i];
       final name = (s['exercise_name'] as String?) ?? '';
-      if (blocks.isNotEmpty && blocks.last.name == name) {
+      // Adjacency on the canonical key, not the spelling: the header stat
+      // beside this list counts through distinctExerciseCount, so comparing
+      // raw strings rendered two blocks under a "1 exercise" heading.
+      if (blocks.isNotEmpty && sameExerciseName(blocks.last.name, name)) {
         blocks.last.sets.add((index: i, set: s));
       } else {
         blocks.add((name: name, sets: [(index: i, set: s)]));

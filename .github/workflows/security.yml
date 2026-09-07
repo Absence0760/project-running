@@ -23,12 +23,15 @@ name: Security
 #     It claimed apps/mobile_android/android (the Flutter Gradle host) too
 #     and does not reach it, for the same reason § 1304 found on the Go
 #     leg: CodeQL analyses what the build steps compile, the only build
-#     step below is watch_wear's, and the Go-specific autobuild fallback
+#     step below was watch_wear's, and the Go-specific autobuild fallback
 #     has no Java/Kotlin analogue. That leaves 11 platform-channel bridges
 #     unscanned, RunActionReceiver.kt among them. Covering them means
 #     building the Flutter host, which needs the pinned SDK set up in this
-#     job — filed rather than done here, and the claim corrected meanwhile
-#     so the gap is stated instead of hidden.
+#     job — a trade still to be taken. What HAS changed (§ 1352) is that the
+#     build step now enumerates the Gradle projects from the tree, so a
+#     third one is scanned the day it lands, and the one exclusion is a
+#     declared value that `scripts/check_codeql_coverage.mjs` re-measures
+#     against the tree on every PR rather than a sentence in this header.
 #   - actions covers every workflow under .github/workflows/
 #   - Trivy scans both Go service images — apps/job_worker and
 #     apps/graph_cycle (multi-stage, final image distroless). They
@@ -198,12 +201,67 @@ jobs:
       - uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
           languages: java-kotlin
-      # Pre-fetch Gradle wrappers so CodeQL's autobuild doesn't blow
-      # the network egress allowance on first run. Both Kotlin
-      # surfaces live in their own Gradle projects.
-      - name: Build watch_wear (Wear OS Kotlin)
-        working-directory: apps/watch_wear/android
-        run: ./gradlew --no-daemon compileDebugKotlin
+      # Every Gradle project in the tree, enumerated rather than named. This
+      # step used to be a single `working-directory: apps/watch_wear/android`
+      # under a comment claiming "both Kotlin surfaces" were covered by it,
+      # which is the § 1304 defect on the leg it was found on next: CodeQL
+      # analyses what the build steps compile, so the set of projects built
+      # here IS the set of projects scanned, and the java-kotlin analysis
+      # reported clean over 11 files it had never read. There is no fallback
+      # to catch it either — the `runAutobuildIfLegacyGoWorkflow` net that had
+      # quietly been covering the Go side is Go-specific with no Java/Kotlin
+      # analogue, and `build-mode: none` cannot stand in because CodeQL's
+      # buildless Java extractor does not process Kotlin at all.
+      #
+      # A project this job cannot build yet is DECLARED below rather than
+      # omitted, so the gap is a value a guard can read instead of a sentence
+      # a reader has to notice. A third Gradle project is built the day it
+      # lands; if it cannot be built here, CI goes red and somebody decides,
+      # which is the outcome the silent version never produced.
+      - name: Build every Gradle project for the CodeQL extractor
+        env:
+          # `<path>=<reason>`, one per line. Every entry must name a project
+          # the walk below actually finds, so an entry cannot outlive the
+          # directory it excuses; `scripts/check_codeql_coverage.mjs` in the
+          # `workflow-lint` job fails the PR on a stale one, on a walk that
+          # has stopped matching the tree, and on a reason left blank.
+          CODEQL_KOTLIN_UNBUILT: |
+            apps/mobile_android/android=the Flutter Gradle host. settings.gradle.kts reads flutter.sdk out of a local.properties that only the Flutter tool writes, and :app compiles against every plugin subproject melos bootstraps, so building it here means adding the pinned Flutter SDK and a melos bootstrap to this job and paying those minutes on every PR and every weekly cron. Until that trade is taken, 11 Kotlin files are unscanned - MainActivity.kt, RunActionReceiver.kt (a BroadcastReceiver) and the platform-channel bridges that mediate health permissions, calendar access and foreground-service actions (decisions § 1352).
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJECTS=$(find . \( -name settings.gradle -o -name settings.gradle.kts \) \
+            -not -path './node_modules/*' \
+            -not -path './.git/*' \
+            -printf '%h\n' | sort -u)
+          COUNT=$(printf '%s' "$PROJECTS" | grep -c . || true)
+          if [ "$COUNT" -lt 2 ]; then
+            echo "::error::found $COUNT Gradle project(s) under the repo root; this repo has at least 2 (apps/watch_wear/android, apps/mobile_android/android). A walk that stopped matching would build nothing, and a java-kotlin database with no source extracted is indistinguishable from a clean scan."
+            exit 1
+          fi
+          BUILT=0
+          for p in $PROJECTS; do
+            rel=${p#./}
+            reason=""
+            while IFS= read -r line; do
+              case "$line" in "$rel="*) reason=${line#*=} ;; esac
+            done <<< "$CODEQL_KOTLIN_UNBUILT"
+            if [ -n "$reason" ]; then
+              echo "::warning::$rel is NOT scanned by the java-kotlin analysis: $reason"
+              continue
+            fi
+            echo "::group::gradlew compileDebugKotlin ($rel)"
+            if ! (cd "$p" && ./gradlew --no-daemon compileDebugKotlin); then
+              echo "::error::./gradlew --no-daemon compileDebugKotlin failed in $rel, so CodeQL extracted none of its Kotlin. This is a build break, not a CodeQL finding; reproduce with: cd $rel && ./gradlew compileDebugKotlin"
+              exit 1
+            fi
+            echo "::endgroup::"
+            BUILT=$((BUILT + 1))
+          done
+          if [ "$BUILT" -lt 1 ]; then
+            echo "::error::every Gradle project in the tree is listed in CODEQL_KOTLIN_UNBUILT, so this job extracted no Kotlin and the java-kotlin analysis will report clean over nothing. Build at least one, or delete the language from the init step rather than leaving an empty analysis in place."
+            exit 1
+          fi
       - uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
           category: '/language:java-kotlin'

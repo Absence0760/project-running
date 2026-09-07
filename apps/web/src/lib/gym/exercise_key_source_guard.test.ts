@@ -1,5 +1,13 @@
-// Source-level guard: nothing in the web tree folds an exercise name with the
-// runtime's own `toLowerCase()`.
+// Source-level guard: nothing in the web tree derives or compares an exercise
+// identity off the display spelling.
+//
+// Two scans, because there are two ways to get it wrong and they are opposites.
+// `foldHits` bans the WRONG fold (`trim().toLowerCase()` where
+// `normaliseExerciseName` belongs). `rawNameComparisonHits` bans NO fold -- a
+// raw `===` between two spellings, which is what four block-grouping surfaces
+// and the routine promotion were doing (decisions 1322). The first scan is
+// blind to the second shape by construction: there is no `.toLowerCase()` in
+// `last.name === s.exercise_name` to see.
 //
 // The exercise grouping key has one derivation — `normaliseExerciseName`,
 // which collapses the named whitespace class and lower-cases through the
@@ -164,6 +172,86 @@ function blankQuoted(code: string): string {
 	return out;
 }
 
+/// An equality comparison, and only that: `>=` / `<=` / `=>` / assignment are
+/// excluded by the surrounding character tests rather than by listing them.
+const COMPARISON = /(?<![<>=!])(?:===|!==|==|!=)(?!=)/g;
+
+/// The operand to the RIGHT of an operator at [at]: whitespace skipped, then a
+/// primary expression -- identifier/member chain with balanced call and index
+/// groups walked over, and a quoted literal read whole. The mirror of
+/// [receiverOf], which reads the left.
+function operandAfter(code: string, at: number): string {
+	let i = at;
+	while (i < code.length && /\s/.test(code[i])) i++;
+	const start = i;
+	if (code[i] === "'" || code[i] === '"' || code[i] === '`') {
+		const q = code[i];
+		i++;
+		while (i < code.length && code[i] !== q) i += code[i] === '\\' ? 2 : 1;
+		return code.slice(start, Math.min(i + 1, code.length));
+	}
+	while (i < code.length) {
+		const c = code[i];
+		if (/[A-Za-z0-9_$.?!]/.test(c)) {
+			i++;
+			continue;
+		}
+		if (c === '(' || c === '[') {
+			const close = c === '(' ? ')' : ']';
+			let depth = 0;
+			while (i < code.length) {
+				if (code[i] === c) depth++;
+				else if (code[i] === close && --depth === 0) {
+					i++;
+					break;
+				}
+				i++;
+			}
+			continue;
+		}
+		break;
+	}
+	return code.slice(start, i);
+}
+
+/// An operand naming the free-text DISPLAY spelling of an exercise. Deliberately
+/// narrower than [NAMES_AN_EXERCISE]: `exercise_id` and `exerciseCount` are
+/// compared legitimately all over the tree, and only the NAME is the value with
+/// two spellings.
+const NAMES_A_SPELLING = /exercise[_]?name|exercise_?names/i;
+
+/// A literal the other side of a comparison, which makes it a blankness or
+/// sentinel test rather than an identity test between two spellings.
+function isLiteral(operand: string): boolean {
+	const t = operand.trim();
+	if (t === '') return false;
+	if (/^['"`]/.test(t)) return true;
+	return /^(null|undefined|true|false|-?\d)/.test(t);
+}
+
+/// Every raw comparison of an exercise spelling in [source]. Exported so the
+/// mutation test below can feed it planted violations, as `foldHits` is.
+export function rawNameComparisonHits(path: string, source: string): Hit[] {
+	const code = stripComments(source);
+	const scan = blankQuoted(code);
+	if (BROAD_MODULES.includes(path)) return [];
+	const out: Hit[] = [];
+	for (const m of scan.matchAll(COMPARISON)) {
+		const at = m.index ?? 0;
+		const left = receiverOf(code, at);
+		const right = operandAfter(code, at + m[0].length);
+		// A folded operand is the fix, not the defect. Either side carrying the
+		// canonical derivation means the comparison is already on the key.
+		if (/normaliseExerciseName\s*\(/.test(left) || /normaliseExerciseName\s*\(/.test(right)) continue;
+		const namesSpelling = NAMES_A_SPELLING.test(left) || NAMES_A_SPELLING.test(right);
+		if (!namesSpelling) continue;
+		if (isLiteral(left) || isLiteral(right)) continue;
+		const line = code.slice(0, at).split('\n').length;
+		out.push({ path, line, text: source.split('\n')[line - 1]?.trim() ?? '' });
+	}
+	return out;
+}
+
 function scannableFiles(dir: string): string[] {
 	const out: string[] = [];
 	for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -174,11 +262,11 @@ function scannableFiles(dir: string): string[] {
 	return out;
 }
 
-function scanTree(): Hit[] {
+function scanTree(scan: (path: string, source: string) => Hit[]): Hit[] {
 	const out: Hit[] = [];
 	for (const full of scannableFiles(SRC)) {
 		const rel = relative(SRC, full).split(sep).join('/');
-		out.push(...foldHits(rel, readFileSync(full, 'utf-8')));
+		out.push(...scan(rel, readFileSync(full, 'utf-8')));
 	}
 	return out;
 }
@@ -194,7 +282,7 @@ test('the guard scans a tree that is actually there', () => {
 
 test('no web surface folds an exercise name with the runtime case mapping', () => {
 	const pending = new Set(PENDING.map((p) => p.path));
-	const offenders = scanTree().filter((h) => !pending.has(h.path));
+	const offenders = scanTree(foldHits).filter((h) => !pending.has(h.path));
 	assert.deepEqual(
 		offenders,
 		[],
@@ -302,4 +390,82 @@ test('the scan sees the shapes it bans, and spares the ones it must not', () => 
 		1,
 		'a broad module must still be judged fold by fold',
 	);
+});
+
+test('no web surface compares two exercise spellings raw', () => {
+	const offenders = scanTree(rawNameComparisonHits);
+	assert.deepEqual(
+		offenders,
+		[],
+		'Compare exercise spellings through sameExerciseName / normaliseExerciseName ' +
+			'from $lib/gym/gym_prs, never with ===. Adjacency measured on the display ' +
+			'spelling renders one lift as two blocks beside a header stat that counts ' +
+			'one, and in routineFromWorkout it PERSISTED two rows under one key ' +
+			'(decisions 1322):\n' +
+			offenders.map((h) => `  ${h.path}:${h.line}  ${h.text}`).join('\n'),
+	);
+});
+
+test('the raw-comparison scan sees the shapes it bans, and spares the ones it must not', () => {
+	const caught: [string, string, string][] = [
+		[
+			'the block-grouping shape all four surfaces had',
+			'lib/components/GymEditor.svelte',
+			'if (last && last.name === s.exercise_name) last.sets.push(row);',
+		],
+		[
+			'the same shape reversed',
+			'routes/gym/[id]/+page.svelte',
+			'if (s.exercise_name === last.name) last.sets.push(s);',
+		],
+		['camelCase field', 'lib/social/z.ts', 'if (a.exerciseName !== b.exerciseName) skip();'],
+		['loose equality', 'lib/social/y.ts', 'if (last.name == s.exercise_name) merge();'],
+		['quoted index', 'lib/social/x.ts', "if (last.name === s['exercise_name']) merge();"],
+		[
+			'a nullish default around the spelling',
+			'lib/social/w.ts',
+			"if ((s.exercise_name ?? '') === last.name) merge();",
+		],
+	];
+	for (const [label, path, source] of caught) {
+		assert.equal(rawNameComparisonHits(path, source).length, 1, `missed: ${label}`);
+	}
+
+	const spared: [string, string, string][] = [
+		[
+			'the fix itself',
+			'lib/gym/exercise_history.ts',
+			"if (normaliseExerciseName(s.exercise_name ?? '') !== key) continue;",
+		],
+		[
+			'the fix with the fold on the right',
+			'lib/gym/x.ts',
+			'if (key !== normaliseExerciseName(s.exercise_name)) continue;',
+		],
+		['a blankness test', 'lib/gym/y.ts', "if (s.exercise_name === '') continue;"],
+		['a null test', 'lib/gym/z.ts', 'if (s.exercise_name == null) continue;'],
+		['an id compared, not a spelling', 'lib/gym/w.ts', 'if (a.exercise_id === b.exercise_id) merge();'],
+		['a count compared', 'lib/gym/v.ts', 'if (a.exerciseCount !== b.exerciseCount) redraw();'],
+		[
+			'a comment describing the ban',
+			'lib/gym/u.ts',
+			'// never last.name === s.exercise_name',
+		],
+		['a string mentioning it', 'lib/gym/t.ts', "const doc = 'last.name === s.exercise_name';"],
+		[
+			'the broad module, judged by the fold scan instead',
+			'lib/core/data.ts',
+			'if (patch.exercise_name !== other.exercise_name) fields.name = x;',
+		],
+		[
+			'a helper call, which is not a comparison at all',
+			'lib/gym/s.ts',
+			'if (sameExerciseName(last.name, s.exercise_name)) last.sets.push(row);',
+		],
+		['a greater-or-equal beside one', 'lib/gym/r.ts', 'if (s.exercise_name.length >= 1) keep();'],
+		['an arrow function', 'lib/gym/q.ts', 'const f = (s) => s.exercise_name;'],
+	];
+	for (const [label, path, source] of spared) {
+		assert.deepEqual(rawNameComparisonHits(path, source), [], `false positive: ${label}`);
+	}
 });

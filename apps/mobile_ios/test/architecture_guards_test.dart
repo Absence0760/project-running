@@ -2822,6 +2822,55 @@ void main() {
     }
   });
 
+  group('one club-insert path', () {
+    // `clubs.slug` is `text unique not null`, so an insert that does not
+    // handle 23505 fails outright the moment two people name a club the same
+    // thing — and the slug is derived from the NAME, so that is not a rare
+    // race. `SocialService.createClub` retries up to four times with a random
+    // suffix; `ApiClient.createClub` was a second, caller-less insert that did
+    // not, and also never minted the `invite_token` an invite-only club needs
+    // to be shareable. It was deleted rather than repaired, because two write
+    // paths to one unique column is the defect (decisions § 1339).
+    //
+    // Pinned as a COUNT over the whole mobile + api_client tree rather than as
+    // the absence of one deleted symbol: a guard keyed on the name
+    // `ApiClient.createClub` would pass the moment the next one is called
+    // something else, which is precisely how this one survived unnoticed.
+    test('exactly one place in the tree inserts into clubs', () {
+      final roots = <String>[
+        'lib',
+        '../../packages/api_client/lib',
+        '../../packages/core_models/lib',
+      ];
+      final insert = RegExp(
+        r"""\.from\((?:['"]clubs['"]|ClubRow\.table)\)\s*\.insert\(""",
+      );
+      final sites = <String>[];
+      for (final root in roots) {
+        final dir = Directory(root);
+        if (!dir.existsSync()) continue;
+        for (final f in dir.listSync(recursive: true).whereType<File>()) {
+          if (!f.path.endsWith('.dart')) continue;
+          final stripped = f
+              .readAsStringSync()
+              .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
+              .replaceAll(RegExp(r'//.*'), '');
+          if (insert.hasMatch(stripped)) sites.add(f.path);
+        }
+      }
+      expect(
+        sites.length,
+        1,
+        reason: 'Expected exactly one club-insert site (the one in '
+            'social_service.dart that retries on 23505 and mints the '
+            'invite token). Found: $sites. A second insert path to a '
+            'unique column is a trap for whoever calls it next — route '
+            'it through SocialService.createClub instead.',
+      );
+      expect(sites.single, endsWith('social_service.dart'));
+    });
+  });
+
   group('Android phone manifest', () {
     // These tests guard the Play-policy + SDK-34/35 manifest plumbing
     // that the audit pass identified as submission blockers. The

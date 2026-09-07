@@ -29,6 +29,24 @@ List<cm.Route> _makeRoutes(int count) {
   ];
 }
 
+/// Routes named exactly as given, so a search / sort case can name them back.
+List<cm.Route> _namedRoutes(List<String> names) {
+  return [
+    for (int i = 0; i < names.length; i++)
+      cm.Route(
+        id: 'route-${i.toString().padLeft(3, '0')}',
+        userId: 'test-user',
+        name: names[i],
+        waypoints: const [
+          cm.Waypoint(lat: 51.5, lng: -0.12),
+          cm.Waypoint(lat: 51.51, lng: -0.13),
+        ],
+        distanceMetres: 5000,
+        elevationGainMetres: 50,
+      ),
+  ];
+}
+
 Future<Preferences> _makePrefs() async {
   SharedPreferences.setMockInitialValues({});
   final p = Preferences();
@@ -681,4 +699,76 @@ void main() {
       expect(tester.getSize(chip).height, greaterThan(small));
     });
   });
+
+  // ── Search + sort fold (decisions § 1337) ─────────────────────────────
+  //
+  // Both used to run through `toLowerCase()`, whose answer differs between
+  // this runtime and a browser's at 466 code points, and the `az` sort
+  // additionally compared code units where web collated — two orderings that
+  // disagree about 31.75 % of all pairs of Unicode letters. Both now go
+  // through `catalogue_browse`'s generated fold, so the phone and the web
+  // answer the same question the same way.
+  group('RoutesScreen — search and sort fold', () {
+    testWidgets('typing an unaccented query finds the accented route',
+        (tester) async {
+      final prefs = await _makePrefs();
+      // ignore: invalid_use_of_visible_for_testing_member
+      final routeStore = LocalRouteStore()
+        ..debugSeed(_namedRoutes(['İstanbul Loop', 'Riverside Way']));
+      await _pump(tester, prefs: prefs, routeStore: routeStore);
+      await tester.pump();
+
+      await tester.enterText(find.byType(TextField).first, 'istanbul');
+      await tester.pump();
+
+      // A browser's `toLowerCase` renders İ as i + a combining dot, so
+      // `istanbul` did NOT match there while it did here. Folding makes the
+      // two agree — and the assertion holds on either runtime.
+      expect(find.text('İstanbul Loop'), findsOneWidget);
+      expect(find.text('Riverside Way'), findsNothing);
+    });
+
+    testWidgets('the query folds accents, so zurich reaches Zürich',
+        (tester) async {
+      final prefs = await _makePrefs();
+      // ignore: invalid_use_of_visible_for_testing_member
+      final routeStore = LocalRouteStore()
+        ..debugSeed(_namedRoutes(['Zürich Lakeside', 'Riverside Way']));
+      await _pump(tester, prefs: prefs, routeStore: routeStore);
+      await tester.pump();
+
+      await tester.enterText(find.byType(TextField).first, 'zurich');
+      await tester.pump();
+
+      expect(find.text('Zürich Lakeside'), findsOneWidget);
+      expect(find.text('Riverside Way'), findsNothing);
+    });
+
+    testWidgets('A–Z orders on the folded name, not on raw code units',
+        (tester) async {
+      final prefs = await _makePrefs();
+      // ignore: invalid_use_of_visible_for_testing_member
+      final routeStore = LocalRouteStore()
+        ..debugSeed(_namedRoutes(
+            ['Zaragoza Loop', 'Åre Trail', 'Riverside Way']));
+      await _pump(tester, prefs: prefs, routeStore: routeStore);
+      await tester.pump();
+
+      // Open the sort chip and pick A–Z.
+      await tester.tap(find.text('Newest first'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.tap(find.text('A–Z').last);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      double y(String name) => tester.getTopLeft(find.text(name)).dy;
+      // Folded: "are trail" < "riverside way" < "zaragoza loop". A raw
+      // code-unit order would put Å (U+00C5) after Z (U+005A) and end the
+      // list with Åre — which is what this side used to do.
+      expect(y('Åre Trail'), lessThan(y('Riverside Way')));
+      expect(y('Riverside Way'), lessThan(y('Zaragoza Loop')));
+    });
+  });
+
 }

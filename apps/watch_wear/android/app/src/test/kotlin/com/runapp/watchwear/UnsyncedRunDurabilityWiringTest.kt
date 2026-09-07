@@ -137,13 +137,32 @@ class UnsyncedRunDurabilityWiringTest {
     }
 
     @Test
-    fun `the successful-drain hook removes the queue entry before deleting the file`() {
-        val drain = body(read("RunViewModel.kt"), "private suspend fun drainQueueLocked(")
-        val removeAt = drain.indexOf("store.remove(id)")
-        val deleteAt = drain.indexOf("File(run.trackFilePath).delete()")
-        assertTrue("expected the queue removal in the drain hook", removeAt >= 0)
-        assertTrue("expected the track delete in the drain hook", deleteAt >= 0)
+    fun `a dropped queue entry goes before the file it points at`() {
+        // The ordering had one caller and lived inline in the drain hook until
+        // the rejected-queue discard became a second one (decisions § 1347).
+        // Two copies of an invariant is one copy that can drift, so it moved to
+        // `dropQueuedRun` — and this guard follows it there rather than reading
+        // whichever caller happens to be first in the file.
+        val vm = read("RunViewModel.kt")
+        val drop = body(vm, "private suspend fun dropQueuedRun(")
+        val removeAt = drop.indexOf("store.remove(id)")
+        val deleteAt = drop.indexOf("File(run.trackFilePath).delete()")
+        assertTrue("expected the queue removal in dropQueuedRun", removeAt >= 0)
+        assertTrue("expected the track delete in dropQueuedRun", deleteAt >= 0)
         assertTrue("the queue entry must go first", removeAt < deleteAt)
+        // …and the drain must still go through it, or the ordering is guarded
+        // in a function the upload path no longer calls.
+        val drain = body(vm, "private suspend fun drainQueueLocked(")
+        assertTrue(
+            "the drain's onSuccessfulDrain hook must delegate to dropQueuedRun — " +
+                "an inline copy is the drift this move exists to prevent",
+            Regex("""onSuccessfulDrain = OnSuccessfulDrain \{ id -> dropQueuedRun\(id""")
+                .containsMatchIn(drain),
+        )
+        assertFalse(
+            "the drain hook must not delete a track file itself",
+            drain.contains("File(run.trackFilePath).delete()"),
+        )
     }
 
     @Test

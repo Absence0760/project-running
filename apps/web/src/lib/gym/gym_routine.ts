@@ -138,13 +138,26 @@ function numericOrNull(v: unknown): number | null {
 }
 
 /// Promote a logged session's sets into a routine draft. Sets are grouped into
-/// exercise blocks by *consecutive* equal `exercise_name` (the same grouping
-/// the GymEditor + the flat log use — a re-entered exercise later in the
-/// session is its own block, matching how it was logged). Each logged set
-/// becomes a planned `working` set with its reps/weight/RPE as the target.
-/// Blank-named sets are dropped. `exercise_key` is stamped via
-/// `normaliseExerciseName` at promotion time (frozen identity for plan↔log
-/// binding). The title defaults to the workout's title, else "Routine".
+/// exercise blocks by *consecutive* equal CANONICAL KEY (the same grouping the
+/// GymEditor + the flat log use — a re-entered exercise later in the session
+/// is its own block, matching how it was logged). Each logged set becomes a
+/// planned `working` set with its reps/weight/RPE as the target. The title
+/// defaults to the workout's title, else "Routine".
+///
+/// Adjacency is measured on `normaliseExerciseName`, not on the display
+/// spelling, and that is the whole of the difference from what a reader
+/// expects. Adjacency itself is load-bearing and must stay — a superset
+/// alternates A/B/A and has to render as three blocks — but comparing the raw
+/// string split one lift logged under two spellings ("Bench Press" then
+/// "bench press", or either against a U+00A0 / U+0130 variant) into two blocks
+/// carrying the SAME `exercise_key`, which nothing refuses: the column has no
+/// unique index, deliberately (decisions § 1286). Keying the test merges the
+/// two without merging across an interleaved lift. The first spelling wins as
+/// the block's display name.
+///
+/// A set is dropped when its canonical KEY is empty, not when its trimmed name
+/// is — the two differ on exactly one code point and the difference was a
+/// silent web/Dart divergence (decisions § 1322).
 export function routineFromWorkout(
 	workoutTitle: string | null | undefined,
 	sets: LoggedSet[],
@@ -153,19 +166,20 @@ export function routineFromWorkout(
 	const exercises: RoutineDraftExercise[] = [];
 	for (const s of sets) {
 		const name = (s.exercise_name ?? '').trim();
-		if (name === '') continue;
+		const key = normaliseExerciseName(name);
+		if (key === '') continue;
 		const reps = numericOrNull(s.reps);
 		const weight = numericOrNull(s.weight_kg);
 		const rpe = numericOrNull(s.rpe);
 
 		const last = exercises[exercises.length - 1];
 		const block =
-			last && last.exerciseName === name
+			last && last.exerciseKey === key
 				? last
 				: (() => {
 						const created: RoutineDraftExercise = {
 							exerciseName: name,
-							exerciseKey: normaliseExerciseName(name),
+							exerciseKey: key,
 							position: exercises.length,
 							sets: [],
 						};

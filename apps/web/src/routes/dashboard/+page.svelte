@@ -16,6 +16,7 @@
 		fetchFitnessSnapshots,
 		insertFitnessSnapshot,
 		type FitnessSnapshotRow,
+		type PeriodSummaryRun,
 	} from '$lib/core/data';
 	import { dashboardRunsWindowStart } from '$lib/core/dashboard_runs';
 	import {
@@ -400,7 +401,7 @@
 	/// the same way `filteredRuns` is so the modal agrees with the card
 	/// that opened it.
 	const periodRunsCoveredFrom = dashboardRunsWindowStart(new Date());
-	async function loadFullRunHistory(): Promise<Run[]> {
+	async function loadFullRunHistory(): Promise<PeriodSummaryRun[]> {
 		const all = await fetchRunsForPeriodSummary();
 		return sourceFilter === 'all' ? all : all.filter((r) => r.source === sourceFilter);
 	}

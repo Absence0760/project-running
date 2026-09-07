@@ -4,7 +4,7 @@
 /// AWS event in scope.
 ///
 /// The strategy: at deploy time the share-run Lambda's bundler embeds
-/// `apps/web/build/index.html` -- adapter-static's SPA fallback, served for
+/// `apps/web/build/200.html` -- adapter-static's SPA fallback, served for
 /// any non-prerendered route -- as a string; per request the Lambda calls
 /// `injectShareRunMeta` to splice in the run-specific tags. The strip and
 /// splice steps live once, in head_splice.ts.
