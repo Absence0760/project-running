@@ -10,7 +10,19 @@
  *
  * The DB enforces the real gate too (a crossing's health columns persist only
  * when the checkpoint requires_weigh_in AND the RPC caller passes consent), so
- * this is the client half of a defence-in-depth pair, not the sole guard.
+ * this is the client half of a defence-in-depth pair, not the sole guard. That
+ * other half is measured by
+ * `apps/backend/supabase/tests/weigh_in_health_gate_test.sql`, which covers all
+ * four health columns and the merge branch no client can reach; naming it here
+ * is the point, because a claim about a guard nobody can find is a claim that
+ * goes unpinned (decisions §1497).
+ *
+ * The mobile twin `apps/mobile_android/lib/weigh_in_flag.dart` reads
+ * `WEIGH_IN_GATE`, NOT the dropped-prefix `WEIGH_IN_ENABLED` the other three
+ * deploy gates would lead you to expect. The stems differ, so an operator who
+ * has set this key has NOT flipped the phone's Art 9 surface, and vice versa;
+ * `deploy_gate_names_test.dart` re-measures both the exception and the fact
+ * that both headers state it (decisions §1354).
  */
 import { env } from '$env/dynamic/public';
 import { isTruthyFlagValue } from '../core/env_flag';
