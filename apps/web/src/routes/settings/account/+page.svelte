@@ -57,6 +57,8 @@
 	import { m } from '$lib/i18n/store.svelte';
 	import PasswordInput from '$lib/components/PasswordInput.svelte';
 	import { isCyclePlansEnabled } from '$lib/training/cycle_plan_flag';
+	import type { PrefsBag } from '$lib/settings/settings';
+	import type { Updatable } from '$lib/core/database';
 	import {
 		MIN_CYCLE_LENGTH_DAYS,
 		MAX_CYCLE_LENGTH_DAYS,
@@ -546,7 +548,7 @@
 			}
 			healthDataConsentAt = null;
 		}
-		const profileUpdate: Record<string, unknown> = {
+		const profileUpdate: Updatable<'user_profiles'> = {
 			display_name: displayName || null,
 			parkrun_number: parkrunNumber || null,
 			// The age record, carrying no consent term (§ 718) — ending the
@@ -584,7 +586,7 @@
 
 		// Persist DOB + HR into user_settings.prefs. DOB only when consented;
 		// on withdrawal it is explicitly nulled so the stored value is cleared.
-		const prefs: Record<string, unknown> = {};
+		const prefs: PrefsBag = {};
 		prefs.date_of_birth = healthDataConsent && dateOfBirth ? dateOfBirth : null;
 		if (restingHr) prefs.resting_hr_bpm = parseInt(restingHr, 10) || null;
 		if (maxHr) prefs.max_hr_bpm = parseInt(maxHr, 10) || null;
@@ -611,7 +613,7 @@
 				.select('prefs')
 				.eq('user_id', auth.user.id)
 				.maybeSingle();
-			const merged = { ...((data?.prefs as Record<string, unknown>) ?? {}), ...prefs };
+			const merged = { ...((data?.prefs as PrefsBag | null) ?? {}), ...prefs };
 			const { error: settingsError } = await supabase.from('user_settings').upsert({
 				user_id: auth.user.id,
 				prefs: merged,

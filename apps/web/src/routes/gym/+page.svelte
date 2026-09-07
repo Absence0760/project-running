@@ -28,6 +28,7 @@
 	import GymEditor from '$lib/components/GymEditor.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import type { JsonObject } from '$lib/types';
 
 	let workouts = $state<GymWorkout[]>([]);
 	let summaries = $state<GymWorkoutSummary[]>([]);
@@ -101,7 +102,12 @@
 		draftBusy = true;
 		try {
 			await updateGymWorkout(current.draft.id, {
-				metadata: stripSessionDraft(current.draft.metadata),
+				// `stripSessionDraft` runs `gym_session_draft.ts`'s own `isJsonObject`
+				// guard over its input and then declares the result
+				// `Record<string, unknown>`, which is not assignable to the jsonb
+				// column it goes back into. That module belongs to another change
+				// this round; retyping its return to `JsonObject` deletes this.
+				metadata: stripSessionDraft(current.draft.metadata) as JsonObject,
 			});
 			await load();
 		} catch (e) {

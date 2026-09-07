@@ -6,6 +6,10 @@ import { edgeFunctionErrorCode, edgeFunctionErrorMessage } from './edge_function
 import { isDuplicateKeyError, supabaseErrorFields } from './supabase_error';
 import { singleEmbed, fitnessSnapshotDue, publicRouteListFill } from './data_normalise';
 import { TABLES, BUCKETS, METADATA_KEYS } from './schema';
+import type { Database, Json } from '../database.types';
+import { SELECT_SEPARATOR, type Join } from './database';
+import type { Insertable, Updatable } from './database';
+import type { JsonObject, TrackPoint } from '../types';
 import { isEntityId } from './entity_id';
 import { probeSaysConfigured } from './provider_probe';
 import { loadSettings, effective } from '../settings/settings';
@@ -80,14 +84,21 @@ import type {
 	RouteConditionSeverity
 } from '../types';
 export type { NotificationKind };
-import { parseRunSource, parseRouteSurface, type RunSource } from '../types';
+import {
+	parseActivityType,
+	parseIntegrationProvider,
+	parseJoinPolicy,
+	parseRouteSurface,
+	parseRunSource,
+	type RunSource,
+} from '../types';
 import type { RaceImportLeg } from '../integrations/race_import_providers';
 import {
 	filterRelinkCandidates,
 	DEFAULT_RELINK_WINDOW_DAYS,
 	type RelinkCandidateRun
 } from '../training/relink_candidates';
-import type { GeneratedPlan, GoalEvent } from '../training/training';
+import type { GeneratedPlan, GoalEvent, PlanPhase } from '../training/training';
 import { auth } from '../stores/auth.svelte';
 import { compareLeaderboard } from '../runs/race_leaderboard';
 import { readRankRows } from '../segments/effort_rank';
@@ -207,7 +218,11 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 	const build = () => {
 		let q = supabase
 			.from(TABLES.runs)
-			.select(opts?.columns ? opts.columns.join(', ') : '*')
+			.select(
+				(opts?.columns ? opts.columns.join(SELECT_SEPARATOR) : '*') as
+					| '*'
+					| Join<RunColumns, typeof SELECT_SEPARATOR>,
+			)
 			.eq('user_id', userId);
 		if (opts?.startedAtFrom != null) q = q.gte('started_at', opts.startedAtFrom);
 		if (opts?.startedAtBefore != null) q = q.lt('started_at', opts.startedAtBefore);
@@ -255,7 +270,7 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 	// the constraint or rows from a future client whose new value
 	// hasn't propagated to this build need a fallback. parseRunSource
 	// coerces unknowns to 'app'.
-	return rows.map((r: any) => ({
+	return rows.map((r) => ({
 		...r,
 		source: parseRunSource(r.source),
 		track: null,
@@ -324,7 +339,12 @@ export async function fetchRunsForDashboard(): Promise<{
 	const windowStart = dashboardRunsWindowStart(new Date());
 	const { data, error } = await supabase
 		.from(TABLES.runs)
-		.select(DASHBOARD_RUN_COLUMNS.join(', '))
+		.select(
+			DASHBOARD_RUN_COLUMNS.join(SELECT_SEPARATOR) as Join<
+				typeof DASHBOARD_RUN_COLUMNS,
+				typeof SELECT_SEPARATOR
+			>,
+		)
 		.eq('user_id', userId)
 		.gte('started_at', windowStart.toISOString())
 		.order('started_at', { ascending: false });
@@ -338,7 +358,7 @@ export async function fetchRunsForDashboard(): Promise<{
 		// pairs. `DashboardRun` above is what the ten columns really are; making
 		// it the declared type is a one-line change once those parameters take a
 		// structural bound (§ 1330).
-		runs: data.map((r: any) => ({
+		runs: data.map((r) => ({
 			...r,
 			source: parseRunSource(r.source),
 			track: null,
@@ -557,7 +577,7 @@ export async function publishRecap(
 				user_id: userId,
 				period_kind: periodKind,
 				period_key: periodKey,
-				snapshot: snapshot as unknown as Record<string, unknown>,
+				snapshot: snapshot as unknown as Json,
 			},
 			{ onConflict: 'user_id,period_kind,period_key' },
 		)
@@ -623,7 +643,36 @@ export async function fetchRunById(
 			console.warn('Failed to fetch track', e);
 		}
 	}
-	return { run: { ...data, source: parseRunSource(data.source), track }, error: null };
+	return { run: asRun(data, track), error: null };
+}
+
+/// One whole `runs` row as the `Run` a consumer reads.
+///
+/// `source` and `activity_type` are CHECK-constrained unions the generated row
+/// types as bare strings — `source` was already parsed here, `activity_type`
+/// was not, so a value outside the union arrived typed as one of its members.
+/// `metadata` is jsonb, typed `Json`: the column can legitimately hold a
+/// scalar or an array, neither of which is a metadata bag, so one becomes null
+/// rather than being handed on as a bag every reader will index into.
+///
+/// Only a read that selects every column can use this. The windowed
+/// projections (`fetchRunsForDashboard`, `fetchRunsForRecap`) carry their own
+/// row shapes — see § 1330.
+function asRun(
+	row: Database['public']['Tables']['runs']['Row'],
+	track: TrackPoint[] | null,
+): Run {
+	const { metadata, ...rest } = row;
+	return {
+		...rest,
+		source: parseRunSource(row.source),
+		activity_type: parseActivityType(row.activity_type),
+		metadata:
+			metadata != null && typeof metadata === 'object' && !Array.isArray(metadata)
+				? metadata
+				: null,
+		track,
+	};
 }
 
 /// Fetch every run by the signed-in user against `routeId`, ordered
@@ -1168,7 +1217,20 @@ export async function saveRunAsRoute(
 ): Promise<{ id: string }> {
 	const { summarizeRouteFromTrack } = await import('../routes/route_simplify');
 	if (track.length < 2) throw new Error('Not enough GPS points to save a route');
-	const { waypoints, distance_m, elevation_m } = summarizeRouteFromTrack(track, 10);
+	// `waypoints` is annotated rather than inferred: `route_simplify`'s `LatLng`
+	// is an interface, and an interface has no implicit index signature, so an
+	// array of them is refused as the `Json` the column takes. `TrackPoint` is
+	// the same shape declared as an alias, which is what `Route.waypoints`
+	// already promises the row holds.
+	const {
+		waypoints,
+		distance_m,
+		elevation_m,
+	}: {
+		waypoints: Array<{ lat: number; lng: number; ele?: number | null }>;
+		distance_m: number;
+		elevation_m: number;
+	} = summarizeRouteFromTrack(track, 10);
 
 	const { data: authUser } = await supabase.auth.getUser();
 	const userId = authUser.user?.id;
@@ -1242,7 +1304,7 @@ export async function createManualRun(input: {
 	if (!userId) throw new Error('Not authenticated');
 	const isPublic = input.isPublic ?? (await defaultRunIsPublic(userId));
 
-	const metadata: Record<string, unknown> = {
+	const metadata: JsonObject = {
 		[METADATA_KEYS.manual_entry]: true,
 	};
 	if (input.notes && input.notes.trim()) metadata[METADATA_KEYS.notes] = input.notes.trim();
@@ -1295,7 +1357,7 @@ export async function saveRun(input: {
 	embedded_bests?: Partial<
 		Record<'fastest_5k_s' | 'fastest_10k_s' | 'fastest_half_marathon_s' | 'fastest_marathon_s', number>
 	>;
-	metadata: Record<string, unknown> | null;
+	metadata: JsonObject | null;
 	track?: Array<{ lat: number; lng: number; ele?: number; ts?: string; bpm?: number }>;
 	/// Per-point HR for a trackless (indoor / treadmill) run. Uploaded as the
 	/// `{user_id}/{run_id}.hr.json.gz` sidecar only when `track` carries no bpm,
@@ -1325,10 +1387,10 @@ export async function saveRun(input: {
 	// sum it in SQL. The vert challenge aggregate sums the COLUMN, so writing
 	// only the metadata key leaves every vert leaderboard stuck at 0 m.
 	// See docs/backend/metadata.md for the registered keys.
-	const mergedMetadata: Record<string, unknown> = { ...(input.metadata ?? {}) };
+	const mergedMetadata: JsonObject = { ...(input.metadata ?? {}) };
 	if (input.title) mergedMetadata[METADATA_KEYS.title] = input.title;
 	if (input.elevation_m != null) mergedMetadata[METADATA_KEYS.elevation_m] = input.elevation_m;
-	const row: Record<string, unknown> = {
+	const row: Insertable<'runs'> = {
 		user_id: userId,
 		started_at: input.started_at,
 		distance_m: input.distance_m,
@@ -1483,7 +1545,7 @@ export async function updateRunMetadata(
 	// edit dialog applies the same normalisation. Logic lives in
 	// data_normalise.ts so the contract can be unit-tested.
 	const next = applyRunMetadataPatch(
-		run.metadata as Record<string, unknown> | null | undefined,
+		run.metadata as JsonObject | null | undefined,
 		fields,
 		new Date().toISOString(),
 	);
@@ -1768,6 +1830,31 @@ export async function fetchRoutesWithError(): Promise<{
 	return { routes: merged, error: null };
 }
 
+/// One `routes` row as the `Route` every consumer reads it as.
+///
+/// Three things separate the two, and each read used to do a different subset
+/// of them. `shadow_hidden` is server-/trigger-owned moderation state
+/// (migration 20270218_001) that the read boundary is otherwise unanimous
+/// about stripping (§ 1327). `surface` is a CHECK-constrained union the
+/// generated row types as a bare `string`. And `waypoints` is jsonb, typed
+/// `Json`, which is not the non-nullable `TrackPoint[]` the client type
+/// promises. `fetchClubRoutes` and `saveRoute` did none of the three and
+/// returned the raw row as a `Route` regardless, so a club route arrived
+/// carrying the moderation column and an unparsed surface.
+///
+/// A `waypoints` that is not an array becomes `[]` rather than being asserted
+/// through: a line the consumer can iterate is the promise, and § 1229 is
+/// exactly the failure of handing back `undefined` under a type that says
+/// otherwise.
+function asRoute(row: Database['public']['Tables']['routes']['Row']): Route {
+	const { shadow_hidden: _moderation, waypoints, surface, ...rest } = row;
+	return {
+		...rest,
+		waypoints: Array.isArray(waypoints) ? (waypoints as unknown as TrackPoint[]) : [],
+		surface: parseRouteSurface(surface),
+	};
+}
+
 /// Routes owned by a club (`routes.club_id = clubId`). Read-gated by
 /// RLS to club members; admin-write-gated for transfers/edits. Used by
 /// the club home Routes tab and by EventEditor's route picker.
@@ -1781,7 +1868,7 @@ export async function fetchClubRoutes(clubId: string): Promise<Route[]> {
 		console.error('fetchClubRoutes failed', error);
 		return [];
 	}
-	return data ?? [];
+	return (data ?? []).map(asRoute);
 }
 
 /// Bookmark a public route. Inserts a `saved_routes` reference rather
@@ -1844,33 +1931,16 @@ export async function fetchRouteById(id: string): Promise<Route | null> {
 		.maybeSingle();
 	if (ownerRead.error) throw ownerRead.error;
 	if (ownerRead.data) {
-		// `shadow_hidden` is a server-/trigger-owned moderation column
-		// (migration 20270218_001) the client has no business reading; the
-		// `public_routes` view already projects it away, so strip it from the
-		// base-table owner read too. `Route` no longer declares it either
-		// (§ 1327) — the strip is what makes the returned value that type
-		// rather than a cast over it. `surface` is narrowed through the same
-		// defensive parse `fetchRunById` uses for `source`, so a value outside
-		// the RouteSurface union can't leak past the read boundary.
-		const { shadow_hidden, ...rest } = ownerRead.data as typeof ownerRead.data & {
-			shadow_hidden?: boolean;
-		};
-		void shadow_hidden;
-		if (rest.user_id !== viewerId) {
+		const owned = asRoute(ownerRead.data);
+		if (owned.user_id !== viewerId) {
 			// RLS surfaced this base row to a non-owner (active club member).
 			// Never hand back the unclipped polyline / `geom` / `start_point`;
 			// route the waypoints through the same server-side privacy clip the
 			// non-owner branch below uses and drop the raw geometry columns.
 			const clipped = await fetchClippedRouteForViewer(id);
-			return {
-				...rest,
-				geom: null,
-				start_point: null,
-				waypoints: clipped,
-				surface: parseRouteSurface(rest.surface),
-			} as Route;
+			return { ...owned, geom: null, start_point: null, waypoints: clipped };
 		}
-		return { ...rest, surface: parseRouteSurface(rest.surface) } as Route;
+		return owned;
 	}
 
 	// The metadata read and the server-clip RPC both key only on `id`, so
@@ -1952,7 +2022,7 @@ export async function saveRoute(route: {
 		if (friendly) throw new Error(friendly);
 		throw error;
 	}
-	return data;
+	return asRoute(data);
 }
 
 export async function deleteRoute(id: string): Promise<void> {
@@ -2077,7 +2147,15 @@ export async function fetchIntegrations(): Promise<Integration[]> {
 		.eq('user_id', userId)
 		.is('disconnected_at', null);
 
-	return data ?? [];
+	// `provider` is a CHECK-constrained union (`integrations_provider_check`)
+	// that the generated row types as a bare `string`; a row whose provider the
+	// build has not heard of is dropped rather than handed on as an
+	// `IntegrationProvider` it is not — every consumer switches on it, and the
+	// card for a provider with no branch renders as nothing either way.
+	return (data ?? []).flatMap((row) => {
+		const provider = parseIntegrationProvider(row.provider);
+		return provider ? [{ ...row, provider }] : [];
+	});
 }
 
 export async function connectIntegration(provider: string): Promise<void> {
@@ -2156,7 +2234,7 @@ export async function browseClubsWithError(
 	}
 	const { data, error } = await query.order('created_at', { ascending: false }).limit(60);
 	if (error) return { clubs: [], error: error.message };
-	return data ? enrichClubs(data) : { clubs: [], error: null };
+	return data ? enrichClubs(data.map(asClub)) : { clubs: [], error: null };
 }
 
 export async function browseClubs(search?: string): Promise<ClubWithMeta[]> {
@@ -2382,7 +2460,7 @@ export async function updateRaceListing(
 	id: string,
 	patch: Partial<RaceListingInput>
 ): Promise<void> {
-	const fields: Record<string, unknown> = {};
+	const fields: Updatable<'race_listings'> = {};
 	if (patch.name != null) fields.name = patch.name.trim();
 	if (patch.race_date != null) fields.race_date = patch.race_date;
 	if (patch.distance_m !== undefined) fields.distance_m = patch.distance_m;
@@ -2640,7 +2718,7 @@ export async function fetchMyClubsWithError(): Promise<{
 	if (!userId) return { clubs: [], error: null };
 	const { data, error } = await supabase
 		.from(TABLES.club_members)
-		.select(`club_id, role, clubs!inner(${CLUB_SELECT_COLS})`)
+		.select(`club_id, role, clubs!inner(${CLUB_SELECT_COLS})` as const)
 		.eq('user_id', userId)
 		.order('joined_at', { ascending: false });
 	if (error) return { clubs: [], error: error.message };
@@ -2666,7 +2744,7 @@ export async function fetchClubBySlug(
 		.maybeSingle();
 	if (error) return { club: null, error: error.message };
 	if (!data) return { club: null, error: null };
-	const { clubs: enrichedClubs, error: rolesError } = await enrichClubs([data]);
+	const { clubs: enrichedClubs, error: rolesError } = await enrichClubs([asClub(data)]);
 	if (rolesError) return { club: null, error: rolesError };
 	const [enriched] = enrichedClubs;
 	if (!enriched) return { club: null, error: null };
@@ -2719,6 +2797,15 @@ export async function fetchClubSlugById(id: string): Promise<string | null> {
  *
  * The result shape matches the `{ clubs, error }` every caller already
  * returns, so three of the four hand it straight back. */
+/// One `clubs` row, as `CLUB_SELECT_COLS` reads it, as the client's `Club`.
+/// `join_policy` is a CHECK-constrained union the generated row types as a
+/// bare `string`, and every club read handed the raw row on as a `Club`
+/// without checking it — `parseJoinPolicy` falls back to `'request'`, the one
+/// value that neither opens a club nor makes it unjoinable.
+function asClub(row: Omit<Club, 'join_policy'> & { join_policy: string }): Club {
+	return { ...row, join_policy: parseJoinPolicy(row.join_policy) };
+}
+
 async function enrichClubs(
 	clubs: Club[]
 ): Promise<{ clubs: ClubWithMeta[]; error: string | null }> {
@@ -3383,7 +3470,15 @@ export async function createEvent(input: {
 			category: input.category,
 			is_public: input.is_public ?? true,
 			discipline: input.discipline?.trim() || null,
-			gym_template: input.category === 'class' ? (input.gym_template ?? null) : null,
+			// Restated as an object literal on the way into the jsonb column.
+			// TypeScript gives an implicit index signature only to a type ALIAS
+			// of an object type, never to an `interface` — which stays open to
+			// declaration merging — so a named record shape is refused as a
+			// `Json` however JSON-shaped it is. Declaring these two as aliases
+			// where they live is the fix; both are TS<->Dart parity modules this
+			// change does not own.
+			gym_template:
+				input.category === 'class' && input.gym_template ? { ...input.gym_template } : null,
 			description: input.description?.trim() || null,
 			starts_at: input.starts_at,
 			// Anchor the event to the organiser's local timezone so discovery's
@@ -3429,7 +3524,21 @@ export async function updateEvent(
 ): Promise<void> {
 	// RLS `is_event_organiser` gates the UPDATE; owner/admin/event_organiser
 	// only. `events` stays bare here per the F11 registry tail (see schema.ts).
-	const { error } = await supabase.from('events').update(patch).eq('id', id);
+	//
+	// `gym_template` is pulled out and restated for the reason `createEvent`
+	// states: an interface has no implicit index signature, so it is refused as
+	// the `Json` the column takes. Left out of the update entirely when the
+	// caller did not patch it — putting the key back with an `undefined` would
+	// turn "leave it alone" into a write.
+	const { gym_template, ...fields } = patch;
+	const { error } = await supabase
+		.from('events')
+		.update(
+			gym_template === undefined
+				? fields
+				: { ...fields, gym_template: gym_template ? { ...gym_template } : null },
+		)
+		.eq('id', id);
 	if (error) throw error;
 }
 
@@ -4110,15 +4219,7 @@ export async function fetchPendingEventResultClaims(
 		.eq('event_results.event_id', eventId)
 		.eq('event_results.instance_start', instanceStart)
 		.order('created_at', { ascending: true });
-	const rows = (data ?? []) as Array<{
-		id: string;
-		result_id: string;
-		claimant_id: string;
-		status: EventResultClaim['status'];
-		created_at: string;
-		// PostgREST returns the embedded relationship as an array.
-		event_results: Array<{ bib: string | null; finisher_name: string | null }>;
-	}>;
+	const rows = data ?? [];
 	if (rows.length === 0) return [];
 	const claimantIds = [...new Set(rows.map((r) => r.claimant_id))];
 	const { data: profiles } = await supabase
@@ -4131,12 +4232,27 @@ export async function fetchPendingEventResultClaims(
 		id: r.id,
 		result_id: r.result_id,
 		claimant_id: r.claimant_id,
-		status: r.status,
+		status: parseClaimStatus(r.status),
 		created_at: r.created_at,
 		claimant_name: byId.get(r.claimant_id) ?? null,
-		bib: r.event_results[0]?.bib ?? null,
-		finisher_name: r.event_results[0]?.finisher_name ?? null
+		bib: r.event_results.bib,
+		finisher_name: r.event_results.finisher_name
 	}));
+}
+
+/// Defensive narrow on read for `event_result_claims.status`, which carries a
+/// CHECK the generated row types as a bare `string`. An unrecognised status
+/// reads as `'pending'`: the two other values are terminal decisions an
+/// organiser made, and inventing one from a value this build cannot interpret
+/// would either approve a claim nobody approved or bury it as rejected.
+function parseClaimStatus(raw: string): EventResultClaim['status'] {
+	switch (raw) {
+		case 'approved':
+		case 'rejected':
+			return raw;
+		default:
+			return 'pending';
+	}
 }
 
 // Organiser approves or rejects a claim. Approving attaches the claimant's
@@ -4274,7 +4390,7 @@ export async function endRace(
 	// `event-race-control.spec.ts:170` Cancel-from-armed test timed
 	// out on every CI run for this reason. Only stamp finished_at
 	// when transitioning to `finished`.
-	const patch: Record<string, unknown> = {
+	const patch: Updatable<'race_sessions'> = {
 		status,
 		updated_at: new Date().toISOString(),
 	};
@@ -4611,7 +4727,7 @@ export async function setPlanIsTemplate(
 	isTemplate: boolean,
 	clubId: string | null = null
 ): Promise<void> {
-	const patch: Record<string, unknown> = {
+	const patch: Updatable<'training_plans'> = {
 		is_template: isTemplate,
 		updated_at: new Date().toISOString(),
 	};
@@ -5051,7 +5167,9 @@ export async function createTrainingPlan(input: {
 			target_duration_seconds: wo.target_duration_seconds,
 			target_pace_sec_per_km: wo.target_pace_sec_per_km,
 			target_pace_tolerance_sec: wo.target_pace_tolerance_sec,
-			structure: wo.structure,
+			// Same restatement as `createEvent`'s `gym_template`: `WorkoutStructure`
+			// is an interface, and an interface has no implicit index signature.
+			structure: wo.structure ? { ...wo.structure } : null,
 			notes: wo.notes
 		}))
 	);
@@ -5316,7 +5434,7 @@ export async function updatePlanWorkout(
 		pace_zone: string | null;
 		notes: string | null;
 		scheduled_date: string;
-		structure: Record<string, unknown> | null;
+		structure: JsonObject | null;
 	}>
 ): Promise<void> {
 	// Normalise the `notes` patch the same way `createTrainingPlan`
@@ -5328,16 +5446,21 @@ export async function updatePlanWorkout(
 	if ('notes' in normalisedPatch) {
 		normalisedPatch.notes = normalisePlanWorkoutNotes(normalisedPatch.notes);
 	}
-	const { error } = await supabase
-		.from('plan_workouts')
-		.update(normalisedPatch)
-		.eq('id', id);
+	// `kind` stays a `string` on the parameter because two of the three callers
+	// are TS<->Dart parity modules (`plan_replan`, `cycle_plan`) whose patch
+	// types spell it that way; the column's CHECK is what constrains it.
+	// Restated field-by-field rather than casting the whole patch, so the other
+	// nine fields stay checked against the table they are sent to.
+	const { kind, ...fields } = normalisedPatch;
+	const update: Updatable<'plan_workouts'> = fields;
+	if (kind !== undefined) update.kind = kind as Updatable<'plan_workouts'>['kind'];
+	const { error } = await supabase.from('plan_workouts').update(update).eq('id', id);
 	if (error) throw error;
 }
 
 export async function updatePlanWeek(
 	id: string,
-	patch: Partial<{ phase: string; target_volume_m: number | null; notes: string | null }>
+	patch: Partial<{ phase: PlanPhase; target_volume_m: number | null; notes: string | null }>
 ): Promise<void> {
 	const { error } = await supabase.from('plan_weeks').update(patch).eq('id', id);
 	if (error) throw error;
@@ -5350,7 +5473,7 @@ export async function updatePlanMeta(
 		notes: string | null;
 		goal_time_seconds: number | null;
 		days_per_week: number;
-		rules: unknown[] | null;
+		rules: Json[] | null;
 		start_date: string;
 		end_date: string;
 	}>
@@ -6604,6 +6727,12 @@ export async function addRunPhoto(input: {
 	return {
 		...data,
 		url: signed?.signedUrl ?? '',
+		// Always null on the insert path: `thumb_512_path` is written later by
+		// the photo_process job, so there is no thumbnail to sign yet. The key
+		// was simply missing, which made a just-uploaded photo the one case
+		// where a `RunPhoto` carried `undefined` under a type promising
+		// `string | null`.
+		thumbUrl: null,
 	};
 }
 
@@ -7087,7 +7216,7 @@ export async function addRouteMarker(input: {
 	label: string;
 	lat: number;
 	lng: number;
-	meta?: Record<string, unknown>;
+	meta?: JsonObject;
 }): Promise<RouteMarker> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not signed in');
@@ -7111,9 +7240,9 @@ export async function addRouteMarker(input: {
 
 export async function updateRouteMarker(
 	id: string,
-	patch: { kind?: RouteMarkerKind; label?: string; lat?: number; lng?: number; meta?: Record<string, unknown> }
+	patch: { kind?: RouteMarkerKind; label?: string; lat?: number; lng?: number; meta?: JsonObject }
 ): Promise<void> {
-	const update: Record<string, unknown> = {};
+	const update: Updatable<'route_markers'> = {};
 	if (patch.kind !== undefined) update.kind = patch.kind;
 	if (patch.label !== undefined) update.label = patch.label.trim();
 	if (patch.lat !== undefined) update.lat = patch.lat;
@@ -8201,6 +8330,21 @@ export interface GlobalSegment {
 	created_at: string;
 }
 
+/// One `global_segments` row as the client's `GlobalSegment`. `waypoints` is a
+/// jsonb column the generated row types `Json`, where this type promises a
+/// line; a value that is not an array becomes `[]` rather than being asserted
+/// through, the same rule `asRoute` follows for the same column shape.
+function asGlobalSegment(
+	row: Database['public']['Tables']['global_segments']['Row'],
+): GlobalSegment {
+	return {
+		...row,
+		waypoints: Array.isArray(row.waypoints)
+			? (row.waypoints as unknown as GlobalSegment['waypoints'])
+			: [],
+	};
+}
+
 export interface GlobalSegmentEffort {
 	id: string;
 	global_segment_id: string;
@@ -8255,7 +8399,7 @@ export async function fetchGlobalSegmentsWithError(
 		console.error('fetchGlobalSegments failed', error);
 		return { segments: [], error: `${error.message}${error.code ? ` (${error.code})` : ''}` };
 	}
-	return { segments: (data ?? []) as GlobalSegment[], error: null };
+	return { segments: (data ?? []).map(asGlobalSegment), error: null };
 }
 
 export async function fetchGlobalSegment(id: string): Promise<GlobalSegment | null> {
@@ -8269,7 +8413,7 @@ export async function fetchGlobalSegment(id: string): Promise<GlobalSegment | nu
 		console.error('fetchGlobalSegment failed', error);
 		return null;
 	}
-	return (data as GlobalSegment) ?? null;
+	return data ? asGlobalSegment(data) : null;
 }
 
 /// Block-guarded global-segment leaderboard. Mirrors
@@ -8352,7 +8496,7 @@ export async function computeGlobalSegmentEffortsForRun(input: {
 			.select('id', { count: 'exact', head: true })
 			.eq('is_active', true),
 	]);
-	const runMetadata = (runRow?.metadata ?? null) as Record<string, unknown> | null;
+	const runMetadata = (runRow?.metadata ?? null) as JsonObject | null;
 	if (!shouldRescoreGlobalSegments(runMetadata, activeCount)) return 0;
 
 	const { segments } = await fetchGlobalSegmentsWithError(GLOBAL_SEGMENT_SCORING_LIMIT);
@@ -8418,7 +8562,7 @@ export async function computeGlobalSegmentEffortsForRun(input: {
 		.eq('id', input.run_id)
 		.maybeSingle();
 	const next = stampGlobalSegmentsScored(
-		(freshRow?.metadata ?? null) as Record<string, unknown> | null,
+		(freshRow?.metadata ?? null) as JsonObject | null,
 		segments.length,
 	);
 	const { error: stampErr } = await supabase
@@ -8447,7 +8591,7 @@ export async function fetchGlobalEffortsForRun(
 		.select('*')
 		.in('id', segmentIds);
 	const bySeg = new Map<string, GlobalSegment>();
-	for (const s of segments ?? []) bySeg.set(s.id, s as GlobalSegment);
+	for (const s of segments ?? []) bySeg.set(s.id, asGlobalSegment(s));
 
 	// This one is reachable for a logged-out reader of a public run today:
 	// `global_segment_effort_ranks` is granted to `authenticated` only while
@@ -9169,7 +9313,7 @@ export interface GymWorkout {
 	/// Schemaless bag (migration 20270101_001) holding the guided-runner
 	/// execution trio and, while a session is in flight, the
 	/// `gym_session_draft` snapshot. Registered in docs/backend/metadata.md.
-	metadata: Record<string, unknown> | null;
+	metadata: JsonObject | null;
 	/// Trigger-maintained totals over the workout's sets (migration
 	/// 20261214_001, contract in docs/backend/derived_state.md) — the list row
 	/// reads them off the row rather than summing raw sets client-side.
@@ -9627,7 +9771,17 @@ export async function fetchExerciseCatalogue(): Promise<Exercise[]> {
 	const { data, error } = await supabase
 		.from(TABLES.exercises)
 		.select('*')
-		.order('name', { ascending: true });
+		.order('name', { ascending: true })
+		// A seeded global and a user's own custom entry can carry the same
+		// name: the two partial uniques on `name_key` (migration 20270222_001)
+		// scope uniqueness to `author_id is null` and to one author, so a
+		// custom can shadow a global. Ordering on `name` alone leaves that pair
+		// in an unspecified order, and `GymEditor`'s `catalogueByKey` is a Map
+		// built from the list — where the LAST row under a key wins. The
+		// binding from a typed name to an `exercises.id` could therefore flip
+		// between two loads of the same catalogue. `api_client.dart` carries
+		// the same tiebreak, and this comment, for the same reason.
+		.order('id', { ascending: true });
 	if (error) {
 		console.error('fetchExerciseCatalogue failed', error);
 		return [];
@@ -9704,7 +9858,7 @@ export async function createGymWorkout(input: {
 	notes?: string | null;
 	is_public?: boolean;
 	sets?: GymSetInput[];
-	metadata?: Record<string, unknown> | null;
+	metadata?: JsonObject | null;
 }): Promise<GymWorkout> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not signed in');
@@ -9797,7 +9951,7 @@ export interface GymRoutineExercise {
 	superset_order: number | null;
 	modality: GymExerciseModality;
 	progression: GymProgressionScheme;
-	progression_params: Record<string, unknown>;
+	progression_params: JsonObject;
 	sets: GymRoutineSet[];
 }
 
@@ -9831,7 +9985,7 @@ export interface GymRoutineInput {
 		superset_order?: number | null;
 		modality?: GymExerciseModality;
 		progression?: GymProgressionScheme;
-		progression_params?: Record<string, unknown>;
+		progression_params?: JsonObject;
 		sets: Array<{
 			set_index: number;
 			set_type?: GymSetType;
@@ -9916,7 +10070,7 @@ export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetai
 		superset_order: number | null;
 		modality: GymExerciseModality;
 		progression: GymProgressionScheme;
-		progression_params: Record<string, unknown> | null;
+		progression_params: JsonObject | null;
 	}>;
 	if (exercises.length === 0) {
 		return { routine: routine as GymRoutineSummary, exercises: [] };
@@ -10002,8 +10156,12 @@ export async function fetchGymRoutineHistory(
 		lastPerformedAt: row.last_performed_at ?? null,
 		gradedCount: row.graded_count ?? 0,
 		completedCount: row.completed_count ?? 0,
+		// `recent_sessions` is a jsonb array the RPC builds row by row
+		// (migration 20270528_001); the generated return type can say no more
+		// than `Json`, so the element shape is the RPC's contract with
+		// `routine_history.ts` rather than anything the compiler can check.
 		recentRows: Array.isArray(row.recent_sessions)
-			? (row.recent_sessions as RoutineSessionRow[])
+			? (row.recent_sessions as unknown as RoutineSessionRow[])
 			: [],
 	};
 }
@@ -11319,7 +11477,7 @@ export async function updateEventCheckpoint(
 		requiresWeighIn: boolean;
 	}>
 ): Promise<void> {
-	const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+	const row: Updatable<'event_checkpoints'> = { updated_at: new Date().toISOString() };
 	if (patch.name !== undefined) row.name = patch.name.trim();
 	if (patch.ordinal !== undefined) row.ordinal = patch.ordinal;
 	if (patch.routeMarkerId !== undefined) row.route_marker_id = patch.routeMarkerId;
@@ -11977,7 +12135,7 @@ export async function updateFundraiser(
 	id: string,
 	patch: Partial<Pick<CreateFundraiserInput, 'charityName' | 'charityUrl' | 'title' | 'story' | 'goalCents'>>
 ): Promise<void> {
-	const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+	const row: Updatable<'fundraisers'> = { updated_at: new Date().toISOString() };
 	if (patch.charityName !== undefined) row.charity_name = patch.charityName.trim();
 	if (patch.charityUrl !== undefined) row.charity_url = patch.charityUrl?.trim() || null;
 	if (patch.title !== undefined) row.title = patch.title.trim();

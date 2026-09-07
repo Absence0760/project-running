@@ -1,8 +1,22 @@
 // Database row types are generated from the Supabase schema. Regenerate with
 // `npm run gen:types` after every migration. The aliases below add the narrow
 // unions and lazy-loaded client-side fields that the schema alone can't express.
-import type { Database } from './database.types';
+import type { Database, Json } from './database.types';
 import type { EventGymTemplate } from './social/event_gym_template';
+
+/// A jsonb bag as the column actually holds it.
+///
+/// The `Record<string, unknown>` these replace was under-specified in a way
+/// that mattered: `unknown` admits a `Date`, a `Map`, a function — none of
+/// which survive `JSON.stringify` as themselves — and, being neither `Json`
+/// nor assignable to it, forced a cast at every point the bag met the column
+/// it is stored in. Reading a key gives `Json | undefined` rather than
+/// `unknown`, which narrows the same way and carries more information.
+///
+/// Written as a type alias rather than an interface deliberately: only an
+/// alias of an object type gets TypeScript's implicit index signature, and
+/// without it nothing is assignable to a jsonb column at all.
+export type JsonObject = { [key: string]: Json | undefined };
 
 type RunRow = Database['public']['Tables']['runs']['Row'];
 type RouteRow = Database['public']['Tables']['routes']['Row'];
@@ -58,7 +72,10 @@ export type Achievement = Omit<AchievementRow, 'tier' | 'source_kind'> & {
 	source_kind: AchievementSourceKind;
 };
 
-export interface TrackPoint {
+/// A type alias, not an interface, so the array of them is assignable to
+/// `routes.waypoints` — a jsonb column, and an interface has no implicit
+/// index signature.
+export type TrackPoint = {
 	lat: number;
 	lng: number;
 	ele?: number;
@@ -70,7 +87,7 @@ export interface TrackPoint {
 	/// it falls back to a "No HR samples on this run" message. See
 	/// `docs/backend/metadata.md`.
 	bpm?: number;
-}
+};
 
 // `track` is populated on-demand by `data.ts#fetchRunById` from the gzipped
 // Storage object pointed to by `track_url`. It is not a column on the table.
@@ -80,7 +97,7 @@ export interface TrackPoint {
 export type Run = Omit<RunRow, 'source' | 'metadata' | 'activity_type'> & {
 	source: RunSource;
 	activity_type: ActivityType;
-	metadata: Record<string, unknown> | null;
+	metadata: JsonObject | null;
 	track: TrackPoint[] | null;
 	// View-only boolean from `public_runs` (migration 20261105_001):
 	// whether a GPS trace exists, without exposing the Storage path. Set on
@@ -120,7 +137,7 @@ export type RouteMarkerKind =
 
 export type RouteMarker = Omit<RouteMarkerRow, 'kind' | 'meta'> & {
 	kind: RouteMarkerKind;
-	meta: Record<string, unknown>;
+	meta: JsonObject;
 };
 
 // A discoverable race calendar entry (migration 20270214_001). `provider` is
@@ -237,6 +254,58 @@ export type PreferredUnit = 'km' | 'mi';
 export type Gender = 'male' | 'female' | 'prefer_not_to_say';
 export type SubscriptionTier = 'free' | 'pro' | 'lifetime';
 
+/// Defensive narrows on read, mirroring `parseRunSource` / `parseRouteSurface`.
+/// Every one of these columns carries a CHECK, so the server cannot store a
+/// value outside the union — but the generated row and RPC types spell each of
+/// them `string`, so a client that assigns one straight into the narrow union
+/// is asserting rather than checking, and a value the union has not learned
+/// about yet (a migration that widens the CHECK, a row written by a newer
+/// build) would arrive typed as something it is not.
+///
+/// `parseSubscriptionTier` fails closed to `'free'` specifically: an
+/// unrecognised tier must never read as an entitlement. Reading it as `'pro'`
+/// would open every paywalled surface on a value the build does not understand.
+export function parseActivityType(raw: string | null | undefined): ActivityType {
+	switch (raw) {
+		case 'run':
+		case 'walk':
+		case 'hike':
+		case 'cycle':
+		case 'stroller':
+			return raw;
+		default:
+			return 'run';
+	}
+}
+
+export function parseIntegrationProvider(
+	raw: string | null | undefined,
+): IntegrationProvider | null {
+	switch (raw) {
+		case 'strava':
+		case 'garmin':
+		case 'parkrun':
+		case 'runsignup':
+			return raw;
+		default:
+			return null;
+	}
+}
+
+export function parsePreferredUnit(raw: string | null | undefined): PreferredUnit {
+	return raw === 'mi' ? 'mi' : 'km';
+}
+
+export function parseSubscriptionTier(raw: string | null | undefined): SubscriptionTier {
+	switch (raw) {
+		case 'pro':
+		case 'lifetime':
+			return raw;
+		default:
+			return 'free';
+	}
+}
+
 export type ClubRole = 'owner' | 'admin' | 'event_organiser' | 'race_director' | 'member';
 // 'waitlisted' is assigned server-side by the event-capacity trigger
 // (migration 20261018_001) when a 'going' RSVP exceeds events.capacity; the
@@ -260,6 +329,23 @@ export type EventAttendance = 'attended' | 'no_show';
 // union that already told it the value was impossible.
 export type MembershipStatus = 'active' | 'pending' | 'rejected';
 export type JoinPolicy = 'open' | 'request' | 'invite';
+
+/// Defensive narrow on read, mirroring `parseRunSource`. `clubs.join_policy`
+/// carries a CHECK, so the server cannot store anything else — but the
+/// generated row types it `string`, and every club read fed the raw row into
+/// `Club`, which promises the union. `'request'` is the fallback because it is
+/// the only value that neither opens a club nor makes it unjoinable: a policy
+/// this build has not learned about must not silently read as `'open'`.
+export function parseJoinPolicy(raw: string | null | undefined): JoinPolicy {
+	switch (raw) {
+		case 'open':
+		case 'request':
+		case 'invite':
+			return raw;
+		default:
+			return 'request';
+	}
+}
 export type RecurrenceFreq = 'weekly' | 'biweekly' | 'monthly';
 export type Weekday = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
 // Names track ActivityType ('cycle', not 'ride') so the app keeps one type

@@ -50,7 +50,11 @@ test('fetchRunsForDashboard is bounded + column-narrowed, not the unbounded sele
 	);
 	assert.match(
 		body,
-		/\.select\(DASHBOARD_RUN_COLUMNS\.join\(/,
+		// Whitespace-tolerant: the select is a multi-line expression since the
+		// join's result gained the `Join<>` restatement that keeps supabase-js
+		// from inferring `string`. What the guard is about is which tuple is
+		// projected, not how the call is wrapped.
+		/\.select\(\s*DASHBOARD_RUN_COLUMNS\.join\(/,
 		'fetchRunsForDashboard must project the declared tuple, not a second column list.',
 	);
 	// Anchored on the tuple's CONTENTS, not on the identifier: since § 1330 the
@@ -198,14 +202,18 @@ test('fetchRouteById clips waypoints for non-owner club members (RLS is not the 
 	);
 	assert.ok(fnMatch, 'Could not locate fetchRouteById body — rename?');
 	const body = fnMatch![0];
+	// Anchored on the comparison, not on what the destructured row is called:
+	// the guard is about the owner check existing, and the local has been
+	// `rest` and `owned`.
+	const ownerCheck = /\w+\.user_id\s*!==\s*viewerId/;
 	assert.match(
 		body,
-		/rest\.user_id\s*!==\s*viewerId/,
+		ownerCheck,
 		'fetchRouteById must compare the row owner against the viewer — RLS surfacing the base row to a club member is not consent to see the unclipped polyline.',
 	);
 	// The non-owner branch (everything after the owner-check) must clip
 	// and strip the raw geometry columns.
-	const nonOwnerBranch = body.slice(body.indexOf('rest.user_id !== viewerId'));
+	const nonOwnerBranch = body.slice(ownerCheck.exec(body)!.index);
 	assert.match(
 		nonOwnerBranch,
 		/fetchClippedRouteForViewer/,
@@ -1436,7 +1444,10 @@ test('enrichClubs reports a failed membership read instead of asserting non-memb
 	}
 	assert.match(
 		source,
-		/const \{ clubs: enrichedClubs, error: rolesError \} = await enrichClubs\(\[data\]\);\s*\n\s*if \(rolesError\) return \{ club: null, error: rolesError \};/,
+		// The argument is written whitespace-and-expression-tolerantly: what the
+		// guard is about is the error being destructured and returned, not how
+		// the single row is spelled on the way in (it is normalised now).
+		/const \{ clubs: enrichedClubs, error: rolesError \} = await enrichClubs\(\[[^\]]*\]\);\s*\n\s*if \(rolesError\) return \{ club: null, error: rolesError \};/,
 		'fetchClubBySlug must surface a membership-read failure rather than returning the club with no role',
 	);
 });
@@ -1711,3 +1722,109 @@ export const periodSummaryReadsCompile = (r: PeriodSummaryRun) => [
 	r.duration_s,
 	r.source,
 ];
+
+test('every routes read hands back a normalised row, never the raw one', () => {
+	// Reason: a `routes` row differs from `Route` in three ways, and each read
+	// used to do a different subset. `fetchClubRoutes` did none of them — it
+	// selected every column and returned the row verbatim, so a club route
+	// arrived carrying `shadow_hidden` (the server-owned moderation column
+	// § 1327 says every read strips) and a `surface` that had never been
+	// through `parseRouteSurface`. `saveRoute` returned its inserted row the
+	// same way. One normaliser is what keeps the three steps from drifting
+	// apart again.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const start = source.indexOf('function asRoute(');
+	assert.ok(start >= 0, 'asRoute moved — re-anchor this guard');
+	const body = source.slice(start, source.indexOf('\nexport ', start + 1));
+	assert.match(body, /shadow_hidden/, 'asRoute must strip the moderation column');
+	assert.match(body, /parseRouteSurface\(/, 'asRoute must narrow the surface union');
+	assert.match(
+		body,
+		/Array\.isArray\(waypoints\)/,
+		'asRoute must check that the jsonb waypoints is an array — § 1229 is the failure of promising a line that is not there',
+	);
+
+	// The two reads that used to skip it.
+	for (const fn of ['fetchClubRoutes', 'saveRoute']) {
+		const at = source.indexOf(`export async function ${fn}(`);
+		assert.ok(at >= 0, `${fn} moved — re-anchor this guard`);
+		const fnBody = source.slice(at, source.indexOf('\nexport ', at + 1));
+		// `\basRoute\b` rather than `asRoute(`: one site calls it, the other
+		// passes it to `.map` by reference.
+		assert.match(
+			fnBody,
+			/\basRoute\b/,
+			`${fn} must return a normalised row — the raw one carries shadow_hidden and an unparsed surface`,
+		);
+	}
+});
+
+test('a to-one embed is read as the object PostgREST returns, not indexed as an array', () => {
+	// Reason: `event_result_claims.result_id` is a FK held by the SOURCE table,
+	// so embedding `event_results` is many-to-one and PostgREST returns a JSON
+	// OBJECT. The organiser's pending-claims read asserted an array and read
+	// `event_results[0]?.bib` off it — which is `undefined` on an object, so
+	// every claim in the approval queue showed a null bib and a null finisher
+	// name, the two fields the queue exists to display ("Bob claims bib 102 —
+	// Alice Anon"). `!inner` filters; it does not change cardinality.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const start = source.indexOf('export async function fetchPendingEventResultClaims(');
+	assert.ok(start >= 0, 'fetchPendingEventResultClaims moved — re-anchor this guard');
+	const body = source.slice(start, source.indexOf('\nexport ', start + 1));
+	assert.match(body, /event_results!inner\(/, 'the embed must still be there');
+	assert.doesNotMatch(
+		body,
+		/event_results\s*\[\s*0\s*\]/,
+		'a to-one embed is an object; indexing it yields undefined for every row',
+	);
+	assert.match(
+		body,
+		/r\.event_results\.bib/,
+		'the bib must be read off the embedded object',
+	);
+});
+
+test('the exercise catalogue read is totally ordered, so a name binds to one id', () => {
+	// Reason: the two partial uniques on `exercises.name_key` (20270222_001)
+	// scope uniqueness to the seeded globals and to one author separately, so a
+	// user's custom can carry the same name as a global. `GymEditor` builds
+	// `catalogueByKey` as a Map over the returned list, and a Map keeps the
+	// LAST row under a key — so ordering on `name` alone left the id a typed
+	// name binds to decided by an unspecified Postgres row order, free to
+	// differ between two loads. `api_client.dart` carries the same tiebreak.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const start = source.indexOf('export async function fetchExerciseCatalogue(');
+	assert.ok(start >= 0, 'fetchExerciseCatalogue moved — re-anchor this guard');
+	const body = source.slice(start, source.indexOf('\nexport ', start + 1));
+	assert.match(body, /\.order\('name'/, 'the catalogue is still presented by name');
+	assert.match(
+		body,
+		/\.order\('id'/,
+		'ordering on a non-unique key alone is not an order — add the id tiebreak',
+	);
+});
+
+test('a CHECK-constrained union is narrowed at the read boundary, not asserted', () => {
+	// Reason: the generated row and RPC types spell every one of these columns
+	// `string`, so assigning one straight into its client union is an
+	// assertion, not a check — and the tier one gates the paywall. Each read
+	// goes through the parser that fails closed.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	for (const [fn, parser] of [
+		['fetchIntegrations', 'parseIntegrationProvider'],
+		['fetchPendingEventResultClaims', 'parseClaimStatus'],
+	] as const) {
+		const at = source.indexOf(`export async function ${fn}(`);
+		assert.ok(at >= 0, `${fn} moved — re-anchor this guard`);
+		const body = source.slice(at, source.indexOf('\nexport ', at + 1));
+		assert.match(body, new RegExp(`${parser}\\(`), `${fn} must narrow through ${parser}`);
+	}
+	// The auth store reads the two paywall-relevant ones off get_my_profile().
+	const store = stripComments(read('src/lib/stores/auth.svelte.ts'));
+	assert.match(
+		store,
+		/subscription_tier: parseSubscriptionTier\(/,
+		'the tier must fail closed to free — an unrecognised value read as pro opens every gated surface',
+	);
+	assert.match(store, /preferred_unit: parsePreferredUnit\(/, 'the unit must be narrowed too');
+});
