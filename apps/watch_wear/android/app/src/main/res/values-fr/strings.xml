@@ -41,6 +41,15 @@
     <string name="start">Démarrer</string>
     <string name="sync_count">Synchroniser %1$d</string>
     <string name="sync_retry">Réessayer</string>
+    <string name="sync_retry_count">Réessayer %1$d</string>
+    <plurals name="cd_sync_queued">
+        <item quantity="one">%1$d course enregistrée en attente de synchronisation. Appuyez pour synchroniser.</item>
+        <item quantity="other">%1$d courses enregistrées en attente de synchronisation. Appuyez pour synchroniser.</item>
+    </plurals>
+    <plurals name="cd_sync_failed_retry">
+        <item quantity="one">%1$d course enregistrée en attente. La dernière synchronisation n\'a pas abouti. Appuyez pour réessayer.</item>
+        <item quantity="other">%1$d courses enregistrées en attente. La dernière synchronisation n\'a pas abouti. Appuyez pour réessayer.</item>
+    </plurals>
     <string name="cd_sync_unreadable_retry">Courses enregistrées illisibles, appuyez pour réessayer</string>
     <plurals name="sync_rejected">
         <item quantity="one">%1$d refusée</item>
@@ -85,7 +94,10 @@
     <string name="save_it">Enregistrer</string>
     <string name="discard">Supprimer</string>
     <string name="discard_confirm">Supprimer ?</string>
-    <string name="discard_stake">Enregistrée nulle part ailleurs</string>
+    <plurals name="discard_stake">
+        <item quantity="one">Enregistrée nulle part ailleurs</item>
+        <item quantity="other">Enregistrées nulle part ailleurs</item>
+    </plurals>
 
     <string name="battery_allow_background">Autoriser l\'activité en arrière-plan</string>
     <string name="battery_samsung_summary">Les montres Samsung gèrent cela dans Galaxy Wearable sur votre téléphone.</string>

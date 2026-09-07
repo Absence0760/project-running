@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../fab_clearance.dart';
+import '../gym_prs.dart';
 import '../gym_routine.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -283,7 +284,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
     final blocks = prefillFromRoutine(planned);
     final seed = <GymSetInput>[];
     for (final b in blocks) {
-      if (b.name.trim().isEmpty) continue;
+      if (!namesAnExercise(b.name)) continue;
       for (final s in b.sets) {
         seed.add((
           exerciseName: b.name,
@@ -715,7 +716,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
               runSpacing: 4,
               children: [
                 Text(
-                  ex.exerciseName.isEmpty ? '—' : ex.exerciseName,
+                  namesAnExercise(ex.exerciseName) ? ex.exerciseName : '—',
                   style: theme.textTheme.titleSmall,
                 ),
                 if (ex.supersetGroup != null)

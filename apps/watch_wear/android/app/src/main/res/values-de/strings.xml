@@ -41,6 +41,15 @@
     <string name="start">Start</string>
     <string name="sync_count">%1$d synchronisieren</string>
     <string name="sync_retry">Sync erneut</string>
+    <string name="sync_retry_count">Erneut %1$d</string>
+    <plurals name="cd_sync_queued">
+        <item quantity="one">%1$d gespeicherter Lauf wartet auf die Synchronisierung. Zum Synchronisieren tippen.</item>
+        <item quantity="other">%1$d gespeicherte Läufe warten auf die Synchronisierung. Zum Synchronisieren tippen.</item>
+    </plurals>
+    <plurals name="cd_sync_failed_retry">
+        <item quantity="one">%1$d gespeicherter Lauf wartet. Die letzte Synchronisierung kam nicht durch. Zum erneuten Versuch tippen.</item>
+        <item quantity="other">%1$d gespeicherte Läufe warten. Die letzte Synchronisierung kam nicht durch. Zum erneuten Versuch tippen.</item>
+    </plurals>
     <string name="cd_sync_unreadable_retry">Gespeicherte Läufe nicht lesbar, zum Wiederholen tippen</string>
     <plurals name="sync_rejected">
         <item quantity="one">%1$d abgelehnt</item>
@@ -85,7 +94,10 @@
     <string name="save_it">Speichern</string>
     <string name="discard">Verwerfen</string>
     <string name="discard_confirm">Verwerfen?</string>
-    <string name="discard_stake">Nirgendwo sonst gespeichert</string>
+    <plurals name="discard_stake">
+        <item quantity="one">Nirgendwo sonst gespeichert</item>
+        <item quantity="other">Nirgendwo sonst gespeichert</item>
+    </plurals>
 
     <string name="battery_allow_background">Hintergrundaktivität erlauben</string>
     <string name="battery_samsung_summary">Samsung-Uhren verwalten dies in Galaxy Wearable auf deinem Handy.</string>

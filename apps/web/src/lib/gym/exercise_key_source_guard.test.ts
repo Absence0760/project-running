@@ -231,6 +231,13 @@ function isLiteral(operand: string): boolean {
 
 /// Every raw comparison of an exercise spelling in [source]. Exported so the
 /// mutation test below can feed it planted violations, as `foldHits` is.
+///
+/// Each operand is judged on its DECLARATION as well as on itself. The scan
+/// shipped without that and the Dart port found what it cost: the mobile
+/// compose sheet grouped on `last.name.text == name` three lines under `final
+/// name = (s['exercise_name'] as String?) ?? ''`, so neither operand said
+/// "exercise" where the comparison was written and a tree the scan called clean
+/// still rendered one lift as two blocks (decisions 1368).
 export function rawNameComparisonHits(path: string, source: string): Hit[] {
 	const code = stripComments(source);
 	const scan = blankQuoted(code);
@@ -238,14 +245,123 @@ export function rawNameComparisonHits(path: string, source: string): Hit[] {
 	const out: Hit[] = [];
 	for (const m of scan.matchAll(COMPARISON)) {
 		const at = m.index ?? 0;
-		const left = receiverOf(code, at);
-		const right = operandAfter(code, at + m[0].length);
+		const left = originOf(code, receiverOf(code, at));
+		const right = originOf(code, operandAfter(code, at + m[0].length));
 		// A folded operand is the fix, not the defect. Either side carrying the
 		// canonical derivation means the comparison is already on the key.
 		if (/normaliseExerciseName\s*\(/.test(left) || /normaliseExerciseName\s*\(/.test(right)) continue;
 		const namesSpelling = NAMES_A_SPELLING.test(left) || NAMES_A_SPELLING.test(right);
 		if (!namesSpelling) continue;
 		if (isLiteral(left) || isLiteral(right)) continue;
+		const line = code.slice(0, at).split('\n').length;
+		out.push({ path, line, text: source.split('\n')[line - 1]?.trim() ?? '' });
+	}
+	return out;
+}
+
+/// A field carrying the free-text DISPLAY spelling under a name that does not
+/// say "exercise". Judged only inside a file that names one, the same
+/// file-level rule that gives [foldHits] its teeth: the two editors call their
+/// blocks `ex` and `e`, so `ex.name` says nothing to a receiver test on its own
+/// while saying everything inside `GymEditor.svelte`.
+const NAMES_A_DISPLAY_FIELD = /\.name\b/;
+
+/// An empty-string literal, read out of the comment-stripped text where string
+/// BODIES are still present. [blankQuoted] preserves offsets by replacing a
+/// body with spaces, so `'x'` would read as an empty literal there.
+function isEmptyLiteral(operand: string): boolean {
+	return /^(?:''|""|``)$/.test(operand.trim());
+}
+
+const LENGTH_TAIL = /\.length\s*$/;
+
+/// The operand to the LEFT of an operator, a quoted literal included.
+/// [receiverOf] walks a member chain and stops dead at a quote, so `'' === name`
+/// reads as no left operand at all — and the emptiness scan has to see the
+/// literal whichever side it is written on.
+function leftOperand(code: string, at: number): string {
+	const chain = receiverOf(code, at);
+	if (chain.trim() !== '') return chain;
+	let i = at - 1;
+	while (i >= 0 && /\s/.test(code[i])) i--;
+	const q = code[i];
+	if (q !== "'" && q !== '"' && q !== '`') return chain;
+	let j = i - 1;
+	while (j >= 0 && code[j] !== q) j--;
+	return code.slice(Math.max(j, 0), i + 1);
+}
+
+/// The value a comparison is testing for emptiness, or null if it is not an
+/// emptiness test at all, paired with whether the subject may be judged on its
+/// DECLARATION as well as on the operand itself.
+///
+/// `x === ''` and `x.length === 0` are the same question asked of a string, but
+/// only the first says the subject is one. A list is emptied the same way, and
+/// `named.length === 0` two lines under `const named = exercises.filter((e) =>
+/// e.name.trim() !== '')` is a count of blocks, not a blank name — so the
+/// length shape is judged on the operand alone, where the spelling has to be
+/// named outright.
+function emptinessSubject(left: string, right: string): { subject: string; chase: boolean } | null {
+	if (isEmptyLiteral(right)) return { subject: left, chase: true };
+	if (isEmptyLiteral(left)) return { subject: right, chase: true };
+	if (right.trim() === '0' && LENGTH_TAIL.test(left))
+		return { subject: left.replace(LENGTH_TAIL, ''), chase: false };
+	if (left.trim() === '0' && LENGTH_TAIL.test(right))
+		return { subject: right.replace(LENGTH_TAIL, ''), chase: false };
+	return null;
+}
+
+/// The right-hand side of a bare identifier's declaration, chased up to a few
+/// hops so a value named by a `const` two lines up is still judged on where it
+/// came from.
+///
+/// [foldHits] reaches that shape with [statementAt], and a blankness test
+/// cannot: `if (name === '')` names nothing in its own statement, and the whole
+/// defect is that the declaration one line up read `ex.name.trim()`. The chase
+/// stops at the first expression that is not a bare identifier, which is why
+/// the catalogue picker's `query` prop is out of reach — noted where the scan
+/// is asserted.
+function originOf(code: string, operand: string): string {
+	let expr = operand.trim();
+	const seen = new Set<string>();
+	for (let hop = 0; hop < 4; hop++) {
+		if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(expr) || seen.has(expr)) break;
+		seen.add(expr);
+		const m = new RegExp(`\\b(?:const|let|var)\\s+${expr}\\s*(?::[^=;\\n]*)?=([^;\\n]*)`).exec(code);
+		if (!m) break;
+		expr = m[1].trim();
+	}
+	return expr;
+}
+
+/// Every blankness test in [source] taken on an exercise SPELLING rather than
+/// on its key. Exported so the mutation test below can feed it planted
+/// violations, as the other two scans are.
+///
+/// The third shape, and the one the other two scans exclude by construction.
+/// `rawNameComparisonHits` deliberately spares a comparison against a literal
+/// — that is what separates an identity test from a sentinel test — and there
+/// is no case fold in `name.trim() === ''` for `foldHits` to see. So the tree
+/// could carry, and did carry, a drop guard that answered a different question
+/// from every keyed surface downstream: JS `trim()` and the shared whitespace
+/// class differ on U+0085, so a name made of one passed the guard and saved a
+/// set whose server-stamped `exercise_key` is `''` (decisions 1367).
+export function blankSpellingTestHits(path: string, source: string): Hit[] {
+	const code = stripComments(source);
+	const scan = blankQuoted(code);
+	const fileNamesAnExercise = NAMES_AN_EXERCISE.test(scan) && !BROAD_MODULES.includes(path);
+	const out: Hit[] = [];
+	for (const m of scan.matchAll(COMPARISON)) {
+		const at = m.index ?? 0;
+		const found = emptinessSubject(leftOperand(code, at), operandAfter(code, at + m[0].length));
+		if (found === null) continue;
+		const origin = found.chase ? originOf(code, found.subject) : found.subject;
+		// The fix itself, on either the operand or its declaration.
+		if (/normaliseExerciseName\s*\(|namesAnExercise\s*\(/.test(origin)) continue;
+		const spelling =
+			NAMES_A_SPELLING.test(origin) ||
+			(found.chase && fileNamesAnExercise && NAMES_A_DISPLAY_FIELD.test(origin));
+		if (!spelling) continue;
 		const line = code.slice(0, at).split('\n').length;
 		out.push({ path, line, text: source.split('\n')[line - 1]?.trim() ?? '' });
 	}
@@ -426,6 +542,11 @@ test('the raw-comparison scan sees the shapes it bans, and spares the ones it mu
 			'lib/social/w.ts',
 			"if ((s.exercise_name ?? '') === last.name) merge();",
 		],
+		[
+			'neither operand says exercise where the comparison is written',
+			'lib/components/Composer.svelte',
+			"const name = s.exercise_name ?? '';\n\t\tif (last.name === name) last.sets.push(row);",
+		],
 	];
 	for (const [label, path, source] of caught) {
 		assert.equal(rawNameComparisonHits(path, source).length, 1, `missed: ${label}`);
@@ -468,4 +589,117 @@ test('the raw-comparison scan sees the shapes it bans, and spares the ones it mu
 	for (const [label, path, source] of spared) {
 		assert.deepEqual(rawNameComparisonHits(path, source), [], `false positive: ${label}`);
 	}
+});
+
+test('no web surface decides an exercise name is blank on the display spelling', () => {
+	const offenders = scanTree(blankSpellingTestHits);
+	assert.deepEqual(
+		offenders,
+		[],
+		'Decide blankness with namesAnExercise from $lib/gym/gym_prs, never with ' +
+			"`name.trim() === ''`. The two answers differ on U+0085 (in the shared " +
+			'whitespace class, not in the set JS trim() strips), so a name made of ' +
+			'one is saved as a set every keyed surface counts as nothing and both ' +
+			'key columns with a length CHECK refuse outright (decisions 1367):\n' +
+			offenders.map((h) => `  ${h.path}:${h.line}  ${h.text}`).join('\n'),
+	);
+});
+
+test('the blankness scan sees the shapes it bans, and spares the ones it must not', () => {
+	const caught: [string, string, string][] = [
+		[
+			'the editor drop guard, named by a declaration one line up',
+			'lib/components/GymEditor.svelte',
+			"let catalogue = $state<Exercise[]>([]);\n\t\t\tconst name = ex.name.trim();\n\t\t\tif (name === '') continue;",
+		],
+		[
+			'the routine editor filter, named by the chain',
+			'lib/components/RoutineEditor.svelte',
+			"const named = exercises.filter((e) => e.name.trim() !== '');",
+		],
+		[
+			'the receiver names one, the file otherwise does not',
+			'lib/share/x.ts',
+			"if (s.exercise_name === '') continue;",
+		],
+		['camelCase field', 'lib/social/z.ts', "if (set.exerciseName !== '') keep();"],
+		['loose equality', 'lib/social/y.ts', "if (s.exercise_name == '') continue;"],
+		['the literal on the left', 'lib/social/x.ts', "if ('' === s.exercise_name) continue;"],
+		['a length test instead', 'lib/social/w.ts', 'if (s.exercise_name.length === 0) continue;'],
+		[
+			'a length test with the zero on the left',
+			'lib/social/v.ts',
+			'if (0 === s.exercise_name.length) continue;',
+		],
+		[
+			'two declaration hops inside a file that names an exercise',
+			'lib/components/Composer.svelte',
+			"const exercises = [];\n\tconst raw = block.name;\n\tconst name = raw;\n\tif (name === '') continue;",
+		],
+	];
+	for (const [label, path, source] of caught) {
+		assert.equal(blankSpellingTestHits(path, source).length, 1, `missed: ${label}`);
+	}
+
+	const spared: [string, string, string][] = [
+		[
+			'the fix itself',
+			'lib/components/GymEditor.svelte',
+			'let catalogue = $state<Exercise[]>([]);\n\t\t\tconst name = ex.name.trim();\n\t\t\tif (!namesAnExercise(name)) continue;',
+		],
+		[
+			'the key tested directly, as every module that already holds one does',
+			'lib/gym/gym_routine.ts',
+			"const key = normaliseExerciseName(name);\n\tif (key === '') continue;",
+		],
+		[
+			'a title trimmed in a file full of exercises',
+			'lib/components/RoutineEditor.svelte',
+			"const exercises = [];\n\tif (title.trim() === '') return;",
+		],
+		[
+			'a numeric field in a file full of exercises',
+			'lib/components/GymExecutionBand.svelte',
+			"const step = exercise;\n\tconst reps = repsRaw.trim() === '' ? null : parseInt(repsRaw, 10);",
+		],
+		[
+			'a .name blank test in a file that has nothing to do with exercises',
+			'lib/social/club.ts',
+			"if (club.name.trim() === '') return;",
+		],
+		['an identity test, which the raw-comparison scan owns', 'lib/gym/y.ts', 'if (last.name === s.exercise_name) merge();'],
+		[
+			'a count of blocks, whose declaration filtered on a name',
+			'lib/components/RoutineEditor.svelte',
+			"const named = exercises.filter((e) => namesAnExercise(e.name));\n\t\tif (named.length === 0) return null;",
+		],
+		['a null test', 'lib/gym/z.ts', 'if (s.exercise_name == null) continue;'],
+		[
+			'a comment describing the ban',
+			'lib/gym/u.ts',
+			"// never s.exercise_name.trim() === ''",
+		],
+		['a string mentioning it', 'lib/gym/t.ts', "const doc = \"s.exercise_name === ''\";"],
+		[
+			'the broad module, judged by the fold scan instead',
+			'lib/core/data.ts',
+			"const name = (row.movement_name ?? '').trim();\n\tif (name === '') continue;",
+		],
+	];
+	for (const [label, path, source] of spared) {
+		assert.deepEqual(blankSpellingTestHits(path, source), [], `false positive: ${label}`);
+	}
+
+	// The scan's own edge, stated rather than left to be rediscovered: a value
+	// that reaches the test through a PROP or a `$derived` is out of the
+	// declaration chase's reach, so the catalogue picker's `query.trim()` is not
+	// reported. Its call site is fixed and its shape is pinned here, not by the
+	// scan.
+	assert.deepEqual(
+		blankSpellingTestHits(
+			'lib/components/ExerciseCataloguePicker.svelte',
+			"const trimmed = $derived(query.trim());\n\tconst name = trimmed;\n\tif (name === '') return;",
+		),
+		[],
+	);
 });

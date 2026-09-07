@@ -403,8 +403,12 @@ class ScreenWiringTest {
         // recover it on `online` withholds the recovery path for a purely
         // local fault. The COUNTED chip stays gated — that one uploads.
         val src = readRunWatchApp()
+        // Ends at the NEXT arm of the chain, whichever it is, rather than at
+        // the counted one by name: a third arm landed between them (§ 1347) and
+        // the extraction silently widened to span it, so an assertion about
+        // "the unreadable chip" could be satisfied by the rejected chip's body.
         val branch = Regex(
-            """if \(queueUnreadable && authed\) \{(.*?)\n            \} else if \(queuedCount > 0\) \{""",
+            """if \(queueUnreadable && authed\) \{(.*?)\n            \} else if \(""",
             RegexOption.DOT_MATCHES_ALL,
         ).find(src)
         assertTrue("no unreadable-queue branch parsed — the checks below read nothing", branch != null)
@@ -417,6 +421,12 @@ class ScreenWiringTest {
             "the unreadable chip must carry a contentDescription — its 100 dp " +
                 "label cannot hold the sentence and colour alone is not a signal: $body",
             body.contains("R.string.cd_sync_unreadable_retry"),
+        )
+        assertTrue(
+            "…and it must APPLY it. Reading the resource reference alone passes for a " +
+                "branch that resolves the string and hands it to nothing, which is a " +
+                "chip TalkBack announces as its 100 dp label: $body",
+            Regex("""\.semantics \{ contentDescription = unreadableCd""").containsMatchIn(body),
         )
         assertTrue(
             "the unreadable chip must not reuse the counted label — `Sync N` " +

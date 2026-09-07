@@ -1,7 +1,8 @@
 import { createBrowserClient } from '@supabase/ssr';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+import type { AppDatabase } from './database';
 
-export const supabase = createBrowserClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
+export const supabase = createBrowserClient<AppDatabase>(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
 
 // Dev-only test seam for the SSO e2e lane (tests-e2e/sso). The OAuth
 // login path can only be driven against a mock OIDC provider, and the

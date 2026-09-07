@@ -613,12 +613,56 @@ way — eleven of twenty-two columns absent behind `Route`
   would be a third declaration of the same thing. Both directions fail for a
   reason: a column on the type and not the wire is the original defect; one on
   the wire and not the type is width paid for and unreadable.
+- **The select list has to reach supabase-js as ONE string literal.**
+  `Array.prototype.join` is declared to return `string`, and the typed client's
+  select-list parser answers `GenericStringError` for anything but a literal —
+  every property read off the resulting row is an error, and the row degrades
+  to something no consumer can be checked against. So a list built from a
+  column tuple is restated as the literal that tuple spells, through
+  `Join<T, D>` in `core/database.ts`; a list built by concatenation or held in
+  a variable is `string` and makes the typed client vacuous on that query
+  ([§ 1365](decisions.md)). This is why the hand-written `CLUB_SELECT_COLS` /
+  `EVENT_SELECT_COLS` carry `as const`.
+
 - **A `setof <view>` RPC is typed from the view, not from the table behind it.**
   The server fixes the projection, so derive the row type from the generated
   view row rather than casting to the table's — and `Pick` it from the client
   overlay rather than taking the generated view row verbatim, because postgres
   cannot prove a view column NOT NULL and the generated row types every one of
   them nullable ([§ 1328](decisions.md)).
+
+## A narrowed column is narrowed by a call at the read boundary, not by the declaration
+
+`Run.source` says `RunSource`; the `runs` row says `string`; the CHECK
+constraint is what makes the second true of the data. None of that makes the
+row's value become the union — only a `parseRunSource` at the read does, and
+where a read skips it the client has asserted rather than checked. That is not
+hypothetical: typing the Supabase client found `activity_type`, `provider`,
+`join_policy`, `preferred_unit` and `subscription_tier` all being assigned
+straight from a `string` into their unions ([§ 1364](decisions.md)).
+
+- **One parser per narrowed union, in `types.ts`**, in the shape
+  `parseRunSource` established: a `switch` over the members with a stated
+  fallback, never a cast.
+- **One normaliser per table, not one per read.** `asRun`, `asRoute`, `asClub`,
+  `asGlobalSegment` in `data.ts` each do everything that separates a row from
+  its client type — parse the unions, strip the columns the read boundary
+  withholds, narrow the jsonb — so the several reads of a table cannot drift
+  into doing different subsets of it. `fetchClubRoutes` and `saveRoute` did
+  none of it while three sibling reads did all of it.
+- **The fallback is a decision, and where it has a consequence, say so and pin
+  it.** `parseSubscriptionTier` falls back to `'free'` because the paywall
+  reads the tier and an unrecognised value read as `'pro'` opens every gated
+  surface; `parseJoinPolicy` falls back to `'request'`, the only value that
+  neither lets a stranger into a club whose policy this build cannot read nor
+  strands every legitimate applicant. Both are pinned in `types.test.ts` with
+  the reason in the test name.
+- **A jsonb column narrows to a shape, and a value that is not that shape is
+  refused rather than asserted.** `Json` admits a scalar and an array as well
+  as an object; `asRoute` turns a non-array `waypoints` into `[]` and `asRun`
+  turns a non-object `metadata` into `null`, because handing back a bag every
+  reader will index into, or an absent line under a type promising one, is the
+  failure [§ 1229](decisions.md) exists to prevent.
 
 ## Local stores — a directory transition is serialised, not just atomic
 

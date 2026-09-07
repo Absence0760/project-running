@@ -6,6 +6,7 @@
 // Invocation:
 //   npx tsx --test src/lib/backup/restore_orchestrator.test.ts
 
+import type { JsonObject } from '../types.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -87,10 +88,10 @@ function makeFakeBackend(): FakeBackend {
 }
 
 interface ParsedBackupOpts {
-	runs?: Record<string, unknown>[];
-	routes?: Record<string, unknown>[];
-	profile?: Record<string, unknown> | null;
-	settingsPrefs?: Record<string, unknown>;
+	runs?: JsonObject[];
+	routes?: JsonObject[];
+	profile?: JsonObject | null;
+	settingsPrefs?: JsonObject;
 	tracks?: Record<string, Uint8Array>;
 	manifest?: Record<string, unknown>;
 }

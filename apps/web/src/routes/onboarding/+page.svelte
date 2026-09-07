@@ -15,6 +15,8 @@
 	import { supabase } from '$lib/core/supabase';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { updateUniversal } from '$lib/settings/settings';
+	import type { PrefsBag } from '$lib/settings/settings';
+	import type { Updatable } from '$lib/core/database';
 	import {
 		isPushSupported,
 		pushPermission,
@@ -169,7 +171,7 @@
 	/// wizard then navigated to /dashboard, the gate re-read a still-null
 	/// `onboarded_at`, and bounced the user back to step 1 with every
 	/// answer lost (issue #227). Throws so both callers surface the toast.
-	async function stampProfile(profileUpdate: Record<string, unknown>): Promise<void> {
+	async function stampProfile(profileUpdate: Updatable<'user_profiles'>): Promise<void> {
 		const { data: updatedRows, error } = await supabase
 			.from('user_profiles')
 			.update(profileUpdate)
@@ -244,7 +246,7 @@
 		saving = true;
 		try {
 			// 1. Universal prefs bag (units + goal + weight + privacy).
-			const bagChanges: Record<string, unknown> = {
+			const bagChanges: PrefsBag = {
 				preferred_unit: preferredUnit,
 				weight_unit: weightUnit,
 				privacy_default: privacyDefault,
@@ -274,7 +276,7 @@
 			// 2. user_profiles columns: display_name, preferred_unit
 			// (dual-write for the cross-user readable surfaces),
 			// gender + DOB + health_data_consent_at, onboarded_at.
-			const profileUpdate: Record<string, unknown> = {
+			const profileUpdate: Updatable<'user_profiles'> = {
 				preferred_unit: preferredUnit,
 				onboarded_at: new Date().toISOString(),
 			};

@@ -45,16 +45,29 @@ import type { Database } from './database.types';
 
 type RunRow = Database['public']['Tables']['runs']['Row'];
 
-export type Run = Omit<RunRow, 'source' | 'metadata'> & {
-	source: RunSource;                          // narrow from string
-	metadata: Record<string, unknown> | null;   // loosen from Json
-	track: TrackPoint[] | null;                 // lazy-loaded, not a column
+export type Run = Omit<RunRow, 'source' | 'metadata' | 'activity_type'> & {
+	source: RunSource;                  // narrow from string
+	activity_type: ActivityType;        // narrow from string
+	metadata: JsonObject | null;        // the bag `Json`'s object member describes
+	track: TrackPoint[] | null;         // lazy-loaded, not a column
 };
 ```
 
 The `Omit<...> & { ... }` pattern is deliberate: start from what the DB gives us, override only the fields where the client has better knowledge than the schema.
 
+**A narrowed field has to be narrowed on the way in, not merely declared.** `Run.source` says `RunSource`; the row says `string`; nothing makes the second become the first except a call to `parseRunSource` at the read. `types.ts` carries one such parser per narrowed union (`parseRunSource`, `parseRouteSurface`, `parseActivityType`, `parseIntegrationProvider`, `parseJoinPolicy`, `parsePreferredUnit`, `parseSubscriptionTier`) and every read boundary in `data.ts` goes through the right one — `asRun`, `asRoute`, `asClub`, `asGlobalSegment` do it once per table so the several reads of a table cannot drift into doing different subsets of it. Two of the fallbacks are load-bearing: `parseSubscriptionTier` fails closed to `'free'` because the paywall reads it, and `parseJoinPolicy` to `'request'`. See [decisions § 1364](decisions.md).
+
+**A jsonb column is `JsonObject`, not `Record<string, unknown>`.** `unknown` admits a `Date`, a `Map` and a function — none of which survive `JSON.stringify` as themselves, and none of which the column can hold — and it is not assignable to the generated `Json`, so the bag needs a cast at every point it meets the column it lives in. Note the TypeScript rule behind this: an object type gets an implicit index signature only as a type **alias**, never as an `interface`, so a shape written `export interface X {}` is refused as a `Json` however JSON-shaped it is. Declare anything destined for a jsonb column as an alias. [decisions § 1363](decisions.md).
+
 **The Edge Functions read this same file — it is the only artifact, not the web one.** Every Supabase client under `apps/backend/supabase/functions/` is built as `createClient<Database>(...)` and every client-shaped parameter is typed `DbClient`, both imported from `_shared/database.ts`, which re-exports `apps/web/src/lib/database.types.ts` across the tree boundary. That relative path is deliberately the only one in the functions tree that leaves `apps/backend`: a second generated copy would need a second drift check and would rot between the two, and if the generated file ever moves, exactly one line changes. Nothing crosses the boundary at runtime — every re-export is `export type`, so the specifier is erased before the Supabase CLI bundles a function (the generated file carries a runtime `Constants` export that would otherwise be dragged into sixteen deploy bundles). What holds the functions to it is the `deno check` step in CI's `edge-functions` job; see [decisions § 762](decisions.md).
+
+### The one correction the generated schema needs — `apps/web/src/lib/core/database.ts`
+
+`supabase gen types` emits every function parameter as its bare postgres type and records only whether it carries a SQL default, as a `?`. It carries **no nullability**: `mark_attendance(p_attendance text)` — a function whose own body branches on `p_attendance is not null` — is emitted `p_attendance: string`, so a caller that means NULL does not compile. `database.types.ts` cannot be hand-corrected, because `gen:types:check` compares it byte-for-byte with a fresh generator run.
+
+So `core/database.ts` exports `AppDatabase`, a **derivation** of the generated `Database` that widens every function's `Args` field to `T | null`, and both Supabase clients plus `App.Locals.supabase` take that instead. The function name, the argument key set and the return type stay checked exactly as generated. It also exports `Insertable<'table'>` / `Updatable<'table'>` — the write shapes a patch object should be declared as — and `Join<T, D>`, which restates a select list built from a column tuple as the string literal that tuple spells (`Array.prototype.join` returns `string`, and supabase-js answers `GenericStringError` for a non-literal select, which silently degrades the row to something no consumer can be checked against).
+
+Never re-declare `Database` here; derive from it, or the correction rots on the next migration. `core/database.test.ts` pins both — that the two clients still pass the schema, and that this module imports the generated type rather than shadowing it.
 
 ### Mobile — `packages/core_models/lib/src/generated/db_rows.dart`
 
@@ -313,7 +326,7 @@ Dart is **not** exempt, and this section used to say it was. The `core_models` l
 
 ## What this does not solve
 
-- **Ephemeral / undeclared fields inside `jsonb` columns** — `runs.metadata` is `jsonb` in the DB and `Record<string, unknown>` / `Map<String, dynamic>` on both clients. If mobile writes `metadata.avg_bpm` and web doesn't read it, no generator will catch that (this is why load-bearing keys like `activity_type` / `is_dnf` were promoted to real columns — `20261207_001`, F3 — so codegen *does* cover them; only the telemetry bag stays undeclared). The roadmap's Phase 3 cross-client integration test is designed to cover this.
+- **Ephemeral / undeclared fields inside `jsonb` columns** — `runs.metadata` is `jsonb` in the DB and `JsonObject` / `Map<String, dynamic>` on both clients. If mobile writes `metadata.avg_bpm` and web doesn't read it, no generator will catch that (this is why load-bearing keys like `activity_type` / `is_dnf` were promoted to real columns — `20261207_001`, F3 — so codegen *does* cover them; only the telemetry bag stays undeclared). The roadmap's Phase 3 cross-client integration test is designed to cover this.
 - **Semantic parity** — generators catch "this column exists", not "this column means the same thing on both platforms". `moving_time` computed differently on web vs Android is still a human-review problem.
 - **UI parity** — whether both platforms actually *show* a field is covered by the Phase 2 parity matrix, not codegen.
 

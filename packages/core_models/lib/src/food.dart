@@ -1,4 +1,5 @@
 import 'generated/db_rows.dart';
+import 'iso_parse.dart';
 
 /// Typed domain view of a food-log entry — the `food_log` row scalars. Built
 /// from the raw row map the offline `LocalFoodStore` holds so the nutrition
@@ -48,7 +49,7 @@ class FoodEntry {
 
   factory FoodEntry.fromRow(Map<String, dynamic> row) => FoodEntry(
         id: row[FoodLogRow.colId] as String,
-        startedAt: _parseTs(row[FoodLogRow.colStartedAt]),
+        startedAt: parseIsoStrictValue(row[FoodLogRow.colStartedAt]),
         itemName: (row[FoodLogRow.colItemName] as String?) ?? '',
         mealSlot: row[FoodLogRow.colMealSlot] as String?,
         calories: (row[FoodLogRow.colCalories] as num?)?.toDouble(),
@@ -62,10 +63,7 @@ class FoodEntry {
         cholesterolMg: (row[FoodLogRow.colCholesterolMg] as num?)?.toDouble(),
         isPublic: (row[FoodLogRow.colIsPublic] as bool?) ?? false,
         externalId: row[FoodLogRow.colExternalId] as String?,
-        lastModifiedAt: _parseTs(row[FoodLogRow.colLastModifiedAt]),
-        createdAt: _parseTs(row[FoodLogRow.colCreatedAt]),
+        lastModifiedAt: parseIsoStrictValue(row[FoodLogRow.colLastModifiedAt]),
+        createdAt: parseIsoStrictValue(row[FoodLogRow.colCreatedAt]),
       );
 }
-
-DateTime? _parseTs(dynamic v) =>
-    v is String && v.isNotEmpty ? DateTime.tryParse(v) : null;

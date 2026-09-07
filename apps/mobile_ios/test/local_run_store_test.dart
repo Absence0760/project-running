@@ -1418,6 +1418,59 @@ void main() {
 
       expect(store.runs.single.distanceMetres, 2222);
     });
+
+    test('an IMPOSSIBLE last_modified_at is refused, not rolled over',
+        () async {
+      // `DateTime.tryParse` answers `2026-06-32` with the 2nd of July rather
+      // than refusing it, and that answer passes every non-null check a real
+      // one would (decisions § 1344 / § 1377). Here the rolled-over day is
+      // LATER than the remote copy's clock, so the stale local row would win
+      // the merge and the server copy could never reach the phone again.
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+
+      await store.saveFromRemote(rawRun(
+        id: 'r-impossible',
+        startedAt: DateTime.utc(2026, 1, 1),
+        metadata: {'last_modified_at': '2026-06-32T00:00:00.000Z'},
+        distance: 2222,
+      ));
+      await store.saveFromRemote(rawRun(
+        id: 'r-impossible',
+        startedAt: DateTime.utc(2026, 6, 10),
+        distance: 8888,
+      ));
+
+      expect(store.runs.single.distanceMetres, 8888,
+          reason: 'the unreadable stamp falls back to startedAt (1 Jan), which '
+              'loses to the remote copy — under tryParse it would have read as '
+              '2 July and won');
+    });
+
+    test('a last_modified_at of the wrong TYPE reads as absent, not a throw',
+        () async {
+      // The `as String?` cast this read used to carry threw a TypeError out of
+      // the merge, so one malformed stamp discarded the comparison rather than
+      // degrading to the run's own start instant.
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+
+      await store.saveFromRemote(rawRun(
+        id: 'r-type',
+        startedAt: DateTime.utc(2026, 6, 10),
+        metadata: {'last_modified_at': 12345},
+        distance: 1111,
+      ));
+      await store.saveFromRemote(rawRun(
+        id: 'r-type',
+        startedAt: DateTime.utc(2026, 1, 1),
+        distance: 9999,
+      ));
+
+      expect(store.runs.single.distanceMetres, 1111,
+          reason: 'the stamp is absent, so startedAt (10 Jun) decides and the '
+              'local copy is kept');
+    });
   });
 
   group('summary index', () {

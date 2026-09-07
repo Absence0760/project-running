@@ -11,8 +11,13 @@ import {
   mine,
 } from './pgtap_definer_neutralisers.mjs';
 import {
+  CONDITIONALLY_STAMPED_ASSERTIONS,
   EXPECTED_SURVIVORS,
   STAMPED_VALUE_ASSERTIONS,
+  assertionDescriptions,
+  assignedColumns,
+  conditionallyStampedColumns,
+  descriptionOf,
   readMigrations,
   stampedColumns,
   stampedValueWrites,
@@ -619,5 +624,158 @@ test('no pgtap positive supplies a value a BEFORE trigger overwrites, unless reg
 			`STAMPED_VALUE_ASSERTIONS entry ${entry.file} / "${entry.description}" is stale`,
 		);
 		assert.ok(entry.reason.length > 40, `${entry.file} entry needs a real reason`);
+	}
+});
+
+
+test('assignedColumns separates a branch assignment from one that always fires', () => {
+	const body = `
+begin
+  new.always := 1;
+  if new.status = 'going' then
+    new.status := 'waitlisted';
+  end if;
+  return new;
+end;`;
+	assert.deepEqual(assignedColumns(body), { unconditional: ['always'], conditional: ['status'] });
+
+	// A column assigned BOTH ways belongs to the stronger population: the
+	// top-level assignment always fires, so the branch adds nothing to what the
+	// supplied value is worth.
+	assert.deepEqual(
+		assignedColumns('begin\n  new.k := 1;\n  if x then\n    new.k := 2;\n  end if;\nend;'),
+		{ unconditional: ['k'], conditional: [] },
+	);
+});
+
+test('conditionallyStampedColumns subtracts the columns some live trigger always stamps', () => {
+	/** @param {string} name @param {string} body */
+	const fn = (name, body) =>
+		`create or replace function public.${name}() returns trigger language plpgsql as $x$\nbegin\n${body}\n  return new;\nend;\n$x$;`;
+	const migrations = [
+		{
+			name: '001.sql',
+			text:
+				`${fn('branchy', '  if x then\n    new.k := 1;\n    new.j := 2;\n  end if;')}\n` +
+				'create trigger a before insert on public.tbl for each row execute function public.branchy();\n' +
+				`${fn('always', '  new.k := 3;')}\n` +
+				'create trigger b before insert on public.tbl for each row execute function public.always();',
+		},
+	];
+	// `k` is stamped unconditionally by the second trigger, so whether the
+	// supplied value survives is not a fixture question at all; only `j` is.
+	assert.deepEqual([...conditionallyStampedColumns(migrations)], [['tbl.j', 'a']]);
+});
+
+test('descriptionOf folds the implicit concatenation SQL applies to adjacent literals', () => {
+	assert.equal(descriptionOf("'one'"), 'one');
+	assert.equal(descriptionOf("'one '\n  'two'"), 'one two');
+	assert.equal(descriptionOf("'it''s '\n  'folded'"), "it's folded");
+	assert.equal(descriptionOf('coalesce(a, b)'), null);
+	assert.equal(descriptionOf("'a' || 'b'"), null);
+});
+
+test('assertionDescriptions reads the last argument of every pgtap assertion form', () => {
+	const sql = [
+		"select lives_ok($$ insert into t values (1) $$, 'the write lives');",
+		"select is((select k from t), 1, 'and stores what it supplied');",
+		"select results_eq($$ select k from t $$, $$ values (1) $$, 'read back '\n  'in two literals');",
+		"select ok(true, 'plain');",
+	].join('\n');
+	const found = assertionDescriptions(sql);
+	assert.ok(found.has('the write lives'));
+	assert.ok(found.has('and stores what it supplied'));
+	assert.ok(found.has('read back in two literals'));
+	assert.ok(found.has('plain'));
+});
+
+test('the conditionally-stamped population is non-empty, so a broken parse cannot read as clean', () => {
+	// The same 510 floor the unconditional scan carries. The registry below
+	// anchors it - an empty set makes all thirteen entries go stale - but the
+	// population is asserted outright too, named at the triggers the filing was
+	// about.
+	const conditional = conditionallyStampedColumns(readMigrations());
+	assert.ok(conditional.size >= 10, `only ${conditional.size} conditionally stamped columns found`);
+	assert.equal(conditional.get('event_attendees.status'), 'trg_enforce_event_capacity');
+	assert.equal(conditional.get('live_run_pings.ele'), 'live_run_pings_drop_in_zone_before_insert');
+	assert.equal(conditional.get('race_pings.coarse'), 'race_pings_drop_in_zone_before_insert');
+});
+
+test('every pgtap positive supplying a conditionally stamped column is registered and read', () => {
+	const conditional = conditionallyStampedColumns(readMigrations());
+	const registry = new Map(
+		CONDITIONALLY_STAMPED_ASSERTIONS.map((e) => [`${e.file} ${e.description}`, e]),
+	);
+	/** @type {Set<string>} */
+	const matched = new Set();
+	/** @type {string[]} */
+	const offenders = [];
+	for (const file of readdirSync(TESTS_DIR).filter((f) => f.endsWith('.sql'))) {
+		const text = readFileSync(join(TESTS_DIR, file), 'utf8');
+		/** @type {Set<string> | null} */
+		let descriptions = null;
+		for (const call of findCalls(text, 'lives_ok')) {
+			const sql = literalOf(call.argv[0]);
+			if (sql === null) continue;
+			const writes = stampedValueWrites(sql, conditional);
+			if (writes.length === 0) continue;
+			const key = `${file} ${call.argv[1] === undefined ? '' : (descriptionOf(call.argv[1]) ?? '')}`;
+			const entry = registry.get(key);
+			if (entry === undefined) {
+				offenders.push(`${file}:${call.line}`);
+				continue;
+			}
+			matched.add(key);
+			assert.deepEqual(
+				entry.columns,
+				[...new Set(writes.map((w) => `${w.table}.${w.column}`))].sort(),
+				`${entry.file} / "${entry.description}" names a stale column set`,
+			);
+			assert.ok(entry.reason.length > 40, `${entry.file} entry needs a real reason`);
+			if (entry.readBack === undefined) continue;
+			descriptions ??= assertionDescriptions(text);
+			assert.ok(
+				descriptions.has(entry.readBack),
+				`${entry.file} / "${entry.description}" names a read-back no assertion carries: "${entry.readBack}"`,
+			);
+		}
+	}
+	assert.deepEqual(offenders, []);
+	for (const entry of CONDITIONALLY_STAMPED_ASSERTIONS) {
+		assert.ok(
+			matched.has(`${entry.file} ${entry.description}`),
+			`CONDITIONALLY_STAMPED_ASSERTIONS entry ${entry.file} / "${entry.description}" is stale`,
+		);
+	}
+});
+
+test('the money path and the two ping positives are read back, not excused by prose', () => {
+	// The three sites decisions 1324 named as unsupportable, plus the terminal
+	// -status control and the re-asserted seat found beside them. Named
+	// individually rather than left to the count, because dropping a read-back
+	// and its registry entry in one change would otherwise be silent.
+	const byKey = new Map(
+		CONDITIONALLY_STAMPED_ASSERTIONS.map((e) => [`${e.file} ${e.description}`, e]),
+	);
+	for (const [file, description] of [
+		['paid_events_test.sql', 'going on a priced event with a matching paid order succeeds'],
+		['paid_events_test.sql', 'a partially refunded order still backs a re-asserted going seat'],
+		[
+			'refund_failed_ledger_test.sql',
+			'a partially_refunded order still seats its attendee (20270522_001 stands)',
+		],
+		[
+			'payment_refund_ledger_test.sql',
+			'a terminal status can still be replaced by another terminal one',
+		],
+		['unbounded_numeric_column_bounds_test.sql', 'an ordinary live ping still stores'],
+		['unbounded_numeric_column_bounds_test.sql', 'an ordinary race ping still stores'],
+	]) {
+		const entry = byKey.get(`${file} ${description}`);
+		assert.ok(entry !== undefined, `${file} / "${description}" is not registered`);
+		assert.ok(
+			entry.readBack !== undefined,
+			`${file} / "${description}" is excused by prose where a read-back is owed`,
+		);
 	}
 });

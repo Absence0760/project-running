@@ -179,6 +179,50 @@ void main() {
     });
   });
 
+  group('a malformed metadata bag costs its own field, not the run', () {
+    test('a value of the wrong type reads as absent rather than throwing', () {
+      // `metadata` is jsonb with no schema, so a value of the wrong type is a
+      // thing it can hold. The hard casts this replaced threw out of the
+      // projection, and the store's save path does not catch — so ONE bad
+      // value discarded the whole run (decisions § 1377).
+      final summary = RunSummary.fromRun(
+        buildRun(metadata: {
+          'activity_type': 7,
+          'avg_bpm': 'one hundred',
+          'elevation_m': <String, dynamic>{},
+          'last_modified_at': 12345,
+          'created_by_user_id': false,
+        }),
+        synced: false,
+      );
+      expect(summary.activityType, isNull);
+      expect(summary.avgBpm, isNull);
+      expect(summary.elevationM, isNull);
+      expect(summary.lastModifiedAt, isNull);
+      expect(summary.createdByUserId, isNull);
+      expect(summary.distanceMetres, 5234.5,
+          reason: 'the run itself still projects');
+    });
+
+    test('a well-formed bag is unchanged', () {
+      final summary = RunSummary.fromRun(
+        buildRun(metadata: {
+          'activity_type': 'trail_run',
+          'avg_bpm': 142,
+          'elevation_m': 310.5,
+          'last_modified_at': '2026-04-23T09:00:00.000Z',
+          'created_by_user_id': 'user-a',
+        }),
+        synced: false,
+      );
+      expect(summary.activityType, 'trail_run');
+      expect(summary.avgBpm, 142.0);
+      expect(summary.elevationM, 310.5);
+      expect(summary.lastModifiedAt, '2026-04-23T09:00:00.000Z');
+      expect(summary.createdByUserId, 'user-a');
+    });
+  });
+
   group('withSynced', () {
     test('flips only the synced flag', () {
       final summary = RunSummary.fromRun(buildRun(), synced: false);

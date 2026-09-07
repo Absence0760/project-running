@@ -17,13 +17,15 @@
 	import { activityTypeLabel } from '$lib/runs/activity_type.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import type { PrefsBag } from '$lib/settings/settings';
+	import type { Json } from '$lib/database.types';
 
 	interface DeviceRow {
 		device_id: string;
 		platform: string;
 		label: string | null;
 		last_seen_at: string;
-		prefs: Record<string, unknown>;
+		prefs: PrefsBag;
 		updated_at: string;
 	}
 
@@ -101,12 +103,12 @@
 		if (!data) return;
 		devices = devices.map((d) =>
 			d.device_id === currentDeviceId
-				? { ...d, prefs: (data.prefs as Record<string, unknown>) ?? {} }
+				? { ...d, prefs: (data.prefs as PrefsBag | null) ?? {} }
 				: d,
 		);
 	}
 
-	function hasPushSubscription(prefs: Record<string, unknown>): boolean {
+	function hasPushSubscription(prefs: PrefsBag): boolean {
 		return prefs && typeof prefs === 'object' && 'push_subscription' in prefs;
 	}
 
@@ -204,7 +206,7 @@
 		});
 	}
 
-	function overrideCount(prefs: Record<string, unknown>): number {
+	function overrideCount(prefs: PrefsBag): number {
 		return Object.keys(prefs).length;
 	}
 
@@ -360,13 +362,18 @@
 		const device = devices.find((d) => d.device_id === addingForDevice);
 		if (!device) return;
 		const ed = currentEditor();
-		let value: unknown;
+		// A `Json`, not an `unknown`: the value goes straight into the jsonb
+		// overrides bag. Typing it as one also puts the chain's exhaustiveness
+		// on the compiler — the trailing `else if` used to leave `value`
+		// unassigned for any editor shape without a branch, writing `undefined`
+		// into the bag instead of refusing.
+		let value: Json;
 		if (ed.shape.kind === 'bool') value = addValueBool;
 		else if (ed.shape.kind === 'number') {
 			const n = parseFloat(addValueNumber);
 			if (!Number.isFinite(n)) return;
 			value = n;
-		} else if (ed.shape.kind === 'enum') value = addValueEnum;
+		} else value = addValueEnum;
 
 		if (addBusy) return;
 		addBusy = true;

@@ -1,4 +1,15 @@
 import { supabase } from '../core/supabase';
+import type { JsonObject } from '../types';
+import type { Insertable } from '../core/database';
+import type { Json } from '../database.types';
+
+/// A jsonb column read back as the bag it is supposed to be. `Json` admits a
+/// string, a number, a boolean and an array as well as an object, and none of
+/// those is a preferences bag; the archive reader discards them on the way back
+/// in, so the writer refuses to put one in.
+function prefsBagOf(value: Json | null | undefined): JsonObject {
+	return value != null && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
 import { TABLES, BUCKETS } from '../core/schema';
 import { auth } from '../stores/auth.svelte';
 import {
@@ -114,16 +125,16 @@ export async function createBackup(
 
 	// Strip user_id from rows so the archive is re-homeable.
 	const runsOut = runRows.map((r) => {
-		const { user_id: _uid, ...rest } = r as Record<string, unknown>;
+		const { user_id: _uid, ...rest } = r;
 		return rest;
 	});
 	const routesOut = routes.map((r) => {
-		const { user_id: _uid, ...rest } = r as Record<string, unknown>;
+		const { user_id: _uid, ...rest } = r;
 		return rest;
 	});
 
 	const runsWithTracks = runRows.filter(
-		(r): r is Record<string, unknown> & { id: string; track_url: string } =>
+		(r): r is JsonObject & { id: string; track_url: string } =>
 			typeof r.id === 'string' &&
 			typeof r.track_url === 'string' &&
 			r.track_url.length > 0
@@ -133,7 +144,11 @@ export async function createBackup(
 		runsOut,
 		routesOut,
 		profile: profile ?? null,
-		settingsPrefs: userSettings?.prefs ?? {},
+		// `user_settings.prefs` is jsonb, so the column can legitimately hold a
+		// scalar or an array. Anything but an object is not a prefs bag, and
+		// the archive's own reader already discards one; narrowing here keeps
+		// the writer from putting a shape the reader will drop into the file.
+		settingsPrefs: prefsBagOf(userSettings?.prefs),
 		userId,
 		exportedFrom: 'web',
 		runsWithTracks,
@@ -191,10 +206,19 @@ export async function restoreBackup(
  * existing supabase-js calls. Tests substitute a counter-tracking
  * fake; see `restore_orchestrator.test.ts`.
  */
+// Each `as Insertable<...>` below is the one thing a typed client cannot check
+// here and should not pretend to: an archived row is a JSON object read out of
+// a file the user supplied, so its column set is whatever build wrote the
+// archive, not whatever this build's schema declares. The server is the only
+// validator there is — a stale or hand-edited archive comes back as a
+// PostgREST 400, which the restore loop already records in `result.warnings`
+// rather than aborting on.
 function supabaseRestoreBackend(): RestoreBackend {
 	return {
 		async upsertProfile(row) {
-			const { error } = await supabase.from('user_profiles').upsert(row);
+			const { error } = await supabase
+				.from('user_profiles')
+				.upsert(row as Insertable<'user_profiles'>);
 			if (error) throw error;
 		},
 		async upsertSettings(prefs) {
@@ -216,11 +240,15 @@ function supabaseRestoreBackend(): RestoreBackend {
 			if (error) throw error;
 		},
 		async upsertRun(row) {
-			const { error } = await supabase.from(TABLES.runs).upsert(row, { onConflict: 'id' });
+			const { error } = await supabase
+				.from(TABLES.runs)
+				.upsert(row as Insertable<'runs'>, { onConflict: 'id' });
 			if (error) throw error;
 		},
 		async upsertRoute(row) {
-			const { error } = await supabase.from('routes').upsert(row, { onConflict: 'id' });
+			const { error } = await supabase
+				.from('routes')
+				.upsert(row as Insertable<'routes'>, { onConflict: 'id' });
 			if (error) throw error;
 		},
 		async fetchValidEventIds(ids) {

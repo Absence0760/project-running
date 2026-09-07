@@ -11,7 +11,7 @@
 /// edge cases (null / empty / whitespace / "0" truthiness / emoji).
 
 import { METADATA_KEYS } from './schema';
-import type { TrackPoint } from '../types';
+import type { JsonObject, TrackPoint } from '../types';
 
 /// Trim a string and collapse empty-after-trim to null. Mirrors
 /// `s?.trim() || null`. Pulled out so it can be reused without the
@@ -48,12 +48,12 @@ export function normaliseRunMetadataFields(fields: {
 /// bag with the cleared keys explicitly removed. Returns the new
 /// metadata object. Pure — no I/O. Tests pin the contract.
 export function applyRunMetadataPatch(
-	current: Record<string, unknown> | null | undefined,
+	current: JsonObject | null | undefined,
 	fields: { title?: string; notes?: string },
 	now: string,
-): Record<string, unknown> {
+): JsonObject {
 	const base = current ?? {};
-	const next: Record<string, unknown> = { ...base };
+	const next: JsonObject = { ...base };
 	// Drop any key the caller is patching, then re-add normalised
 	// values. This is how a whitespace-only edit clears the key
 	// instead of writing `""`.
@@ -92,10 +92,10 @@ export const GLOBAL_SEGMENT_SCORING_LIMIT = 500;
 /// identical for every run and public — and needs no `public_runs`
 /// strip.
 export function readGlobalSegmentsScoredCount(
-	metadata: Record<string, unknown> | null | undefined,
+	metadata: JsonObject | null | undefined,
 ): number | null {
 	if (!metadata || typeof metadata !== 'object') return null;
-	const count = (metadata as Record<string, unknown>)[METADATA_KEYS.global_segments_scored_count];
+	const count = metadata[METADATA_KEYS.global_segments_scored_count];
 	if (typeof count !== 'number' || !Number.isFinite(count) || count < 0) return null;
 	return count;
 }
@@ -113,7 +113,7 @@ export function readGlobalSegmentsScoredCount(
 /// still only scored against 500 rows, and demanding a 520 stamp the
 /// fetch can never produce would re-score forever.
 export function shouldRescoreGlobalSegments(
-	metadata: Record<string, unknown> | null | undefined,
+	metadata: JsonObject | null | undefined,
 	activeCount: number | null | undefined,
 	scoringLimit: number = GLOBAL_SEGMENT_SCORING_LIMIT,
 ): boolean {
@@ -127,9 +127,9 @@ export function shouldRescoreGlobalSegments(
 /// bag without clobbering the rest of it. Pure — the caller writes the
 /// result back.
 export function stampGlobalSegmentsScored(
-	metadata: Record<string, unknown> | null | undefined,
+	metadata: JsonObject | null | undefined,
 	catalogueCount: number,
-): Record<string, unknown> {
+): JsonObject {
 	const base = metadata ?? {};
 	return { ...base, [METADATA_KEYS.global_segments_scored_count]: catalogueCount };
 }

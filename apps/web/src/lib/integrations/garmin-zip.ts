@@ -21,6 +21,7 @@
 import JSZip from 'jszip';
 import { parseRouteFile } from './import';
 import { saveRun } from '../core/data';
+import type { JsonObject } from '../types';
 import { supabase } from '../core/supabase';
 import { TABLES, METADATA_KEYS } from '../core/schema';
 import { auth } from '../stores/auth.svelte';
@@ -316,7 +317,7 @@ async function importFitFile(
 		return 'skipped';
 	}
 
-	const metadata: Record<string, unknown> = {
+	const metadata: JsonObject = {
 		[METADATA_KEYS.imported_from]: 'garmin',
 		[METADATA_KEYS.imported_at]: new Date().toISOString(),
 		[METADATA_KEYS.source_file]: displayName,
@@ -399,7 +400,7 @@ async function importRouteFile(
 		return 'skipped';
 	}
 
-	const metadata: Record<string, unknown> = {
+	const metadata: JsonObject = {
 		imported_from: 'garmin',
 		imported_at: new Date().toISOString(),
 		source_file: file.name,

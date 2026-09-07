@@ -41,6 +41,15 @@
     <string name="start">Iniciar</string>
     <string name="sync_count">Sincronizar %1$d</string>
     <string name="sync_retry">Tentar de novo</string>
+    <string name="sync_retry_count">Repetir %1$d</string>
+    <plurals name="cd_sync_queued">
+        <item quantity="one">%1$d corrida guardada a aguardar sincronização. Toque para sincronizar agora.</item>
+        <item quantity="other">%1$d corridas guardadas a aguardar sincronização. Toque para sincronizar agora.</item>
+    </plurals>
+    <plurals name="cd_sync_failed_retry">
+        <item quantity="one">%1$d corrida guardada em espera. A última sincronização não foi concluída. Toque para tentar de novo.</item>
+        <item quantity="other">%1$d corridas guardadas em espera. A última sincronização não foi concluída. Toque para tentar de novo.</item>
+    </plurals>
     <string name="cd_sync_unreadable_retry">Corridas guardadas ilegíveis, toque para tentar de novo</string>
     <plurals name="sync_rejected">
         <item quantity="one">%1$d recusada</item>
@@ -85,7 +94,10 @@
     <string name="save_it">Guardar</string>
     <string name="discard">Descartar</string>
     <string name="discard_confirm">Descartar?</string>
-    <string name="discard_stake">Não guardada em mais nenhum lado</string>
+    <plurals name="discard_stake">
+        <item quantity="one">Não guardada em mais nenhum lado</item>
+        <item quantity="other">Não guardadas em mais nenhum lado</item>
+    </plurals>
 
     <string name="battery_allow_background">Permitir atividade em segundo plano</string>
     <string name="battery_samsung_summary">Os relógios Samsung gerem isto no Galaxy Wearable no seu telemóvel.</string>

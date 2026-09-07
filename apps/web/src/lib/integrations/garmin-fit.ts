@@ -15,12 +15,15 @@ import type { TrackPoint } from '../types';
 /// is 1-based; `start_offset_s` is the cumulative duration up to the START
 /// of this lap (first lap = 0); `distance_m` / `duration_s` are per-lap
 /// deltas, not cumulative. Mirrors the recorder's `lapsToCanonicalJson`.
-export interface FitLap {
+/// A type alias, not an interface: the shape is written straight into a jsonb
+/// column, and an interface has no implicit index signature so nothing is
+/// assignable to `Json` however JSON-shaped it is.
+export type FitLap = {
 	index: number;
 	start_offset_s: number;
 	distance_m: number;
 	duration_s: number;
-}
+};
 
 interface RawFitLap {
 	total_distance?: number;
@@ -71,12 +74,15 @@ export function fitCadenceToSpm(raw: unknown, isFootSport: boolean): number | nu
 /// field is optional — only the metrics the watch actually recorded are
 /// present (a base watch with no HRM-Pro/Run pod carries none of them).
 /// Registered in docs/backend/metadata.md § running_dynamics.
-export interface RunningDynamics {
+/// A type alias, not an interface: the shape is written straight into a jsonb
+/// column, and an interface has no implicit index signature so nothing is
+/// assignable to `Json` however JSON-shaped it is.
+export type RunningDynamics = {
 	vertical_oscillation_mm?: number;
 	gct_ms?: number;
 	stride_length_m?: number;
 	power_w?: number;
-}
+};
 
 interface RawFitSessionDynamics {
 	avg_vertical_oscillation?: unknown;
@@ -293,13 +299,16 @@ export interface ParsedFitRun {
 /// The five HR-zone upper boundaries, matching the app's
 /// `user_settings.prefs.hr_zones` shape. `z1`..`z5` are the upper bpm of
 /// zones 1-5; a measured HR at or below `z1` is zone 1, etc.
-export interface FitHrZones {
+/// A type alias, not an interface: the shape is written straight into a jsonb
+/// column, and an interface has no implicit index signature so nothing is
+/// assignable to `Json` however JSON-shaped it is.
+export type FitHrZones = {
 	z1: number;
 	z2: number;
 	z3: number;
 	z4: number;
 	z5: number;
-}
+};
 
 /// Project the FIT `hr_zone` messages onto the app's 5-cutoff shape.
 /// Each FIT `hr_zone` carries a `high_bpm` upper boundary; Garmin emits

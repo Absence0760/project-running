@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -39,7 +40,7 @@ class PendingRaceResult {
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'event_id': eventId,
-        'instance_start': instanceStart.toUtc().toIso8601String(),
+        'instance_start': instanceStartKey(instanceStart),
         'run_id': runId,
         'duration_s': durationS,
         'distance_m': distanceM,
@@ -58,7 +59,7 @@ class PendingRaceResult {
         distanceM is! num) {
       return null;
     }
-    final parsed = DateTime.tryParse(instance);
+    final parsed = parseIsoStrict(instance);
     if (parsed == null) return null;
     return PendingRaceResult(
       eventId: eventId,
@@ -183,8 +184,8 @@ class RaceController extends ChangeNotifier {
           .select('event_id, instance_start, status')
           .eq('user_id', uid)
           .eq('status', 'going')
-          .gte('instance_start', past.toIso8601String())
-          .lte('instance_start', horizon.toIso8601String());
+          .gte('instance_start', instanceStartKey(past))
+          .lte('instance_start', instanceStartKey(horizon));
       final list = (rsvps as List).cast<Map<String, dynamic>>();
       if (list.isEmpty) { _setActive(null); return; }
 
@@ -194,12 +195,13 @@ class RaceController extends ChangeNotifier {
       // of the slowest one rather than the sum of all of them.
       final sessionResults = await Future.wait(list.map((r) async {
         final eventId = r['event_id'] as String;
-        final inst = DateTime.parse(r['instance_start'] as String);
+        final inst =
+            parseIsoStrictRequired(r['instance_start'], 'instance_start');
         final res = await _c
             .from('race_sessions')
             .select('status, started_at')
             .eq('event_id', eventId)
-            .eq('instance_start', inst.toIso8601String())
+            .eq('instance_start', instanceStartKey(inst))
             .inFilter('status', ['armed', 'running'])
             .maybeSingle();
         return (eventId: eventId, inst: inst, row: res);
@@ -214,9 +216,7 @@ class RaceController extends ChangeNotifier {
           eventId: s.eventId,
           instanceStart: s.inst,
           status: res['status'] as String,
-          startedAt: res['started_at'] == null
-              ? null
-              : DateTime.parse(res['started_at'] as String),
+          startedAt: parseIsoStrictValue(res['started_at']),
           eventTitle: title,
         );
         // Prefer running over armed if we somehow see both.
@@ -315,7 +315,7 @@ class RaceController extends ChangeNotifier {
     try {
       await _c.from('race_pings').insert({
         'event_id': eid,
-        'instance_start': inst.toIso8601String(),
+        'instance_start': instanceStartKey(inst),
         'user_id': _c.auth.currentUser?.id,
         'lat': lat,
         'lng': lng,

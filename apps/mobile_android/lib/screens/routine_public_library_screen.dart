@@ -8,6 +8,7 @@ import 'package:ui_kit/ui_kit.dart';
 import '../backend_timeout.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../fab_clearance.dart';
+import '../gym_prs.dart';
 import '../local_gym_store.dart';
 import '../local_routine_store.dart';
 import '../preferences.dart';
@@ -416,9 +417,9 @@ class _RoutinePublicPreviewScreenState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            ex.exercise.exerciseName.isEmpty
-                                ? '—'
-                                : ex.exercise.exerciseName,
+                            namesAnExercise(ex.exercise.exerciseName)
+                                ? ex.exercise.exerciseName
+                                : '—',
                             style: theme.textTheme.titleSmall,
                           ),
                           const SizedBox(height: 4),

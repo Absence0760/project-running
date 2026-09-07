@@ -284,17 +284,26 @@ jobs:
           # ceiling; CodeQL silently falls back to that when
           # security-and-quality isn't available.
           queries: security-and-quality
-          # unnecessary-use-of-advanced-config suggests replacing this
-          # workflow with GitHub's settings-configured "default setup".
-          # The advanced config here is deliberate: explicit language
-          # selection (Swift excluded for macOS-runner cost — see the
-          # header), a pinned Go toolchain + explicit build, the JDK-17
-          # Gradle prebuild for the Kotlin extractor, SHA-pinned actions,
-          # and the Trivy SARIF upload — none of which default setup can
-          # express. Filter the note out instead of dismissing four
-          # alerts by hand every time an init step moves.
+          # Every entry below narrows this analysis, so each one carries its
+          # reason in the comment lines directly above it — inside the block,
+          # where they are comments in the config document CodeQL parses AND
+          # where `scripts/check_codeql_coverage.mjs` reads them. A narrowing
+          # here is a hole in a security scan; the guard fails the PR on one
+          # bought with fewer than 40 characters of prose, on a `paths` glob
+          # that has stopped matching anything, and on a rule id whose family
+          # this leg cannot emit (which would filter nothing while reading as
+          # a deliberate exclusion).
           config: |
             query-filters:
+              # unnecessary-use-of-advanced-config suggests replacing this
+              # workflow with GitHub's settings-configured "default setup".
+              # The advanced config here is deliberate: explicit language
+              # selection (Swift excluded for macOS-runner cost — see the
+              # header), a pinned Go toolchain + explicit build, the JDK-17
+              # Gradle prebuild for the Kotlin extractor, SHA-pinned actions,
+              # and the Trivy SARIF upload — none of which default setup can
+              # express. Filter the note out instead of dismissing four
+              # alerts by hand every time an init step moves.
               - exclude:
                   id: actions/unnecessary-use-of-advanced-config
       - uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4

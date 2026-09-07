@@ -178,6 +178,51 @@ void main() {
     });
   });
 
+  group('namesAnExercise', () {
+    test('a spelling names a lift when its canonical key is non-empty', () {
+      expect(namesAnExercise('Bench Press'), isTrue);
+      expect(namesAnExercise('  Row  '), isTrue);
+      expect(namesAnExercise('İncline Press'), isTrue);
+      expect(namesAnExercise(''), isFalse);
+      expect(namesAnExercise('   '), isFalse);
+      expect(namesAnExercise(null), isFalse);
+      // Every member of the folded class, alone, is blank.
+      for (final cp in [
+        0x09,
+        0x20,
+        0x85,
+        0xa0,
+        0x1680,
+        0x2000,
+        0x2028,
+        0x202f,
+        0x3000,
+        0xfeff,
+      ]) {
+        expect(namesAnExercise(String.fromCharCode(cp)), isFalse,
+            reason: 'U+${cp.toRadixString(16)}');
+      }
+      // U+001C-U+001F are deliberately outside the class (decisions 790), so
+      // they name a lift as any other character does.
+      expect(namesAnExercise('\u001c'), isTrue);
+    });
+
+    test('U+0085 is blank here, and this rail agrees only because it is named',
+        () {
+      // Dart's trim() strips the whole White_Space set plus U+FEFF, so it
+      // happens to answer as the class does -- which the web twin's trim() does
+      // not, and is why the test is a function on both rails rather than a
+      // trim at each call site (decisions 1367).
+      expect('\u0085'.trim(), '');
+      expect(namesAnExercise('\u0085'), isFalse);
+      expect(namesAnExercise(' \u00a0\u0085\u2028 '), isFalse);
+      // A real name carrying one is still a real name, and the class collapses
+      // it to the separator every other member collapses to.
+      expect(namesAnExercise('\u0085Row\u0085'), isTrue);
+      expect(normaliseExerciseName('Bench\u0085Press'), 'bench press');
+    });
+  });
+
   group('distinctExerciseCount', () {
     test('spellings the canonical fold merges count once', () {
       // Each pair is one lift under two spellings that `trim().toLowerCase()`

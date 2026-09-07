@@ -21,6 +21,7 @@
 	import RestTimer from './RestTimer.svelte';
 	import Modal from './Modal.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
+	import type { JsonObject } from '$lib/types';
 
 	interface Props {
 		routine: GymRoutineSummary;
@@ -218,7 +219,17 @@
 		if (abandoned || saving) return true;
 		const sets = buildSets();
 		if (sets.length === 0 && draftId === null) return true;
-		const metadata = draftMetadata(routine.id, outcomes, currentIndex, new Date().toISOString());
+		// `gym_session_draft.ts` declares both of these `Record<string, unknown>`
+		// while every value they put in the bag is JSON and one of them has
+		// already run the module's own `isJsonObject` guard over its input. That
+		// module belongs to another change this round, so the restatement lives
+		// here; retyping its two return types to `JsonObject` deletes it.
+		const metadata = draftMetadata(
+			routine.id,
+			outcomes,
+			currentIndex,
+			new Date().toISOString(),
+		) as JsonObject;
 		try {
 			if (draftId === null) {
 				const created = await createGymWorkout({

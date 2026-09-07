@@ -1,4 +1,5 @@
 import 'generated/db_rows.dart';
+import 'iso_parse.dart';
 
 /// A single logged set inside a [GymWorkout]. The typed view of one entry in
 /// the inline `sets` list a [GymWorkout] carries (the offline store keeps a
@@ -79,16 +80,13 @@ class GymWorkout {
       GymWorkout(
         id: row[GymWorkoutRow.colId] as String,
         title: row[GymWorkoutRow.colTitle] as String?,
-        startedAt: _parseTs(row[GymWorkoutRow.colStartedAt]),
+        startedAt: parseIsoStrictValue(row[GymWorkoutRow.colStartedAt]),
         durationS: (row[GymWorkoutRow.colDurationS] as num?)?.toInt(),
         notes: row[GymWorkoutRow.colNotes] as String?,
         isPublic: (row[GymWorkoutRow.colIsPublic] as bool?) ?? false,
         externalId: row[GymWorkoutRow.colExternalId] as String?,
-        lastModifiedAt: _parseTs(row[GymWorkoutRow.colLastModifiedAt]),
-        createdAt: _parseTs(row[GymWorkoutRow.colCreatedAt]),
+        lastModifiedAt: parseIsoStrictValue(row[GymWorkoutRow.colLastModifiedAt]),
+        createdAt: parseIsoStrictValue(row[GymWorkoutRow.colCreatedAt]),
         sets: [for (final s in sets) GymSet.fromRow(s)],
       );
 }
-
-DateTime? _parseTs(dynamic v) =>
-    v is String && v.isNotEmpty ? DateTime.tryParse(v) : null;

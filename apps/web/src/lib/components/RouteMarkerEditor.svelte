@@ -5,6 +5,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import type { MapMarkerPin } from './RunMap.svelte';
 	import type { RouteMarker, RouteMarkerKind } from '$lib/types';
+	import type { JsonObject } from '$lib/types';
 	import {
 		fetchRouteMarkers,
 		addRouteMarker,
@@ -385,9 +386,9 @@
 	// rebuilding from scratch silently deleted all of it on any edit. Each key
 	// the editor owns is explicitly set or deleted below, so switching kind
 	// still drops the fields that kind can't carry.
-	function buildMeta(): Record<string, unknown> {
+	function buildMeta(): JsonObject {
 		const existing = editingId ? markers.find((mk) => mk.id === editingId)?.meta : null;
-		const meta: Record<string, unknown> = { ...((existing ?? {}) as Record<string, unknown>) };
+		const meta: JsonObject = { ...(existing ?? {}) };
 		const spec = kindSpec(draftKind);
 		if (spec.hasServices && draftServices.length > 0) meta.services = draftServices;
 		else delete meta.services;

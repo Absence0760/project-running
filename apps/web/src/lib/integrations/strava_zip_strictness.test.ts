@@ -32,7 +32,11 @@ function source(): string {
 function importOneBody(s: string): string {
 	const from = s.indexOf('async function importOne(');
 	assert.notEqual(from, -1, 'importOne not found — did it move?');
-	const to = s.indexOf('const metadata: Record<string, unknown>', from);
+	// The block ends where the metadata bag is declared. Anchored on the
+	// declaration, not on its type annotation: what closes the track block is
+	// that statement existing, and the bag has been typed
+	// `Record<string, unknown>` and `JsonObject`.
+	const to = s.indexOf('const metadata:', from);
 	assert.notEqual(to, -1, 'the track block no longer ends where this guard expects');
 	return s.slice(from, to);
 }

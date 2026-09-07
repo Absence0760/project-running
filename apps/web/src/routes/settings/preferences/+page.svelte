@@ -37,6 +37,7 @@
 		weightBoundsIn,
 	} from '$lib/format/weight';
 	import { valueLimit, withinValueLimit } from '$lib/core/column_limits';
+	import { MAX_HR_BPM_MIN, MAX_HR_BPM_MAX, isUsableMaxHrBpm } from '$lib/training/hr_zones';
 	import {
 		ACTIVITY_LEVELS,
 		type ActivityLevel,
@@ -57,6 +58,9 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { consent } from '$lib/settings/consent.svelte';
+	import { numberInputValue } from '$lib/settings/number_input';
+	import type { PrefsBag } from '$lib/settings/settings';
+	import type { Updatable } from '$lib/core/database';
 
 	let settings = $state<LoadedSettings | null>(null);
 	let loading = $state(true);
@@ -192,10 +196,10 @@
 	// snapshot. updateUniversal is offline-first (write-through cache + pending
 	// queue, decisions §79). A short debounce keeps it invisible; beforeNavigate
 	// flushes anything still pending so leaving the page never drops a change.
-	let pendingChanges: Record<string, unknown> = {};
+	let pendingChanges: PrefsBag = {};
 	let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
-	function autoSave(changes: Record<string, unknown>) {
+	function autoSave(changes: PrefsBag) {
 		if (!auth.user) return;
 		Object.assign(pendingChanges, changes);
 		saveStatus = 'saving';
@@ -332,6 +336,21 @@
 	// beta-blocked runner whose formula HR-max is wrong needs to set it.
 	let restingHr = $state('');
 	let maxHr = $state('');
+	// `min`/`max` on the max-HR input are COSMETIC, like the demographics card
+	// below: this field autosaves onblur and never reaches a form submit, so
+	// the browser's constraint validation never runs. This is the real gate.
+	// `max_hr_bpm` is a jsonb prefs key with no column and therefore no CHECK,
+	// so refusing it here is the only thing between a typo and three readers
+	// that each silently ignore it — the runner would otherwise type 300, be
+	// told nothing, and get age-estimated zones forever (decisions § 1407).
+	const maxHrParsed = $derived(numberInputValue(maxHr));
+	const maxHrOutOfRange = $derived(maxHrParsed !== null && !isUsableMaxHrBpm(maxHrParsed));
+	const maxHrBounds = { min: MAX_HR_BPM_MIN, max: MAX_HR_BPM_MAX };
+
+	function saveMaxHr() {
+		if (maxHrOutOfRange) return;
+		autoSave({ max_hr_bpm: maxHrParsed });
+	}
 
 	// HR zones
 	let z1 = $state('');
@@ -541,7 +560,19 @@
 	async function persistZones(next: PrivacyZone[]) {
 		if (!auth.user) return;
 		try {
-			await updateUniversal(auth.user.id, { [PRIVACY_ZONES_KEY]: next });
+			// The zone list is restated as an object literal on the way into the
+			// jsonb prefs bag: `PrivacyZone` is an interface, and an interface
+			// has no implicit index signature, so TypeScript refuses one as a
+			// `Json` however JSON-shaped it is. Naming the three fields also
+			// pins what a zone persists as — decisions § 33 makes this a
+			// privacy contract, not an incidental serialisation.
+			await updateUniversal(auth.user.id, {
+				[PRIVACY_ZONES_KEY]: next.map((z) => ({
+					lat: z.lat,
+					lng: z.lng,
+					radius_m: z.radius_m,
+				})),
+			});
 			privacyZones = next;
 		} catch (e) {
 			showToast(m('prefs.zoneSaveFailed', { error: (e as Error).message }), 'error');
@@ -657,7 +688,7 @@
 			// alone, so this write records an edit rather than undoing one.
 			// gender + height are the Art 9 fields and go null the moment
 			// consent is off.
-			const profileUpdate: Record<string, unknown> = {
+			const profileUpdate: Updatable<'user_profiles'> = {
 				date_of_birth: dateOfBirth || null,
 				gender: healthDataConsent && gender ? gender : null,
 				height_cm: healthDataConsent && heightVal != null ? heightVal : null,
@@ -703,7 +734,7 @@
 		}
 	}
 
-	function saveNutritionPref(changes: Record<string, unknown>) {
+	function saveNutritionPref(changes: PrefsBag) {
 		autoSave(changes);
 	}
 </script>
@@ -976,7 +1007,10 @@
 				</label>
 				<label>
 					<span class="label-text">{m('prefs.maxHr')}</span>
-					<input type="number" bind:value={maxHr} min="100" max="230" placeholder={m('prefs.maxHrPlaceholder')} onblur={() => autoSave({ max_hr_bpm: maxHr ? parseInt(maxHr, 10) || null : null })} />
+					<input type="number" bind:value={maxHr} min={MAX_HR_BPM_MIN} max={MAX_HR_BPM_MAX} placeholder={m('prefs.maxHrPlaceholder')} aria-invalid={maxHrOutOfRange} data-testid="max-hr" onblur={saveMaxHr} />
+					{#if maxHrOutOfRange}
+						<span class="field-error" data-testid="max-hr-error">{m('limits.maxHrOutOfRange', maxHrBounds)}</span>
+					{/if}
 				</label>
 			</div>
 			<p class="section-desc">{m('prefs.zonesUpperBoundDesc')}</p>

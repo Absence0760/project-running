@@ -45,6 +45,17 @@ test.describe('Settings propagation: hr_zones → /runs/[id] HR Zones', () => {
 		// 165 fall in Z1 / Z2 / Z3 / Z4 respectively (one sample each,
 		// no Z5). With a lower hr_zones config those same samples
 		// shift up the ladder; with a higher one they shift down.
+		//
+		// The samples carry `ts`, so the page takes its TIME-WEIGHTED
+		// branch -- the one a real recorder always reaches. Each sample
+		// weighs half the gap behind it plus half the gap ahead, each half
+		// capped at 30 s, so four samples 60 s apart weigh 30 / 60 / 60 /
+		// 30 seconds: 17 / 33 / 33 / 17 percent. The first and last carry
+		// half because nothing precedes or follows them -- that is the
+		// shape of the real computation, not an artefact of the fixture.
+		// The field was `t` until decisions § 1404, a key the app never
+		// reads, so this track reached the count fallback instead and
+		// every figure below was a flat 25 %.
 		const baseLat = -37.8136;
 		const baseLng = 144.9631;
 		const tBase = new Date('2026-04-15T08:00:00Z').getTime();
@@ -59,7 +70,7 @@ test.describe('Settings propagation: hr_zones → /runs/[id] HR Zones', () => {
 			track: bpmSamples.map((bpm, i) => ({
 				lat: baseLat + i * 0.0001,
 				lng: baseLng + i * 0.0001,
-				t: new Date(tBase + i * 60_000).toISOString(),
+				ts: new Date(tBase + i * 60_000).toISOString(),
 				bpm,
 			})),
 		});
@@ -77,8 +88,8 @@ test.describe('Settings propagation: hr_zones → /runs/[id] HR Zones', () => {
 	}) => {
 		// No hr_zones set in user_settings → page uses default
 		// [114, 133, 152, 171, 190].
-		// 100 → ≤114 → Z1; 125 → ≤133 → Z2; 145 → ≤152 → Z3; 165 → ≤171 → Z4.
-		// 4 samples / 4 zones × 1 each → 25% / 25% / 25% / 25% / 0%.
+		// 100 → ≤114 → Z1; 125 → ≤133 → Z2; 145 → ≤152 → Z3; 165 → ≤171 → Z4,
+		// one sample each, weighing 30 / 60 / 60 / 30 s → 17 / 33 / 33 / 17 / 0.
 		await setUserSetting(USER_A.id, 'hr_zones', null);
 		await page.goto(`/runs/${runId}`);
 		await expect(page.getByRole('heading', { name: 'Heart Rate Zones' }))
@@ -87,31 +98,23 @@ test.describe('Settings propagation: hr_zones → /runs/[id] HR Zones', () => {
 		// Pin the distribution by reading each zone's legend percentage.
 		const pcts = page.locator('.hr-legend .hr-zone-pct');
 		await expect(pcts).toHaveCount(5);
-		// Each of the 4 samples is in a distinct zone — 25% in each
-		// of Z1..Z4, 0% in Z5. Use sample-count-aware tolerance: the
-		// 4-sample distribution rounds cleanly.
-		await expect(pcts.nth(0)).toContainText('25');
-		await expect(pcts.nth(1)).toContainText('25');
-		await expect(pcts.nth(2)).toContainText('25');
-		await expect(pcts.nth(3)).toContainText('25');
-		await expect(pcts.nth(4)).toContainText('0');
+		// Whole strings, not `toContainText`: '30%' contains '0', so an
+		// empty-zone assertion written that way is satisfied by a third of
+		// the run.
+		await expect(pcts.nth(0)).toHaveText('17%');
+		await expect(pcts.nth(1)).toHaveText('33%');
+		await expect(pcts.nth(2)).toHaveText('33%');
+		await expect(pcts.nth(3)).toHaveText('17%');
+		await expect(pcts.nth(4)).toHaveText('0%');
 	});
 
 	test('custom hr_zones (lower cutoffs): same samples shift to higher zones', async ({
 		page,
 	}) => {
-		// Set cutoffs lower than the samples — every sample now lands
-		// in a higher-numbered zone. 100 ≤120 → Z2; 125 ≤140 → Z3;
-		// 145 ≤160 → Z4; 165 > 160, ≤180 → Z5.
-		// Wait: zoneIndex uses cutoffs[0..4] as upper bounds; a sample
-		// > cutoffs[4] is Z5. 165 ≤ 180 (cutoffs[3]) → Z4. Let me
-		// recheck.
-		// cutoffs = [110, 130, 150, 170, 190]
-		// 100 ≤ 110 → Z1; 125 ≤ 130 → Z2; 145 ≤ 150 → Z3; 165 ≤ 170 → Z4
-		// Hmm — same as default minus a shift. Let me lower further.
-		// cutoffs = [90, 110, 130, 150, 170]
-		// 100 > 90, ≤110 → Z2; 125 > 110, ≤130 → Z3; 145 > 130,
-		// ≤150 → Z4; 165 > 150, ≤170 → Z5. Distribution: 0/1/1/1/1 → 0/25/25/25/25.
+		// cutoffs = [90, 110, 130, 150, 170] puts every sample one rung
+		// higher: 100 > 90 → Z2; 125 > 110 → Z3; 145 > 130 → Z4;
+		// 165 > 150 → Z5. The ladder shifts and the weights come with it,
+		// so the distribution is 0 / 17 / 33 / 33 / 17.
 		await setUserSetting(USER_A.id, 'hr_zones', {
 			z1: 90,
 			z2: 110,
@@ -125,12 +128,11 @@ test.describe('Settings propagation: hr_zones → /runs/[id] HR Zones', () => {
 
 		const pcts = page.locator('.hr-legend .hr-zone-pct');
 		await expect(pcts).toHaveCount(5);
-		// 0% in Z1 (no sample below 90), 25% each in Z2-Z5.
-		await expect(pcts.nth(0)).toContainText('0');
-		await expect(pcts.nth(1)).toContainText('25');
-		await expect(pcts.nth(2)).toContainText('25');
-		await expect(pcts.nth(3)).toContainText('25');
-		await expect(pcts.nth(4)).toContainText('25');
+		await expect(pcts.nth(0)).toHaveText('0%');
+		await expect(pcts.nth(1)).toHaveText('17%');
+		await expect(pcts.nth(2)).toHaveText('33%');
+		await expect(pcts.nth(3)).toHaveText('33%');
+		await expect(pcts.nth(4)).toHaveText('17%');
 	});
 
 	test('custom hr_zones (higher cutoffs): same samples shift to lower zones', async ({
@@ -138,7 +140,8 @@ test.describe('Settings propagation: hr_zones → /runs/[id] HR Zones', () => {
 	}) => {
 		// cutoffs = [140, 160, 180, 200, 220]
 		// 100 ≤140 → Z1; 125 ≤140 → Z1; 145 >140, ≤160 → Z2;
-		// 165 >160, ≤180 → Z3. Distribution: 2/1/1/0/0 → 50/25/25/0/0.
+		// 165 >160, ≤180 → Z3. Z1 now holds the first two samples, 30 + 60
+		// of the 180 s total → 50 / 33 / 17 / 0 / 0.
 		await setUserSetting(USER_A.id, 'hr_zones', {
 			z1: 140,
 			z2: 160,
@@ -152,11 +155,11 @@ test.describe('Settings propagation: hr_zones → /runs/[id] HR Zones', () => {
 
 		const pcts = page.locator('.hr-legend .hr-zone-pct');
 		await expect(pcts).toHaveCount(5);
-		await expect(pcts.nth(0)).toContainText('50');
-		await expect(pcts.nth(1)).toContainText('25');
-		await expect(pcts.nth(2)).toContainText('25');
-		await expect(pcts.nth(3)).toContainText('0');
-		await expect(pcts.nth(4)).toContainText('0');
+		await expect(pcts.nth(0)).toHaveText('50%');
+		await expect(pcts.nth(1)).toHaveText('33%');
+		await expect(pcts.nth(2)).toHaveText('17%');
+		await expect(pcts.nth(3)).toHaveText('0%');
+		await expect(pcts.nth(4)).toHaveText('0%');
 	});
 
 	test('round-trip: lower → higher → unset returns to defaults', async ({
@@ -178,7 +181,7 @@ test.describe('Settings propagation: hr_zones → /runs/[id] HR Zones', () => {
 		await page.goto(`/runs/${runId}`);
 		const pcts = page.locator('.hr-legend .hr-zone-pct');
 		await expect(pcts.first()).toBeVisible({ timeout: 10_000 });
-		await expect(pcts.nth(0)).toContainText('0'); // Z1 empty
+		await expect(pcts.nth(0)).toHaveText('0%'); // Z1 empty
 
 		// Phase 2: higher.
 		await setUserSetting(USER_A.id, 'hr_zones', {
@@ -190,13 +193,13 @@ test.describe('Settings propagation: hr_zones → /runs/[id] HR Zones', () => {
 		});
 		await page.goto(`/runs/${runId}`);
 		await expect(pcts.first()).toBeVisible({ timeout: 10_000 });
-		await expect(pcts.nth(0)).toContainText('50'); // Z1 dominates
+		await expect(pcts.nth(0)).toHaveText('50%'); // Z1 dominates
 
 		// Phase 3: unset → defaults.
 		await setUserSetting(USER_A.id, 'hr_zones', null);
 		await page.goto(`/runs/${runId}`);
 		await expect(pcts.first()).toBeVisible({ timeout: 10_000 });
-		await expect(pcts.nth(0)).toContainText('25'); // back to defaults
+		await expect(pcts.nth(0)).toHaveText('17%'); // back to defaults
 	});
 });
 

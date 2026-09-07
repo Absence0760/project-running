@@ -49,6 +49,25 @@ class L10nResourceParityTest {
         return out
     }
 
+    /// Map of name -> the element that declares it, `"string"` or `"plurals"`.
+    /// A key's KIND is part of its contract: `stringResource` on a `<plurals>`
+    /// and `pluralStringResource` on a `<string>` both raise
+    /// `Resources.NotFoundException` at render time, and only on a device set
+    /// to the locale that disagrees.
+    private fun kinds(file: File): Map<String, String> {
+        val doc = DocumentBuilderFactory.newInstance().apply {
+            isNamespaceAware = false
+        }.newDocumentBuilder().parse(file)
+        val out = linkedMapOf<String, String>()
+        for (tag in listOf("string", "plurals")) {
+            val nodes = doc.getElementsByTagName(tag)
+            for (i in 0 until nodes.length) {
+                out[(nodes.item(i) as Element).getAttribute("name")] = tag
+            }
+        }
+        return out
+    }
+
     @Test
     fun `default strings file exists and is non-empty`() {
         val def = stringsFile("values")
@@ -75,6 +94,30 @@ class L10nResourceParityTest {
                 "$dir has keys absent from the default set: $extra",
                 emptySet<String>(),
                 extra,
+            )
+        }
+    }
+
+    @Test
+    fun `every locale declares each key as the same kind of resource`() {
+        // The key-set check above folds `<string>` and `<plurals>` into one
+        // namespace, so a key converted to a plural in `values` and left a
+        // string in one translation passes it — and then crashes with
+        // `Resources.NotFoundException` on the one locale that disagrees, which
+        // is exactly the class of failure this file exists to catch before a
+        // device does (decisions § 1389). The call site picks its accessor from
+        // the DEFAULT catalogue, so the default's kind is the contract.
+        val default = kinds(stringsFile("values"))
+        for (dir in localeDirs) {
+            val parsed = kinds(stringsFile(dir))
+            val wrong = default.keys
+                .filter { parsed[it] != null && parsed[it] != default[it] }
+                .map { "$it (values=${default[it]}, $dir=${parsed[it]})" }
+            assertEquals(
+                "$dir declares a key as a different resource kind than the default set, " +
+                    "so the accessor the call site picked cannot read it on that locale",
+                emptyList<String>(),
+                wrong,
             )
         }
     }

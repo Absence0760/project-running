@@ -711,16 +711,51 @@
 		}
 	}
 
+	/// Every geojson source `addOverlays` creates. The layers are found FROM
+	/// this list rather than listed beside it, so a new layer over an existing
+	/// source needs no second edit -- only a new source does.
+	const OWNED_SOURCE_IDS = [
+		'trace',
+		'trace-pace',
+		'distance-markers',
+		'route-markers',
+		'animated-trace',
+		'selected-segment',
+	] as const;
+
+	/// Remove everything `addOverlays` added, so it can run again against a
+	/// clean style. The style-swap path gets this for free -- `setStyle` wipes
+	/// user layers -- but a track change does not.
+	function clearOverlays(): void {
+		if (!map) return;
+		const owned = new Set<string>(OWNED_SOURCE_IDS);
+		for (const layer of map.getStyle()?.layers ?? []) {
+			const src = (layer as { source?: string }).source;
+			if (src && owned.has(src)) map.removeLayer(layer.id);
+		}
+		for (const id of OWNED_SOURCE_IDS) {
+			if (map.getSource(id)) map.removeSource(id);
+		}
+	}
+
 	let trackCoords: [number, number][] = [];
 	let trackBounds: maplibregl.LngLatBoundsLike | undefined;
+	/// The `track` array the four snapshots below were taken from. Compared by
+	/// IDENTITY: every caller holds the value in `$state` or `$derived`, both
+	/// of which keep it stable until the value really changes.
+	let renderedTrack: TrackPoint[] | null = null;
 
-	onMount(() => {
-		// Honour the global banner choice on every surface: if the user
-		// has already accepted the cookie banner, auto-init the map
-		// (consent is on record) and skip the per-view "Load map" tap.
-		if (hasAcceptedConsent()) mapConsented = true;
+	/// Take every snapshot the map derives from `track`. `track` is a PROP and
+	/// it changes after mount -- /runs/[id] draws the recorded line and swaps
+	/// in the map-matched one when the second gzipped object lands -- and all
+	/// four of these used to be computed once, at mount. The drawn line, the
+	/// camera and the tap index therefore stayed on the recorded track forever
+	/// while `buildSegment` read `track[i]` reactively, so the segment card
+	/// mixed one track's indices with another's values, and returned null
+	/// outright whenever the two differed in length (decisions § 1402).
+	function snapshotTrack(): void {
 		trackCoords = track.map((p) => [p.lng, p.lat]);
-
+		trackBounds = undefined;
 		if (trackCoords.length > 0) {
 			// Reduce, don't spread: `Math.min(...lngs)` throws RangeError past
 			// ~110k args and an ultra track is ~180k points.
@@ -733,9 +768,47 @@
 				];
 			}
 		}
+		cumulativeM = buildCumulative(trackCoords);
+		trackIndex = buildTrackIndex(trackCoords);
+		renderedTrack = track;
+	}
+
+	onMount(() => {
+		// Honour the global banner choice on every surface: if the user
+		// has already accepted the cookie banner, auto-init the map
+		// (consent is on record) and skip the per-view "Load map" tap.
+		if (hasAcceptedConsent()) mapConsented = true;
+		snapshotTrack();
 
 		if (!mapConsented) return; // Wait for the user to tap "Load map".
 		initMap();
+	});
+
+	// Adopt a track that changed after mount. Declared after `onMount` so it
+	// cannot run before the first snapshot, and gated on identity so an
+	// unrelated re-render never rebuilds a 180k-point index or yanks the
+	// camera. /runs/[id] is the caller this exists for: it draws the recorded
+	// line and swaps in the map-matched one a beat later, and its own comment
+	// has claimed "the map will swap to the matched line once it lands" since
+	// the day the matched line shipped (decisions § 1402).
+	$effect(() => {
+		const next = track;
+		if (!map || next === renderedTrack) return;
+		// The replay walks a copy of the old coordinates and paints into a
+		// source this is about to remove.
+		if (animating) stopAnimation();
+		// The selection was expressed as indices into the OLD track; there is
+		// no honest way to carry it across.
+		segmentMarker?.remove();
+		segmentMarker = undefined;
+		snapshotTrack();
+		clearOverlays();
+		// `data-map-idle` means "settled on the track being shown", so it has
+		// to come off until the new camera has settled -- a pointer-driven
+		// test waiting on it would otherwise read a position mid-animation.
+		mapContainer?.removeAttribute('data-map-idle');
+		map.once('idle', () => mapContainer?.setAttribute('data-map-idle', 'true'));
+		addOverlays(trackCoords, trackBounds, true);
 	});
 
 	function loadMapNow() {
@@ -748,6 +821,10 @@
 
 	function initMap() {
 		if (map || !mapContainer) return;
+		// Re-taken rather than trusted: `mapConsented` can flip long after
+		// mount, and the track may have changed in between. Guarded so the
+		// ordinary path does not walk a 180k-point track twice.
+		if (renderedTrack !== track) snapshotTrack();
 		map = new maplibregl.Map({
 			container: mapContainer,
 			style: mapStyleUrl(PUBLIC_MAPTILER_KEY, prefersDark),
@@ -760,9 +837,6 @@
 		stopResizeWatch = watchMapResize(mapContainer, map);
 
 		map.addControl(new maplibregl.NavigationControl(), 'top-right');
-
-		cumulativeM = buildCumulative(trackCoords);
-		trackIndex = buildTrackIndex(trackCoords);
 
 		map.on('load', () => addOverlays(trackCoords, trackBounds, true));
 		// The entrance fitBounds (inside the load handler above) animates the

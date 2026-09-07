@@ -7,7 +7,7 @@
 	import { buildMonthInRunningRecap, type YearInRunningRecap } from '$lib/runs/recap';
 	import { buildRecapShareSvg } from '$lib/share/recap_share_image';
 	import { buildRecapShareCanonical } from '$lib/share/share_recap_meta';
-	import { svgToPngBlob } from '$lib/share/svg_to_png';
+	import { rasterizeSvgToPng } from '$lib/format/svg_raster';
 	import RecapView from '$lib/components/RecapView.svelte';
 	import { fmtKm, getUnit } from '$lib/format/units.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
@@ -72,7 +72,7 @@
 
 		try {
 			const svg = buildRecapShareSvg(recap, getUnit(), periodLabel);
-			const blob = await svgToPngBlob(svg, 1080);
+			const blob = await rasterizeSvgToPng(svg, 1080, 1080);
 			const file = new File([blob], `threkir-${periodKey}.png`, { type: 'image/png' });
 			if (navigator.canShare?.({ files: [file] })) {
 				await navigator.share({

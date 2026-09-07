@@ -12,6 +12,7 @@
 	import { paceParts } from '$lib/format/pace_format';
 	import { m as t } from '$lib/i18n/store.svelte';
 	import type { PlanWorkout } from '$lib/types';
+	import type { JsonObject } from '$lib/types';
 	import Modal from './Modal.svelte';
 	import UnsavedChangesGuard from './UnsavedChangesGuard.svelte';
 	import { trackDirty } from '$lib/core/form_dirty';
@@ -317,7 +318,7 @@
 				notes: notes.trim() || null,
 				structure: isUnstructured
 					? null
-					: (nextStructure as unknown as Record<string, unknown> | null),
+					: (nextStructure as unknown as JsonObject | null),
 			});
 			dirty.rebaseline();
 			onSaved();

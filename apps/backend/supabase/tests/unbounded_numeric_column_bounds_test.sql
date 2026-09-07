@@ -27,7 +27,7 @@
 
 begin;
 
-select plan(29);
+select plan(31);
 
 -- ── the two Postgres facts the bounds are shaped around ────────────────────
 select ok(
@@ -83,6 +83,18 @@ select lives_ok(
              'd1000000-0000-0000-0000-000000000001',
              51.5, -0.12, 35, 1200, 400, 148) $$,
   'an ordinary live ping still stores'
+);
+-- STORES WHAT IT SUPPLIED. `live_run_pings_drop_in_zone` is a BEFORE INSERT
+-- trigger that coarsens lat/lng and nulls `ele` for a runner inside one of
+-- their own privacy zones, and the CHECKs this suite exists to exercise run
+-- AFTER it -- so `lives_ok` alone cannot tell a stored coordinate from one the
+-- clipper substituted, and the positive control would survive a bound that had
+-- stopped admitting the client's own value (decisions 1372).
+select results_eq(
+  $$ select lat, lng, ele, coarse from live_run_pings
+      where run_id = 'd1000000-0000-0000-0000-00000000a001' and elapsed_s = 400 $$,
+  $$ values (51.5::float8, -0.12::float8, 35::float8, false) $$,
+  'the stored live ping is the supplied one, not a privacy-coarsened substitute'
 );
 select throws_ok(
   $$ insert into live_run_pings (run_id, user_id, lat, lng)
@@ -168,6 +180,12 @@ select lives_ok(
              'd1000000-0000-0000-0000-000000000001', now(), 51.5, -0.12,
              1200, 400, 148, false) $$,
   'an ordinary race ping still stores'
+);
+select results_eq(
+  $$ select lat, lng, coarse from race_pings
+      where event_id = 'd1000000-0000-0000-0000-00000000e001' and elapsed_s = 400 $$,
+  $$ values (51.5::float8, -0.12::float8, false) $$,
+  'the stored race ping is the supplied one, not a privacy-coarsened substitute'
 );
 select throws_ok(
   $$ insert into race_pings (event_id, instance_start, user_id, at, lat, lng, coarse)

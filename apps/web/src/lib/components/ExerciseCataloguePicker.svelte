@@ -3,6 +3,7 @@
 	import type { Exercise, ExerciseCategory } from '$lib/types';
 	import { createCustomExercise } from '$lib/core/data';
 	import { cataloguePickerView } from './exercise_catalogue_picker';
+	import { namesAnExercise } from '$lib/gym/gym_prs';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 
@@ -62,7 +63,11 @@
 
 	async function create() {
 		const name = trimmed;
-		if (name === '' || creating) return;
+		// The same blankness test cataloguePickerView already makes on the key,
+		// rather than a second one on the spelling: exercises.name_key carries
+		// `length(...) between 1 and 120`, so the two disagreeing would mean the
+		// create button stays hidden while this path still attempts the insert.
+		if (!namesAnExercise(name) || creating) return;
 		creating = true;
 		const made = await createCustomExercise({
 			name,

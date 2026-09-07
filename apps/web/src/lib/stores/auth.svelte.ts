@@ -5,6 +5,7 @@ import { setUnit } from '$lib/format/units.svelte';
 import { defaultUnitForLocale } from '$lib/format/locale_defaults';
 import { showToast } from '$lib/stores/toast.svelte';
 import { m } from '$lib/i18n/store.svelte';
+import { parsePreferredUnit, parseSubscriptionTier } from '$lib/types';
 import { createReadyGate, isAuthSettled } from './auth_ready';
 import { signOutWithScope } from './sign_out';
 
@@ -120,8 +121,8 @@ function createAuthStore() {
 				display_name: profile.display_name,
 				avatar_url: profile.avatar_url,
 				parkrun_number: profile.parkrun_number,
-				preferred_unit: profile.preferred_unit ?? 'km',
-				subscription_tier: profile.subscription_tier ?? 'free',
+				preferred_unit: parsePreferredUnit(profile.preferred_unit),
+				subscription_tier: parseSubscriptionTier(profile.subscription_tier),
 				billing_issue_at: profile.billing_issue_at ?? null,
 				onboarded_at: profile.onboarded_at ?? null,
 			};
