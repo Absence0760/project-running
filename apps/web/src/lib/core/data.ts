@@ -167,13 +167,21 @@ import {
 /// a column, so a migration that drops one fails to compile at the declaration
 /// rather than asking PostgREST for nothing.
 ///
-/// The wire string is `.join()`ed from the tuple, which is `string` rather than a
-/// literal type. That costs nothing today — the browser client is constructed
-/// without the `Database` generic, so supabase-js infers no row shape from any
-/// select in this file — but whoever types that client has to convert these
-/// joins back to literals, and `route_list_columns.ts` already carries the
-/// `Join<T, D>` template-literal type that does it.
-export type RunColumns = readonly (keyof Run)[];
+/// The intersection is what makes that true, and `keyof Run` alone did not:
+/// the overlay adds `track` — a lazy Storage download that has never been a
+/// column — and `has_track`, a field only the `public_runs` view carries. Both
+/// passed `satisfies` and both reach PostgREST as a 42703 that fails the WHOLE
+/// read, not just the column. Narrowing to the generated row's own keys is the
+/// check the typed client makes available; `data.test.ts` pins both refusals.
+///
+/// The wire string is `.join()`ed from the tuple, so it is `string` and
+/// supabase-js's select parser can read nothing from it — unlike every other
+/// narrowed read here, whose columns are a module constant `Join<T, D>` can
+/// re-state as the literal it spells. These are a caller's parameter, known
+/// only at the call site, so the check lives at the tuple's own declaration
+/// instead and the row type is `Pick`ed from that same tuple: one declaration,
+/// two derivations, which is the whole point of § 1330.
+export type RunColumns = readonly (keyof Run & keyof Database['public']['Tables']['runs']['Row'])[];
 
 export interface FetchRunsOptions<C extends RunColumns = RunColumns> {
 	/** Cap the number of rows returned. Pair with `offset` for paging. */
@@ -221,11 +229,10 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 	const build = () => {
 		let q = supabase
 			.from(TABLES.runs)
-			.select(
-				(opts?.columns ? opts.columns.join(SELECT_SEPARATOR) : '*') as
-					| '*'
-					| Join<RunColumns, typeof SELECT_SEPARATOR>,
-			)
+			// `Join<RunColumns, D>` used to stand here and evaluated to `string`:
+			// the type only spells a literal for a TUPLE, and this is an
+			// unbounded array. It read as if the literal survived the join.
+			.select(opts?.columns ? opts.columns.join(SELECT_SEPARATOR) : '*')
 			.eq('user_id', userId);
 		if (opts?.startedAtFrom != null) q = q.gte('started_at', opts.startedAtFrom);
 		if (opts?.startedAtBefore != null) q = q.lt('started_at', opts.startedAtBefore);
@@ -2276,7 +2283,7 @@ export async function searchClubsWithError(
 		location_label: (r.location_label ?? null) as string | null,
 		is_public: r.is_public as boolean,
 		is_verified: (r.is_verified as boolean | undefined) ?? false,
-		join_policy: (r.join_policy ?? 'open') as JoinPolicy,
+		join_policy: parseJoinPolicy(r.join_policy as string | null),
 		member_count: (r.member_count ?? 0) as number,
 		requires_activity_waiver: (r.requires_activity_waiver as boolean | undefined) ?? false,
 		website_url: (r.website_url ?? null) as string | null,
@@ -2714,7 +2721,11 @@ export async function fetchMyClubsWithError(): Promise<{
 		.eq('user_id', userId)
 		.order('joined_at', { ascending: false });
 	if (error) return { clubs: [], error: error.message };
-	const clubs = (data ?? []).map((row: any) => row.clubs).filter(Boolean);
+	// `(row: any)` stood here and hid that this read alone skipped `asClub`:
+	// the embedded row's `join_policy` arrived as the bare `string` the
+	// generated type gives it and was handed on under a type promising the
+	// union. Typing the client is what made the gap visible.
+	const clubs = (data ?? []).map((row) => row.clubs).filter(Boolean).map(asClub);
 	return enrichClubs(clubs);
 }
 
@@ -2818,7 +2829,6 @@ async function enrichClubs(
 	const withMembership = (): ClubWithMeta[] =>
 		clubs.map((c) => ({
 			...c,
-			join_policy: (c.join_policy ?? 'open') as JoinPolicy,
 			member_count: c.member_count ?? 0,
 			viewer_role: roles.get(c.id) ?? null,
 			viewer_status: statuses.get(c.id) ?? null
@@ -2900,7 +2910,7 @@ export async function createClub(input: {
 			return {
 				...data,
 				invite_token: inviteToken,
-				join_policy: (data.join_policy ?? 'open') as JoinPolicy
+				join_policy: parseJoinPolicy(data.join_policy)
 			};
 		}
 		// 23505 is the slug-uniqueness conflict — retry with a suffix.

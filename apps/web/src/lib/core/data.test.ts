@@ -15,7 +15,7 @@ import { resolve } from 'node:path';
 import { stripComments } from './strip_comments';
 // Type-only, so nothing in `data.ts` (the supabase singleton, `$env/static/public`)
 // is evaluated when this file runs under `tsx --test`.
-import type { PeriodSummaryRun } from './data';
+import type { PeriodSummaryRun, RunColumns } from './data';
 
 function read(...parts: string[]): string {
 	return readFileSync(resolve(...parts), 'utf-8');
@@ -2112,5 +2112,67 @@ test('every gym / meal-template / recipe read and the row type it is read as nam
 				`${at}: ${c} is declared an extra and the select no longer asks for it`,
 			);
 		}
+	}
+});
+
+// ── Compile-time: a run projection can only name a column `runs` has ──
+//
+// `svelte-check` is the gate for these too. `RunColumns` was `keyof Run`, and
+// the overlay adds two keys that are not columns: `track`, the lazy Storage
+// download, and `has_track`, which only the `public_runs` view carries. Either
+// in a projection is a PostgREST 42703 that fails the WHOLE read — the runner
+// sees no runs at all, not a run missing a field — and both compiled.
+
+// @ts-expect-error — `track` is a lazy Storage download, never a `runs` column
+export const trackIsNotAProjectableRunColumn = ['track'] as const satisfies RunColumns;
+
+// @ts-expect-error — `has_track` is a `public_runs` view field, not a base column
+export const hasTrackIsNotAProjectableRunColumn = ['has_track'] as const satisfies RunColumns;
+
+/// The narrowing has to leave the real columns projectable, or the pins above
+/// are the only thing still passing. `source`, `activity_type` and `metadata`
+/// are the three the overlay re-declares — they stay columns.
+export const realRunColumnsStayProjectable = [
+	'id',
+	'started_at',
+	'distance_m',
+	'track_url',
+	'source',
+	'activity_type',
+	'metadata',
+] as const satisfies RunColumns;
+
+test('every clubs read narrows join_policy, and none of them fails open', () => {
+	// Reason: `join_policy` is a CHECK-constrained union the generated row
+	// types as a bare `string`, and it decides whether a club is free to join.
+	// Four sites asserted it into the union with a `?? 'open'` fallback — the
+	// value that grants entry to anyone — against the one narrower the module
+	// already had, whose fallback is `'request'`. `fetchMyClubsWithError`
+	// reached `enrichClubs` without narrowing at all, which only surfaced when
+	// the `(row: any)` on its embed came off (§ 1330's premise: a typed client
+	// is what turns an assertion into a check).
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const asserted = source
+		.split('\n')
+		.map((text, i) => ({ line: i + 1, text: text.trim() }))
+		.filter(({ text }) => /join_policy\b/.test(text) && /\bas JoinPolicy\b/.test(text));
+	assert.deepEqual(
+		asserted,
+		[],
+		'join_policy must come through parseJoinPolicy, which fails closed to `request`:\n' +
+			asserted.map((h) => `  data.ts:${h.line}  ${h.text}`).join('\n'),
+	);
+	for (const fn of [
+		'browseClubsWithError',
+		'searchClubsWithError',
+		'fetchMyClubsWithError',
+		'fetchClubBySlug',
+		'createClub',
+	]) {
+		assert.match(
+			functionBody(source, fn),
+			/\basClub\b|parseJoinPolicy\(/,
+			`${fn} must narrow join_policy at the read boundary, not assert it`,
+		);
 	}
 });
