@@ -709,6 +709,25 @@ jobs:
             echo "Reproduce with: node --test scripts/check_shared_constants.test.mjs (stdlib only, no install needed)."
             exit 1
           fi
+      # The guard above compares rails it has been TOLD about, and
+      # check_parity_pair_registry.mjs compares the two registries rather than
+      # the two behaviours (§ 852) — so neither can see a web module that
+      # rewrites a shared helper privately. The tree hit that four times
+      # (§ 852, § 1340, the round-42 catalogue-picker copy, § 1398's planSlug)
+      # with every guard green. This one reads the source instead of a
+      # registry; decisions § 1397.
+      - name: No web module privately reimplements a shared helper
+        run: |
+          if ! node scripts/check_shared_reimplementations.mjs; then
+            echo "::error::A web module rewrites a helper apps/web/src/lib already exports, instead of importing it. The failing lines name both sides and what they share — an identical normalised function body, or the distinctive operations a copy cannot drop. Import the shared export; if the duplication is deliberate, add a REGISTERED entry in scripts/check_shared_reimplementations.mjs saying what the thing actually IS."
+            echo "A STALE line means the opposite: a registration matching no finding, so the duplication was resolved (delete the entry) or the guard stopped seeing it."
+            exit 1
+          fi
+          if ! node --test scripts/check_shared_reimplementations.test.mjs; then
+            echo "::error::The private-reimplementation guard's own unit tests failed. The tree itself is clean — the check above just passed — so this is a defect in scripts/check_shared_reimplementations.mjs, not a new copy."
+            echo "Reproduce with: node --test scripts/check_shared_reimplementations.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
       # The accent fold the famous-segment catalogue searches and sorts with is
       # DERIVED data on the Dart side: web computes it from `normalize('NFD')`
       # and the Unicode `Diacritic` property, which Dart's core library cannot
