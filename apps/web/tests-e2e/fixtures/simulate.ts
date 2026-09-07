@@ -2,6 +2,9 @@ import { gzipSync } from 'zlib';
 
 import { getAdminClient } from './local-supabase';
 
+/// The one bucket every run-scoped object in this file lives in.
+const BUCKET_RUNS = 'runs';
+
 interface TrackPoint {
 	lat: number;
 	lng: number;
@@ -33,6 +36,40 @@ interface TrackPoint {
  *     members for cluster-of-N tests where joining via UI per
  *     user is too slow.
  */
+
+/**
+ * The sentence a Storage failure throws with.
+ *
+ * `upErr.message` alone is not attributable. The one occurrence this exists
+ * for read `simulate.insertRun track upload failed: An invalid response was
+ * received from the upstream server` — Kong's 502 body, which names neither
+ * the bucket, nor the object, nor the status, so a CI flake here reads as a
+ * spec defect ([§ 1403](../../../../docs/architecture/decisions.md)).
+ *
+ * **It is deliberately not a retry.** Measured on the shared local stack:
+ * 1,800 uploads — 300 sequential and 1,500 at concurrency 12 — failed zero
+ * times, and no race is available to the fixture anyway, since the path
+ * embeds a freshly minted `runs.id` and `upsert: true` makes even a collision
+ * a no-op. What DOES reproduce it exactly is another lane restarting the
+ * shared Supabase stack: a `docker restart` of the storage container while
+ * uploading gives a contiguous ~5.5 s burst of `502 An invalid response was
+ * received from the upstream server` and then nothing. A retry would paper
+ * over a stack that is going down locally, and on CI — where the stack is
+ * this job's alone — a 502 is a real signal that deserves to fail loudly.
+ * Naming the status is what separates the two readings.
+ */
+export function storageFailure(
+	what: string,
+	bucket: string,
+	path: string,
+	err: { message: string; status?: number; statusCode?: string | number },
+): Error {
+	const status = err.status ?? err.statusCode;
+	return new Error(
+		`simulate.${what} failed: bucket ${bucket}, path ${path}` +
+			`${status == null ? '' : `, status ${status}`}: ${err.message}`,
+	);
+}
 
 export async function insertRun(opts: {
 	user_id: string;
@@ -90,14 +127,12 @@ export async function insertRun(opts: {
 		const json = JSON.stringify(opts.track);
 		const gzipped = gzipSync(Buffer.from(json, 'utf-8'));
 		const { error: upErr } = await admin.storage
-			.from('runs')
+			.from(BUCKET_RUNS)
 			.upload(path, gzipped, {
 				contentType: 'application/octet-stream',
 				upsert: true
 			});
-		if (upErr) {
-			throw new Error(`simulate.insertRun track upload failed: ${upErr.message}`);
-		}
+		if (upErr) throw storageFailure('insertRun track upload', BUCKET_RUNS, path, upErr);
 		const { error: updErr } = await admin
 			.from('runs')
 			.update({ track_url: path })
@@ -111,11 +146,9 @@ export async function insertRun(opts: {
 		const path = `${opts.user_id}/${runId}.hr.json.gz`;
 		const gzipped = gzipSync(Buffer.from(JSON.stringify(opts.hrSeries), 'utf-8'));
 		const { error: upErr } = await admin.storage
-			.from('runs')
+			.from(BUCKET_RUNS)
 			.upload(path, gzipped, { contentType: 'application/octet-stream', upsert: true });
-		if (upErr) {
-			throw new Error(`simulate.insertRun hr-series upload failed: ${upErr.message}`);
-		}
+		if (upErr) throw storageFailure('insertRun hr-series upload', BUCKET_RUNS, path, upErr);
 		const { error: updErr } = await admin
 			.from('runs')
 			.update({ hr_series_url: path })
@@ -158,11 +191,9 @@ export async function insertMatchedTrack(opts: {
 		path = `${opts.user_id}/${opts.run_id}.matched.json.gz`;
 		const gzipped = gzipSync(Buffer.from(JSON.stringify(opts.track), 'utf-8'));
 		const { error: upErr } = await admin.storage
-			.from('runs')
+			.from(BUCKET_RUNS)
 			.upload(path, gzipped, { contentType: 'application/octet-stream', upsert: true });
-		if (upErr) {
-			throw new Error(`simulate.insertMatchedTrack upload failed: ${upErr.message}`);
-		}
+		if (upErr) throw storageFailure('insertMatchedTrack upload', BUCKET_RUNS, path, upErr);
 	}
 
 	const { error } = await admin.from('run_matched_tracks').upsert(
@@ -203,7 +234,7 @@ export async function deleteRun(runId: string): Promise<void> {
 		(p): p is string => !!p,
 	);
 	if (paths.length > 0) {
-		await admin.storage.from('runs').remove(paths);
+		await admin.storage.from(BUCKET_RUNS).remove(paths);
 	}
 	const { error } = await admin.from('runs').delete().eq('id', runId);
 	if (error) {
