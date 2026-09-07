@@ -1846,6 +1846,39 @@ a rule written afterwards would destroy the one thing it is for. That
 declaration lives in the file it describes, so the guard carries no list of
 exceptions.
 
+## A checkbox is ticked against the merged tree, not against one lane's worktree
+
+A parallel round runs several lanes in separate worktrees, each of which can see
+only its own. That produces a specific, recurring, *structural* miss: lane A
+files a `- [ ]` for something it cannot take because the owning tree is lane B's,
+lane B fixes exactly that thing, and nobody ticks the box — B never saw the
+filing, and A's tree does not contain the fix. Both lanes behaved correctly. In
+round 43 two of one lane's five assigned items were already satisfied by the
+commit the lane was branched from, landed by a sibling in the previous round's
+own PR; the boxes were still open because a lane can only tick what it can see.
+
+So the tick is not a lane's obligation. **Whoever integrates the round re-reads
+every `- [ ]` the round's own branches touched or filed against, checks it
+against the MERGED tree, and ticks the ones the merged tree already satisfies.**
+The check is cheap because the population is bounded: the boxes each lane's
+report claims, plus the boxes each lane filed. A lane that finds its assigned
+item already done says so in its report rather than deleting the box, so the
+integrator has the list.
+
+Two related passes belong to the same moment, for the same reason:
+
+- **The census is reconciled LAST.** Per-file test counts in
+  [`test_inventory.md`](../testing/test_inventory.md) move under several lanes at
+  once, so a lane that recomputes them conflicts with every other lane and
+  measures a tree that no longer exists by the time the round lands. Each lane
+  reports the recompute command for any count it moved;
+  `scripts/check_test_inventory_counts.mjs` then re-derives all of them on the
+  merged tree in one pass.
+- **A count a lane states is stated with the command that produced it**, so
+  reconciliation is arithmetic rather than archaeology. "Wear OS is now 774
+  across 75" is worth less than the `find`/`grep` that says so, because only the
+  second survives another lane also adding a test.
+
 ## A merge gate and an agent name each have exactly one definition
 
 Two invariants about this repo's own tooling, both guarded in `apps/web/src/lib/ci_workflow_guards.test.ts` because both fail *green*:
