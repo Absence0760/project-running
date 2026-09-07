@@ -5,26 +5,15 @@
 
 import { normaliseSiteUrl } from './share_meta';
 import { escapeHtml } from '../util/html_escape';
+import { serialiseJsonLd } from '../util/json_ld';
+import { collapseAndClip } from '../util/clip_text';
 import type { SharedProfile } from './share_profile_lookup';
 
 const SITE_NAME = 'Threkir';
 
-function escapeJsonLd(json: string): string {
-	return json
-		.replace(/</g, '\\u003c')
-		.replace(/>/g, '\\u003e')
-		.replace(/&/g, '\\u0026');
-}
-
-function clean(raw: string | null | undefined, max: number): string {
-	const collapsed = (raw ?? '').replace(/\s+/g, ' ').trim();
-	if (!collapsed) return '';
-	return collapsed.length > max ? `${collapsed.slice(0, max - 1).trimEnd()}…` : collapsed;
-}
-
 /// Display name with a safe fallback (a profile may have no name set).
 export function profileDisplayName(profile: SharedProfile | null | undefined): string {
-	return clean(profile?.display_name, 80) || 'Runner';
+	return collapseAndClip(profile?.display_name, 80) || 'Runner';
 }
 
 export function buildProfileShareTitle(profile: SharedProfile | null | undefined): string {
@@ -65,7 +54,7 @@ export function buildProfileJsonLd(
 		url: canonical,
 		mainEntity: person,
 	};
-	return escapeJsonLd(JSON.stringify(graph));
+	return serialiseJsonLd(graph);
 }
 
 export interface ShareProfileMetaInput {

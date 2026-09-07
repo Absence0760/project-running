@@ -12,6 +12,9 @@
 /// triggered the scrape), so we default to km here and ignore the
 /// viewer-side preference entirely.
 
+import { collapseAndClip } from '../util/clip_text';
+import { serialiseJsonLd } from '../util/json_ld';
+
 const SITE_NAME = 'Threkir';
 
 export type ShareRunMeta = {
@@ -23,14 +26,10 @@ export type ShareRunMeta = {
 	title?: string | null;
 };
 
-/// Normalise a user-set run title for use in a share <title> / og:title:
-/// collapse whitespace and truncate so a pathological caption can't blow
-/// out the meta tag. Returns '' when there's nothing usable.
+/// The share <title> / og:title budget for a run caption, which arrives from
+/// the untyped `runs.metadata.title` bag and so may not be a string at all.
 export function cleanShareTitle(raw: unknown): string {
-	if (typeof raw !== 'string') return '';
-	const collapsed = raw.replace(/\s+/g, ' ').trim();
-	if (!collapsed) return '';
-	return collapsed.length > 80 ? `${collapsed.slice(0, 79).trimEnd()}…` : collapsed;
+	return collapseAndClip(raw, 80);
 }
 
 export type ShareRouteMeta = {
@@ -158,7 +157,7 @@ function runShareName(
 /// location must never leak into structured data.
 ///
 /// The run caption + display name are user-controlled, so the output is
-/// run through `escapeJsonLd` before it reaches the DOM.
+/// serialised through `serialiseJsonLd` before it reaches the DOM.
 export function buildRunJsonLd(
 	run: ShareRunMeta | null | undefined,
 	opts: { id: string; base: string | null | undefined; displayName?: string | null },
@@ -184,7 +183,7 @@ export function buildRunJsonLd(
 			],
 		},
 	};
-	return escapeJsonLd(JSON.stringify(graph));
+	return serialiseJsonLd(graph);
 }
 
 export function buildRouteShareTitle(route: ShareRouteMeta | null | undefined): string {
@@ -237,18 +236,6 @@ export function buildRouteOgImageUrl(
 	return `${normaliseSiteUrl(base)}/og/route/${id}.png`;
 }
 
-/// Escape the three characters that let a string break out of a
-/// `<script type="application/ld+json">` block when the JSON is
-/// injected verbatim into HTML. `<` is the only strictly necessary
-/// one (`</script>`), but escaping all three is the conventional
-/// belt-and-braces form and keeps the payload valid JSON either way.
-function escapeJsonLd(json: string): string {
-	return json
-		.replace(/</g, '\\u003c')
-		.replace(/>/g, '\\u003e')
-		.replace(/&/g, '\\u0026');
-}
-
 /// schema.org JSON-LD for a public route share page, serialized ready
 /// to drop inside a `<script type="application/ld+json">`. A `WebPage`
 /// node names + describes the route and points at the og:image, with a
@@ -260,7 +247,7 @@ function escapeJsonLd(json: string): string {
 /// never leak into structured data.
 ///
 /// The route name is user-controlled, so the output is run through
-/// `escapeJsonLd` before it reaches the DOM.
+/// `serialiseJsonLd` before it reaches the DOM.
 export function buildRouteJsonLd(
 	route: ShareRouteMeta | null | undefined,
 	opts: { id: string; base: string | null | undefined },
@@ -292,5 +279,5 @@ export function buildRouteJsonLd(
 			],
 		},
 	};
-	return escapeJsonLd(JSON.stringify(graph));
+	return serialiseJsonLd(graph);
 }

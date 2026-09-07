@@ -5,33 +5,22 @@
 
 import { normaliseSiteUrl } from './share_meta';
 import { escapeHtml } from '../util/html_escape';
+import { serialiseJsonLd } from '../util/json_ld';
+import { collapseAndClip } from '../util/clip_text';
 import type { SharedClub } from './share_club_lookup';
 
 const SITE_NAME = 'Threkir';
 
-function escapeJsonLd(json: string): string {
-	return json
-		.replace(/</g, '\\u003c')
-		.replace(/>/g, '\\u003e')
-		.replace(/&/g, '\\u0026');
-}
-
-function clean(raw: string | null | undefined, max: number): string {
-	const collapsed = (raw ?? '').replace(/\s+/g, ' ').trim();
-	if (!collapsed) return '';
-	return collapsed.length > max ? `${collapsed.slice(0, max - 1).trimEnd()}…` : collapsed;
-}
-
 export function buildClubShareTitle(club: SharedClub | null | undefined): string {
-	const n = clean(club?.name, 80);
+	const n = collapseAndClip(club?.name, 80);
 	return n ? `${n} — ${SITE_NAME}` : `Club — ${SITE_NAME}`;
 }
 
 export function buildClubShareDescription(club: SharedClub | null | undefined): string {
 	if (!club) return `A running club on ${SITE_NAME}.`;
-	const desc = clean(club.description, 160);
+	const desc = collapseAndClip(club.description, 160);
 	if (desc) return desc;
-	const loc = clean(club.location_label, 60);
+	const loc = collapseAndClip(club.location_label, 60);
 	return loc
 		? `A running club in ${loc} on ${SITE_NAME}.`
 		: `A running club on ${SITE_NAME}.`;
@@ -60,7 +49,7 @@ export function buildClubJsonLd(
 	const graph: Record<string, unknown> = {
 		'@context': 'https://schema.org',
 		'@type': 'SportsOrganization',
-		name: clean(club?.name, 120) || 'Club',
+		name: collapseAndClip(club?.name, 120) || 'Club',
 		description: buildClubShareDescription(club),
 		url: canonical,
 		sport: 'Running',
@@ -69,8 +58,8 @@ export function buildClubJsonLd(
 		graph.logo = club.avatar_url;
 		graph.image = club.avatar_url;
 	}
-	if (club?.location_label) graph.areaServed = clean(club.location_label, 120);
-	return escapeJsonLd(JSON.stringify(graph));
+	if (club?.location_label) graph.areaServed = collapseAndClip(club.location_label, 120);
+	return serialiseJsonLd(graph);
 }
 
 export interface ShareClubMetaInput {

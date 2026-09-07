@@ -4,25 +4,14 @@
 
 import { formatKmStable, formatDateStable, normaliseSiteUrl } from './share_meta';
 import { escapeHtml } from '../util/html_escape';
+import { serialiseJsonLd } from '../util/json_ld';
+import { collapseAndClip } from '../util/clip_text';
 import type { SharedRace } from './share_race_lookup';
 
 const SITE_NAME = 'Threkir';
 
-function escapeJsonLd(json: string): string {
-	return json
-		.replace(/</g, '\\u003c')
-		.replace(/>/g, '\\u003e')
-		.replace(/&/g, '\\u0026');
-}
-
-function clean(raw: string | null | undefined, max: number): string {
-	const collapsed = (raw ?? '').replace(/\s+/g, ' ').trim();
-	if (!collapsed) return '';
-	return collapsed.length > max ? `${collapsed.slice(0, max - 1).trimEnd()}…` : collapsed;
-}
-
 export function buildRaceShareTitle(race: SharedRace | null | undefined): string {
-	const n = clean(race?.name, 90);
+	const n = collapseAndClip(race?.name, 90);
 	return n ? `${n} — ${SITE_NAME}` : `Race — ${SITE_NAME}`;
 }
 
@@ -33,7 +22,7 @@ export function buildRaceShareDescription(race: SharedRace | null | undefined): 
 	if (date) bits.push(date);
 	const km = formatKmStable(race.distance_m);
 	if (km) bits.push(km);
-	if (race.location_label) bits.push(clean(race.location_label, 60));
+	if (race.location_label) bits.push(collapseAndClip(race.location_label, 60));
 	const lead = bits.length ? `${bits.join(' · ')}. ` : '';
 	return `${lead}Find it on the ${SITE_NAME} race calendar.`.trim();
 }
@@ -58,7 +47,7 @@ export function buildRaceJsonLd(
 	const graph: Record<string, unknown> = {
 		'@context': 'https://schema.org',
 		'@type': 'SportsEvent',
-		name: clean(race?.name, 120) || 'Race',
+		name: collapseAndClip(race?.name, 120) || 'Race',
 		description: buildRaceShareDescription(race),
 		url: canonical,
 		sport: 'Running',
@@ -67,9 +56,9 @@ export function buildRaceJsonLd(
 	};
 	if (race?.race_date) graph.startDate = race.race_date;
 	if (race?.location_label) {
-		graph.location = { '@type': 'Place', name: clean(race.location_label, 120) };
+		graph.location = { '@type': 'Place', name: collapseAndClip(race.location_label, 120) };
 	}
-	return escapeJsonLd(JSON.stringify(graph));
+	return serialiseJsonLd(graph);
 }
 
 export interface ShareRaceMetaInput {
