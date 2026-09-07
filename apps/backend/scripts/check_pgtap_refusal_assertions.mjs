@@ -50,10 +50,13 @@
 // empty. Found by the second operator: seven "owner-scoped" RPC refusals that
 // the first operator could not have measured at all.
 //
-// Three phases. `--static-only` checks that every negative pins the error it
-// expects, so a `throws_ok` cannot pass on a typo'd table name.
-// `--validate-operators` proves each permissive replacement is not inert. The
-// default is the mutation run, and needs the local stack.
+// Three phases. `--static-only` needs no database and carries three scans:
+// every negative pins the error it expects, so a `throws_ok` cannot pass on a
+// typo'd table name; and the two POSITIVE populations below, whose supplied
+// value a BEFORE trigger may have replaced before the constraint ever saw it
+// (decisions.md 1324 for the unconditional half, 1372 for the conditional
+// one). `--validate-operators` proves each permissive replacement is not
+// inert. The default is the mutation run, and needs the local stack.
 
 import { spawnSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
