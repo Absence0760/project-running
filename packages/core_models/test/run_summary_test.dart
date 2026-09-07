@@ -171,6 +171,53 @@ void main() {
       expect(RunSummary.fromIndexJson(j).source, RunSource.app);
     });
 
+    test('an impossible start is refused, never rolled onto another day', () {
+      // `DateTime.parse` reads this as 2027-02-18 — an answer that never threw,
+      // so it never reached `LocalRunStore`'s index rebuild: the run list was
+      // ordered by a day the runner never ran and the value was written back
+      // on the next index flush (decisions § 1431).
+      expect(DateTime.parse('2026-13-45T99:99:99Z'),
+          DateTime.utc(2027, 2, 18, 4, 40, 39));
+      final j = RunSummary.fromRun(buildRun(), synced: false).toIndexJson()
+        ..['started_at'] = '2026-13-45T99:99:99Z';
+      expect(
+        () => RunSummary.fromIndexJson(j),
+        throwsA(isA<FormatException>()
+            .having((e) => e.message, 'message', contains('started_at'))),
+      );
+    });
+
+    test('an unreadable required field names itself rather than a Dart type',
+        () {
+      // The bare casts this replaced threw a `TypeError` naming neither the
+      // column nor the row, which is all the store's recovery had to log.
+      const unusable = <String, List<Object?>>{
+        'id': [null, 42, <String, dynamic>{}],
+        'duration_us': [null, 'thirty minutes', <String, dynamic>{}],
+        'distance_m': [null, '5k', <String, dynamic>{}],
+      };
+      for (final field in unusable.keys) {
+        for (final bad in unusable[field]!) {
+          final j = RunSummary.fromRun(buildRun(), synced: false).toIndexJson()
+            ..[field] = bad;
+          expect(
+            () => RunSummary.fromIndexJson(j),
+            throwsA(isA<FormatException>()
+                .having((e) => e.message, 'message', contains(field))),
+            reason: '$field = $bad',
+          );
+        }
+      }
+    });
+
+    test('a readable row is unaffected by the refusals around it', () {
+      final j = RunSummary.fromRun(buildRun(), synced: false).toIndexJson();
+      final restored = RunSummary.fromIndexJson(j);
+      expect(restored.startedAt, DateTime.parse(j['started_at'] as String));
+      expect(restored.distanceMetres, j['distance_m']);
+      expect(restored.duration.inMicroseconds, j['duration_us']);
+    });
+
     test('wire keys are the compact snake_case shape', () {
       final j = RunSummary.fromRun(buildRun(), synced: true).toIndexJson();
       expect(j.keys,

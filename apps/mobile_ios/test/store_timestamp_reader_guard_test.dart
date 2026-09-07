@@ -106,7 +106,7 @@ void main() {
     expect(_familyFiles().length, greaterThanOrEqualTo(8),
         reason: 'derived family is ${_familyFiles().map((f) => f.path)}');
     final files = _coveredFiles();
-    expect(files.length, greaterThanOrEqualTo(11),
+    expect(files.length, greaterThanOrEqualTo(14),
         reason: 'covered set is ${files.map((f) => f.path)}');
 
     final offenders = <String>[];
@@ -139,6 +139,8 @@ void main() {
     // its own — removing the check cannot remove the expectation. Seventeen
     // when § 1377 landed: `social_service` 11, `race_controller` 3,
     // `offline_sync_store` 2 (the two named readers), `local_run_store` 1.
+    // Twenty-four since § 1430 added `backup` 4, `watch_ingest_queue` 2 and
+    // `training_service` 1.
     var sites = 0;
     for (final f in dartFiles(_root)) {
       final code = blankNonCode(f.readAsStringSync());
@@ -146,7 +148,7 @@ void main() {
           .allMatches(code)
           .length;
     }
-    expect(sites, greaterThanOrEqualTo(15),
+    expect(sites, greaterThanOrEqualTo(22),
         reason: 'a file that stops calling the strict reader leaves the '
             'covered set, so this floor is what keeps it in');
   });
