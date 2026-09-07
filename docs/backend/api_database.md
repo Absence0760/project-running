@@ -2044,7 +2044,7 @@ Add `authenticated` to the revoke list when no client role should hold it at all
 trigger calls). 57 migrations write a function-level `from public, anon` revoke
 today (45 as `revoke execute`, 12 as `revoke all`); it is the house form for
 exactly this reason, and `check_migration_function_revoke_noop.mjs` is what
-keeps it — it replays all 478 migrations in version order and fails the PR on
+keeps it — it replays all 480 migrations in version order and fails the PR on
 any EXECUTE revoke that leaves the other channel at its image-dependent
 default, in either direction. **Those four figures are derived, not typed**: the
 guard prints them and `check_migration_function_revoke_noop.test.mjs` asserts
