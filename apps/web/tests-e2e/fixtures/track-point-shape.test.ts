@@ -32,11 +32,22 @@ import { stripComments } from '../../src/lib/core/strip_comments';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-/** The optional-and-required field names of the first `TrackPoint` interface. */
+/**
+ * The optional-and-required field names of the first `TrackPoint` declaration.
+ *
+ * Matches BOTH `interface TrackPoint {` and `type TrackPoint = {`: the two are
+ * interchangeable for an object shape, so anchoring on one keyword fails
+ * correct code the day someone converts it — which is exactly what happened
+ * between this guard being written and the round it shipped in.
+ */
 function trackPointFields(file: string): string[] {
 	const source = stripComments(readFileSync(file, 'utf8'));
-	const start = source.indexOf('interface TrackPoint {');
-	assert.ok(start >= 0, `${file} no longer declares a TrackPoint interface — this guard reads a stale name.`);
+	const decl = /(?:interface\s+TrackPoint\s*\{|type\s+TrackPoint\s*=\s*\{)/.exec(source);
+	assert.ok(
+		decl,
+		`${file} no longer declares a TrackPoint object shape — this guard reads a stale name.`,
+	);
+	const start = decl.index;
 	const body = source.slice(start, source.indexOf('\n}', start));
 	return [...body.matchAll(/^\t([A-Za-z_$][\w$]*)\??:/gm)].map(([, name]) => name).sort();
 }
