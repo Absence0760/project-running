@@ -1,7 +1,11 @@
 /// The coach roster's column sort, in a module the unit runner can hold —
 /// `+page.svelte`'s `$derived` cannot be exercised without booting SvelteKit,
 /// and the property worth pinning is one a render never shows twice.
-import { injuryRiskBand } from '$lib/training/coach_load';
+// Relative, not `$lib`: this module is loaded by the `tsx --test` unit runner,
+// which resolves `$lib` only through `.svelte-kit/tsconfig.json` — a file CI's
+// unit job never generates. A `$lib` TYPE import is erased before that matters;
+// a value import is not.
+import { injuryRiskBand } from '../../lib/training/coach_load';
 import type { CoachRosterRow } from '$lib/core/data';
 
 export type RosterSortKey = 'risk' | 'lastRun' | 'load' | 'plan' | 'name';
