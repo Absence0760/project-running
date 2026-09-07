@@ -110,7 +110,7 @@ class PreRunRejectedQueueTest {
         )
         assertTrue(
             "the arm must name the stake: these runs are not saved anywhere else",
-            Regex("""if \(armed\) \{[^}]*R\.string\.discard_stake""", RegexOption.DOT_MATCHES_ALL)
+            Regex("""if \(armed\) \{[^}]*R\.plurals\.discard_stake""", RegexOption.DOT_MATCHES_ALL)
                 .containsMatchIn(body),
         )
         assertTrue(

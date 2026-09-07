@@ -1,5 +1,6 @@
 package com.runapp.watchwear
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -162,6 +163,37 @@ class UnsyncedRunDurabilityWiringTest {
         assertFalse(
             "the drain hook must not delete a track file itself",
             drain.contains("File(run.trackFilePath).delete()"),
+        )
+    }
+
+    @Test
+    fun `every drop path goes through dropQueuedRun`() {
+        // The ordering above is only an invariant while nothing removes a queue
+        // entry around it. `discard()` — the PostRun `×` — was `store.remove(id)`
+        // and nothing else, so a discarded run's track (several megabytes on an
+        // ultra) outlived its entry until `sweepOrphanTracks` reached it: once
+        // per process, latched, and skipped entirely while a recording is live
+        // (decisions § 1388).
+        //
+        // Anchored on the REMOVAL rather than on any caller's name, so a fourth
+        // drop path added later fails this without having to be listed here.
+        val vm = read("RunViewModel.kt")
+        assertEquals(
+            "`store.remove(` must appear exactly once in RunViewModel — inside " +
+                "`dropQueuedRun`, where the entry-then-file ordering lives. A second " +
+                "call site is a drop path that strands the track it points at.",
+            1,
+            Regex("""store\.remove\(""").findAll(vm).count(),
+        )
+        assertTrue(
+            "…and that one site must be dropQueuedRun's, or the ordering is guarded " +
+                "in a function nothing calls",
+            body(vm, "private suspend fun dropQueuedRun(").contains("store.remove(id)"),
+        )
+        assertTrue(
+            "the PostRun discard must drop through it too: the `×` destroys a run the " +
+                "queue may still hold, and the entry alone leaves storage nothing names",
+            body(vm, "fun discard()").contains("dropQueuedRun("),
         )
     }
 

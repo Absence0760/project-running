@@ -59,9 +59,9 @@ class RecoveryPromptDisclosureTest {
     fun `Save it is disabled while the queue is unreadable and Discard is not`() {
         val block = prompt()
         val save = block.indexOf("R.string.save_it")
-        // Word-boundary: `discard_confirm` (the armed label) and `discard_stake`
-        // (the armed warning) both sit inside this block and both start with
-        // the same eight characters, so a bare indexOf lands on the Save chip.
+        // Word-boundary: `discard_confirm` (the armed label) sits inside this
+        // block and starts with the same eight characters, so a bare indexOf
+        // lands on it rather than on the Discard chip.
         val discard = Regex("""R\.string\.discard\b""").find(block)?.range?.first ?: -1
         assertTrue("expected a Save it chip", save >= 0)
         assertTrue("expected a Discard chip", discard >= 0)
@@ -120,7 +120,7 @@ class RecoveryPromptDisclosureTest {
         )
         assertTrue(
             "the arm must name the stake: this checkpoint exists nowhere else",
-            block.contains("R.string.discard_stake"),
+            block.contains("R.plurals.discard_stake"),
         )
         assertTrue(
             "the arm must lapse on its own, or a watch put down while armed comes " +

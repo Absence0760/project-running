@@ -139,6 +139,20 @@ data class UiState(
     val signInLoading: Boolean = false,
     val syncing: Boolean = false,
     val syncError: String? = null,
+    /// True when the last COMPLETED drain pass stopped on a transient failure
+    /// — a 5xx, a timeout, a dropped connection — which is also what arms
+    /// `drainBackoff`.
+    ///
+    /// Deliberately not carried on [syncError], which is the PostRun banner
+    /// and a fact about one pass: `startNextRun` clears it, and PreRun is the
+    /// screen the runner is on for every drain but the first, so the banner's
+    /// lifetime is exactly wrong for the surface that needed it. This is the
+    /// same split § 1347 drew for [rejectedRunIds] — a standing fact about the
+    /// queue rather than about a pass (decisions § 1390).
+    ///
+    /// Not persisted, and re-derived by the next completed pass in both
+    /// directions: a pass that gets through clears it.
+    val syncFailed: Boolean = false,
     val thisRunId: String? = null,
     val thisRunSynced: Boolean = false,
     val lastRunSummary: FinishedSummary? = null,
@@ -1343,10 +1357,23 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    /// Drop the run the PostRun `×` is showing — the queue entry and the track
+    /// file it points at, through the one path that orders those two.
+    ///
+    /// It removed the queue entry and nothing else, which left a track of
+    /// several megabytes on an ultra alive until `sweepOrphanTracks` reached
+    /// it — once per process, and not at all while a recording is live, so
+    /// the file could outlive the run by a whole session (decisions § 1388).
+    ///
+    /// `thisRunId` may name a run the queue never held: an already-synced one,
+    /// whose entry and file the drain dropped together when it uploaded. The
+    /// snapshot lookup then finds nothing and only the no-op removal runs,
+    /// which is the right answer rather than a case to special-case — there is
+    /// no file left to delete.
     fun discard() {
         val id = _state.value.thisRunId
         launchGuarded {
-            if (id != null) store.remove(id)
+            if (id != null) dropQueuedRun(id, store.queue.first())
             startNextRun()
         }
     }
@@ -1507,6 +1534,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         // is about the queue (decisions § 1347).
         _state.value = _state.value.copy(
             syncError = result.lastError,
+            syncFailed = result.anyTransientFailure,
             rejectedRunIds = rejectedAfterPass(
                 previouslyRejected = _state.value.rejectedRunIds,
                 queuedIdsBeforePass = snapshot.map { it.id },
