@@ -27589,3 +27589,105 @@ Two smaller things fell out of it. The `toContainText` assertions there were unf
 **A grep found three of the nine call sites; the corrected type found the other six.** Searching for `t:` at the head of a line matched only the three multi-line track builders. The other six -- in `account-data-rights-journey`, `jobs-stuck-alert`, `job-tier-priority`, `storage-boundaries`, the account-deletion saga and `runs/cascade` -- write the point as a single-line object literal passed straight to `insertRun`, which is exactly the position where TypeScript's excess-property check DOES fire, so `check:e2e-types` named all six the moment the field was spelled correctly. None of them asserts anything time-derived; they needed a track to exist, and now plant a real one.
 
 The guard is `fixtures/track-point-shape.test.ts`: every field on the fixture's `TrackPoint` must be one the app's declares. Subset, not equality — the app may carry a field no fixture has needed to plant, and demanding it would be a demand rather than a check; the direction that matters is the one that silently plants nothing. Both interfaces are read out of the source and each parse is asserted non-empty, so a renamed declaration fails loudly rather than matching nothing.
+
+## 1409. `resting_hr_bpm` gets a named range, and both web write paths gate on it — the second jsonb HR pref, closed the way § 1407 closed the first
+
+§ 1407 closed the two web `max_hr_bpm` write paths and filed the sibling: `resting_hr_bpm` is the other jsonb HR pref with no column, therefore no CHECK, therefore nothing in the database that can refuse a typo. The account card wrote `parseInt(restingHr, 10) || null` and the preferences page autosaved the same expression on blur, both under an advisory `min="30" max="120"` that constraint validation never reaches — no `<form>` on one, an `onblur` autosave on the other.
+
+The filing said explicitly that this must not be closed by analogy, because unlike `max_hr_bpm` there was no named bound anywhere to reuse: the two 30/120 attributes were the only numbers in the tree and they are inert. So the range was decided first. `RESTING_HR_BPM_MIN`/`MAX` and `kRestingHrBpmMin`/`Max` are **20..200**, which is the WIDER of the two ranges the tree already shipped — the mobile `_editRestingHr` picker's own 20..200 against the web attributes' 30..120 — so naming it refuses nothing any rail accepted before it was named. Adopting the web pair instead would have refused 20..29 and 121..200, which the shipped mobile picker writes and stored rows may already hold, and a write gate that rejects a value already on file is a gate the runner cannot act on.
+
+`isUsableRestingHrBpm` is deliberately a WRITE-side test only, and that is the difference from `isUsableMaxHrBpm`. The max-HR predicate composes with the read: the write refuses exactly what `defaultZoneCutoffs` ignores, by construction. Nothing ignores a resting HR — `training_load`'s TRIMP calibration consumes it with no bound of its own beyond `rest < max` — so this predicate makes no claim about the readers, and its doc comment says so rather than leaving a reader to infer the § 1407 shape.
+
+Two other things moved with it. The bound is compared across its rails by `check_shared_constants.mjs` (`usable resting_hr_bpm range`), for the reason § 1408 gives: two names in two languages are still two literals, and nothing was looking at both. And the account page's `if (maxHr)` / `if (restingHr)` guards went — they meant a **cleared** field never reached the write at all, so deleting the value in the input left the stored figure in place, which is the same silence § 1407 exists to remove, arriving from the opposite direction.
+
+## 1410. A refused numeric preference on the phone says so, instead of closing exactly like Cancel
+
+`settings_preferences_screen.dart`'s `_pickInt` is the shared dialog behind every numeric preference on the screen — max HR, resting HR, carbs/h, fluid/h and the rest. Its Save button did `if (v == null || v < minValue || v > maxValue) Navigator.pop(ctx, null);`, and `null` is what Cancel pops. So a runner who typed 300, or `abc`, got precisely what a runner who changed their mind got: the dialog closed, nothing was written, and nothing was said. This is the mobile half of the rule § 1407 applies on web — a refusal the user cannot act on is a bug — and it was live on ten call sites, not one.
+
+The fix is a `StatefulBuilder` holding one `rangeError` string: an out-of-range or unparseable entry keeps the dialog open and puts `prefsValueOutOfRange(min, max)` in the field's own `errorText`, and the next keystroke clears it. The message names both ends of the range rather than saying only that something was wrong, because the runner cannot see the caller's bounds anywhere else on the screen.
+
+The pinning suite is `settings_preferences_pick_int_test.dart`, four widget tests through the resting-HR call site: the refusal keeps the dialog open and states the range, unparseable text is refused the same way, **Cancel still closes** (the outcome the refusal is no longer confused with), and correcting the entry clears the message and lets the save land. The last two are what make this more than a message — the value of the change is that the two outcomes are now distinguishable, so both have to be asserted.
+
+## 1414. The dashboard and recap reads declare the `Pick` they fetched, and § 1330's residual is closed rather than restated
+
+`fetchRunsForDashboard` and `fetchRunsForRecap` each read ten and nine columns and then declared `Run[]`, reached through `as unknown as`. § 1330 stated the widening at the line where it happened and filed the rest, on the reasoning that narrowing the return moves the error into `computeRunStreaks`, `buildYearInRunningRecap` and the race predictor — whose `Run[]` parameters are halves of registered TS↔Dart parity pairs, so widening them is a lockstep edit.
+
+It turned out not to be: the consumers take a structural bound (the columns they actually read), which is a TypeScript-side narrowing of the parameter and no change at all to the Dart halves' behaviour or shape. Both fetchers now return the `Pick<>` they already had a name for, `DashboardRun` and `RecapRun`, and the two casts are gone.
+
+The cast was not merely untidy. `fetchRunsForDashboard` was the one run read in `data.ts` that applied none of the client narrows, because the widening cast made the row look right without them: `source`, `activity_type` and `metadata` are `text`, `text` and `jsonb` in the generated types where the client unions promise less. All three are narrowed on read now, the defence `fetchRunById` already applied one row at a time. `parseRunMetadata` is the new one — jsonb admits a string, a number, a boolean and an array as well as an object, while every consumer indexes `metadata` by key — and a non-object reads as `null` rather than `{}`, because the column is nullable and "nothing usable is stored" is a state the type already has, where `{}` would claim an empty bag was written.
+
+## 1419. The exercise-catalogue read pages, reports its own failure, and resolves the shadow at the read
+
+`fetchExerciseCatalogue` returned `[]` on a failed read, and its unranged select was capped at PostgREST's `db.max-rows` with no flag saying so. Three different states — unavailable, truncated, and genuinely empty — arrived at every consumer as one value, and the consumer that matters is the picker's create affordance: an empty catalogue makes every name look free, so the failure mode is a duplicate exercise minted at exactly the moment the app could not tell the runner it already existed.
+
+The read now walks explicit ranges, on the rule `paged_read.dart` already states for the phone — a short page is not proof of exhaustion — and returns `{ catalogue, error }` so the three states are three states. It also resolves the two partial uniques' shadow at the read, with the owner's row winning, rather than leaving each consumer to discover that a global and a custom row can carry the same folded name.
+
+The picker gains a third state to match: while the catalogue is unknown its create affordance fails closed, rather than offering to create a name it cannot check.
+
+## 1424. `gym_sets.exercise_key` gets the `>= 1` floor its two sibling columns carry
+
+Three columns persist an exercise grouping key. `gym_routine_exercises.exercise_key` and `exercises.name_key` both carry `length(...) between 1 and 120`; `gym_sets.exercise_key` came out of `20270706000002` with the canonical equality, the `<= 120` cap, and no floor — and that migration recorded the omission as deliberate, on the grounds that a whitespace-only name folds to the empty key the readers filter out.
+
+Filtering it out is what makes it wrong. A set whose key is empty is a row the database holds and every read denies: `gym_exercise_names`, `gym_exercise_records`, both set-history RPCs and `gym_workout_summaries` all skip it on `exercise_key <> ''`, `routineFromWorkout` drops it, and `distinctExerciseCount` counts it as nothing — while the gym editor renders it and the trigger-maintained `gym_workouts.set_count` counts it. § 1367 closed the web and mobile paths that MINTED such a row, so nothing this repo ships creates one; the database still accepted one from any other client.
+
+The constraint is on the KEY rather than on `normalise_exercise_name(exercise_name)`, which would give a more legible 23514 — because the value of the change is that all three columns now say one thing about one idea, and the legibility is bought back by the constraint's name and its `comment on constraint`, which is what a reader chasing a 23514 through `pg_constraint` finds.
+
+It ships as the playbook's two migrations. `ADD CONSTRAINT ... NOT VALID` takes ACCESS EXCLUSIVE for a catalogue flip, runs no scan, and enforces every insert and update from the moment it commits; the `VALIDATE` scans under SHARE UPDATE EXCLUSIVE **only because it is in its own transaction**. The validating half pre-flights with a counting scan and raises with the count plus a listing query, rather than letting `validate constraint` answer "violated by some row" with no count, no column and no instruction. There is deliberately no automatic repair: the offending row is a logged set whose name has no content, so there is no name to derive and no correct value to invent, and deleting a set the gym editor still renders is the owner's call and not a migration's. `gym_workout_summaries_test.sql` files its whitespace-named row with the constraint dropped for the span of its own transaction, because the claim that test makes is now a claim about rows that PREDATE the constraint — which prod may still hold.
+
+## 1430. The Dart row generator emits a strict `DateTime` reader, because `DateTime.parse` rolls rather than refuses
+
+`DateTime.parse` rolls an out-of-range component through the calendar instead of refusing it, so a corrupt column does not throw — it answers with a confident wrong instant. § 1377 put `parseIsoStrict` in `core_models`, below every consumer, and the largest remaining block of the old behaviour was one line in `scripts/gen_dart_models.dart`: 167 generated reads of the form `DateTime.parse(json['x'] as String)`.
+
+The generator now emits the strict reader. A required column throws naming the field, exactly as the cast it replaces already did, and a nullable one degrades to null. The change is a schema-codegen change rather than an edit to `db_rows.dart`, which is generated and must never be hand-edited; the regenerated file is committed with it.
+
+## 1431. `RunSummary.fromIndexJson` refuses a corrupt index row by name, and the throw is what reaches the recovery
+
+The local run store's on-disk index was read with a bare cast per field, whose `TypeError` names the Dart types and neither the column nor the row — so the store's own recovery logged `type 'Null' is not a subtype of type 'String'` about a file with thousands of rows in it. Worse, `started_at` read through `DateTime.parse`, so a corrupt date never threw at all: it sorted the run list by a day the runner never ran and was written back on the next flush.
+
+Unlike `fromRun`, which reads a jsonb bag another client may have written and therefore tolerates a wrong type per field, this reads a file `toIndexJson` wrote in this same build. A field it cannot read means the index is CORRUPT, not that a writer disagreed — so every unreadable field throws, and the throw is the point: `LocalRunStore._readIndex` catches it, discards the index and rebuilds from the per-run files, which is lossless. Skipping the row instead would drop a run that is still on disk and then persist that omission on the next index write; defaulting the field would persist the wrong value. Both defeat the recovery the throw reaches.
+
+## 1434. The Wear OS PreRun top-arc slot is a pure function, not the order of four `else if` arms
+
+The arc at the top of the PreRun screen has five competing facts to show and one slot to show them in. The precedence between them was expressible only as the order of four `else if` arms inside the composable, and assertable only by reading those lines back — which three separate guard files did, in three different ways, none of them able to evaluate the decision for a given state.
+
+`syncChipState` takes the six inputs and returns the slot; the composable is a `when` over its answer. `SyncChipStateTest` runs all 64 tuples of the state space through it, plus the reachability of every slot — so the precedence is now measured rather than described, and a fifth fact added to the arc is a change to a function with a total test rather than to an if-chain with three greps pointed at it.
+
+The three greps are narrowed to what a grep can actually hold: that the arc asks the function, and that each `when` arm renders the control the answer names.
+
+## 1439. The Flutter Android host's Gradle wrapper is committed, and its 32 tests run in `build-mobile-android`
+
+`apps/mobile_android/android` holds 32 `@Test` methods across `HealthRoutePermissionBridgeTest`, `WearAuthBridgeArgsTest` and `WearRoutesBridgeArgsTest`. They were written, they were committed, and no job had ever executed them: `assembleRelease` has no dependency on a test task, so § 1393 declared the gap in `GRADLE_UNTESTED` and echoed it as a warning on every run rather than leaving it silent.
+
+Closing it needed a `gradlew` in the checkout, which Flutter's android template gitignores on the assumption that only `flutter build` ever drives Gradle there. The wrapper committed here is byte-identical to the one `apps/watch_wear/android` has always committed, so the tree gains no new distribution pin and no second Gradle version.
+
+The invocation goes in `build-mobile-android` rather than in a job of its own, because everything it needs — the pinned Flutter SDK, the bootstrapped plugin subprojects, the warm Gradle cache — is already paid for there; a second job would pay for all of it again to run 32 pure-JVM assertions. It must stay AFTER the `flutter build` step for a second reason: `settings.gradle.kts` `require()`s `flutter.sdk` out of a `local.properties` that no checkout carries and only the Flutter tool writes, so Gradle cannot configure the project until `flutter build` has run once. `check_gradle_test_coverage.mjs` reads the task word off the step, so deleting `testDebugUnitTest` fails the PR rather than silently stopping the suite.
+
+## 1440. A job's `~/.gradle` cache key must hash every project that job builds
+
+One `GRADLE_USER_HOME` serves every project a job builds, while an `actions/cache` key hashes named files. A job that invokes Gradle in two projects and hashes one therefore restores a cache that a change to the other's build files did not invalidate — one project's build reading another's cached answers. That is slow or confusing rather than wrong, which is why it was filed as a nit when `build-watch-wear` was the only tested Gradle job; § 1439 makes a second invocation somebody's decision, and the natural way to take it is another line in an existing job.
+
+`check_gradle_test_coverage.mjs` gains it as claim 4, keyed on the paths a cache step restores rather than on the step's name or the action's version, and on the `hashFiles()` globs the key is computed from — a key with no `hashFiles()` at all hashes nothing and is reported as covering nothing, rather than as covering everything. The guard also fails when no workflow caches `~/.gradle` at all, because a detection that has stopped matching would otherwise agree with every key in the file.
+
+The walk moved from per-file to per-STEP to support it. `working-directory:` is a step-level key, so scoping an invocation's read to one step's body is what it already meant; the job an invocation belongs to is the thing claim 4 is about, and a file-wide read cannot say.
+
+## 1444. The `recurrence` pair's 30/25 test counts, decomposed case by case rather than reported
+
+The `recurrence` registry entry made no claim about its mirror suites, and a crude count put them at 30 web / 25 Dart. A count is not evidence of a gap in either direction, so the difference was read rather than reported.
+
+It decomposes as **23 direct mirrors**; **2 Dart-only** cases that are source guards with no web analogue by construction (web steps its cursor with `Date.setDate()`, which is calendar-based natively, where Dart's `add(Duration(days: n))` is absolute and repeats a local day across a fall-back, and CI runs in UTC so no behavioural test can fail on it); **2 web-only** cases whose substance a differently-shaped Dart case already covers; and **5 web-only cases that are a real gap** — all four `describeRecurrence` cases and `nextInstanceAfter` past `recurrence_until`. `describeRecurrence` is a lockstep half, the same hard-coded English and ISO day ordering and ` · ` separator, live on the phone at `screens/event_detail_screen.dart`, with zero Dart coverage.
+
+It is filed rather than closed: the round that measured it owned no `apps/` tree. The number now lives in both registries — CLAUDE.md's pair list and the `shared-library-syncer` table — so the next reader inherits the decomposition instead of the count.
+
+## 1450. One XML escaper for the six sinks that each carried their own, and the Dart twin moves with it
+
+`routes/gpx.ts`, `routes/route_gpx.ts` and `share/sitemap.ts` each held a private five-character XML escaper, and three share/OG image builders inlined the same replaces — seven copies of one idea under two names, which `check_shared_reimplementations.mjs` had registered as a real duplicate rather than fixed, because `route_gpx` is half of a registered parity pair and the consolidated home had to be chosen with the Dart side in view.
+
+The home is `util/html_escape`, which already existed for the raw-HTML and raw-SVG sinks and encodes the same five characters. Its one substantive difference is the apostrophe: it emits the numeric `&#39;` where the private copies emitted `&apos;`, because `&apos;` is predefined in XML only and the numeric form is valid in HTML4, HTML5 and XML/SVG alike. Both parse to `'`, so no consumer changes — but the two halves of the `route_gpx` pair have to emit the same BYTES, so `route_gpx.dart` and its iOS twin spell the apostrophe numerically too, in the same commit. A separate commit for either half would have left the pair divergent in between.
+
+## 1451. ISO timestamps sort by code unit, not by collation, and the one that orders prose stays a collation
+
+Seven sorts compared ISO timestamps through `localeCompare`. Over ASCII digits and hyphens a collation and a code-unit order agree, which is why this was filed as wasteful rather than wrong — except that Postgres trims a `timestamptz`'s zero fractional part, so two rows in the same second differ at the character after the seconds, `+` against `.`, and the CLDR root orders those two the opposite way from their code points. Measured: `'2026-01-05T18:00:00+00:00'.localeCompare('2026-01-05T18:00:00.482000+00:00') === 1` in en, sv, de, tr, ja and ar. Every newest-first list built on `localeCompare` therefore puts the older row on top whenever one of a pair lands on the second exactly — reachable wherever one action stamps several rows, such as archiving a batch of coach threads or importing a set of routes.
+
+`ordinalCompare` is the instrument, and the seventh site — sorting BCP-47 tags to pick between two same-language guide variants — takes it for a different reason: there the point is that the answer stops being a property of the host's ICU data.
+
+The title sort in `guides_index` deliberately stays a collation. It orders prose for a reader, which is the criterion § 1400 states: collate where the surface is web-only and the reader's own order is the correct one, fold or compare by code unit where the value is an identifier or a Dart twin must agree.

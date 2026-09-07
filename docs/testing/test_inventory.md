@@ -85,7 +85,7 @@ The structured-workout step engine — step expansion (warmup → reps → recov
 
 Closes the documented "typed errors thrown from `prepare()`" gap. Replaces `GeolocatorPlatform.instance` with a fake that extends `GeolocatorPlatform` (so `PlatformInterface.verify` passes) and exposes setters for `serviceEnabled` / `permissionState` / `requestPermissionResult` plus an `emit(Position)` and `emitError(Object)` method that pushes through the live position stream. The error-path tests cover `LocationServiceDisabledError` when services are off, `LocationPermissionDeniedError(forever: false)` when the request returns denied, and `LocationPermissionDeniedError(forever: true)` when permission is denied-forever — plus the "already granted" path that skips the request. The happy-path tests cover `prepare()` opening the position stream, positions flowing through the filter chain (pre-begin updates the dot but not the track; post-begin first fix becomes the track anchor; subsequent fixes accumulate distance), stream `onError` not crashing the recorder, and `dispose()` cancelling the subscription so subsequent emits don't extend the track.
 
-### `apps/mobile_android/test/local_run_store_test.dart` — 96 tests
+### `apps/mobile_android/test/local_run_store_test.dart` — 98 tests
 
 Persistence round-trips against a real temporary filesystem directory. Tests inject a tempDir via `LocalRunStore.init(overrideDirectory: ...)` so they never touch `path_provider` or the platform channel.
 
@@ -209,7 +209,7 @@ Mirror suite for the `cloud_export_helpers` ↔ `export_job.dart` parity pair: t
 
 Widget coverage of the queued Art 20 export on the Account screen, driving a scripted export service through the injected `exportClient` seam. The case they exist for is the ordinary one on a phone: the runner asks and the screen goes dark. **Resume** — an export that finished while the app was closed is simply waiting on mount, found through a status read with no POST and nothing persisted on the device. **Silence** — a subject who never asked is shown nothing about an export, and a resume read that fails is silent rather than claiming a failure. **Enqueue** — the tile POSTs to `/v1/export/jobs`, renders the building notice, and downloads nothing (the archive does not exist yet). **No silent demotion** — a refused enqueue surfaces its retry window and does NOT produce the on-device archive in its place. **Fail-closed rendering** — a `ready` job with no URL renders as a failure, a `stalled` one says so rather than claiming to still be building, and a truncated one discloses both counts. **Fresh signing** — tapping Download re-reads the status endpoint rather than reusing the URL the card was drawn with, which is signed for ten minutes from the read that produced it. Plus a copy assertion that the on-device notice names what that archive does not carry.
 
-### `apps/mobile_android/test/backup_test.dart` — 65 tests
+### `apps/mobile_android/test/backup_test.dart` — 67 tests
 
 Round-trip + invariant coverage for `BackupService.createBackup` + `restore`. Manifest / offline-restore / progress / api:null tests; **writeBackupZipStreaming** tests added with the streaming + parallel writer refactor in May 2026 (see `decisions.md § 66`); and a 3-test **BackupOutcome** group covering what a finished archive may claim about itself. The former **tryServerBackup** orchestration group is gone with the helper ([decisions § 724](../architecture/decisions.md)): this class no longer reaches for the server rail at all, so there is no server-first / local-fallback dance left to test — the queued rail lives on the surface and is covered by `settings_account_export_test.dart`.
 
@@ -511,7 +511,7 @@ What a challenge value is CALLED and what UNIT it is printed in. `check_constrai
 
 The seven ARB catalogues against the checked-in `lib/l10n/gen/` ([decisions § 844](../architecture/decisions.md)). `l10n_parity_test.dart` measures the ARBs against each other and `architecture_guards_test.dart` measures the locale set; neither measures the hand-run `gen-l10n` step between them, so an ARB whose wording changed without a regeneration ships the previous sentence in every locale and a hand-edit to a `gen/` file is invisible from both directions. Reads the generated Dart back — there is no reflection to ask an `AppLocalizations` for a getter named at runtime — and asserts the member set in both directions plus, for every non-ICU message, the literal itself with `$name` rewritten to `{name}`: 3,761 of 3,826 messages per catalogue. Each group carries a floor on how many members it parsed, so a change in what `gen-l10n` emits fails the guard rather than emptying it.
 
-### `apps/mobile_ios/test/` — 552 files, byte-for-byte
+### `apps/mobile_ios/test/` — 553 files, byte-for-byte
 
 After the April 2026 mobile-codebase unification, `apps/mobile_ios/test/` is kept identical to `apps/mobile_android/test/` via `diff -rq`. Every test file documented above runs on the iOS target too **locally** — `melos run test` has no scope filter — but **not in CI**: the `test-packages` job scopes `melos exec` to `run_recorder`, `mobile_android`, `api_client`, `gpx_parser`, `ui_kit` and `core_models`, and `mobile_ios` is not among them. That is not a gap for byte-identical Dart, but it is why a test gated on an `ios/` file being present asserts nothing on any CI run — two such groups existed and were removed in favour of `scripts/check_ios_native_declarations.mjs` (decisions.md § 742). Per-target counts: `flutter test` compiles separately, so each test file is executed twice when you run both apps locally. Don't add iOS-specific test files — every test belongs in both apps. The architecture-guard tests under `apps/mobile_android/test/architecture_guards_test.dart` read `lib/screens/run_screen.dart` from the working directory, so they pin the same invariants on both targets.
 
@@ -845,7 +845,7 @@ The chunked following-feed reads (was 12). Three added cases: `FEED_FOLLOWEE_CHU
 
 Both gained a non-vacuity control (was 5 and 2). Each guard reports an empty offender list when it works AND when it sees nothing at all, and only the matcher half had fixtures: a walk that reaches no file, an `aria-live` filter that stops matching the app's own markup, or a `<TrackPreview` matcher that stops seeing a mount each turns the guard into a green check over an unscanned tree ([§ 762](../architecture/decisions.md)'s rule, applied to two guards that predate it). The `TrackPreview` control is a POSITIVE one taken off the real permitted wrappers rather than a fixture, so it cannot drift away from what it checks.
 
-### `apps/watch_wear/android/app/src/test/kotlin/**/*Test.kt` — 774 Wear OS Kotlin/JUnit tests across 75 files
+### `apps/watch_wear/android/app/src/test/kotlin/**/*Test.kt` — 784 Wear OS Kotlin/JUnit tests across 76 files
 
 Run with `cd apps/watch_wear/android && ./gradlew testDebugUnitTest`. Pure-JVM tests — no Android instrumentation, no Robolectric. **Six of them read files outside this Gradle build** (the phone's two `Wear*Bridge.kt`, `apps/web/src/lib/core/env_flag.ts`, `docs/backend/metadata.md`, the `activity_type` migration and the two client label catalogues), plus the manifest, and none was a declared input of the test task until [decisions § 946](../architecture/decisions.md) — so a local run reported UP-TO-DATE and SUCCESSFUL on exactly the drift those guards exist to catch. They are declared now; if you add a guard that reads anything outside `app/src`, add it to `guardedCrossTreeFiles` / `guardedCrossTreeSets` in `app/build.gradle.kts` in the same change or it will not re-run when its subject changes. `ScreenWiringTest` also now pins the pre-run signed-out notice ([decisions § 948](../architecture/decisions.md)): the `!authed` branch renders `not_signed_in` and NOT `offline`, read branch-scoped so the sibling `!online && authed` branch a few lines above cannot satisfy it — two conditions sharing one string breaks nothing, so only an assertion about which branch says which can see it. The team deliberately avoided UI-test infrastructure (see `apps/watch_wear/CLAUDE.md`'s "layouts can't be unit-tested without Robolectric"); the pattern is to extract pure helpers from the Android-bound classes and exercise them at the JVM level.
 
@@ -1317,7 +1317,7 @@ Mirror of the web suite above, vector for vector. Twelve of the fourteen fail ag
 The accent-fold drift guard, and the generator under it. Pins that the two causes of a mismatch are reported as different sentences — a hand-edit or a stale commit against a Node whose Unicode tables have moved — because the second reaches a PR that touched none of it, and sending that reader hunting for an edit they did not make wastes the run. Plus: a render that lost its version stamp is itself a finding (without it the guard cannot tell the causes apart), the committed table is what the generator renders, its keys are strictly ascending and parallel to its values, the Hangul arithmetic reproduces NFD across all 11,172 syllables independently of the generator's own assertion, the fold answers the divergence classes and leaves the undecomposable letters alone, and `dartLiteral` emits ASCII only.
 
 
-### Exercise catalogue picker — `apps/web/src/lib/components/exercise_catalogue_picker.test.ts` (16) · `apps/mobile_android/test/exercise_catalogue_picker_test.dart` (20 widget)
+### Exercise catalogue picker — `apps/web/src/lib/components/exercise_catalogue_picker.test.ts` (20) · `apps/mobile_android/test/exercise_catalogue_picker_test.dart` (20 widget)
 
 The gym catalogue picker's search / hidden-exact / ordering decision, pinned on both platforms but by deliberately different instruments ([decisions § 1333](../architecture/decisions.md), [§ 1382](../architecture/decisions.md)). Web has no harness that can compile a `.svelte` component, so the decision was moved OUT of the markup into a pure module and `cataloguePickerView` is tested directly: a blank query lists everything and offers no create, the search folds both sides through the canonical key, an exact name the CATEGORY filter is hiding is reported rather than dropped into “No exercises match.”, a shadowed name reports the same entry whichever order the fetch returned, and five ordering cases pin the folded comparator — an accented name not filed after `z`, the phone's order rather than the host collation's, § 1334's measured eight-name list, the id tiebreak for names the fold calls equal, and that the input array is not reordered in place. `flutter_test` renders widgets natively, so the Dart side pins the WIDGET instead and therefore reaches strictly more than the web module can — the rendered sentence and the rendered order, which § 1333 says only a browser can prove on web: the same search / hidden-exact / ordering cases plus the create path end to end (no affordance without an API client, a create under a category filed there and under “all” filed under other, a refused create reported while staying on the picker, tapping a row popping with that entry) and the shadowing badge. The counts are NOT a mirror pair and are not expected to match — the two suites test different objects. The iOS twin runs the Dart file byte-for-byte.
 
@@ -2233,3 +2233,25 @@ NOT run by this lane, and not claimed: Playwright, the full `apps/mobile_android
 `privacy_guards.test.ts` 21, `infra_guards.test.ts` 12, `consent_guards.test.ts` 11, `lambda_guards.test.ts` 9, `a11y_guards.test.ts` 8, `credential_guards.test.ts` 6, `rate_limit_guards.test.ts` 6, `edge_function_guards.test.ts` 5, `paywall_guards.test.ts` 5, `ci_workflow_guards.test.ts` 4, `xss_guards.test.ts` 3, `source_scanner_guards.test.ts` 1 — 91 total, recounted on the merged tree.
 
 The one-test file is deliberate: the comment-delimiter REGISTER is the single thing every lane adding a source scanner must edit, so it is the one file a scanner author needs to find.
+
+## #789 round 44 (2026-09-07)
+
+### `apps/web/src/lib/gym/exercise_catalogue.test.ts` — 8 tests
+
+The paged catalogue read and the shadow resolution behind the picker: an explicit-range walk (a short page is not proof of exhaustion), a failed read reported as `{ catalogue, error }` rather than as an empty catalogue, and the two partial uniques resolved at the read with the owner's row winning. The picker's third state — create fails closed while the catalogue is unknown — is pinned in `exercise_catalogue_picker.test.ts`.
+
+### `apps/web/src/lib/util/ordinal_compare.test.ts` — 4 tests
+
+The code-unit comparator the seven ISO-timestamp sorts now use. Pins the case the collation gets wrong: Postgres trims a `timestamptz`'s zero fractional part, so two rows in the same second differ at `+` against `.`, and the CLDR root orders those the opposite way from their code points — putting the older row on top of a newest-first list.
+
+### `packages/core_models/test/db_rows_datetime_test.dart` — 7 tests
+
+The generated row DTOs' `DateTime` columns, which read through the strict parser rather than `DateTime.parse` — a required column throws naming the field, a nullable one degrades to null, and an impossible instant is refused instead of being rolled through the calendar into a confident wrong answer.
+
+### `packages/core_models/test/safety_contact_dto_test.dart` — 14 tests
+
+The seven raw stamp parses in `social.dart`, two of which are SMS-opt-in stamps and one a confirmation stamp — where a rolled-over value reads as a real consent and arms the escalation.
+
+### `apps/mobile_android/test/settings_preferences_pick_int_test.dart` — 4 tests (mirrored on the iOS twin)
+
+The Preferences screen's shared `_pickInt` dialog, which used to pop `null` on a refusal — the same value Cancel pops. Pins that an out-of-range figure and unparseable text each keep the dialog open with the range named in the field's own `errorText`, that Cancel is still distinguishable from both, and that correcting the entry clears the message and lets the save land.
