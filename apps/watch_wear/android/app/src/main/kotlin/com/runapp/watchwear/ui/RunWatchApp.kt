@@ -2225,10 +2225,11 @@ private fun PostRunScreen(
         )
 
         // Discard on this screen ends an UNSYNCED run: `RunViewModel.discard`
-        // is `store.remove(id)`, and while the run has not reached Supabase the
-        // local queue is the only place it exists. So it is behind the estate's
-        // two-press confirm (decisions § 1206) like the crash-recovery prompt's
-        // Discard and both watchOS ones (§ 1208), not a single tap.
+        // drops the queue entry and the track file it points at (§ 1388), and
+        // while the run has not reached Supabase those two are the only place
+        // it exists. So it is behind the estate's two-press confirm (decisions
+        // § 1206) like the crash-recovery prompt's Discard and both watchOS
+        // ones (§ 1208), not a single tap.
         //
         // The arm cannot be announced on the control itself: the whole visual
         // is a 52 dp `×` with no room for a word, and recolouring it would make
