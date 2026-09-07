@@ -41,6 +41,14 @@
 //      run's log rather than in a document, and the entry is re-measured here:
 //      it must name a project this tree still holds, that project must still
 //      hold tests, and it may not swallow every project at once.
+//   4. A job caching `~/.gradle` names every project it invokes in its cache
+//      KEY. One `GRADLE_USER_HOME` serves every project a job builds while the
+//      key hashes named files, so a job that invokes two projects and hashes
+//      one restores a cache that a change to the other's build files did not
+//      invalidate. That is one project's build reading another's cached
+//      answers — slow or confusing rather than wrong, but invisible either way,
+//      and it becomes live the moment a job grows a second invocation
+//      (decisions § 1440).
 //
 // Run: `node scripts/check_gradle_test_coverage.mjs`
 // CI:  the `workflow-lint` job in .github/workflows/ci.yml, which is in the
@@ -51,6 +59,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { parseSteps } from './check_ci_diagnostics.mjs';
 import {
 	MIN_REASON_CHARS,
 	blockScalar,
@@ -181,6 +190,44 @@ export function gradleInvocations(text) {
 	return out;
 }
 
+/// A `~/.gradle` cache step, keyed on the paths it restores rather than on the
+/// step's name or the action's version: a job that restores `~/.gradle/caches`
+/// under any spelling has one Gradle user home shared by everything it builds.
+export const GRADLE_CACHE_PATH = /(?:^|[\s'"])~?\/?\.gradle\//m;
+
+/**
+ * The `~/.gradle` cache steps in a workflow, by job, with the `hashFiles()`
+ * globs their key is computed from.
+ *
+ * The globs are what makes the claim checkable: a key is an opaque string
+ * otherwise, and "does a change to this project's build files change it" is
+ * exactly the question. A key with no `hashFiles()` at all hashes nothing and
+ * is reported as covering nothing rather than as covering everything.
+ *
+ * @param {string} text
+ * @returns {{ job: string, line: number, key: string, globs: string[] }[]}
+ */
+export function gradleCacheSteps(text) {
+	/** @type {{ job: string, line: number, key: string, globs: string[] }[]} */
+	const out = [];
+	for (const step of parseSteps(text)) {
+		if (!/\buses:\s*actions\/cache@/.test(step.body)) continue;
+		if (!GRADLE_CACHE_PATH.test(step.body)) continue;
+		const key = /^\s*key:\s*(.*?)\s*$/m.exec(step.body);
+		if (!key) continue;
+		/** @type {string[]} */
+		const globs = [];
+		for (const call of key[1].matchAll(/hashFiles\(([^)]*)\)/g)) {
+			for (const arg of call[1].split(',')) {
+				const g = arg.trim().replace(/^['"]|['"]$/g, '');
+				if (g) globs.push(g);
+			}
+		}
+		out.push({ job: step.job, line: step.line, key: key[1], globs });
+	}
+	return out;
+}
+
 /// A task word that makes Gradle run the project's tests. Matched on the task's
 /// own shape rather than on the exact spelling the repo uses today, so a
 /// variant-qualified task (`testDebugUnitTest`, `testProdReleaseUnitTest`) and
@@ -220,10 +267,19 @@ export function check(opts = {}) {
 		return { errors, ok };
 	}
 
-	/** @type {{ dir: string, tasks: string[], line: number, file: string }[]} */
+	/// Read per STEP rather than per file, so each invocation carries the job
+	/// that makes it — claim 4 is about a job's cache, and a file-wide read
+	/// cannot say which job an invocation belongs to. `working-directory:` is
+	/// a step-level key, so scoping the walk to one step's body is what it
+	/// already meant.
+	/** @type {{ dir: string, tasks: string[], line: number, file: string, job: string }[]} */
 	const invocations = [];
 	for (const wf of workflows) {
-		for (const inv of gradleInvocations(wf.text)) invocations.push({ ...inv, file: wf.name });
+		for (const step of parseSteps(wf.text)) {
+			for (const inv of gradleInvocations(step.body)) {
+				invocations.push({ ...inv, line: step.line, file: wf.name, job: step.job });
+			}
+		}
 	}
 
 	/** @type {{ path: string, reason: string }[]} */
@@ -323,6 +379,36 @@ export function check(opts = {}) {
 				`tests are committed and are executed by nothing, which is the state a green CI is ` +
 				`least able to tell you about. Run them, or declare the project in \`${UNTESTED_KEY}\` ` +
 				`with a reason saying what would have to change.`,
+		);
+	}
+
+	/// Claim 4. A job's `~/.gradle` is one directory; its key names files.
+	const cacheSteps = workflows.flatMap((wf) =>
+		gradleCacheSteps(wf.text).map((c) => ({ ...c, file: wf.name })),
+	);
+	if (cacheSteps.length === 0) {
+		errors.push(
+			`no workflow caches \`~/.gradle\` at all. Either every Gradle job now downloads its ` +
+				`distribution and dependencies afresh, or the cache-step detection stopped matching ` +
+				`— in which case claim 4 measures nothing and would agree with a job whose key ` +
+				`ignores the project it builds.`,
+		);
+	}
+	for (const cache of cacheSteps) {
+		const invoked = [...new Set(invocations.filter((i) => i.job === cache.job).map((i) => i.dir))]
+			.filter((d) => projects.includes(d))
+			.sort();
+		const uncovered = invoked.filter(
+			(d) => !cache.globs.some((g) => g === d || g.startsWith(`${d}/`)),
+		);
+		if (uncovered.length === 0) continue;
+		errors.push(
+			`\`${cache.file}\`'s \`${cache.job}\` job invokes Gradle in ${uncovered.join(', ')} and ` +
+				`restores \`~/.gradle\` from a key that hashes no file under ` +
+				`${uncovered.length === 1 ? 'it' : 'them'} (${cache.file}:${cache.line}, hashing ` +
+				`${cache.globs.length > 0 ? cache.globs.join(', ') : 'nothing'}). One Gradle user home ` +
+				`serves every project a job builds, so a change to those build files restores the ` +
+				`cache written before it. Add a \`hashFiles()\` glob under each invoked project.`,
 		);
 	}
 
