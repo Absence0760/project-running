@@ -13,6 +13,7 @@
  */
 
 import { parseCutoff } from './route_markers';
+import { escapeHtml } from '../util/html_escape';
 
 export interface RouteGpxMarker {
 	label: string;
@@ -59,10 +60,10 @@ export function toRouteGpxWithMarkers(
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
   <metadata>
-    <name>${escapeXml(name)}</name>
+    <name>${escapeHtml(name)}</name>
   </metadata>
 ${waypoints ? waypoints + '\n' : ''}  <trk>
-    <name>${escapeXml(name)}</name>
+    <name>${escapeHtml(name)}</name>
     <trkseg>
 ${trackpoints}
     </trkseg>
@@ -73,13 +74,13 @@ ${trackpoints}
 function renderWaypoint(m: RouteGpxMarker): string {
 	const parts: string[] = [
 		`  <wpt lat="${m.lat}" lon="${m.lng}">`,
-		`<name>${escapeXml(m.label)}</name>`,
-		`<type>${escapeXml(m.kind)}</type>`
+		`<name>${escapeHtml(m.label)}</name>`,
+		`<type>${escapeHtml(m.kind)}</type>`
 	];
 	const sym = SYM_BY_KIND[m.kind];
 	if (sym) parts.push(`<sym>${sym}</sym>`);
 	const desc = buildDesc(m.meta);
-	if (desc) parts.push(`<desc>${escapeXml(desc)}</desc>`);
+	if (desc) parts.push(`<desc>${escapeHtml(desc)}</desc>`);
 	parts.push('</wpt>');
 	return parts.join('');
 }
@@ -105,13 +106,4 @@ function buildDesc(meta: Record<string, unknown>): string {
 	}
 
 	return segments.join(' | ');
-}
-
-function escapeXml(str: string): string {
-	return str
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/"/g, '&quot;')
-		.replace(/'/g, '&apos;');
 }

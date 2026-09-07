@@ -27,6 +27,7 @@ export type RecapOgInput = {
 };
 
 import { OG_CARD_DARK } from './og_card_palette';
+import { escapeHtml } from '../util/html_escape';
 
 const W = 1200;
 const H = 630;
@@ -42,15 +43,6 @@ function fmtDistanceKm(meters: number | null | undefined, unit: 'km' | 'mi'): st
 	const m = meters ?? 0;
 	if (unit === 'mi') return `${(m / 1609.344).toFixed(0)} mi`;
 	return `${(m / 1000).toFixed(0)} km`;
-}
-
-export function xmlEscape(s: string): string {
-	return s
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/"/g, '&quot;')
-		.replace(/'/g, '&apos;');
 }
 
 /// Build the og:image SVG for a public recap share page. `unit` defaults to
@@ -74,12 +66,12 @@ export function buildRecapOgSvg(input: RecapOgInput, unit: 'km' | 'mi' = 'km'): 
 	const period = (input.periodLabel ?? (input.year != null ? String(input.year) : '')).trim();
 	const kicker = period ? `MY ${period.toUpperCase()} IN RUNNING` : 'MY YEAR IN RUNNING';
 	parts.push(
-		`<text x="${PAD}" y="${PAD + 84}" font-family="${F}" font-size="28" font-weight="700" fill="${LABEL_FILL}" letter-spacing="3">${xmlEscape(kicker)}</text>`,
+		`<text x="${PAD}" y="${PAD + 84}" font-family="${F}" font-size="28" font-weight="700" fill="${LABEL_FILL}" letter-spacing="3">${escapeHtml(kicker)}</text>`,
 	);
 
 	// Hero — total distance.
 	parts.push(
-		`<text x="${PAD}" y="${PAD + 230}" font-family="${F}" font-size="150" font-weight="900" fill="${HERO_FILL}">${xmlEscape(fmtDistanceKm(input.totalDistanceM, unit))}</text>`,
+		`<text x="${PAD}" y="${PAD + 230}" font-family="${F}" font-size="150" font-weight="900" fill="${HERO_FILL}">${escapeHtml(fmtDistanceKm(input.totalDistanceM, unit))}</text>`,
 	);
 
 	// Subhead — run count (+ attribution).
@@ -88,7 +80,7 @@ export function buildRecapOgSvg(input: RecapOgInput, unit: 'km' | 'mi' = 'km'): 
 	const by = input.displayName?.trim();
 	const subhead = by ? `${n} ${runWord} · ${by}` : `across ${n} ${runWord}`;
 	parts.push(
-		`<text x="${PAD}" y="${PAD + 296}" font-family="${F}" font-size="40" font-weight="600" fill="${STAT_FILL}">${xmlEscape(subhead)}</text>`,
+		`<text x="${PAD}" y="${PAD + 296}" font-family="${F}" font-size="40" font-weight="600" fill="${STAT_FILL}">${escapeHtml(subhead)}</text>`,
 	);
 
 	// Stat row along the bottom — three headline cells.
@@ -102,10 +94,10 @@ export function buildRecapOgSvg(input: RecapOgInput, unit: 'km' | 'mi' = 'km'): 
 	cells.forEach((cell, i) => {
 		const x = PAD + i * colW;
 		parts.push(
-			`<text x="${x}" y="${rowY}" font-family="${F}" font-size="24" font-weight="700" fill="${LABEL_FILL}" letter-spacing="2">${xmlEscape(cell.label)}</text>`,
+			`<text x="${x}" y="${rowY}" font-family="${F}" font-size="24" font-weight="700" fill="${LABEL_FILL}" letter-spacing="2">${escapeHtml(cell.label)}</text>`,
 		);
 		parts.push(
-			`<text x="${x}" y="${rowY + 46}" font-family="${F}" font-size="48" font-weight="800" fill="${STAT_FILL}">${xmlEscape(cell.value)}</text>`,
+			`<text x="${x}" y="${rowY + 46}" font-family="${F}" font-size="48" font-weight="800" fill="${STAT_FILL}">${escapeHtml(cell.value)}</text>`,
 		);
 	});
 
