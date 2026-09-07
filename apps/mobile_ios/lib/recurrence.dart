@@ -152,7 +152,11 @@ class EventRecurrence {
 /// zone designator for a local `DateTime` where JS's `toISOString()` always
 /// emits `Z` — so the wire form is normalised at the boundary that owns it
 /// (`instanceStartKey` in `api_client`), not here, where changing it would
-/// move the pair away from its twin (decisions § 1343).
+/// move the pair away from its twin (decisions § 1343). That precondition is
+/// now recorded in BOTH parity registries rather than only in this comment,
+/// and enforced by `test/instance_start_wire_guard_test.dart` over the whole
+/// of `lib/` — a pair whose correctness depends on what its callers do is a
+/// pair the syncer cannot judge from the two files alone (decisions § 1379).
 List<DateTime> expandInstances(
   EventRecurrence e,
   DateTime from,

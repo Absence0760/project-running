@@ -699,11 +699,18 @@ class LocalRunStore extends ChangeNotifier {
   }
 
   static DateTime _lastModifiedOf(Run run) {
-    final raw = run.metadata?[MetadataKeys.lastModifiedAt] as String?;
-    if (raw != null) {
-      final parsed = DateTime.tryParse(raw);
-      if (parsed != null) return parsed;
-    }
+    // Read through the strict parser, not `DateTime.tryParse`: an impossible
+    // stamp there is not an error to that call, it is a rolled-over date
+    // (`2026-06-32` is the 2nd of July), and this clock decides which copy of a
+    // run survives a merge. A stamp far enough in the future wins every
+    // subsequent comparison and the server copy can never reach the phone
+    // again — the § 1342 shape. The fallback below is a real instant this run
+    // actually carries, which is what an unreadable stamp should degrade to
+    // (decisions § 1377). The cast is gone with it: a stamp of the wrong TYPE
+    // used to throw out of a merge rather than read as absent.
+    final parsed =
+        parseIsoStrictValue(run.metadata?[MetadataKeys.lastModifiedAt]);
+    if (parsed != null) return parsed;
     // Fall back to startedAt, NOT createdAt. `createdAt` is the server's
     // `created_at` insert timestamp — it's null for an offline run and,
     // for a synced run, reflects when the row first reached the server

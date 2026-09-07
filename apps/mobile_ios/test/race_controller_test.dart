@@ -29,6 +29,8 @@
 //   "back-to-back instance switch fires notifyListeners" test
 //   below.
 
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -295,6 +297,43 @@ void main() {
           (await SharedPreferences.getInstance())
               .getString(kPendingRaceResultsKey),
           isNull);
+    });
+
+    test('a queued result with an IMPOSSIBLE instance is dropped, not replayed '
+        'against the wrong occurrence', () async {
+      // `DateTime.tryParse` answers `2026-05-32` with the 1st of June rather
+      // than refusing it (decisions § 1344 / § 1377), and `instance_start` is
+      // the recurring-occurrence KEY the upsert matches on. So the runner's
+      // official finisher time would have landed on a DIFFERENT race night —
+      // a wrong answer nothing downstream can question — where refusing it
+      // leaves the queue honest about having lost it.
+      SharedPreferences.setMockInitialValues({
+        kPendingRaceResultsKey: jsonEncode([
+          {
+            'event_id': 'event-rolled',
+            'instance_start': '2026-05-32T18:00:00.000Z',
+            'run_id': 'run-rolled',
+            'duration_s': 100,
+            'distance_m': 1000.0,
+          },
+          {
+            'event_id': 'event-ok',
+            'instance_start': '2026-05-22T18:00:00.000Z',
+            'run_id': 'run-ok',
+            'duration_s': 200,
+            'distance_m': 2000.0,
+          },
+        ]),
+      });
+      final social = _FakeSocial();
+      final c = RaceController(social);
+
+      await c.drainPendingResults();
+
+      // The readable entry still replays, so the refusal is not a blanket
+      // "the queue failed to load".
+      expect(social.submitted.map((s) => s.eventId), ['event-ok']);
+      expect(social.submitted.single.instance, DateTime.utc(2026, 5, 22, 18));
     });
 
     test('a drain that fails again keeps the result queued', () async {
