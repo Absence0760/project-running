@@ -9,7 +9,13 @@ interface TrackPoint {
 	lat: number;
 	lng: number;
 	ele?: number | null;
-	t?: string | null;
+	/// Per-point ISO timestamp. `ts`, matching `src/lib/types.ts`'s own
+	/// `TrackPoint` -- the gzipped object this fixture writes is read back
+	/// verbatim by `fetchTrack`, with no key renaming anywhere, so a field
+	/// spelled anything else is data no code path ever sees. It was `t` for
+	/// the life of this file, which is why three specs planted a track the app
+	/// read as having no timestamps at all (decisions § 1404).
+	ts?: string | null;
 	/// Per-point heart rate in BPM (matches `src/lib/types.ts`
 	/// TrackPoint.bpm). Lets HR-zone e2e tests plant a track that
 	/// the run-detail page reads to compute the zone breakdown.

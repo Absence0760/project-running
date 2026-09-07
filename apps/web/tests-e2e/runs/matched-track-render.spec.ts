@@ -56,7 +56,7 @@ const rawTrack = Array.from({ length: POINTS }, (_, i) => ({
 	lat: 51.46 + i * 0.0005,
 	lng: -0.3,
 	ele: RAW_BASE_ELE + i,
-	t: new Date(Date.UTC(2026, 0, 1, 9, i)).toISOString(),
+	ts: new Date(Date.UTC(2026, 0, 1, 9, i)).toISOString(),
 }));
 
 /** What the worker would write back: the same run snapped a little west,
@@ -65,7 +65,7 @@ const matchedTrack = Array.from({ length: POINTS }, (_, i) => ({
 	lat: 51.46 + i * 0.0005,
 	lng: -0.3001,
 	ele: MATCHED_BASE_ELE + i,
-	t: new Date(Date.UTC(2026, 0, 1, 9, i)).toISOString(),
+	ts: new Date(Date.UTC(2026, 0, 1, 9, i)).toISOString(),
 }));
 
 /** The chart's max-then-min corner pills, whitespace-normalised. */
