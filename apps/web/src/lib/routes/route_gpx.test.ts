@@ -104,6 +104,19 @@ test('toRouteGpxWithMarkers — escapes XML metacharacters in name and desc', ()
 	assert.match(xml, /<desc>Services: water &amp; ice<\/desc>/);
 });
 
+// Both halves of the pair have to emit the same bytes, and the apostrophe is
+// the one reserved character with two legal spellings. The web side escapes
+// through the canonical `util/html_escape`, which picked the numeric form;
+// the Dart twin's `_escapeXml` carries it too (decisions § 1450).
+test('toRouteGpxWithMarkers — apostrophe is the numeric &#39;, not &apos;', () => {
+	const xml = toRouteGpxWithMarkers("O'Brien's Loop", COORDS_3, ELEVS_3, [
+		marker({ label: "Ranger's hut" })
+	]);
+	assert.ok(!xml.includes('&apos;'), 'the numeric reference is what the twin emits');
+	assert.match(xml, /<name>O&#39;Brien&#39;s Loop<\/name>/);
+	assert.match(xml, /<name>Ranger&#39;s hut<\/name>/);
+});
+
 test('toRouteGpxWithMarkers — empty marker list still emits the line + zero wpt', () => {
 	const xml = toRouteGpxWithMarkers('Loop', COORDS_3, ELEVS_3, []);
 	assert.equal((xml.match(/<wpt /g) ?? []).length, 0);

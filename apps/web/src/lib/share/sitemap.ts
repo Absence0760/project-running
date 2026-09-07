@@ -13,6 +13,7 @@ import { buildClubShareCanonical } from './share_club_meta';
 import { buildEventShareCanonical } from './share_event_meta';
 import { buildRaceShareCanonical } from './share_race_meta';
 import { buildRouteShareCanonical, buildRunShareCanonical } from './share_meta';
+import { escapeHtml } from '../util/html_escape';
 
 export type SitemapEntry = {
 	loc: string;
@@ -20,20 +21,6 @@ export type SitemapEntry = {
 	changefreq?: 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never';
 	priority?: number; // 0.0..1.0
 };
-
-/// XML-escape the five characters with special meaning inside element
-/// content + attribute values. Sitemap URLs shouldn't contain `<` or
-/// `>`, but uuids and the trailing slash on the base URL are stable
-/// — guarding here is cheap insurance against a future schema that
-/// allows non-uuid public ids (slugs, handles).
-export function xmlEscape(s: string): string {
-	return s
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/"/g, '&quot;')
-		.replace(/'/g, '&apos;');
-}
 
 /// Strip the trailing slash from a base URL so concatenation with
 /// `/share/...` yields a single-slash join. Idempotent.
@@ -50,8 +37,8 @@ export function buildSitemap(entries: SitemapEntry[]): string {
 	lines.push('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">');
 	for (const e of entries) {
 		lines.push('  <url>');
-		lines.push(`    <loc>${xmlEscape(e.loc)}</loc>`);
-		if (e.lastmod) lines.push(`    <lastmod>${xmlEscape(e.lastmod)}</lastmod>`);
+		lines.push(`    <loc>${escapeHtml(e.loc)}</loc>`);
+		if (e.lastmod) lines.push(`    <lastmod>${escapeHtml(e.lastmod)}</lastmod>`);
 		if (e.changefreq) lines.push(`    <changefreq>${e.changefreq}</changefreq>`);
 		if (e.priority != null) {
 			lines.push(`    <priority>${e.priority.toFixed(1)}</priority>`);

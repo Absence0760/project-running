@@ -15,6 +15,7 @@
 
 import { formatDateStable, formatKmStable } from './share_meta';
 import { OG_CARD_LIGHT } from './og_card_palette';
+import { escapeHtml } from '../util/html_escape';
 
 const W = 1200;
 const H = 630;
@@ -54,7 +55,7 @@ export function buildRunOgSvg(input: RunImageInput): string {
 	const km = formatKmStable(input.distance_m);
 	const heroText = km || 'Run';
 	parts.push(
-		`<text x="${W / 2}" y="${H / 2 + 20}" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="180" font-weight="800" fill="${STAT_FILL}" text-anchor="middle">${xmlEscape(heroText)}</text>`,
+		`<text x="${W / 2}" y="${H / 2 + 20}" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="180" font-weight="800" fill="${STAT_FILL}" text-anchor="middle">${escapeHtml(heroText)}</text>`,
 	);
 
 	// Sub-line: "by NAME on DATE" — composed from whatever bits are
@@ -62,14 +63,14 @@ export function buildRunOgSvg(input: RunImageInput): string {
 	const sub = buildSubline(input);
 	if (sub) {
 		parts.push(
-			`<text x="${W / 2}" y="${H / 2 + 100}" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="44" font-weight="500" fill="${META_FILL}" text-anchor="middle">${xmlEscape(sub)}</text>`,
+			`<text x="${W / 2}" y="${H / 2 + 100}" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="44" font-weight="500" fill="${META_FILL}" text-anchor="middle">${escapeHtml(sub)}</text>`,
 		);
 	}
 
 	// Source tag (strava / parkrun / etc) bottom-right when present.
 	if (input.source) {
 		parts.push(
-			`<text x="${W - PAD}" y="${H - PAD}" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="28" font-weight="600" fill="${META_FILL}" text-anchor="end">${xmlEscape(input.source)}</text>`,
+			`<text x="${W - PAD}" y="${H - PAD}" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="28" font-weight="600" fill="${META_FILL}" text-anchor="end">${escapeHtml(input.source)}</text>`,
 		);
 	}
 
@@ -84,13 +85,4 @@ export function buildSubline(input: RunImageInput): string {
 	if (by) return `by ${by}`;
 	if (date) return date;
 	return '';
-}
-
-export function xmlEscape(s: string): string {
-	return s
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/"/g, '&quot;')
-		.replace(/'/g, '&apos;');
 }

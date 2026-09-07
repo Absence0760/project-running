@@ -117,13 +117,18 @@ String _buildDesc(Map<String, dynamic> meta) {
   return segments.join(' | ');
 }
 
+/// The five XML-reserved characters, with the apostrophe as the NUMERIC
+/// `&#39;` rather than `&apos;`. The web twin escapes through the canonical
+/// `util/html_escape.ts`, which chose the numeric form so one escaper serves
+/// HTML4, HTML5 and XML/SVG alike; both spellings parse to `'`, but the two
+/// halves have to emit the same bytes (decisions § 1450).
 String _escapeXml(String str) {
   return str
       .replaceAll('&', '&amp;')
       .replaceAll('<', '&lt;')
       .replaceAll('>', '&gt;')
       .replaceAll('"', '&quot;')
-      .replaceAll("'", '&apos;');
+      .replaceAll("'", '&#39;');
 }
 
 /// Render a coordinate the way the web twin's template literal does, so the

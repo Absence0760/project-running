@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildRunOgSvg, buildSubline, xmlEscape } from './og_run_image';
+import { buildRunOgSvg, buildSubline } from './og_run_image';
+import { escapeHtml } from '../util/html_escape';
 
 // ---------------- buildRunOgSvg ----------------
 
@@ -95,8 +96,8 @@ test('buildSubline — whitespace-only display name is treated as absent', () =>
 	);
 });
 
-// ---------------- xmlEscape ----------------
+// ---------------- escapeHtml ----------------
 
-test('xmlEscape — escapes the five reserved characters', () => {
-	assert.equal(xmlEscape(`a<b>&c"d'e`), 'a&lt;b&gt;&amp;c&quot;d&apos;e');
+test('escapeHtml — escapes the five reserved characters', () => {
+	assert.equal(escapeHtml(`a<b>&c"d'e`), 'a&lt;b&gt;&amp;c&quot;d&#39;e');
 });

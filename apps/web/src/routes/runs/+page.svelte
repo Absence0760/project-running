@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { compareOrdinal } from '$lib/util/ordinal_compare';
 	import { formatPace, formatDistance, sourceLabel } from '$lib/core/mock-data';
 	import { RUN_SOURCES, sourceColor, sourceInk } from '$lib/runs/source_badge';
 	import { formatDate, formatDuration } from '$lib/format/time';
@@ -272,10 +273,10 @@
 			r.distance_m < 10 ? Infinity : r.duration_s / (r.distance_m / 1000);
 		switch (sortKey) {
 			case 'newest':
-				out.sort((a, b) => b.started_at.localeCompare(a.started_at));
+				out.sort((a, b) => compareOrdinal(b.started_at, a.started_at));
 				break;
 			case 'oldest':
-				out.sort((a, b) => a.started_at.localeCompare(b.started_at));
+				out.sort((a, b) => compareOrdinal(a.started_at, b.started_at));
 				break;
 			case 'longest':
 				out.sort((a, b) => b.distance_m - a.distance_m);
