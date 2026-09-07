@@ -1662,6 +1662,60 @@ void main() {
       indexFile.writeAsStringSync('{not json');
       expect(await store.debugReadIndex(), isNull);
     });
+
+    // What one unreadable row costs, traced end to end. It costs the INDEX,
+    // not the load and not the run: `_readIndex` catches, the loader falls
+    // through to the full walk of the per-run files, and the index is written
+    // back correct. Skipping the row instead would drop a run that is still on
+    // disk and then persist that omission (decisions § 1431).
+    test('one unreadable index row costs the index, never a run', () async {
+      final seed = LocalRunStore();
+      await seed.init(overrideDirectory: tempDir);
+      await seed.save(makeRun(id: 'r-1', distance: 5000));
+      await seed.save(makeRun(id: 'r-2', distance: 6000));
+
+      final indexFile = File('${tempDir.path}/index.json');
+      final data =
+          jsonDecode(indexFile.readAsStringSync()) as Map<String, dynamic>;
+      (data['summaries'] as List)[0]['duration_us'] = 'thirty minutes';
+      indexFile.writeAsStringSync(jsonEncode(data));
+
+      expect(await seed.debugReadIndex(), isNull,
+          reason: 'the whole index is discarded, not the one row');
+
+      final reloaded = LocalRunStore();
+      await reloaded.init(overrideDirectory: tempDir);
+      expect(reloaded.summaryRuns.map((r) => r.id),
+          containsAll(<String>['r-1', 'r-2']));
+      final rebuilt = await reloaded.debugReadIndex();
+      expect(rebuilt, isNotNull, reason: 'the rebuild persists a usable index');
+      expect(rebuilt!.map((s) => s.id), containsAll(<String>['r-1', 'r-2']));
+    });
+
+    test('an impossible start in the index reaches the rebuild', () async {
+      // This is the row that never used to reach it: `DateTime.parse` answered
+      // 2026-13-45 with 2027-02-18, so nothing threw, the run list sorted by a
+      // day the runner never ran, and the value was written back on the next
+      // flush.
+      final seed = LocalRunStore();
+      await seed.init(overrideDirectory: tempDir);
+      await seed.save(makeRun(id: 'r-roll', distance: 5000));
+      final started = seed.summaryRuns.single.startedAt;
+
+      final indexFile = File('${tempDir.path}/index.json');
+      final data =
+          jsonDecode(indexFile.readAsStringSync()) as Map<String, dynamic>;
+      (data['summaries'] as List)[0]['started_at'] = '2026-13-45T99:99:99Z';
+      indexFile.writeAsStringSync(jsonEncode(data));
+
+      expect(await seed.debugReadIndex(), isNull);
+
+      final reloaded = LocalRunStore();
+      await reloaded.init(overrideDirectory: tempDir);
+      expect(reloaded.summaryRuns.single.startedAt, started,
+          reason: 'the run file, not the rolled-over index row, is the source');
+      expect((await reloaded.debugReadIndex())!.single.startedAt, started);
+    });
   });
 
   group('windowed API', () {
