@@ -4301,6 +4301,7 @@ export const en = {
 	"gym.catalogue.searchPlaceholder": "Search exercises",
 	"gym.catalogue.categoryLabel": "Category",
 	"gym.catalogue.empty": "No exercises match.",
+	"gym.catalogue.unavailable": "Couldn't load the exercise catalogue, so this list may be incomplete.",
 	"gym.catalogue.otherCategory": "“{name}” is already in the catalogue, under {category}.",
 	"gym.catalogue.customBadge": "Custom",
 	"gym.catalogue.create": "Add “{name}” as a custom exercise",
