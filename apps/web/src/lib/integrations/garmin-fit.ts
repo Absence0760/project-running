@@ -10,6 +10,7 @@
 /// handles bundle (ZIP) uploads on top of this.
 
 import type { TrackPoint } from '../types';
+import { haversineMetres } from '../runs/run_stats';
 
 /// Canonical per-lap shape registered in docs/backend/metadata.md § laps. `index`
 /// is 1-based; `start_offset_s` is the cumulative duration up to the START
@@ -163,17 +164,6 @@ export const EMBEDDED_BEST_DISTANCES: ReadonlyArray<readonly [EmbeddedBestColumn
 	['fastest_marathon_s', 42195],
 ];
 
-function embeddedHaversineM(lat1: number, lng1: number, lat2: number, lng2: number): number {
-	const r = 6371000;
-	const toRad = Math.PI / 180;
-	const dLat = (lat2 - lat1) * toRad;
-	const dLng = (lng2 - lng1) * toRad;
-	const s1 = Math.sin(dLat / 2);
-	const s2 = Math.sin(dLng / 2);
-	const a = s1 * s1 + Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * s2 * s2;
-	return r * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 function pointMs(p: TrackPoint): number | null {
 	if (typeof p.ts !== 'string') return null;
 	const ms = Date.parse(p.ts);
@@ -194,7 +184,7 @@ export function fastestWindowSeconds(
 	const cum = new Array<number>(n).fill(0);
 	for (let i = 1; i < n; i++) {
 		cum[i] = cum[i - 1] +
-			embeddedHaversineM(track[i - 1].lat, track[i - 1].lng, track[i].lat, track[i].lng);
+			haversineMetres(track[i - 1].lat, track[i - 1].lng, track[i].lat, track[i].lng);
 	}
 	if (cum[n - 1] < windowMetres) return null;
 

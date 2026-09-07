@@ -16,8 +16,8 @@
  */
 
 import { unwrapLonDeg } from './geo';
+import { haversineMetres as sharedHaversineMetres } from '../runs/run_stats';
 
-const EARTH_RADIUS_M = 6371000;
 const M_PER_DEG_LAT = 111320;
 
 /** Runs at or below this point count use a plain linear scan. */
@@ -27,14 +27,11 @@ const LINEAR_SCAN_MAX = 20000;
  *  regardless of track length. */
 const GRID_AXIS = 128;
 
+/// Great-circle metres between two `[lng, lat]` pairs — the coordinate order
+/// the map surfaces already hold. The `[lng, lat]`-shaped door onto the shared
+/// `haversineMetres`, not a second formula.
 export function haversineMetres(a: [number, number], b: [number, number]): number {
-	const toRad = (d: number) => (d * Math.PI) / 180;
-	const dLat = toRad(b[1] - a[1]);
-	const dLng = toRad(b[0] - a[0]);
-	const sinLat = Math.sin(dLat / 2);
-	const sinLng = Math.sin(dLng / 2);
-	const h = sinLat * sinLat + Math.cos(toRad(a[1])) * Math.cos(toRad(b[1])) * sinLng * sinLng;
-	return EARTH_RADIUS_M * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+	return sharedHaversineMetres(a[1], a[0], b[1], b[0]);
 }
 
 interface Grid {

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { bboxRadius, haversineM } from './geocoding_math';
+import { bboxRadius } from './geocoding_math';
 
 test('bboxRadius for the state of Virginia bbox returns roughly half its diagonal', () => {
 	// Approximate MapTiler bbox for "Virginia, United States".
@@ -23,23 +23,21 @@ test('bboxRadius for a city-scale bbox returns roughly the city diagonal', () =>
 	assert.ok(r < 25_000, `expected < 25km, got ${r}`);
 });
 
-test('haversineM returns 0 for identical points', () => {
+test('bboxRadius of a zero-area bbox is zero, not a rounding artefact', () => {
+	// The one contract this module owns over the shared distance: a place
+	// whose bbox collapsed to its centroid has no radius, so a caller cannot
+	// end up searching a few metres of nothing.
 	const p = { lng: -77.0, lat: 38.9 };
-	assert.equal(haversineM(p, p), 0);
+	assert.equal(bboxRadius([p.lng, p.lat, p.lng, p.lat], p), 0);
 });
 
-test('haversineM is symmetric', () => {
-	const a = { lng: -77.0, lat: 38.9 };
-	const b = { lng: -77.1, lat: 38.91 };
-	assert.equal(haversineM(a, b).toFixed(2), haversineM(b, a).toFixed(2));
-});
-
-test('haversineM ballparks the Washington DC ↔ Richmond distance correctly', () => {
-	// DC ≈ (38.90, -77.04), Richmond ≈ (37.54, -77.43) — ~150km apart.
-	const dc = { lng: -77.04, lat: 38.90 };
-	const richmond = { lng: -77.43, lat: 37.54 };
-	const d = haversineM(dc, richmond);
-	assert.ok(d > 140_000 && d < 170_000, `expected ~150km, got ${d}`);
+test('bboxRadius measures the corner distance, not the axis extent', () => {
+	// Corners at DC and Richmond (~150 km apart, ~106 km of it north-south):
+	// the radius is the CENTRE-to-corner half-diagonal, so it lands near 75 km
+	// rather than near either axis half-extent.
+	const bbox: [number, number, number, number] = [-77.43, 37.54, -77.04, 38.9];
+	const r = bboxRadius(bbox, { lng: -77.235, lat: 38.22 });
+	assert.ok(r > 70_000 && r < 85_000, `expected ~75km, got ${r}`);
 });
 
 // ---- searchPlaces (network-mocked) --------------------------------------

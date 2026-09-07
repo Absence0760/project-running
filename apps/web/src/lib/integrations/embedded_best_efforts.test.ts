@@ -50,8 +50,16 @@ test('computeEmbeddedBests — even 6 km run yields ~total-time 5k, no 10k', () 
 });
 
 test('computeEmbeddedBests — a fast 5k inside a long run is detected', () => {
-	// First 5 km fast (100 m / 20 s), last 5 km slow (100 m / 40 s).
-	const stepDeg = 100 / M_PER_DEG;
+	// First half fast (20 s a step), last half slow (40 s a step). The step is
+	// 100.01 m rather than 100 m so the fifty-step prefix clears 5 000 m and
+	// the whole track clears 10 000 m by half a metre: `fastestWindowSeconds`
+	// compares an accumulated float sum against the window EXACTLY, and a
+	// hundred-leg sum of a nominal 100 m carries ~4e-12 m of rounding — enough
+	// to decide, on its own, whether a 5 km window exists here at all.
+	// Measured: the same track summed 5000.0000000000018 m through the private
+	// haversine this module used to carry and 4999.9999999999982 m through the
+	// shared one (§ 1470), so the fixture, not the algorithm, was answering.
+	const stepDeg = 100.01 / M_PER_DEG;
 	const startMs = Date.parse('2026-01-01T09:00:00Z');
 	const track: TrackPoint[] = [{ lat: 0, lng: 0, ts: new Date(startMs).toISOString() }];
 	let t = startMs;

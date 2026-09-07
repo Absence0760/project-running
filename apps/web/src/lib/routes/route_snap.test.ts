@@ -120,3 +120,23 @@ test('a snapped point on a leg across the line wraps back into range', () => {
 	assert.ok(r!.lng >= -180 && r!.lng < 180, `lng ${r!.lng}`);
 	assert.ok(Math.abs(r!.lng - -179.99) < 1e-9, `lng ${r!.lng}`);
 });
+
+test('a near-antipodal leg still reports a distance along the route, not NaN', () => {
+	// The module measured with a private unclamped `Math.atan2(Math.sqrt(a),
+	// Math.sqrt(1 - a))` while `route_snap.dart` has always imported the
+	// CLAMPED `haversineMetres` from `run_stats.dart` — so on a leg whose
+	// haversine `a` rounds a hair above 1, the phone answered half a
+	// circumference and the web answered NaN (§ 1470, the same near-miss § 305
+	// records). Nothing catches that: `alongM` is a `number`, and every
+	// consumer of it — the marker editor's distance readout, the along-route
+	// preview — renders NaN rather than refusing.
+	const line: [number, number][] = [
+		[0, -87.5],
+		[180, 87.5],
+		[180.001, 87.5]
+	];
+	const r = snapToPolyline({ lng: 180, lat: 87.5 }, line);
+	assert.ok(r);
+	assert.ok(Number.isFinite(r!.alongM), `alongM must be a number, got ${r!.alongM}`);
+	assert.ok(Number.isFinite(r!.offsetM), `offsetM must be a number, got ${r!.offsetM}`);
+});
