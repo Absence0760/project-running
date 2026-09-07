@@ -54,7 +54,7 @@ byte-behaviour-identical; registered in the root `CLAUDE.md` parity list,
   no 12-month strip.
 - **Web in-app share card:** `lib/share/recap_share_image.ts`
   (`buildRecapShareSvg`, 1080² SVG) → rasterised client-side via
-  `lib/share/svg_to_png.ts` → OS share sheet / download. Pass a `periodLabel`
+  `lib/format/svg_raster.ts` → OS share sheet / download. Pass a `periodLabel`
   for the monthly kicker.
 - **Mobile:** `RecapScreen` (from the dashboard). Web's two routes collapse into
   one screen: a Year / Month `SegmentedButton` picks the engine, and the

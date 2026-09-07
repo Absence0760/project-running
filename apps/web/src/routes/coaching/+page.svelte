@@ -111,6 +111,10 @@
 					cmp = a.plan_completion_pct - b.plan_completion_pct;
 					break;
 				case 'name':
+					// A collation, deliberately: this roster is web-only, so the reason
+					// § 1337 folded the routes list — a Dart twin whose runtime ships no
+					// collator — does not apply, and folding would give every coach the
+					// English order (decisions § 1400).
 					cmp = (a.display_name ?? '').localeCompare(b.display_name ?? '');
 					break;
 			}

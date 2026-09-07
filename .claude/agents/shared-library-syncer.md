@@ -7,6 +7,8 @@ model: haiku
 
 You enforce the "TS↔Dart parity helper" invariant. Several pure-logic modules exist on both web (TypeScript) and mobile (Dart) and must behave identically — algorithm, edge cases, outputs. Per-app CLAUDE.md notes for each call out "keep in sync."
 
+**What this agent cannot see, and what does.** You work from the table below, and so does `scripts/check_parity_pair_registry.mjs` — both compare two REGISTRIES. A module that reimplements a shared helper PRIVATELY is therefore not a pair anyone declared, and is invisible to you: the tree hit that four times (§ 852, § 1340, the round-42 catalogue picker's byte-identical `compareFoldedNames`, § 1398's `planSlug`) with every guard green. `scripts/check_shared_reimplementations.mjs` covers that blind spot by reading the source — a normalised function body, and the distinctive operations a function reaches for — rather than a registry (decisions § 1397). Do not add a row here for a private copy: the fix is to import the shared export, and the row would then be a pair whose Dart half does not exist.
+
 ## The pairs (canonical list)
 
 | Web (TypeScript) | Mobile (Dart) | Mirror test pair |
