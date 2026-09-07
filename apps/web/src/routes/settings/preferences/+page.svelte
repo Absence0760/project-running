@@ -58,6 +58,7 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { consent } from '$lib/settings/consent.svelte';
+	import { numberInputValue } from '$lib/settings/number_input';
 	import type { PrefsBag } from '$lib/settings/settings';
 	import type { Updatable } from '$lib/core/database';
 
@@ -342,7 +343,7 @@
 	// so refusing it here is the only thing between a typo and three readers
 	// that each silently ignore it — the runner would otherwise type 300, be
 	// told nothing, and get age-estimated zones forever (decisions § 1407).
-	const maxHrParsed = $derived(maxHr.trim() === '' ? null : Number.parseInt(maxHr, 10));
+	const maxHrParsed = $derived(numberInputValue(maxHr));
 	const maxHrOutOfRange = $derived(maxHrParsed !== null && !isUsableMaxHrBpm(maxHrParsed));
 	const maxHrBounds = { min: MAX_HR_BPM_MIN, max: MAX_HR_BPM_MAX };
 

@@ -57,6 +57,7 @@
 	import { m } from '$lib/i18n/store.svelte';
 	import PasswordInput from '$lib/components/PasswordInput.svelte';
 	import { isCyclePlansEnabled } from '$lib/training/cycle_plan_flag';
+	import { numberInputValue } from '$lib/settings/number_input';
 	import type { PrefsBag } from '$lib/settings/settings';
 	import type { Updatable } from '$lib/core/database';
 	import { MAX_HR_BPM_MIN, MAX_HR_BPM_MAX, isUsableMaxHrBpm } from '$lib/training/hr_zones';
@@ -87,7 +88,7 @@
 	// no CHECK, so this is the only gate anywhere on the write side; without
 	// it a typed 300 is stored and then silently ignored by every one of the
 	// three readers that derive zones from it (decisions § 1407).
-	const maxHrParsed = $derived(maxHr.trim() === '' ? null : Number.parseInt(maxHr, 10));
+	const maxHrParsed = $derived(numberInputValue(maxHr));
 	const maxHrOutOfRange = $derived(maxHrParsed !== null && !isUsableMaxHrBpm(maxHrParsed));
 	const maxHrBounds = { min: MAX_HR_BPM_MIN, max: MAX_HR_BPM_MAX };
 	// Cycle/pregnancy-aware training inputs (persona runner-woman, decisions
