@@ -1849,3 +1849,100 @@ test('a CHECK-constrained union is narrowed at the read boundary, not asserted',
 	);
 	assert.match(store, /preferred_unit: parsePreferredUnit\(/, 'the unit must be narrowed too');
 });
+
+/// The body of a top-level function in `data.ts`, bounded by the closing brace
+/// at column 0. `indexOf('\nexport ')` cannot bound one that isn't exported,
+/// and two of the three exercise writers below are module-private.
+function functionBody(source: string, name: string): string {
+	const start = source.indexOf(`function ${name}(`);
+	assert.ok(start >= 0, `${name} moved — re-anchor this guard`);
+	const end = source.indexOf('\n}\n', start);
+	assert.ok(end > start, `could not find the end of ${name} — re-anchor`);
+	return source.slice(start, end);
+}
+
+test('no write in data.ts decides an exercise name is blank on the display spelling', () => {
+	// Reason: the three exercise writes are keyed on a column the SERVER
+	// derives — `exercises.name_key`, `gym_routine_exercises.exercise_key` and
+	// `gym_sets.exercise_key`, each trigger-stamped and each under a
+	// `length >= 1` CHECK — and the fold's whitespace class is not the set JS
+	// `trim()` strips. A name of one U+0085 trims non-empty and folds to
+	// nothing, so a spelling test lets through exactly the row the column
+	// refuses, as a 23514 the composer cannot act on (§ 1367).
+	//
+	// `lib/gym/exercise_key_source_guard.test.ts` runs this scan over the tree
+	// and spares `lib/core/data.ts` by name — its own heuristic is file-scoped
+	// ("a file that names an exercise"), which a 12,000-line module holding
+	// club names, checkpoint names and meal-template names would drown. This
+	// is the narrower claim that file is exempt from: a blankness test whose
+	// RECEIVER names an exercise, anywhere in data.ts.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const offenders = source
+		.split('\n')
+		.map((text, i) => ({ line: i + 1, text: text.trim() }))
+		.filter(({ text }) => /[Ee]xercise\w*(?:\.\w+)*\s*\.trim\(\)/.test(text))
+		.filter(({ text }) => /\.length\s*[<>=!]|[=!]==?\s*''|''\s*[=!]==?|!\w*[Ee]xercise/.test(text));
+	assert.deepEqual(
+		offenders,
+		[],
+		'Decide blankness with namesAnExercise from $lib/gym/gym_prs, never on the trimmed spelling:\n' +
+			offenders.map((h) => `  data.ts:${h.line}  ${h.text}`).join('\n'),
+	);
+});
+
+test('the blank-exercise scan sees the shape it bans, and spares the ones it must not', () => {
+	// The mutation test for the scan above: a guard nothing can trip is a guard
+	// that proves nothing. Each caught line is the exact shape one of the three
+	// writers carried before § 1367; each spared line is a shape that lives in
+	// `data.ts` today and must not start failing.
+	const scan = (text: string) =>
+		/[Ee]xercise\w*(?:\.\w+)*\s*\.trim\(\)/.test(text) &&
+		/\.length\s*[<>=!]|[=!]==?\s*''|''\s*[=!]==?|!\w*[Ee]xercise/.test(text);
+	for (const caught of [
+		"const exercises = input.exercises.filter((e) => e.exercise_name.trim().length > 0);",
+		".filter((r) => r.exercise_name.trim().length > 0);",
+		"if (ex.exercise_name.trim() === '') continue;",
+		"if (!exerciseName.trim()) return null;",
+	]) {
+		assert.ok(scan(caught), `missed: ${caught}`);
+	}
+	for (const spared of [
+		"exercise_name: s.exercise_name.trim(),",
+		".filter((s) => namesAnExercise(s.exercise_name))",
+		"const items = input.items.filter((it) => it.item_name.trim().length > 0);",
+		"if (!input.name.trim()) throw new Error('Name is required.');",
+		"if (patch.name !== undefined) row.name = patch.name.trim();",
+	]) {
+		assert.ok(!scan(spared), `false positive: ${spared}`);
+	}
+});
+
+test('the three exercise writes drop on the key the column is stamped from', () => {
+	// Reason: the negative scan above cannot see a writer that stopped testing
+	// blankness at all. `createCustomExercise` refuses, the other two drop, and
+	// all three decide it the same way.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	for (const fn of ['createCustomExercise', 'replaceGymSets', 'createGymRoutine']) {
+		assert.match(
+			functionBody(source, fn),
+			/namesAnExercise\(/,
+			`${fn} must decide blankness on the folded key, not the spelling`,
+		);
+	}
+});
+
+test('a dropped blank set does not leave a hole in the set numbering', () => {
+	// Reason: `replaceGymSets` stamped `set_index` from the map index and then
+	// filtered, so a blank in the middle of a composed workout shipped 0, 2, 3
+	// — the surviving sets claiming positions that were never their order in
+	// the saved workout, on the column every read orders and every planned-vs-
+	// actual match keys on. Filtering first is what makes the index contiguous.
+	const body = functionBody(stripComments(read('src/lib/core/data.ts')), 'replaceGymSets');
+	const filterAt = body.indexOf('.filter(');
+	const mapAt = body.indexOf('.map(');
+	assert.ok(filterAt >= 0 && mapAt >= 0, 'replaceGymSets no longer filters and maps — re-anchor');
+	assert.ok(
+		filterAt < mapAt,
+		'the drop must precede the map, or set_index counts rows that never ship',
+	);
+});

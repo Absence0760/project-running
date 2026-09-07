@@ -106,6 +106,7 @@ import { readRankRows } from '../segments/effort_rank';
 import type { RecapPeriodKind } from '../types';
 import { GYM_SESSION_DRAFT_KEY, hasSessionDraft } from '../gym/gym_session_draft';
 import { dedupeShadowedExercises } from '../gym/exercise_catalogue';
+import { namesAnExercise } from '../gym/gym_prs';
 import type { RoutineHistoryAggregate, RoutineSessionRow } from '../gym/routine_history';
 import type { YearInRunningRecap } from '../runs/recap';
 import { mergeRecapRuns, recapYearWindow } from '../runs/recap_window';
@@ -9836,7 +9837,12 @@ export async function createCustomExercise(input: {
 	const userId = auth.user?.id;
 	if (!userId) return null;
 	const name = input.name.trim();
-	if (name.length === 0) return null;
+	// The display spelling is not the rail the row is keyed on: `name_key` is
+	// stamped from it by trigger and carries a `length between 1 and 120`
+	// CHECK, and the fold's whitespace class is not the set JS `trim()` strips.
+	// A name of one U+0085 survives the trim and mints an empty key the column
+	// refuses, so blankness is decided on the key (§ 1367).
+	if (!namesAnExercise(name)) return null;
 	const nowIso = new Date().toISOString();
 	const { data, error } = await supabase
 		.from(TABLES.exercises)
@@ -9862,7 +9868,13 @@ async function replaceGymSets(workoutId: string, sets: GymSetInput[]): Promise<v
 		.delete()
 		.eq('workout_id', workoutId);
 	if (delErr) throw delErr;
+	// Dropped on the key, not the spelling: `gym_sets.exercise_key` is stamped
+	// from `exercise_name` by trigger under a `length >= 1` CHECK, and a name
+	// of one U+0085 trims non-empty while folding to nothing. Dropping first
+	// also keeps `set_index` contiguous — a blank in the middle used to leave a
+	// hole in the numbering the surviving sets are read back by.
 	const rows = sets
+		.filter((s) => namesAnExercise(s.exercise_name))
 		.map((s, i) => ({
 			workout_id: workoutId,
 			set_index: i,
@@ -9875,8 +9887,7 @@ async function replaceGymSets(workoutId: string, sets: GymSetInput[]): Promise<v
 			set_type: s.set_type ?? 'working',
 			duration_s: s.duration_s ?? null,
 			exercise_id: s.exercise_id ?? null,
-		}))
-		.filter((r) => r.exercise_name.length > 0);
+		}));
 	if (rows.length === 0) return;
 	const { error: insErr } = await supabase.from(TABLES.gym_sets).insert(rows);
 	if (insErr) throw insErr;
@@ -10203,7 +10214,10 @@ export async function fetchGymRoutineHistory(
 export async function createGymRoutine(input: GymRoutineInput): Promise<GymRoutineSummary> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not signed in');
-	const exercises = input.exercises.filter((e) => e.exercise_name.trim().length > 0);
+	// The same key-not-spelling test `replaceGymSets` applies:
+	// `gym_routine_exercises.exercise_key` is trigger-stamped under a
+	// `length between 1 and 120` CHECK the display spelling does not decide.
+	const exercises = input.exercises.filter((e) => namesAnExercise(e.exercise_name));
 	const nowIso = new Date().toISOString();
 	const { data, error } = await supabase
 		.from(TABLES.gym_routines)
