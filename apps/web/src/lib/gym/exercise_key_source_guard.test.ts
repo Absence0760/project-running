@@ -231,6 +231,13 @@ function isLiteral(operand: string): boolean {
 
 /// Every raw comparison of an exercise spelling in [source]. Exported so the
 /// mutation test below can feed it planted violations, as `foldHits` is.
+///
+/// Each operand is judged on its DECLARATION as well as on itself. The scan
+/// shipped without that and the Dart port found what it cost: the mobile
+/// compose sheet grouped on `last.name.text == name` three lines under `final
+/// name = (s['exercise_name'] as String?) ?? ''`, so neither operand said
+/// "exercise" where the comparison was written and a tree the scan called clean
+/// still rendered one lift as two blocks (decisions 1368).
 export function rawNameComparisonHits(path: string, source: string): Hit[] {
 	const code = stripComments(source);
 	const scan = blankQuoted(code);
@@ -238,8 +245,8 @@ export function rawNameComparisonHits(path: string, source: string): Hit[] {
 	const out: Hit[] = [];
 	for (const m of scan.matchAll(COMPARISON)) {
 		const at = m.index ?? 0;
-		const left = receiverOf(code, at);
-		const right = operandAfter(code, at + m[0].length);
+		const left = originOf(code, receiverOf(code, at));
+		const right = originOf(code, operandAfter(code, at + m[0].length));
 		// A folded operand is the fix, not the defect. Either side carrying the
 		// canonical derivation means the comparison is already on the key.
 		if (/normaliseExerciseName\s*\(/.test(left) || /normaliseExerciseName\s*\(/.test(right)) continue;
@@ -534,6 +541,11 @@ test('the raw-comparison scan sees the shapes it bans, and spares the ones it mu
 			'a nullish default around the spelling',
 			'lib/social/w.ts',
 			"if ((s.exercise_name ?? '') === last.name) merge();",
+		],
+		[
+			'neither operand says exercise where the comparison is written',
+			'lib/components/Composer.svelte',
+			"const name = s.exercise_name ?? '';\n\t\tif (last.name === name) last.sets.push(row);",
 		],
 	];
 	for (const [label, path, source] of caught) {
