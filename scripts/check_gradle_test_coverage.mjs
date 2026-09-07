@@ -37,10 +37,15 @@
 //      Gradle in the directory that holds the tests. This is the check that
 //      survives the one-word deletion above.
 //   3. A project whose tests nothing runs is DECLARED in `GRADLE_UNTESTED` with
-//      a reason, the value is echoed by the job itself so the gap is in every
-//      run's log rather than in a document, and the entry is re-measured here:
-//      it must name a project this tree still holds, that project must still
-//      hold tests, and it may not swallow every project at once.
+//      a size and a reason, the value is echoed by the job itself so the gap is
+//      in every run's log rather than in a document, and the entry is
+//      re-measured here: it must name a project this tree still holds, that
+//      project must still hold tests, its stated count must equal how many test
+//      sources that project actually holds, and it may not swallow every
+//      project at once. The count shares `parseUnbuilt` with CodeQL's own
+//      exclusion list, which is the same declaration answering the same
+//      question — how much does this excuse hide — and one parser is what keeps
+//      the two from drifting into two formats (decisions § 1500).
 //   4. A job caching `~/.gradle` names every project it invokes in its cache
 //      KEY. One `GRADLE_USER_HOME` serves every project a job builds while the
 //      key hashes named files, so a job that invokes two projects and hashes
@@ -282,7 +287,7 @@ export function check(opts = {}) {
 		}
 	}
 
-	/** @type {{ path: string, reason: string }[]} */
+	/** @type {{ path: string, hidden: number, reason: string }[]} */
 	let declared = [];
 	/** @type {string[]} */
 	const declaringFiles = [];
@@ -295,8 +300,10 @@ export function check(opts = {}) {
 		for (const line of malformed) {
 			errors.push(
 				`\`${UNTESTED_KEY}\` in ${wf.name} carries \`${line}\`, which is not ` +
-					`\`<path>=<reason>\`. The step that echoes it splits on the first \`=\`, so a line ` +
-					`in any other shape names no project and warns about nothing.`,
+					`\`<path>=<untested-source-count>=<reason>\`. The step that echoes it splits on ` +
+					`the first \`=\`, so a line naming no project warns about nothing; a line naming ` +
+					`no count is an excuse that has stopped saying how many committed tests it ` +
+					`covers.`,
 			);
 		}
 	}
@@ -348,6 +355,18 @@ export function check(opts = {}) {
 						`reason, covering ${tests.length} test source file(s) that run nowhere. It costs ` +
 						`at least ${MIN_REASON_CHARS} characters saying what would have to change to ` +
 						`close it.`,
+				);
+			}
+			if (excuse.hidden !== tests.length) {
+				errors.push(
+					`\`${UNTESTED_KEY}\` says \`${project}\` hides ${excuse.hidden} test source ` +
+						`file(s) and it now holds ${tests.length}. ` +
+						(tests.length > excuse.hidden
+							? `Tests have been added to a project no job runs, and a green CI says ` +
+								`nothing about them. `
+							: `The excuse covers more than the project still holds. `) +
+						`Move the figure deliberately — that edit is the excuse being re-decided, ` +
+						`which is the only thing between it and one nobody looks at.`,
 				);
 			}
 			declaredTests += tests.length;
