@@ -2324,11 +2324,18 @@ jobs:
       # settings.gradle.kts require()s `flutter.sdk` out of a local.properties
       # that no checkout carries and only the Flutter tool writes, so Gradle
       # cannot configure this project until `flutter build` has run once.
+      # The task is `:app:`-scoped and must stay that way. An unqualified
+      # `testDebugUnitTest` at the root runs the test task of EVERY subproject,
+      # and the Flutter plugins are subprojects here: `geolocator_android`
+      # ships its own `MethodCallHandlerImplTest`, three of whose cases fail on
+      # a stock checkout, so the unqualified form failed on a third party's
+      # tests rather than on ours. `apps/watch_wear/android` needs no such
+      # qualifier because it has no plugin subprojects.
       # `scripts/check_gradle_test_coverage.mjs` in `workflow-lint` reads the
       # task word, so deleting it fails the PR rather than silently stopping the
       # suite.
       - working-directory: apps/mobile_android/android
-        run: ./gradlew testDebugUnitTest --no-daemon
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
 
   twin-parity:
     needs: changes
