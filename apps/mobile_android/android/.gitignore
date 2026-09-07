@@ -1,8 +1,10 @@
-gradle-wrapper.jar
+# Flutter's android template gitignores the wrapper (gradle-wrapper.jar,
+# gradlew, gradlew.bat) on the assumption that only `flutter build` ever drives
+# Gradle here. CI also runs this project's own unit tests, which needs an
+# executable that is in the checkout — so the wrapper is committed, matching
+# apps/watch_wear/android (decisions § 1439).
 /.gradle
 /captures/
-/gradlew
-/gradlew.bat
 /local.properties
 GeneratedPluginRegistrant.java
 .cxx/
@@ -12,3 +14,6 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Kotlin compile-session debris from a local `./gradlew` run in this project.
+.kotlin/
