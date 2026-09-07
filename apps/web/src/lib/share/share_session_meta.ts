@@ -21,14 +21,9 @@ import { escapeHtml } from '../util/html_escape';
 import { expandSessionSteps } from '../social/session_steps';
 import type { SharedSession } from './share_session_lookup';
 import { serialiseJsonLd } from '../util/json_ld';
+import { collapseAndClip } from '../util/clip_text';
 
 const SITE_NAME = 'Threkir';
-
-function clean(raw: string | null | undefined, max: number): string {
-	const collapsed = (raw ?? '').replace(/\s+/g, ' ').trim();
-	if (!collapsed) return '';
-	return collapsed.length > max ? `${collapsed.slice(0, max - 1).trimEnd()}…` : collapsed;
-}
 
 /// The plan's length in whole minutes: the author's own estimate when set,
 /// otherwise the expanded step sequence's total. Routed through the shared
@@ -62,9 +57,9 @@ export function buildSessionShareTitle(
 	displayName?: string | null,
 ): string {
 	if (!session) return `Session — ${SITE_NAME}`;
-	const custom = clean(session.title, 80);
+	const custom = collapseAndClip(session.title, 80);
 	if (custom) return `${custom} — ${SITE_NAME}`;
-	const by = clean(displayName, 60);
+	const by = collapseAndClip(displayName, 60);
 	return by ? `Session by ${by} — ${SITE_NAME}` : `Session — ${SITE_NAME}`;
 }
 
@@ -74,15 +69,15 @@ export function buildSessionShareDescription(
 ): string {
 	if (!session) return `View a public session plan on ${SITE_NAME}.`;
 	const bits: string[] = [];
-	const discipline = clean(session.discipline, 40);
+	const discipline = collapseAndClip(session.discipline, 40);
 	if (discipline) bits.push(discipline);
 	const movements = session.items.length;
 	if (movements > 0) bits.push(`${movements} ${movements === 1 ? 'movement' : 'movements'}`);
 	const minutes = sessionEstimatedMinutes(session);
 	if (minutes > 0) bits.push(`about ${minutes} min`);
-	const equipment = clean(session.equipment, 40);
+	const equipment = collapseAndClip(session.equipment, 40);
 	if (equipment) bits.push(equipment);
-	const by = clean(displayName, 60);
+	const by = collapseAndClip(displayName, 60);
 	if (by) bits.push(`by ${by}`);
 	const lead = bits.length ? `${bits.join(' · ')}. ` : '';
 	return `${lead}Follow the sequence on ${SITE_NAME}.`.trim();

@@ -12,6 +12,7 @@
 /// triggered the scrape), so we default to km here and ignore the
 /// viewer-side preference entirely.
 
+import { collapseAndClip } from '../util/clip_text';
 import { serialiseJsonLd } from '../util/json_ld';
 
 const SITE_NAME = 'Threkir';
@@ -25,14 +26,10 @@ export type ShareRunMeta = {
 	title?: string | null;
 };
 
-/// Normalise a user-set run title for use in a share <title> / og:title:
-/// collapse whitespace and truncate so a pathological caption can't blow
-/// out the meta tag. Returns '' when there's nothing usable.
+/// The share <title> / og:title budget for a run caption, which arrives from
+/// the untyped `runs.metadata.title` bag and so may not be a string at all.
 export function cleanShareTitle(raw: unknown): string {
-	if (typeof raw !== 'string') return '';
-	const collapsed = raw.replace(/\s+/g, ' ').trim();
-	if (!collapsed) return '';
-	return collapsed.length > 80 ? `${collapsed.slice(0, 79).trimEnd()}…` : collapsed;
+	return collapseAndClip(raw, 80);
 }
 
 export type ShareRouteMeta = {

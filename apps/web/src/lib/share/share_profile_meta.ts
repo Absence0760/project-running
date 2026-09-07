@@ -7,18 +7,13 @@ import { normaliseSiteUrl } from './share_meta';
 import { escapeHtml } from '../util/html_escape';
 import type { SharedProfile } from './share_profile_lookup';
 import { serialiseJsonLd } from '../util/json_ld';
+import { collapseAndClip } from '../util/clip_text';
 
 const SITE_NAME = 'Threkir';
 
-function clean(raw: string | null | undefined, max: number): string {
-	const collapsed = (raw ?? '').replace(/\s+/g, ' ').trim();
-	if (!collapsed) return '';
-	return collapsed.length > max ? `${collapsed.slice(0, max - 1).trimEnd()}…` : collapsed;
-}
-
 /// Display name with a safe fallback (a profile may have no name set).
 export function profileDisplayName(profile: SharedProfile | null | undefined): string {
-	return clean(profile?.display_name, 80) || 'Runner';
+	return collapseAndClip(profile?.display_name, 80) || 'Runner';
 }
 
 export function buildProfileShareTitle(profile: SharedProfile | null | undefined): string {

@@ -11,6 +11,7 @@ import type { TrackPoint } from '../types';
 import { projectTrack } from '../routes/track_projection';
 import { OG_CARD_LIGHT } from './og_card_palette';
 import { escapeHtml } from '../util/html_escape';
+import { clipText } from '../util/clip_text';
 
 const W = 1200;
 const H = 630;
@@ -83,7 +84,7 @@ export function buildRouteOgSvg(input: RouteImageInput): string {
 	const meta = buildMetaLine(input.distance_m, input.surface);
 	const titleY = H - 160;
 	parts.push(
-		`<text x="${PAD}" y="${titleY}" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="56" font-weight="700" fill="${TEXT_FILL}">${escapeHtml(truncate(name, 30))}</text>`,
+		`<text x="${PAD}" y="${titleY}" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="56" font-weight="700" fill="${TEXT_FILL}">${escapeHtml(clipText(name, 30))}</text>`,
 	);
 	if (meta) {
 		parts.push(
@@ -107,9 +108,4 @@ export function buildMetaLine(
 	}
 	if (surface) bits.push(surface);
 	return bits.join(' · ');
-}
-
-export function truncate(s: string, max: number): string {
-	if (s.length <= max) return s;
-	return s.slice(0, Math.max(0, max - 1)).trimEnd() + '…';
 }
