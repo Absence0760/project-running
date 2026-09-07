@@ -273,3 +273,23 @@ test('the workflow’s own echo shell names each declared project, run verbatim'
 		'',
 	);
 });
+
+test('a gradlew command quoted inside a diagnostic is not an invocation', () => {
+	// security.yml prints its own reproduce command in an `::error::`. A reader
+	// that counted it would credit a project with a suite that exists only in a
+	// sentence — and a message is exactly where such a line is cheapest to add.
+	const invs = gradleInvocations(
+		[
+			'      - working-directory: apps/a/android',
+			'        run: |',
+			'          if ! ./gradlew assembleDebug; then',
+			'            echo "::error::failed; reproduce with: cd apps/a/android && ./gradlew test"',
+			'          fi',
+			'          echo "or run ./gradlew testDebugUnitTest by hand"',
+		].join('\n'),
+	);
+	assert.deepEqual(
+		invs.map((i) => [i.dir, i.tasks.join(' ')]),
+		[['apps/a/android', 'assembleDebug']],
+	);
+});

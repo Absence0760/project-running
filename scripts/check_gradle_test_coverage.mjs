@@ -150,6 +150,13 @@ export function gradleInvocations(text) {
 
 	for (let i = 0; i < lines.length; i++) {
 		const line = lines[i];
+		// A `cd … && ./gradlew …` quoted INSIDE a diagnostic is not an
+		// invocation. security.yml's own `::error::` prints its reproduce
+		// command, and a message is exactly where a plausible-looking test task
+		// could sit while nothing runs it — the guard would then credit a
+		// project with a suite that exists only in a sentence.
+		if (/^\s*(?:-\s+)?(?:run:\s*)?echo\b/.test(line) || /::(?:error|warning|notice)::/.test(line))
+			continue;
 		const item = /^(\s*)-\s+\S/.exec(line);
 		if (item && item[1].length <= (stepIndent < 0 ? Infinity : stepIndent)) {
 			workingDir = null;
