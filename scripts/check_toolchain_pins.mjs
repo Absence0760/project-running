@@ -54,6 +54,11 @@
 //     time — it takes whatever the runner image ships that week, and so did a
 //     bare `24`, which is why `release-web.yml` built the shipped bundle on
 //     whichever 24.x the runner resolved that morning (decisions § 1214).
+//     The exactness clause is the one this paragraph asserted for four rounds
+//     while no code read it: § 1214 moved 22 steps to `24.20.0` by hand and
+//     left the rule to a sentence, so a sweep back to `24` would have passed —
+//     every step naming a version, all agreeing, and `.tool-versions` saying
+//     `nodejs 24` comparing equal to it (decisions § 1502).
 //
 //   Deno — every `denoland/setup-deno` step names a `deno-version`, all of them
 //     agree, and the version is an EXACT `MAJOR.MINOR.PATCH` rather than a
@@ -771,7 +776,18 @@ export function parseNodeSteps(text) {
 	return parseUsesStepVersions(text, SETUP_NODE_USES, 'node-version');
 }
 
-/// Rule: every setup-node step names a version, and every one names the same.
+/// An exact Node version, with or without the `v` some call sites write. `24`,
+/// `24.x`, `lts/*` and `latest` are all lines rather than versions, and a line
+/// is the thing this rule exists to refuse.
+export const EXACT_NODE = /^v?(\d+\.\d+\.\d+)$/;
+
+/// Rule: every setup-node step names an EXACT version, and every one names the
+/// same. The exactness half is what the header has claimed since § 1214 and
+/// what `.tool-versions`' own comment tells a contributor — but until § 1502 no
+/// code read it, so the whole rail could go back to `24` in one sweep and stay
+/// green: every step would still name a version, all of them would still agree,
+/// and `.tool-versions` saying `nodejs 24` would still compare equal. That is
+/// the § 1214 state exactly, and it is the release bundle that pays for it.
 /**
  * @param {WorkflowFile[]} files
  * @returns {{ errors: string[], ok: string[], versions: Map<string, string[]> }}
@@ -796,10 +812,22 @@ export function checkNode(files) {
 				);
 				continue;
 			}
-			ok.push(`${where} -> node ${step.version}`);
-			const sites = versions.get(step.version) ?? [];
+			const exact = EXACT_NODE.exec(step.version);
+			if (exact === null) {
+				errors.push(
+					`${where} — this \`actions/setup-node\` step takes \`${step.version}\`, which is a ` +
+						`release line rather than a version: it resolves to whatever the runner ` +
+						`installs that morning. \`release-web.yml\` builds the shipped web bundle ` +
+						`through one of these steps, so the artifact that reaches production would be ` +
+						`compiled by a runtime nothing in this repo names (decisions § 1214). Name an ` +
+						`exact MAJOR.MINOR.PATCH and move it deliberately.`,
+				);
+				continue;
+			}
+			ok.push(`${where} -> node ${exact[1]}`);
+			const sites = versions.get(exact[1]) ?? [];
 			sites.push(where);
-			versions.set(step.version, sites);
+			versions.set(exact[1], sites);
 		}
 	}
 
@@ -841,9 +869,11 @@ export function parseDenoSteps(text) {
 export const EXACT_DENO = /^v?(\d+\.\d+\.\d+)$/;
 
 /// Rule: every setup-deno step names an EXACT version, and every one names the
-/// same. Unlike Node, where a major is enough because the runner image resolves
-/// the rest, a Deno minor carries new `deno check` diagnostics — which is the
-/// whole failure mode.
+/// same — the same rule `checkNode` runs, for the same reason. This comment
+/// used to say "unlike Node, where a major is enough because the runner image
+/// resolves the rest", which had been false since § 1214 pinned every
+/// `setup-node` step to a patch; a guard file asserting two opposite rules
+/// about one question is how the Node half went four rounds unenforced.
 /**
  * @param {WorkflowFile[]} files
  * @returns {{ errors: string[], ok: string[], versions: Map<string, string[]> }}
