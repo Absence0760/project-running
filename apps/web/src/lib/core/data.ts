@@ -5767,7 +5767,10 @@ export async function fetchSuggestedPeople(limit = 12): Promise<PeopleSuggestion
 	const hydrated = await hydratePeopleSuggestions(ids, viewerId);
 	// Rank by combined local signal (shared clubs + shared events) desc, then
 	// shared-club count desc, then display_name. `shared_clubs` stays the
-	// displayed count so the existing People-tab subtitle is unchanged.
+	// displayed count so the existing People-tab subtitle is unchanged. The
+	// name term is `search_ranking.ts`'s, id tiebreak included, so this list
+	// and the People search agree about two runners sharing a display name.
+	const { comparePersonName } = await import('../social/search_ranking');
 	return hydrated
 		.map((p) => ({
 			...p,
@@ -5777,7 +5780,7 @@ export async function fetchSuggestedPeople(limit = 12): Promise<PeopleSuggestion
 		.sort((a, b) => {
 			if (b._score !== a._score) return b._score - a._score;
 			if (b.shared_clubs !== a.shared_clubs) return b.shared_clubs - a.shared_clubs;
-			return (a.display_name ?? '').localeCompare(b.display_name ?? '');
+			return comparePersonName(a, b);
 		})
 		.slice(0, limit)
 		.map(({ _score, ...p }) => p);

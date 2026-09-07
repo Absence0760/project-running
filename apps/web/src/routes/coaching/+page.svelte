@@ -17,7 +17,8 @@
 	} from '$lib/core/data';
 	import { formatRelativeTime } from '$lib/format/time';
 	import { formatDistance } from '$lib/format/units.svelte';
-	import { injuryRiskBand, loadTrend } from '$lib/training/coach_load';
+	import { loadTrend } from '$lib/training/coach_load';
+	import { rosterRisk, sortRoster, type RosterSortKey } from './roster_sort';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { m } from '$lib/i18n/store.svelte';
@@ -66,21 +67,8 @@
 
 	// Sort defaults to "risk first, then most-stale last-run first" so the
 	// athletes who need attention float to the top of the roster.
-	type RosterSortKey = 'risk' | 'lastRun' | 'load' | 'plan' | 'name';
 	let sortKey = $state<RosterSortKey>('risk');
 	let sortDir = $state<'asc' | 'desc'>('desc');
-
-	const RISK_RANK: Record<string, number> = {
-		high: 4,
-		elevated: 3,
-		optimal: 2,
-		low: 1,
-		insufficient: 0
-	};
-
-	function rosterRisk(r: CoachRosterRow): string {
-		return injuryRiskBand(r.load_acute, r.load_chronic);
-	}
 
 	function setSort(key: RosterSortKey) {
 		if (sortKey === key) {
@@ -91,41 +79,7 @@
 		}
 	}
 
-	const sortedRoster = $derived.by(() => {
-		const dir = sortDir === 'desc' ? -1 : 1;
-		const rows = [...roster];
-		rows.sort((a, b) => {
-			let cmp = 0;
-			switch (sortKey) {
-				case 'risk':
-					cmp = RISK_RANK[rosterRisk(a)] - RISK_RANK[rosterRisk(b)];
-					if (cmp === 0) cmp = lastRunMs(a) - lastRunMs(b);
-					break;
-				case 'lastRun':
-					cmp = lastRunMs(a) - lastRunMs(b);
-					break;
-				case 'load':
-					cmp = a.load_acute - b.load_acute;
-					break;
-				case 'plan':
-					cmp = a.plan_completion_pct - b.plan_completion_pct;
-					break;
-				case 'name':
-					// A collation, deliberately: this roster is web-only, so the reason
-					// § 1337 folded the routes list — a Dart twin whose runtime ships no
-					// collator — does not apply, and folding would give every coach the
-					// English order (decisions § 1400).
-					cmp = (a.display_name ?? '').localeCompare(b.display_name ?? '');
-					break;
-			}
-			return cmp * dir;
-		});
-		return rows;
-	});
-
-	function lastRunMs(r: CoachRosterRow): number {
-		return r.last_run_at ? new Date(r.last_run_at).getTime() : 0;
-	}
+	const sortedRoster = $derived(sortRoster(roster, sortKey, sortDir));
 
 	function riskLabel(band: string): string {
 		switch (band) {
