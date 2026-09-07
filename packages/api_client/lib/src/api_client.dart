@@ -6119,6 +6119,18 @@ class ApiClient {
   /// RLS rejects any author_id other than the caller, so the returned row is
   /// always owned by the signed-in user. Returns null when signed out or on
   /// conflict/error (e.g. a duplicate name_key in the user's own customs).
+  ///
+  /// The blank test is `trim()` because in Dart that IS the rule, not because
+  /// blankness is Dart's idea of whitespace. The rule is `namesAnExercise` —
+  /// `normaliseExerciseName(name) != ''` — which this package cannot call, and
+  /// does not need to: the case fold maps code points to code points and never
+  /// deletes one, so a name folds to the empty key exactly when every code
+  /// point of it is in `kExerciseWhitespace`, and that class is Unicode
+  /// `White_Space` plus U+FEFF, which is `trim()`'s set verbatim.
+  /// `exercise_blank_name_guard_test.dart` measures the identity in both
+  /// directions over every assignable code point, so widening the class fails
+  /// there rather than letting a name that folds to `''` reach the server and
+  /// come back as a 23514 this method reports as an unexplained null.
   Future<ExerciseRow?> createCustomExercise({
     required String name,
     String category = 'other',
