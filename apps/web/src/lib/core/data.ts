@@ -104,6 +104,7 @@ import { compareLeaderboard } from '../runs/race_leaderboard';
 import { readRankRows } from '../segments/effort_rank';
 import type { RecapPeriodKind } from '../types';
 import { GYM_SESSION_DRAFT_KEY, hasSessionDraft } from '../gym/gym_session_draft';
+import { dedupeShadowedExercises } from '../gym/exercise_catalogue';
 import type { RoutineHistoryAggregate, RoutineSessionRow } from '../gym/routine_history';
 import type { YearInRunningRecap } from '../runs/recap';
 import { mergeRecapRuns, recapYearWindow } from '../runs/recap_window';
@@ -9761,32 +9762,69 @@ export async function fetchGymExerciseNames(): Promise<string[]> {
 	return ((data ?? []) as Array<{ exercise_name: string }>).map((r) => r.exercise_name);
 }
 
+/// One page of an unbounded PostgREST read. The server caps an unranged
+/// `select()` at `db.max-rows` and answers with the truncated page and a 200
+/// — no error, no flag — so a read whose contract is "every row" has to ask
+/// for explicit ranges until the result set proves exhausted. Mirrors
+/// `packages/api_client/lib/src/paged_read.dart`, including its rule that a
+/// short page is NOT proof of exhaustion: a deployment whose cap is below the
+/// ask answers the very first range short, so the walk stops only on an empty
+/// page, or on one that is both short of the ask AND shorter than the page
+/// before it.
+const EXERCISE_PAGE = 1000;
+
 /// The exercise catalogue visible to the signed-in user: every seeded global
 /// (author_id null) plus their own custom entries. RLS scopes the read; an
 /// ordered name list lets the gym editor merge these into its autocomplete
 /// datalist and bind a typed name to an exercise_id (migration 20270222_001).
 /// Additive — a user who never picks a catalogue entry logs exactly as before.
-export async function fetchExerciseCatalogue(): Promise<Exercise[]> {
-	if (!auth.user?.id) return [];
-	const { data, error } = await supabase
-		.from(TABLES.exercises)
-		.select('*')
-		.order('name', { ascending: true })
-		// A seeded global and a user's own custom entry can carry the same
-		// name: the two partial uniques on `name_key` (migration 20270222_001)
-		// scope uniqueness to `author_id is null` and to one author, so a
-		// custom can shadow a global. Ordering on `name` alone leaves that pair
-		// in an unspecified order, and `GymEditor`'s `catalogueByKey` is a Map
-		// built from the list — where the LAST row under a key wins. The
-		// binding from a typed name to an `exercises.id` could therefore flip
-		// between two loads of the same catalogue. `api_client.dart` carries
-		// the same tiebreak, and this comment, for the same reason.
-		.order('id', { ascending: true });
-	if (error) {
-		console.error('fetchExerciseCatalogue failed', error);
-		return [];
+///
+/// Surfaces the error instead of degrading to `[]`, because an empty catalogue
+/// is a state the surfaces ACT on: `GymEditor` binds every typed name to no
+/// `exercises.id`, the browse affordance hides itself, and the picker's
+/// create-custom test is only as good as the list it scans. The same
+/// "unavailable is not empty" contract `fetchRunsWithError`,
+/// `browseClubsWithError` and `fetchGlobalSegmentsWithError` each carry; here
+/// it is the only shape rather than a sibling, because there is one caller and
+/// a second, swallowing name would be a shim that reads safe.
+export async function fetchExerciseCatalogue(): Promise<{
+	catalogue: Exercise[];
+	error: string | null;
+}> {
+	if (!auth.user?.id) return { catalogue: [], error: null };
+	const rows: Exercise[] = [];
+	let from = 0;
+	let previous: number | null = null;
+	for (;;) {
+		const { data, error } = await supabase
+			.from(TABLES.exercises)
+			.select('*')
+			.order('name', { ascending: true })
+			// A seeded global and a user's own custom entry can carry the same
+			// name: the two partial uniques on `name_key` (migration 20270222_001)
+			// scope uniqueness to `author_id is null` and to one author, so a
+			// custom can shadow a global. Ordering on `name` alone leaves that pair
+			// in an unspecified order, and a range over an ambiguous ordering lets
+			// a row on a page boundary come back twice or not at all.
+			// `api_client.dart` carries the same tiebreak, and this comment, for
+			// the same reason.
+			.order('id', { ascending: true })
+			.range(from, from + EXERCISE_PAGE - 1);
+		if (error) {
+			console.error('fetchExerciseCatalogue failed', error);
+			return {
+				catalogue: [],
+				error: `${error.message}${error.code ? ` (${error.code})` : ''}`,
+			};
+		}
+		const page = (data ?? []) as Exercise[];
+		rows.push(...page);
+		if (page.length === 0) break;
+		if (page.length < EXERCISE_PAGE && previous !== null && page.length < previous) break;
+		previous = page.length;
+		from += page.length;
 	}
-	return (data ?? []) as Exercise[];
+	return { catalogue: dedupeShadowedExercises(rows), error: null };
 }
 
 /// Create an owner-scoped custom exercise. `name_key` is NOT sent: the

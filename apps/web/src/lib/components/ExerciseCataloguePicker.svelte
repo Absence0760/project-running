@@ -17,9 +17,14 @@
 		/// A freshly-created owner custom. The host merges it into its binding map
 		/// so a name typed/picked from it links its id even before the next reload.
 		oncreated?: (exercise: Exercise) => void;
+		/// The catalogue read failed, or has not answered yet — so `catalogue` is
+		/// whatever was last known and not a statement about what exists. The
+		/// create affordance fails closed on it: every claim this picker makes
+		/// about a name being free is a claim about the whole catalogue.
+		unavailable?: boolean;
 	}
 
-	let { catalogue, onpick, oncreated }: Props = $props();
+	let { catalogue, onpick, oncreated, unavailable = false }: Props = $props();
 
 	// The category filter dropdown order: an "all" sentinel plus the nine
 	// catalogue categories (exercises.category CHECK, migration 20270222_001).
@@ -50,7 +55,7 @@
 	// exact-match test scanned the whole catalogue while the list also applied
 	// the category filter, so an exact name in another category rendered
 	// "No exercises match." beside no create button and no explanation.
-	const view = $derived(cataloguePickerView(entries, { query, category }));
+	const view = $derived(cataloguePickerView(entries, { query, category, unavailable }));
 
 	function categoryLabel(c: ExerciseCategory): string {
 		return t(`gym.catalogue.category.${c}`);
@@ -107,6 +112,10 @@
 		</label>
 	</div>
 
+	{#if view.unavailable}
+		<p class="empty" data-testid="catalogue-unavailable">{t('gym.catalogue.unavailable')}</p>
+	{/if}
+
 	{#if view.matches.length > 0}
 		<ul class="results" data-testid="catalogue-results">
 			{#each view.matches as e (e.id)}
@@ -130,7 +139,7 @@
 				category: categoryLabel(view.hiddenExact.category),
 			})}
 		</p>
-	{:else if !canCreate}
+	{:else if !canCreate && !view.unavailable}
 		<p class="empty">{t('gym.catalogue.empty')}</p>
 	{/if}
 

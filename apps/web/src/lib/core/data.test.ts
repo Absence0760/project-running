@@ -1804,6 +1804,27 @@ test('the exercise catalogue read is totally ordered, so a name binds to one id'
 	);
 });
 
+test('the exercise catalogue read pages, and says so when it fails', () => {
+	// Reason: PostgREST caps an unranged select at `db.max-rows` and answers
+	// with the truncated page and a 200 — no error, no flag — so a read whose
+	// contract is "the whole catalogue" cannot be a bare `.select()`.
+	// `api_client.dart` has walked ranges since it was written; the web half
+	// did not, so the two clients disagreed about a bound and the web one gave
+	// no signal on hitting it. Degrading to `[]` on a real error is the same
+	// class one layer up: an empty catalogue is a state the surfaces ACT on.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const start = source.indexOf('export async function fetchExerciseCatalogue(');
+	assert.ok(start >= 0, 'fetchExerciseCatalogue moved — re-anchor this guard');
+	const body = source.slice(start, source.indexOf('\nexport ', start + 1));
+	assert.match(body, /\.range\(/, 'an unranged select is capped at db.max-rows with no flag');
+	assert.match(body, /error: `\$\{error\.message\}/, 'a failed read must surface, not return []');
+	assert.match(
+		body,
+		/dedupeShadowedExercises\(/,
+		'the two partial uniques let one folded key hold two rows — resolve it at the read',
+	);
+});
+
 test('a CHECK-constrained union is narrowed at the read boundary, not asserted', () => {
 	// Reason: the generated row and RPC types spell every one of these columns
 	// `string`, so assigning one straight into its client union is an

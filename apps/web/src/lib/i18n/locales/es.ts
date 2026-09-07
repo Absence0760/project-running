@@ -4284,6 +4284,7 @@ export const messages = {
 	"gym.catalogue.searchPlaceholder": "Buscar ejercicios",
 	"gym.catalogue.categoryLabel": "Categoría",
 	"gym.catalogue.empty": "Ningún ejercicio coincide.",
+	"gym.catalogue.unavailable": "No se pudo cargar el catálogo de ejercicios, por lo que esta lista puede estar incompleta.",
 	"gym.catalogue.otherCategory": "«{name}» ya está en el catálogo, en {category}.",
 	"gym.catalogue.customBadge": "Personalizado",
 	"gym.catalogue.create": "Añadir «{name}» como ejercicio personalizado",

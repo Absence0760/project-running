@@ -34,11 +34,18 @@ export interface CatalogueEntry {
 	category: string;
 }
 
-/// The picker's two inputs. `category` is a catalogue category id or the
-/// UI-only `'all'` sentinel.
+/// The picker's inputs. `category` is a catalogue category id or the UI-only
+/// `'all'` sentinel.
+///
+/// `unavailable` says the list is not known to be the whole catalogue — the
+/// read failed, or has not answered yet. It is a THIRD state rather than a
+/// synonym for empty, because every decision below is a claim about what the
+/// catalogue does NOT hold, and a list that failed to load supports none of
+/// them.
 export interface CatalogueFilter {
 	query: string;
 	category: string;
+	unavailable?: boolean;
 }
 
 export interface CataloguePickerView<E extends CatalogueEntry> {
@@ -50,7 +57,17 @@ export interface CataloguePickerView<E extends CatalogueEntry> {
 	/// name and a second row under it is a duplicate whichever category it
 	/// claims. Narrowing this to the visible set would trade § 1276's dead end
 	/// for a duplicate-key write.
+	///
+	/// Also false while `unavailable`. The test is "the catalogue does not hold
+	/// this name", and a list that failed to load is evidence of nothing: the
+	/// insert then either mints a shadow the reader did not ask for (against a
+	/// seeded global, which the author's partial unique cannot see) or 23505s
+	/// against their own custom, after the affordance said the name was free.
 	canCreate: boolean;
+	/// Whether the entries are known to be the whole catalogue. Echoed from the
+	/// filter so the markup reads one object rather than re-deriving which
+	/// sentence to show from two.
+	unavailable: boolean;
 	/// The entry the query names exactly while the category filter hides it,
 	/// else null. This is the state that has no honest rendering without it:
 	/// `matches` is empty and `canCreate` is false, which the markup used to
@@ -124,6 +141,7 @@ export function cataloguePickerView<E extends CatalogueEntry>(
 	filter: CatalogueFilter,
 ): CataloguePickerView<E> {
 	const key = normaliseExerciseName(filter.query);
+	const unavailable = filter.unavailable === true;
 	const inCategory = (e: E) => filter.category === 'all' || e.category === filter.category;
 
 	const matches = entries
@@ -131,21 +149,20 @@ export function cataloguePickerView<E extends CatalogueEntry>(
 		.filter((e) => key === '' || normaliseExerciseName(e.name).includes(key))
 		.sort(byName);
 
-	if (key === '') return { matches, canCreate: false, hiddenExact: null };
+	if (key === '') return { matches, canCreate: false, unavailable, hiddenExact: null };
 
-	// Sorted, not in catalogue order: `exercises`' two uniques are partial, so
-	// an owner custom may shadow a seeded global under one folded key
-	// (`api_database.md`) and this can hold more than one row. `hiddenExact`
-	// then names whichever the fetch happened to return first — and
-	// `fetchExerciseCatalogue` orders by `name` with no id tiebreak, so two
-	// rows spelled identically are an unspecified tie and the sentence can
-	// name a different category on the next reload. Ordering them by the same
-	// comparator the list uses points the reader at the row they will find.
+	// Sorted, not in catalogue order. `fetchExerciseCatalogue` now resolves a
+	// shadow at the read, so a catalogue that came from it holds one row per
+	// folded key and this holds at most one — but the sort is not redundant:
+	// this module is handed whatever list its caller assembled, and ordering by
+	// the same comparator the list uses is what makes `hiddenExact` name the
+	// row the reader will actually find rather than whichever came first.
 	const exact = entries.filter((e) => normaliseExerciseName(e.name) === key).sort(byName);
 	const shown = exact.find(inCategory);
 	return {
 		matches,
-		canCreate: exact.length === 0,
+		canCreate: exact.length === 0 && !unavailable,
+		unavailable,
 		hiddenExact: shown === undefined ? (exact[0] ?? null) : null,
 	};
 }

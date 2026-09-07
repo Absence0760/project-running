@@ -4284,6 +4284,7 @@ export const messages = {
 	"gym.catalogue.searchPlaceholder": "Übungen suchen",
 	"gym.catalogue.categoryLabel": "Kategorie",
 	"gym.catalogue.empty": "Keine Übung passt.",
+	"gym.catalogue.unavailable": "Der Übungskatalog konnte nicht geladen werden, diese Liste ist möglicherweise unvollständig.",
 	"gym.catalogue.otherCategory": "„{name}“ ist bereits im Katalog, unter {category}.",
 	"gym.catalogue.customBadge": "Eigene",
 	"gym.catalogue.create": "„{name}“ als eigene Übung hinzufügen",
