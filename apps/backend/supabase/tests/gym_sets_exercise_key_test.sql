@@ -1,24 +1,28 @@
 -- pgtap suite for the persisted `gym_sets.exercise_key` (migrations
--- 20270706000001 + 20270706000002).
+-- 20270706000001 + 20270706000002) and its non-empty floor (20270712000001 +
+-- 20270712000002).
 --
 -- The exercise grouping key used to be re-derived once per `gym_sets` row
 -- inside every one of the five RPCs that group a lifter's history. It is now a
 -- column, stamped by a BEFORE INSERT OR UPDATE trigger, and the RPCs read it.
--- Two properties have to hold or a lifter's history splits silently:
+-- Three properties have to hold or a lifter's history splits silently:
 --
 --   * the stored key can never disagree with the name it groups -- the trigger
 --     derives it unconditionally, so a client value is OVERWRITTEN rather than
 --     refused, and the CHECK behind it is validated rather than merely declared
+--   * the key NAMES an exercise. A set stamped with the empty key is a row the
+--     database holds and every read denies, and until 20270712000001 this was
+--     the only one of the three keyed columns with no `>= 1` half to refuse it
 --   * the RPCs actually read the column. A body that still folded the name
 --     would pass every bucketing assertion below while leaving the cost this
---     change exists to remove, so test 13 takes the column away from the name
+--     change exists to remove, so test 15 takes the column away from the name
 --     and proves each answer follows the COLUMN.
 --
 -- Everything here runs inside the suite's own transaction and is rolled back.
 
 begin;
 
-select plan(13);
+select plan(15);
 
 -- ── The column and its invariant ────────────────────────────────────────────
 
@@ -38,6 +42,21 @@ select is(
      and conname = 'gym_sets_exercise_key_canonical'),
   true,
   'the canonical CHECK is validated, not merely declared'
+);
+
+-- 3. The `>= 1` half the column shipped without (20270712000001 + ...002). Its
+--    two siblings -- `gym_routine_exercises_exercise_key_check` and
+--    `exercises_name_key_check` -- have carried `between 1 and 120` since they
+--    were created; this one had only the `<= 120` cap, and the asymmetry is
+--    what let a set exist under no exercise at all. `not valid` here would say
+--    it about new rows only, which is the state the second migration's
+--    pre-flight exists to reach honestly rather than assume.
+select is(
+  (select convalidated from pg_constraint
+   where conrelid = 'public.gym_sets'::regclass
+     and conname = 'gym_sets_exercise_key_nonempty_chk'),
+  true,
+  'the non-empty CHECK is validated, not merely declared'
 );
 
 -- ── The trigger ─────────────────────────────────────────────────────────────
@@ -65,7 +84,7 @@ values
   ('00000000-0000-0000-0000-0000000c1004', '00000000-0000-0000-0000-0000000c0001',
    'w4', now() - interval '1 day');
 
--- 3. The key is the server's answer, not the client's. A client that sends one
+-- 4. The key is the server's answer, not the client's. A client that sends one
 --    -- with an older Unicode case table, or with none at all -- has it
 --    replaced. That is the difference from `gym_routine_exercises.exercise_key`,
 --    where the client stamps it under a CHECK and a 23514 on a legitimate save
@@ -80,7 +99,7 @@ select is(
   'a client-supplied exercise_key is overwritten by the trigger, not refused'
 );
 
--- 4. Renaming the exercise moves the key with it. Without this the set stays in
+-- 5. Renaming the exercise moves the key with it. Without this the set stays in
 --    the old bucket for ever.
 update gym_sets set exercise_name = 'Incline Bench Press'
  where id = '00000000-0000-0000-0000-0000000c2001';
@@ -91,7 +110,7 @@ select is(
   'renaming the exercise re-stamps the key'
 );
 
--- 5. The reason the trigger is `before insert or update` and not
+-- 6. The reason the trigger is `before insert or update` and not
 --    `... update of exercise_name`: an UPDATE that names only the key would not
 --    fire the narrower form, and the canonical CHECK would then answer with a
 --    23514 the client cannot act on.
@@ -107,20 +126,25 @@ select is(
 update gym_sets set exercise_name = 'Bench Press'
  where id = '00000000-0000-0000-0000-0000000c2001';
 
--- 6. A name that is nothing but whitespace is not an exercise. It stamps the
---    empty key, which is what the RPCs' `exercise_key <> ''` filter excludes --
---    the same rows `coalesce(normalise(...), '') <> ''` excluded before.
-insert into gym_sets (id, workout_id, set_index, exercise_name, reps)
-values ('00000000-0000-0000-0000-0000000c2009',
-        '00000000-0000-0000-0000-0000000c1001', 9, chr(9) || chr(160), 5);
-
-select is(
-  (select exercise_key from gym_sets where id = '00000000-0000-0000-0000-0000000c2009'),
-  '',
-  'a whitespace-only name stamps the empty key'
+-- 7. A name that is nothing but whitespace is not an exercise, and since
+--    20270712000001 the row is refused rather than stored under the empty key.
+--    The refusal is reachable BECAUSE the trigger corrects: no exercise_key is
+--    supplied here, the trigger derives '' from the name, and the CHECK then
+--    fires on the server's own answer -- so this is the one shape § 1287's
+--    warning does not empty. The three other CHECKs on the row all pass (the
+--    name is 2 characters, the key equals the fold, 0 <= 120), so only the
+--    named constraint can raise.
+select throws_ok(
+  $$insert into gym_sets (id, workout_id, set_index, exercise_name, reps)
+    values ('00000000-0000-0000-0000-0000000c2009',
+            '00000000-0000-0000-0000-0000000c1001', 9, chr(9) || chr(160), 5)$$,
+  '23514',
+  'new row for relation "gym_sets" violates check constraint '
+  '"gym_sets_exercise_key_nonempty_chk"',
+  'a whitespace-only name is refused: it names no exercise'
 );
 
--- 7. The trigger calls `normalise_exercise_name` as the WRITING role, exactly
+-- 8. The trigger calls `normalise_exercise_name` as the WRITING role, exactly
 --    as the CHECK constraints do, so the same 42501 that broke every
 --    service_role write to the two keyed tables is reachable here (§ 790). The
 --    Playwright gym fixtures insert as service_role.
@@ -143,21 +167,21 @@ values
   ('00000000-0000-0000-0000-0000000c1003', 0, 'Bench' || chr(160) || 'Press', 5, 65),
   ('00000000-0000-0000-0000-0000000c1004', 0, 'Bench' || chr(65279) || 'Press', 5, 70);
 
--- 8.
+-- 9.
 select is(
   (select session_count from gym_exercise_records() where exercise_name like 'Bench%'),
   4,
   'gym_exercise_records buckets the four spellings as one exercise'
 );
 
--- 9.
+-- 10.
 select is(
   (select count(*)::int from gym_exercise_set_history('Bench Press')),
   4,
   'gym_exercise_set_history returns all four sets for the plain spelling'
 );
 
--- 10.
+-- 11.
 select is(
   (select distinct normalised_name
    from gym_exercise_set_history_batch(array[chr(9) || 'BENCH  PRESS'])),
@@ -165,8 +189,29 @@ select is(
   'gym_exercise_set_history_batch returns the canonical key, not a variant'
 );
 
--- 11. The whitespace-only set from 6 lives in w1 and must not count as a second
---     exercise there, and the Front Squat from 7 must.
+-- 12/13. The readers' `exercise_key <> ''` filter is now a claim about rows
+--     that PREDATE the constraint -- prod has accepted a whitespace-only
+--     exercise_name since 20261204_001 and no client refused one until § 1367
+--     -- so it still has to be pinned, and the row can only be filed with the
+--     constraint off. Dropping it here rather than at the end (where 15 drops
+--     the canonical one) is deliberate: nothing below reads it, and the
+--     transaction's rollback puts it back.
+reset role;
+alter table public.gym_sets drop constraint gym_sets_exercise_key_nonempty_chk;
+insert into gym_sets (id, workout_id, set_index, exercise_name, reps)
+values ('00000000-0000-0000-0000-0000000c2009',
+        '00000000-0000-0000-0000-0000000c1001', 9, chr(9) || chr(160), 5);
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000c0001"}';
+
+select is(
+  (select exercise_key from gym_sets where id = '00000000-0000-0000-0000-0000000c2009'),
+  '',
+  'a whitespace-only name stamps the empty key'
+);
+
+-- The legacy set lives in w1 and must not count as a second exercise there,
+-- and the Front Squat from 8 must.
 select is(
   (select exercise_count from gym_workout_summaries()
    where workout_id = '00000000-0000-0000-0000-0000000c1001'),
@@ -174,7 +219,7 @@ select is(
   'gym_workout_summaries excludes the empty key from the exercise count'
 );
 
--- 12. w4 repeats the lift 10 kg below the w2 best, so it sets nothing.
+-- 14. w4 repeats the lift 10 kg below the w2 best, so it sets nothing.
 select is(
   (select is_pr from gym_workout_summaries()
    where workout_id = '00000000-0000-0000-0000-0000000c1004'),
@@ -184,7 +229,7 @@ select is(
 
 -- ── The mutation ────────────────────────────────────────────────────────────
 
--- 13. Every assertion above passes just as well against a body that still folds
+-- 15. Every assertion above passes just as well against a body that still folds
 --     `exercise_name` per row, which is the cost this change exists to remove.
 --     Take the column away from the name -- trigger off, CHECK dropped, both
 --     rolled back with the suite -- and each RPC's answer has to follow the
