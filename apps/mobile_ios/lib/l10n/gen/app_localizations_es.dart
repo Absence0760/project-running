@@ -7713,6 +7713,11 @@ class AppLocalizationsEs extends AppLocalizations {
   String get prefsCancel => 'Cancelar';
 
   @override
+  String prefsValueOutOfRange(int min, int max) {
+    return 'Introduce un valor entre $min y $max.';
+  }
+
+  @override
   String get prefsSave => 'Guardar';
 
   @override

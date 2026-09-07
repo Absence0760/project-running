@@ -7714,6 +7714,11 @@ class AppLocalizationsPt extends AppLocalizations {
   String get prefsCancel => 'Cancelar';
 
   @override
+  String prefsValueOutOfRange(int min, int max) {
+    return 'Introduza um valor entre $min e $max.';
+  }
+
+  @override
   String get prefsSave => 'Guardar';
 
   @override
@@ -21741,6 +21746,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get prefsCancel => 'Cancelar';
+
+  @override
+  String prefsValueOutOfRange(int min, int max) {
+    return 'Informe um valor entre $min e $max.';
+  }
 
   @override
   String get prefsSave => 'Salvar';

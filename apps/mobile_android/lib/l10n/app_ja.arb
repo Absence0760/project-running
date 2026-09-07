@@ -2127,6 +2127,7 @@
   "prefsSyncedSuffix": "{base} · 他の端末と同期済み",
   "prefsClear": "クリア",
   "prefsCancel": "キャンセル",
+  "prefsValueOutOfRange": "{min}〜{max}の範囲で入力してください。",
   "prefsSave": "保存",
   "prefsSplitInterval": "スプリット間隔",
   "prefsSplitIntervalDefault": "デフォルト",

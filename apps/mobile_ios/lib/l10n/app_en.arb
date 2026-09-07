@@ -10168,6 +10168,18 @@
   "@prefsCancel": {
     "description": "Cancel button in Preferences dialogs"
   },
+  "prefsValueOutOfRange": "Enter a value between {min} and {max}.",
+  "@prefsValueOutOfRange": {
+    "description": "Inline error in a Preferences number dialog when the typed value falls outside the accepted range",
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
   "prefsSave": "Save",
   "@prefsSave": {
     "description": "Save button in Preferences dialogs"

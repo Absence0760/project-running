@@ -7738,6 +7738,11 @@ class AppLocalizationsFr extends AppLocalizations {
   String get prefsCancel => 'Annuler';
 
   @override
+  String prefsValueOutOfRange(int min, int max) {
+    return 'Saisis une valeur entre $min et $max.';
+  }
+
+  @override
   String get prefsSave => 'Enregistrer';
 
   @override

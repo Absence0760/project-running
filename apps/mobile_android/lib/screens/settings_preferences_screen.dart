@@ -7,7 +7,8 @@ import 'package:ui_kit/ui_kit.dart' show SectionHeader;
 
 import '../adaptive_width.dart';
 import '../goals.dart';
-import '../hr_zones.dart' show kMaxHrBpmMax, kMaxHrBpmMin;
+import '../hr_zones.dart'
+    show kMaxHrBpmMax, kMaxHrBpmMin, kRestingHrBpmMax, kRestingHrBpmMin;
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
@@ -519,41 +520,59 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     final controller = TextEditingController(
       text: current == null ? '' : '$current',
     );
+    // Popping null on a refusal made an out-of-range entry indistinguishable
+    // from Cancel: the dialog closed, the caller returned, and a runner who
+    // typed 300 was never told the range. Every numeric preference on this
+    // screen shares the helper, so the refusal is stated here once and the
+    // dialog stays open on it (decisions § 1410).
+    String? rangeError;
     final result = await showDialog<int?>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Semantics(
-          label: title,
-          child: TextField(
-            controller: controller,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(suffixText: suffix),
-            autofocus: true,
-          ),
-        ),
-        actions: [
-          if (allowClear)
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, -1),
-              child: Text(l10n.prefsClear),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text(title),
+          content: Semantics(
+            label: title,
+            child: TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                suffixText: suffix,
+                errorText: rangeError,
+              ),
+              autofocus: true,
+              onChanged: (_) {
+                if (rangeError != null) {
+                  setDialogState(() => rangeError = null);
+                }
+              },
             ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, null),
-            child: Text(l10n.prefsCancel),
           ),
-          FilledButton(
-            onPressed: () {
-              final v = int.tryParse(controller.text.trim());
-              if (v == null || v < minValue || v > maxValue) {
-                Navigator.pop(ctx, null);
-              } else {
+          actions: [
+            if (allowClear)
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, -1),
+                child: Text(l10n.prefsClear),
+              ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, null),
+              child: Text(l10n.prefsCancel),
+            ),
+            FilledButton(
+              onPressed: () {
+                final v = int.tryParse(controller.text.trim());
+                if (v == null || v < minValue || v > maxValue) {
+                  setDialogState(() {
+                    rangeError = l10n.prefsValueOutOfRange(minValue, maxValue);
+                  });
+                  return;
+                }
                 Navigator.pop(ctx, v);
-              }
-            },
-            child: Text(l10n.prefsSave),
-          ),
-        ],
+              },
+              child: Text(l10n.prefsSave),
+            ),
+          ],
+        ),
       ),
     );
     if (mounted) FocusScope.of(context).unfocus();
@@ -1033,8 +1052,9 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       title: AppLocalizations.of(context).prefsRestingHr,
       current: _bagValue<num>(SettingsKeys.restingHrBpm)?.round(),
       suffix: 'bpm',
-      minValue: 20,
-      maxValue: 200,
+      // The named bound, not a third spelling of it (decisions § 1245, § 1409).
+      minValue: kRestingHrBpmMin,
+      maxValue: kRestingHrBpmMax,
     );
     if (picked == null) return;
     await _putUniversal(
