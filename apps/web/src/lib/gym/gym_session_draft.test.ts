@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import type { JsonObject } from '../types';
 import type { StepOutcome } from './gym_session_types';
 import {
 	GYM_SESSION_DRAFT_KEY,
@@ -210,4 +211,18 @@ test('save-as-is drops only the draft marker', () => {
 	assert.equal(stripped.notes_kept, true);
 	assert.equal(GYM_SESSION_DRAFT_KEY in stripped, false);
 	assert.deepEqual(stripSessionDraft(null), {});
+});
+
+test('both metadata builders are assignable to the jsonb column they are written to', () => {
+	// The pin is the ANNOTATION, checked by `npm run check` rather than at
+	// runtime: both results go straight into `gym_workouts.metadata`, and a
+	// return type of `Record<string, unknown>` is refused by `Json` however
+	// JSON-shaped its contents are (decisions § 1363). Widening either return,
+	// or turning either draft shape back into an `interface`, fails the
+	// typecheck here instead of pushing an `as JsonObject` back out to the two
+	// call sites that carried one.
+	const built: JsonObject = draftMetadata('r1', [logged(5)], 1, 'now');
+	const stripped: JsonObject = stripSessionDraft(built);
+	assert.equal(GYM_SESSION_DRAFT_KEY in built, true);
+	assert.equal(GYM_SESSION_DRAFT_KEY in stripped, false);
 });
