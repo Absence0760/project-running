@@ -351,19 +351,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          files=$(find sarif-results -name '*.sarif' -type f | sort)
+          # `find` on a missing directory exits non-zero, and under `set -e`
+          # that aborts before any of the diagnoses below are printed — the one
+          # failure mode of this step that would report nothing at all.
+          files=$(find sarif-results -name '*.sarif' -type f 2>/dev/null | sort || true)
           if [ -z "$files" ]; then
             echo "::error::the actions analysis wrote no SARIF under sarif-results/, so nothing records which queries ran. A scan whose output cannot be read is one whose scope cannot be checked."
             exit 1
           fi
+          rules='[.runs[]?.tool | (.driver.rules // []) + ([.extensions[]?.rules // []] | flatten)] | flatten'
           total=0
           quality=0
           for f in $files; do
-            t=$(jq '[.runs[]?.tool | (.driver.rules // []) + ([.extensions[]?.rules // []] | flatten)] | flatten | length' "$f")
-            q=$(jq '[.runs[]?.tool | (.driver.rules // []) + ([.extensions[]?.rules // []] | flatten)] | flatten
-                    | map(select((.properties.tags // []) | (any(startswith("security")) | not)
-                          and any(. == "maintainability" or . == "correctness" or . == "readability" or . == "reliability")))
-                    | length' "$f")
+            if ! t=$(jq "$rules | length" "$f"); then
+              echo "::error::jq could not read $f as SARIF. The analysis produced a file this step cannot interpret, which leaves the query suite unmeasured exactly as an absent file would."
+              exit 1
+            fi
+            q=$(jq "$rules
+                    | map(select((.properties.tags // []) | (any(startswith(\"security\")) | not)
+                          and any(. == \"maintainability\" or . == \"correctness\" or . == \"readability\" or . == \"reliability\")))
+                    | length" "$f")
             total=$((total + t))
             quality=$((quality + q))
           done
