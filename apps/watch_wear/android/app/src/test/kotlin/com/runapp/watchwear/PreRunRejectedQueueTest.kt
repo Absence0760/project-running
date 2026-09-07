@@ -48,29 +48,33 @@ class PreRunRejectedQueueTest {
     }
 
     @Test
-    fun `the rejected chip takes the slot ahead of the counted one`() {
+    fun `the rejected chip renders in the slot the pure decision gives it`() {
         val body = preRun()
-        // Both are arms of the one if/else chain on the top arc, so their order
-        // in source IS their precedence. The counted chip's claim is the thing
-        // this state makes false — it offers a Sync that always reports success
-        // while the count it states never falls — so it must not win the slot.
-        val rejected = body.indexOf("} else if (rejectedCount > 0")
-        val counted = body.indexOf("} else if (queuedCount > 0)")
+        // The precedence itself is no longer here to grep: `syncChipState`
+        // decides it and `SyncChipStateTest` evaluates the whole state space,
+        // including the claim this branch depends on — that the counted chip
+        // yields to the rejected one, because `Sync N` reports success on every
+        // tap for a queue that cannot move. What is left for a source guard is
+        // the wiring: the arc asks that function, and this chip is what the
+        // `Rejected` answer renders.
         assertTrue(
-            "the rejected-queue branch is not an `else if` arm of the top-arc chain — " +
-                "a separate `if` would render BOTH chips and push the arc into Start",
-            rejected >= 0,
+            "the top arc must resolve its slot through `syncChipState` — a chain of " +
+                "`else if`s here is a precedence only a grep can read",
+            Regex("""val syncSlot = syncChipState\(""").containsMatchIn(body),
         )
         assertTrue(
-            "the counted `Sync N` branch is gone or is no longer an `else if` arm — " +
-                "re-point this guard at whatever now decides the slot",
-            counted >= 0,
+            "the rejected chip must be the `Rejected` arm of that `when`, not a " +
+                "separate `if` — a separate `if` would render BOTH chips and push the " +
+                "arc into Start",
+            Regex("""SyncChipState\.Rejected ->""").containsMatchIn(body),
         )
+        val armStart = body.indexOf("SyncChipState.Rejected ->")
+        val armEnd = body.indexOf("\n                SyncChipState.", armStart + 1)
+        assertTrue("could not find the end of the Rejected arm", armEnd > armStart)
         assertTrue(
-            "the counted chip must yield the slot to the rejected one, not the other " +
-                "way round: `Sync N` reports success on every tap for a queue that " +
-                "cannot move",
-            rejected < counted,
+            "the discard must be reachable from that arm — a chip wired under a " +
+                "different slot renders on a state nobody has a rejection in",
+            body.substring(armStart, armEnd).contains("onDiscardRejected()"),
         )
     }
 
