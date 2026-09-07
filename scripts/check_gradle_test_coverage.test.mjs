@@ -49,7 +49,9 @@ function fixture(spec) {
 	return root;
 }
 
-/** @param {{ tasks?: string, untested?: string | null, dir?: string }} [opts] */
+/**
+ * @param {{ tasks?: string, untested?: string | null, dir?: string, cacheKey?: string | null }} [opts]
+ */
 function workflow(opts = {}) {
 	const untested =
 		opts.untested === null
@@ -58,11 +60,24 @@ function workflow(opts = {}) {
           GRADLE_UNTESTED: |
             ${opts.untested ?? `apps/host/android=${REASON}`}
 `;
+	const dir = opts.dir ?? 'apps/watch_wear/android';
+	// Claim 4 reads the job's `~/.gradle` cache step, so every fixture that is
+	// not about claim 4 carries a well-formed one — a fixture missing it would
+	// fail for a reason the case is not about, which is how these eight tests
+	// started failing when claim 4 landed without them.
+	const cache =
+		opts.cacheKey === null
+			? ''
+			: `      - uses: actions/cache@v4
+        with:
+          path: ~/.gradle/caches
+          key: gradle-${opts.cacheKey ?? `\${{ hashFiles('${dir}/**/*.gradle*') }}`}
+`;
 	return `name: CI
 jobs:
   build-watch-wear:
     steps:
-      - working-directory: ${opts.dir ?? 'apps/watch_wear/android'}
+${cache}      - working-directory: ${dir}
         run: ./gradlew ${opts.tasks ?? 'assembleDebug testDebugUnitTest'} --no-daemon
       - name: Gradle unit tests nothing runs
 ${untested}        shell: bash
@@ -233,17 +248,26 @@ test('the shipped workflows run or declare every Gradle test suite this repo hol
 	assert.deepEqual(check().errors, []);
 });
 
-test('the workflow’s own echo shell names each declared project, run verbatim', () => {
-	// Lifted from ci.yml and executed, because that shell is in no other suite:
-	// a declaration nothing prints is a declaration a reader of the run never
-	// sees, which is the difference between this and a line in a document.
+test('a declaration and the step that echoes it exist together, or neither does', () => {
+	// The echoing step is how a declaration reaches a reader of the run rather
+	// than only the guard, so the two are one thing: § 1439 removed both at once
+	// when the last declared project started running its tests. What must never
+	// happen is a declaration with no echo — a gap recorded where nobody looks.
 	const text = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'ci.yml'), 'utf-8');
 	const lines = text.split('\n');
 	const start = lines.findIndex((l) => /^\s+- name: Gradle unit tests nothing runs\s*$/.test(l));
-	assert.ok(start > 0, 'the echoing step is gone; the declaration is then read by the guard alone');
+	const declared = lines.findIndex((l) => /^\s+GRADLE_UNTESTED: \|\s*$/.test(l));
+	assert.equal(
+		start >= 0,
+		declared >= 0,
+		start >= 0
+			? 'the echoing step is there with nothing declared to echo'
+			: 'a GRADLE_UNTESTED declaration is read by the guard alone, with nothing printing it',
+	);
+	if (declared < 0) return;
 
 	const env = [];
-	let i = lines.findIndex((l, n) => n > start && /^\s+GRADLE_UNTESTED: \|\s*$/.test(l)) + 1;
+	let i = declared + 1;
 	const envIndent = lines[i].search(/\S/);
 	for (; lines[i] && lines[i].search(/\S/) >= envIndent && lines[i].trim() !== ''; i++)
 		env.push(lines[i].slice(envIndent));
@@ -263,7 +287,6 @@ test('the workflow’s own echo shell names each declared project, run verbatim'
 	const warnings = out.split('\n').filter((l) => l.startsWith('::warning::'));
 	assert.equal(warnings.length, env.length);
 	assert.ok(warnings.every((w) => /^::warning::\S+ holds unit tests that no job runs: \S/.test(w)));
-	assert.ok(warnings.some((w) => w.includes('apps/mobile_android/android')));
 	// A blank trailing line must not become a warning about nothing.
 	assert.equal(
 		execFileSync('/bin/bash', ['-c', body.join('\n')], {
@@ -272,6 +295,70 @@ test('the workflow’s own echo shell names each declared project, run verbatim'
 		}).trim(),
 		'',
 	);
+});
+
+test('a job whose ~/.gradle key ignores a project it builds fails, and names it', () => {
+	// Claim 4. One GRADLE_USER_HOME serves both invocations while the key hashes
+	// one of them, so a change to the other project's build files restores the
+	// cache written before it.
+	const root = fixture({
+		projects: PROJECTS,
+		workflow: `name: CI
+jobs:
+  build:
+    steps:
+      - uses: actions/cache@v4
+        with:
+          path: ~/.gradle/caches
+          key: gradle-\${{ hashFiles('apps/watch_wear/android/**/*.gradle*') }}
+      - working-directory: apps/watch_wear/android
+        run: ./gradlew testDebugUnitTest --no-daemon
+      - working-directory: apps/host/android
+        run: ./gradlew testDebugUnitTest --no-daemon
+`,
+	});
+	const { errors } = check({ root });
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /invokes Gradle in apps\/host\/android/);
+	assert.match(errors[0], /hashes no file under it/);
+});
+
+test('a key hashing every project the job invokes passes', () => {
+	const root = fixture({
+		projects: PROJECTS,
+		workflow: `name: CI
+jobs:
+  build:
+    steps:
+      - uses: actions/cache@v4
+        with:
+          path: ~/.gradle/caches
+          key: gradle-\${{ hashFiles('apps/watch_wear/android/**/*.gradle*', 'apps/host/android/**/*.gradle*') }}
+      - working-directory: apps/watch_wear/android
+        run: ./gradlew testDebugUnitTest --no-daemon
+      - working-directory: apps/host/android
+        run: ./gradlew testDebugUnitTest --no-daemon
+`,
+	});
+	assert.deepEqual(check({ root }).errors, []);
+});
+
+test('a key with no hashFiles() covers nothing rather than everything', () => {
+	const root = fixture({
+		projects: PROJECTS,
+		workflow: workflow({ cacheKey: 'v1-fixed' }),
+	});
+	const { errors } = check({ root });
+	assert.ok(errors.some((e) => /hashing nothing/.test(e)), errors.join('\n'));
+});
+
+test('a workflow set that caches no ~/.gradle at all fails rather than measuring nothing', () => {
+	// The detection is a regex over a step body; if it ever stopped matching,
+	// claim 4 would agree with every key in the file. Silence is the one answer
+	// it must not give.
+	const root = fixture({ projects: PROJECTS, workflow: workflow({ cacheKey: null }) });
+	const { errors } = check({ root });
+	assert.ok(errors.some((e) => /no workflow caches/.test(e)), errors.join('\n'));
 });
 
 test('a gradlew command quoted inside a diagnostic is not an invocation', () => {
