@@ -83,8 +83,8 @@ test.describe('saga: account deletion via /settings/account', () => {
 			duration_s: 1_500,
 			is_public: false,
 			track: [
-				{ lat: -33.89, lng: 151.27, ele: 10, t: '2026-04-30T10:00:00Z' },
-				{ lat: -33.89, lng: 151.28, ele: 11, t: '2026-04-30T10:00:30Z' }
+				{ lat: -33.89, lng: 151.27, ele: 10, ts: '2026-04-30T10:00:00Z' },
+				{ lat: -33.89, lng: 151.28, ele: 11, ts: '2026-04-30T10:00:30Z' }
 			]
 		});
 

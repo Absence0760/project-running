@@ -54,8 +54,8 @@ test.describe('jobs queue — Pro tier jumps the line', () => {
 			duration_s: 1_500,
 			is_public: false,
 			track: [
-				{ lat: -33.89, lng: 151.27, ele: 10, t: '2026-04-30T07:00:00Z' },
-				{ lat: -33.89, lng: 151.28, ele: 11, t: '2026-04-30T07:01:00Z' }
+				{ lat: -33.89, lng: 151.27, ele: 10, ts: '2026-04-30T07:00:00Z' },
+				{ lat: -33.89, lng: 151.28, ele: 11, ts: '2026-04-30T07:01:00Z' }
 			]
 		});
 
@@ -66,8 +66,8 @@ test.describe('jobs queue — Pro tier jumps the line', () => {
 			duration_s: 1_700,
 			is_public: false,
 			track: [
-				{ lat: -33.89, lng: 151.27, ele: 10, t: '2026-04-30T08:00:00Z' },
-				{ lat: -33.89, lng: 151.28, ele: 11, t: '2026-04-30T08:01:00Z' }
+				{ lat: -33.89, lng: 151.27, ele: 10, ts: '2026-04-30T08:00:00Z' },
+				{ lat: -33.89, lng: 151.28, ele: 11, ts: '2026-04-30T08:01:00Z' }
 			]
 		});
 
@@ -186,7 +186,7 @@ test.describe('jobs queue — Pro tier jumps the line', () => {
 			duration_s: 1_200,
 			is_public: false,
 			track: [
-				{ lat: -33.89, lng: 151.27, t: '2026-04-30T09:00:00Z' }
+				{ lat: -33.89, lng: 151.27, ts: '2026-04-30T09:00:00Z' }
 			]
 		});
 		const morganRunId = await insertRun({
@@ -196,7 +196,7 @@ test.describe('jobs queue — Pro tier jumps the line', () => {
 			duration_s: 1_200,
 			is_public: false,
 			track: [
-				{ lat: -33.89, lng: 151.27, t: '2026-04-30T09:00:00Z' }
+				{ lat: -33.89, lng: 151.27, ts: '2026-04-30T09:00:00Z' }
 			]
 		});
 
