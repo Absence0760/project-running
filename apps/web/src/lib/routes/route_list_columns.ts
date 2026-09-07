@@ -21,22 +21,8 @@
 /// silently asking PostgREST for nothing.
 import type { Route } from '../types';
 import type { Database } from '../database.types';
+import { SELECT_SEPARATOR, type Join } from '../core/database';
 
-/// The PostgREST separator. A select list is comma-separated; the space is
-/// cosmetic and matches the hand-written literal this replaced.
-const COLUMN_SEPARATOR = ', ';
-
-/// A tuple of column names as the string a `.select()` takes. Written as a
-/// type because `Array.prototype.join` is declared to return `string`, and the
-/// literal is what lets supabase-js infer a row shape from the select list
-/// (the reason the constants it replaces carried `as const`).
-type Join<T extends readonly string[], D extends string> = T extends readonly []
-	? ''
-	: T extends readonly [infer Head extends string]
-		? Head
-		: T extends readonly [infer Head extends string, ...infer Rest extends readonly string[]]
-			? `${Head}${D}${Join<Rest, D>}`
-			: string;
 
 /// Every column a consumer of the routes list reads: `/routes` (cards, filters,
 /// sorts, the star toggle, the track preview) and the three pickers — RunEditor,
@@ -71,14 +57,14 @@ export const PUBLIC_ROUTE_LIST_COLUMNS = [
 	'created_at',
 ] as const satisfies readonly (keyof Route)[];
 
-export const ROUTE_LIST_COLS = ROUTE_LIST_COLUMNS.join(COLUMN_SEPARATOR) as Join<
+export const ROUTE_LIST_COLS = ROUTE_LIST_COLUMNS.join(SELECT_SEPARATOR) as Join<
 	typeof ROUTE_LIST_COLUMNS,
-	typeof COLUMN_SEPARATOR
+	typeof SELECT_SEPARATOR
 >;
 
-export const PUBLIC_ROUTE_LIST_COLS = PUBLIC_ROUTE_LIST_COLUMNS.join(COLUMN_SEPARATOR) as Join<
+export const PUBLIC_ROUTE_LIST_COLS = PUBLIC_ROUTE_LIST_COLUMNS.join(SELECT_SEPARATOR) as Join<
 	typeof PUBLIC_ROUTE_LIST_COLUMNS,
-	typeof COLUMN_SEPARATOR
+	typeof SELECT_SEPARATOR
 >;
 
 /// A row of the routes list — exactly the columns the query asks for, so
@@ -111,8 +97,3 @@ type PublicRouteViewRow = Database['public']['Views']['public_routes']['Row'];
 /// already takes that decision for the same view — this is the same view read
 /// through a different door.
 export type PublicRouteSummary = Pick<Route, keyof PublicRouteViewRow & keyof Route>;
-
-/// The columns of `routes` the list deliberately does not ask for. Exported so
-/// a caller that needs one has to say so — by widening the tuple above, which
-/// widens the select in the same edit.
-export type RouteListWithheldColumn = Exclude<keyof Route, (typeof ROUTE_LIST_COLUMNS)[number]>;

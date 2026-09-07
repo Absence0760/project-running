@@ -18,6 +18,7 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import type { PrefsBag } from '$lib/settings/settings';
+	import type { Json } from '$lib/database.types';
 
 	interface DeviceRow {
 		device_id: string;
@@ -361,13 +362,18 @@
 		const device = devices.find((d) => d.device_id === addingForDevice);
 		if (!device) return;
 		const ed = currentEditor();
-		let value: unknown;
+		// A `Json`, not an `unknown`: the value goes straight into the jsonb
+		// overrides bag. Typing it as one also puts the chain's exhaustiveness
+		// on the compiler — the trailing `else if` used to leave `value`
+		// unassigned for any editor shape without a branch, writing `undefined`
+		// into the bag instead of refusing.
+		let value: Json;
 		if (ed.shape.kind === 'bool') value = addValueBool;
 		else if (ed.shape.kind === 'number') {
 			const n = parseFloat(addValueNumber);
 			if (!Number.isFinite(n)) return;
 			value = n;
-		} else if (ed.shape.kind === 'enum') value = addValueEnum;
+		} else value = addValueEnum;
 
 		if (addBusy) return;
 		addBusy = true;

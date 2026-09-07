@@ -6,9 +6,10 @@ import { edgeFunctionErrorCode, edgeFunctionErrorMessage } from './edge_function
 import { isDuplicateKeyError, supabaseErrorFields } from './supabase_error';
 import { singleEmbed, fitnessSnapshotDue, publicRouteListFill } from './data_normalise';
 import { TABLES, BUCKETS, METADATA_KEYS } from './schema';
-import type { Json } from '../database.types';
+import type { Database, Json } from '../database.types';
+import { SELECT_SEPARATOR, type Join } from './database';
 import type { Insertable, Updatable } from './database';
-import type { JsonObject } from '../types';
+import type { JsonObject, TrackPoint } from '../types';
 import { isEntityId } from './entity_id';
 import { probeSaysConfigured } from './provider_probe';
 import { loadSettings, effective } from '../settings/settings';
@@ -83,7 +84,13 @@ import type {
 	RouteConditionSeverity
 } from '../types';
 export type { NotificationKind };
-import { parseRunSource, parseRouteSurface, type RunSource } from '../types';
+import {
+	parseActivityType,
+	parseIntegrationProvider,
+	parseRouteSurface,
+	parseRunSource,
+	type RunSource,
+} from '../types';
 import type { RaceImportLeg } from '../integrations/race_import_providers';
 import {
 	filterRelinkCandidates,
@@ -210,7 +217,11 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 	const build = () => {
 		let q = supabase
 			.from(TABLES.runs)
-			.select(opts?.columns ? opts.columns.join(', ') : '*')
+			.select(
+				(opts?.columns ? opts.columns.join(SELECT_SEPARATOR) : '*') as
+					| '*'
+					| Join<RunColumns, typeof SELECT_SEPARATOR>,
+			)
 			.eq('user_id', userId);
 		if (opts?.startedAtFrom != null) q = q.gte('started_at', opts.startedAtFrom);
 		if (opts?.startedAtBefore != null) q = q.lt('started_at', opts.startedAtBefore);
@@ -258,7 +269,7 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 	// the constraint or rows from a future client whose new value
 	// hasn't propagated to this build need a fallback. parseRunSource
 	// coerces unknowns to 'app'.
-	return rows.map((r: any) => ({
+	return rows.map((r) => ({
 		...r,
 		source: parseRunSource(r.source),
 		track: null,
@@ -327,7 +338,12 @@ export async function fetchRunsForDashboard(): Promise<{
 	const windowStart = dashboardRunsWindowStart(new Date());
 	const { data, error } = await supabase
 		.from(TABLES.runs)
-		.select(DASHBOARD_RUN_COLUMNS.join(', '))
+		.select(
+			DASHBOARD_RUN_COLUMNS.join(SELECT_SEPARATOR) as Join<
+				typeof DASHBOARD_RUN_COLUMNS,
+				typeof SELECT_SEPARATOR
+			>,
+		)
 		.eq('user_id', userId)
 		.gte('started_at', windowStart.toISOString())
 		.order('started_at', { ascending: false });
@@ -341,7 +357,7 @@ export async function fetchRunsForDashboard(): Promise<{
 		// pairs. `DashboardRun` above is what the ten columns really are; making
 		// it the declared type is a one-line change once those parameters take a
 		// structural bound (§ 1330).
-		runs: data.map((r: any) => ({
+		runs: data.map((r) => ({
 			...r,
 			source: parseRunSource(r.source),
 			track: null,
@@ -626,7 +642,36 @@ export async function fetchRunById(
 			console.warn('Failed to fetch track', e);
 		}
 	}
-	return { run: { ...data, source: parseRunSource(data.source), track }, error: null };
+	return { run: asRun(data, track), error: null };
+}
+
+/// One whole `runs` row as the `Run` a consumer reads.
+///
+/// `source` and `activity_type` are CHECK-constrained unions the generated row
+/// types as bare strings — `source` was already parsed here, `activity_type`
+/// was not, so a value outside the union arrived typed as one of its members.
+/// `metadata` is jsonb, typed `Json`: the column can legitimately hold a
+/// scalar or an array, neither of which is a metadata bag, so one becomes null
+/// rather than being handed on as a bag every reader will index into.
+///
+/// Only a read that selects every column can use this. The windowed
+/// projections (`fetchRunsForDashboard`, `fetchRunsForRecap`) carry their own
+/// row shapes — see § 1330.
+function asRun(
+	row: Database['public']['Tables']['runs']['Row'],
+	track: TrackPoint[] | null,
+): Run {
+	const { metadata, ...rest } = row;
+	return {
+		...rest,
+		source: parseRunSource(row.source),
+		activity_type: parseActivityType(row.activity_type),
+		metadata:
+			metadata != null && typeof metadata === 'object' && !Array.isArray(metadata)
+				? metadata
+				: null,
+		track,
+	};
 }
 
 /// Fetch every run by the signed-in user against `routeId`, ordered
@@ -1771,6 +1816,31 @@ export async function fetchRoutesWithError(): Promise<{
 	return { routes: merged, error: null };
 }
 
+/// One `routes` row as the `Route` every consumer reads it as.
+///
+/// Three things separate the two, and each read used to do a different subset
+/// of them. `shadow_hidden` is server-/trigger-owned moderation state
+/// (migration 20270218_001) that the read boundary is otherwise unanimous
+/// about stripping (§ 1327). `surface` is a CHECK-constrained union the
+/// generated row types as a bare `string`. And `waypoints` is jsonb, typed
+/// `Json`, which is not the non-nullable `TrackPoint[]` the client type
+/// promises. `fetchClubRoutes` and `createRoute` did none of the three and
+/// returned the raw row as a `Route` regardless, so a club route arrived
+/// carrying the moderation column and an unparsed surface.
+///
+/// A `waypoints` that is not an array becomes `[]` rather than being asserted
+/// through: a line the consumer can iterate is the promise, and § 1229 is
+/// exactly the failure of handing back `undefined` under a type that says
+/// otherwise.
+function asRoute(row: Database['public']['Tables']['routes']['Row']): Route {
+	const { shadow_hidden: _moderation, waypoints, surface, ...rest } = row;
+	return {
+		...rest,
+		waypoints: Array.isArray(waypoints) ? (waypoints as unknown as TrackPoint[]) : [],
+		surface: parseRouteSurface(surface),
+	};
+}
+
 /// Routes owned by a club (`routes.club_id = clubId`). Read-gated by
 /// RLS to club members; admin-write-gated for transfers/edits. Used by
 /// the club home Routes tab and by EventEditor's route picker.
@@ -1784,7 +1854,7 @@ export async function fetchClubRoutes(clubId: string): Promise<Route[]> {
 		console.error('fetchClubRoutes failed', error);
 		return [];
 	}
-	return data ?? [];
+	return (data ?? []).map(asRoute);
 }
 
 /// Bookmark a public route. Inserts a `saved_routes` reference rather
@@ -1847,33 +1917,16 @@ export async function fetchRouteById(id: string): Promise<Route | null> {
 		.maybeSingle();
 	if (ownerRead.error) throw ownerRead.error;
 	if (ownerRead.data) {
-		// `shadow_hidden` is a server-/trigger-owned moderation column
-		// (migration 20270218_001) the client has no business reading; the
-		// `public_routes` view already projects it away, so strip it from the
-		// base-table owner read too. `Route` no longer declares it either
-		// (§ 1327) — the strip is what makes the returned value that type
-		// rather than a cast over it. `surface` is narrowed through the same
-		// defensive parse `fetchRunById` uses for `source`, so a value outside
-		// the RouteSurface union can't leak past the read boundary.
-		const { shadow_hidden, ...rest } = ownerRead.data as typeof ownerRead.data & {
-			shadow_hidden?: boolean;
-		};
-		void shadow_hidden;
-		if (rest.user_id !== viewerId) {
+		const owned = asRoute(ownerRead.data);
+		if (owned.user_id !== viewerId) {
 			// RLS surfaced this base row to a non-owner (active club member).
 			// Never hand back the unclipped polyline / `geom` / `start_point`;
 			// route the waypoints through the same server-side privacy clip the
 			// non-owner branch below uses and drop the raw geometry columns.
 			const clipped = await fetchClippedRouteForViewer(id);
-			return {
-				...rest,
-				geom: null,
-				start_point: null,
-				waypoints: clipped,
-				surface: parseRouteSurface(rest.surface),
-			} as Route;
+			return { ...owned, geom: null, start_point: null, waypoints: clipped };
 		}
-		return { ...rest, surface: parseRouteSurface(rest.surface) } as Route;
+		return owned;
 	}
 
 	// The metadata read and the server-clip RPC both key only on `id`, so
@@ -1955,7 +2008,7 @@ export async function saveRoute(route: {
 		if (friendly) throw new Error(friendly);
 		throw error;
 	}
-	return data;
+	return asRoute(data);
 }
 
 export async function deleteRoute(id: string): Promise<void> {
@@ -2080,7 +2133,15 @@ export async function fetchIntegrations(): Promise<Integration[]> {
 		.eq('user_id', userId)
 		.is('disconnected_at', null);
 
-	return data ?? [];
+	// `provider` is a CHECK-constrained union (`integrations_provider_check`)
+	// that the generated row types as a bare `string`; a row whose provider the
+	// build has not heard of is dropped rather than handed on as an
+	// `IntegrationProvider` it is not — every consumer switches on it, and the
+	// card for a provider with no branch renders as nothing either way.
+	return (data ?? []).flatMap((row) => {
+		const provider = parseIntegrationProvider(row.provider);
+		return provider ? [{ ...row, provider }] : [];
+	});
 }
 
 export async function connectIntegration(provider: string): Promise<void> {
@@ -2643,7 +2704,7 @@ export async function fetchMyClubsWithError(): Promise<{
 	if (!userId) return { clubs: [], error: null };
 	const { data, error } = await supabase
 		.from(TABLES.club_members)
-		.select(`club_id, role, clubs!inner(${CLUB_SELECT_COLS})`)
+		.select(`club_id, role, clubs!inner(${CLUB_SELECT_COLS})` as const)
 		.eq('user_id', userId)
 		.order('joined_at', { ascending: false });
 	if (error) return { clubs: [], error: error.message };

@@ -53,3 +53,23 @@ export type Insertable<T extends keyof Database['public']['Tables']> =
 	Database['public']['Tables'][T]['Insert'];
 export type Updatable<T extends keyof Database['public']['Tables']> =
 	Database['public']['Tables'][T]['Update'];
+
+/// The PostgREST select-list separator. A select list is comma-separated; the
+/// space is cosmetic and matches the hand-written literals this replaced.
+export const SELECT_SEPARATOR = ', ';
+
+/// A tuple of column names as the string a `.select()` takes.
+///
+/// `Array.prototype.join` is declared to return `string`, and a `string` is
+/// what makes supabase-js's select-list parser give up: it answers
+/// `GenericStringError`, every property read off the row is an error, and the
+/// row degrades to something no consumer can be checked against. The typed
+/// client is only as good as the literal it is handed, so a select list built
+/// from a tuple is re-stated as the literal that tuple spells.
+export type Join<T extends readonly string[], D extends string> = T extends readonly []
+	? ''
+	: T extends readonly [infer Head extends string]
+		? Head
+		: T extends readonly [infer Head extends string, ...infer Rest extends readonly string[]]
+			? `${Head}${D}${Join<Rest, D>}`
+			: string;
