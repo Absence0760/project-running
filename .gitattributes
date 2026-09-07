@@ -6,6 +6,12 @@
 *.sh text eol=lf
 *.bash text eol=lf
 
+# Batch scripts are the mirror of that rule: cmd.exe resolves `goto` and
+# `call` labels by seeking within the file, and an LF-only .bat can land it
+# mid-line. The blob stays LF like everything else — only the working copy is
+# CRLF — so diffs and this repo's Linux tooling see one canonical form.
+*.bat text eol=crlf
+
 # Binary files — never auto-convert line endings or diff as text.
 *.png binary
 *.jpg binary
