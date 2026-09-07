@@ -537,6 +537,36 @@ When you write a value that a second language also has to know:
   live-ping window against the 24 h Redis TTL) are not an equality. Pin those
   with mirror suites and say so where the numbers are written.
 
+## Ordering a name list: fold where a Dart twin exists, collate where the surface is web-only
+
+`localeCompare` is an ICU collation, and Dart ships no collator at all — its only
+ordering primitive is `String.compareTo`, UTF-16 code-unit order. Measured over
+the 145,672 Unicode letters as single-character names the two orderings disagree
+about 31.75 % of all pairs ([decisions § 1337](decisions.md)), so a collation
+inside a module that has a Dart half is a divergence by construction rather than
+a risk that might be realised.
+
+The criterion, which four rounds each re-derived from scratch
+([§ 1276](decisions.md), [§ 1334](decisions.md) / [§ 1337](decisions.md),
+[§ 1383](decisions.md), [§ 1400](decisions.md)):
+
+- **A module with a Dart twin folds.** Use `compareFoldedNames` from
+  `$lib/segments/catalogue_browse` (`catalogue_browse.dart` on the phone). It is
+  answered by a table committed beside the code, so both platforms give the same
+  answer and a test can pin it. The residual is stated where the function lives:
+  a fold is not a collation, so `ø`, `đ`, `ł`, `ß` and `æ` file after `z`.
+- **A web-only surface collates, and should.** A collation gives each reader
+  their own correct order; a fold gives everyone the English one. § 1400
+  measured five distinct orders across seven host locales for one list of nine
+  names, and that variation is the feature. Break the tie on an `id` so the
+  comparator is a total order — a collation returns 0 for two *different*
+  strings, and `Array.prototype.sort`'s stability then leaks the query's order.
+
+`apps/web/src/lib/segments/parity_collation_guard.test.ts` reads the pair list
+out of `.claude/agents/shared-library-syncer.md` and fails the PR when a
+registered half collates, so registering a pair puts it under the rule the same
+day. The second half is a permission, not an obligation, and needs no guard.
+
 ## A client input bound goes in `column_limits`, and it has to sit inside the column's CHECK
 
 A composer or numeric field whose column carries a CHECK is one edit away from a
