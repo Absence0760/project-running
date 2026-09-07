@@ -849,7 +849,7 @@ class TrainingService extends ChangeNotifier {
     final runs = (runRows as List).cast<Map<String, dynamic>>().map((r) {
       return RelinkCandidateRun(
         id: r['id'] as String,
-        startedAt: DateTime.parse(r['started_at'] as String),
+        startedAt: parseIsoStrictRequired(r['started_at'], 'started_at'),
         distanceM: (r['distance_m'] as num).toDouble(),
         durationS: (r['duration_s'] as num).toInt(),
       );
