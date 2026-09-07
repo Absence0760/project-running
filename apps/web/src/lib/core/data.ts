@@ -89,6 +89,7 @@ import {
 	parseIntegrationProvider,
 	parseJoinPolicy,
 	parseRouteSurface,
+	parseRunMetadata,
 	parseRunSource,
 	type RunSource,
 } from '../types';
@@ -326,13 +327,11 @@ export const DASHBOARD_RUN_COLUMNS = [
 	'metadata',
 ] as const satisfies RunColumns;
 
-/// What the dashboard read actually carries. Exported, and deliberately not yet
-/// what `fetchRunsForDashboard` declares: the widening below is stated at the
-/// one line where it happens and the remaining step is filed (§ 1330).
+/// What the dashboard read carries, and what `fetchRunsForDashboard` declares.
 export type DashboardRun = Pick<Run, (typeof DASHBOARD_RUN_COLUMNS)[number]>;
 
 export async function fetchRunsForDashboard(): Promise<{
-	runs: Run[];
+	runs: DashboardRun[];
 	error: string | null;
 }> {
 	const userId = auth.user?.id;
@@ -352,18 +351,19 @@ export async function fetchRunsForDashboard(): Promise<{
 	if (error) return { runs: [], error: error.message };
 	if (!data) return { runs: [], error: null };
 	return {
-		// Widened, like `fetchRunsForRecap`'s, and for the same reason: every
-		// card on /dashboard feeds these rows into `computeRunStreaks`,
-		// `buildYearInRunningRecap`'s siblings in `training/` and the race
-		// predictor, whose `Run[]` parameters are halves of registered TS<->Dart
-		// pairs. `DashboardRun` above is what the ten columns really are; making
-		// it the declared type is a one-line change once those parameters take a
-		// structural bound (§ 1330).
+		// All three narrowed on read, the same defence `fetchRunById` applies one
+		// row at a time. `activity_type` and `source` are CHECK-constrained
+		// `text` and `metadata` is jsonb, so the generated row types them
+		// `string` / `string` / `Json` while the client unions promise less; the
+		// widening cast this replaced meant the dashboard was the one read that
+		// applied none of them. `track` is NOT set — it is not one of the ten
+		// columns, so `DashboardRun` does not carry it.
 		runs: data.map((r) => ({
 			...r,
 			source: parseRunSource(r.source),
-			track: null,
-		})) as unknown as Run[],
+			activity_type: parseActivityType(r.activity_type),
+			metadata: parseRunMetadata(r.metadata),
+		})),
 		error: null,
 	};
 }
@@ -493,7 +493,7 @@ export type RecapRun = Pick<Run, (typeof RECAP_RUN_COLUMNS)[number]>;
 /// engine's dependency, `recap_window.test.ts` pins the equivalence). Both
 /// recap routes take the whole year: the monthly card carries the year's
 /// twelve-month strip.
-export async function fetchRunsForRecap(year: number): Promise<Run[]> {
+export async function fetchRunsForRecap(year: number): Promise<RecapRun[]> {
 	const win = recapYearWindow(year);
 	const [windowed, allStartedAt] = await Promise.all([
 		fetchRuns({
@@ -503,18 +503,8 @@ export async function fetchRunsForRecap(year: number): Promise<Run[]> {
 		}),
 		fetchRuns({ columns: ['started_at'] as const }),
 	]);
-	// The one place in this file where a narrowed read is still widened back to
-	// the full row, and it is deliberate rather than overlooked. `windowed` IS
-	// a `RecapRun[]` — nine of the twenty-four columns — but the consumers of
-	// the merged list are `mergeRecapRuns` (web-only), then
-	// `buildYearInRunningRecap` and `computeRunStreaks`, and the last two are
-	// registered TS<->Dart parity pairs whose `Run[]` parameters would each
-	// have to widen to a structural bound the Dart half cannot express the same
-	// way. Narrowing the return here would move the error into those pairs
-	// rather than remove it, so the widening is stated once, here, and the
-	// remaining step is filed (§ 1330).
 	return mergeRecapRuns(
-		windowed as unknown as Run[],
+		windowed,
 		allStartedAt.map((r) => r.started_at),
 		win,
 	);

@@ -9,7 +9,7 @@
 	import type { Run } from '$lib/types';
 
 	interface Props {
-		runs: Run[];
+		runs: readonly Pick<Run, 'started_at' | 'distance_m' | 'duration_s'>[];
 		weekStart: WeekStartDay;
 		/// Overridable for deterministic tests; defaults to the real clock.
 		now?: Date;

@@ -1,30 +1,35 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { buildYearInRunningRecap, buildMonthInRunningRecap } from './recap';
-import { recapYearWindow, isInRecapWindow, mergeRecapRuns } from './recap_window';
-import type { Run } from '../types';
+import {
+	recapYearWindow,
+	isInRecapWindow,
+	mergeRecapRuns,
+	type RecapWindowRun,
+} from './recap_window';
 
-function mkRun(startedAt: string, distance_m = 5000, duration_s = 1500): Run {
+/// Built as a `RecapWindowRun` rather than cast to a `Run`: these are the nine
+/// columns the recap read selects, and the cast this replaced let the fixture
+/// promise fifteen the fetch never asks for.
+function mkRun(startedAt: string, distance_m = 5000, duration_s = 1500): RecapWindowRun {
 	return {
 		id: `run-${startedAt}`,
-		user_id: 'u',
 		started_at: new Date(startedAt).toISOString(),
 		distance_m,
 		duration_s,
 		elevation_gain_m: 40,
-		track_url: null,
 		route_id: 'route-1',
 		source: 'app',
 		activity_type: 'run',
 		metadata: {},
-	} as unknown as Run;
+	};
 }
 
 /**
  * The same 28 Dec 2025 → 3 Jan 2026 streak `recap.test.ts` pins on the engine,
  * plus older history so "outside the window" is not just the neighbouring days.
  */
-function boundaryHistory(): Run[] {
+function boundaryHistory(): RecapWindowRun[] {
 	return [
 		mkRun('2023-06-01T10:00:00'),
 		mkRun('2024-11-11T10:00:00'),
@@ -41,7 +46,7 @@ function boundaryHistory(): Run[] {
 }
 
 /** What `fetchRunsForRecap` does on the wire, reproduced without Supabase. */
-function splitAndMerge(all: Run[], year: number): Run[] {
+function splitAndMerge(all: RecapWindowRun[], year: number): RecapWindowRun[] {
 	const win = recapYearWindow(year);
 	const windowed = all.filter((r) => isInRecapWindow(r.started_at, win));
 	return mergeRecapRuns(

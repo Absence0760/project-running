@@ -22,6 +22,19 @@
 import type { Run, RunSource } from '../types';
 import { kLayoffResetDays, localDateKey } from './training_load';
 
+/// The columns the fitness math reads off a run: when it happened, how far and
+/// how long, whether it was a bike ride, whether the bag says it was indoors,
+/// and which source recorded it. Declared as a structural bound rather than
+/// `Run` for the reason `plan_ramp`'s `RunForVolume` and `consistency`'s
+/// `ConsistencyActivity` already are — a column-narrowed read (the dashboard's
+/// ten, the recap's nine) carries every one of these and nothing else, so
+/// asking for a whole `Run` overstates the requirement and forces the caller
+/// to assert a row it does not have (§ 1330).
+export type RunForFitness = Pick<
+	Run,
+	'started_at' | 'distance_m' | 'duration_s' | 'activity_type' | 'metadata' | 'source'
+>;
+
 export interface FitnessSnapshot {
 	vdot: number | null;
 	vo2Max: number | null;
@@ -36,7 +49,7 @@ export interface FitnessSnapshot {
 /// before it was ≥ kLayoffResetDays. Drives the gentle "rebuild
 /// gradually" framing on the recovery card so a returning runner isn't
 /// told they're "very fresh — race soon". Persona-hunt comeback #29.
-export function isReturningFromLayoff(runs: Run[], nowMs: number = Date.now()): boolean {
+export function isReturningFromLayoff(runs: readonly RunForFitness[], nowMs: number = Date.now()): boolean {
 	const days = qualifyingRuns(runs)
 		.map((r) => new Date(r.started_at).getTime())
 		.filter((t) => Number.isFinite(t) && t <= nowMs)
@@ -72,7 +85,7 @@ const MIN_QUALIFYING_DISTANCE_M = 1500;
 /// every run (not just qualifying ones) — any logged activity proves prior
 /// history, and a treadmill / short run shouldn't read as "never ran".
 export function isReturningFromGap(
-	runs: Run[],
+	runs: readonly Pick<Run, 'started_at'>[],
 	gapDays = 60,
 	nowMs: number = Date.now(),
 ): boolean {
@@ -112,7 +125,7 @@ const SOURCE_QUALIFIES: Record<RunSource, boolean> = {
 	race: true,
 };
 
-export function qualifyingRuns(runs: Run[]): Run[] {
+export function qualifyingRuns<T extends RunForFitness>(runs: readonly T[]): T[] {
 	return runs.filter(
 		(r) =>
 			r.distance_m >= MIN_QUALIFYING_DISTANCE_M &&
@@ -159,7 +172,7 @@ export function vdotFromRun(distanceM: number, durationS: number): number | null
 /// ~90 days. Picks the best single effort rather than averaging; a
 /// runner's fitness ceiling is what the hardest recent run proved they
 /// can do. Returns null when no qualifying run exists.
-export function currentVdot(runs: Run[], nowMs: number = Date.now()): number | null {
+export function currentVdot(runs: readonly RunForFitness[], nowMs: number = Date.now()): number | null {
 	const cutoff = nowMs - 90 * 24 * 3600_000;
 	let best: number | null = null;
 	for (const r of qualifyingRuns(runs)) {
@@ -238,7 +251,7 @@ function ewma(prev: number, sample: number, alpha: number): number {
 /// (a proper time constant) rather than a 1/N step. ATL halflife = 7,
 /// CTL halflife = 42.
 export function trainingLoad(
-	runs: Run[],
+	runs: readonly RunForFitness[],
 	thresholdPaceSecPerKm: number | null,
 	nowMs: number = Date.now(),
 ): { acuteLoad: number | null; chronicLoad: number | null; trainingStressBal: number | null } {
@@ -298,7 +311,7 @@ export function trainingLoad(
 
 /// Top-level snapshot: combine VDOT, VO2 max, training load into a
 /// single object suitable for inserting into `fitness_snapshots`.
-export function computeSnapshot(runs: Run[], nowMs: number = Date.now()): FitnessSnapshot {
+export function computeSnapshot(runs: readonly RunForFitness[], nowMs: number = Date.now()): FitnessSnapshot {
 	const vdot = currentVdot(runs, nowMs);
 	const threshold = thresholdPaceSecPerKmFromVdot(vdot);
 	const load = trainingLoad(runs, threshold, nowMs);
