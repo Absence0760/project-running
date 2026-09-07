@@ -11,6 +11,7 @@
  * `apps/mobile_android/test/backup_format_compat_test.dart`.
  */
 
+import type { JsonObject } from '../types';
 import {
 	coalesceRunActivity,
 	extractEventIds,
@@ -76,11 +77,11 @@ export function noteIncompleteArchive(
  * than one that fails entirely on the 6th.
  */
 export interface RestoreBackend {
-	upsertProfile(row: Record<string, unknown>): Promise<void>;
-	upsertSettings(prefs: Record<string, unknown>): Promise<void>;
+	upsertProfile(row: JsonObject): Promise<void>;
+	upsertSettings(prefs: JsonObject): Promise<void>;
 	uploadTrack(path: string, bytes: Uint8Array): Promise<void>;
-	upsertRun(row: Record<string, unknown>): Promise<void>;
-	upsertRoute(row: Record<string, unknown>): Promise<void>;
+	upsertRun(row: JsonObject): Promise<void>;
+	upsertRoute(row: JsonObject): Promise<void>;
 	/**
 	 * Returns the subset of `ids` that exist in the destination
 	 * `events` table. Runs whose `event_id` doesn't resolve get
@@ -169,7 +170,7 @@ export async function restoreOrchestrate(
 					: null;
 
 			const { activity_type, metadata } = coalesceRunActivity(r);
-			const row: Record<string, unknown> = {
+			const row: JsonObject = {
 				...r,
 				id: newId,
 				user_id: userId,

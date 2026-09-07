@@ -6,6 +6,9 @@ import { edgeFunctionErrorCode, edgeFunctionErrorMessage } from './edge_function
 import { isDuplicateKeyError, supabaseErrorFields } from './supabase_error';
 import { singleEmbed, fitnessSnapshotDue, publicRouteListFill } from './data_normalise';
 import { TABLES, BUCKETS, METADATA_KEYS } from './schema';
+import type { Json } from '../database.types';
+import type { Insertable, Updatable } from './database';
+import type { JsonObject } from '../types';
 import { isEntityId } from './entity_id';
 import { probeSaysConfigured } from './provider_probe';
 import { loadSettings, effective } from '../settings/settings';
@@ -557,7 +560,7 @@ export async function publishRecap(
 				user_id: userId,
 				period_kind: periodKind,
 				period_key: periodKey,
-				snapshot: snapshot as unknown as Record<string, unknown>,
+				snapshot: snapshot as unknown as Json,
 			},
 			{ onConflict: 'user_id,period_kind,period_key' },
 		)
@@ -1242,7 +1245,7 @@ export async function createManualRun(input: {
 	if (!userId) throw new Error('Not authenticated');
 	const isPublic = input.isPublic ?? (await defaultRunIsPublic(userId));
 
-	const metadata: Record<string, unknown> = {
+	const metadata: JsonObject = {
 		[METADATA_KEYS.manual_entry]: true,
 	};
 	if (input.notes && input.notes.trim()) metadata[METADATA_KEYS.notes] = input.notes.trim();
@@ -1295,7 +1298,7 @@ export async function saveRun(input: {
 	embedded_bests?: Partial<
 		Record<'fastest_5k_s' | 'fastest_10k_s' | 'fastest_half_marathon_s' | 'fastest_marathon_s', number>
 	>;
-	metadata: Record<string, unknown> | null;
+	metadata: JsonObject | null;
 	track?: Array<{ lat: number; lng: number; ele?: number; ts?: string; bpm?: number }>;
 	/// Per-point HR for a trackless (indoor / treadmill) run. Uploaded as the
 	/// `{user_id}/{run_id}.hr.json.gz` sidecar only when `track` carries no bpm,
@@ -1325,10 +1328,10 @@ export async function saveRun(input: {
 	// sum it in SQL. The vert challenge aggregate sums the COLUMN, so writing
 	// only the metadata key leaves every vert leaderboard stuck at 0 m.
 	// See docs/backend/metadata.md for the registered keys.
-	const mergedMetadata: Record<string, unknown> = { ...(input.metadata ?? {}) };
+	const mergedMetadata: JsonObject = { ...(input.metadata ?? {}) };
 	if (input.title) mergedMetadata[METADATA_KEYS.title] = input.title;
 	if (input.elevation_m != null) mergedMetadata[METADATA_KEYS.elevation_m] = input.elevation_m;
-	const row: Record<string, unknown> = {
+	const row: Insertable<'runs'> = {
 		user_id: userId,
 		started_at: input.started_at,
 		distance_m: input.distance_m,
@@ -1483,7 +1486,7 @@ export async function updateRunMetadata(
 	// edit dialog applies the same normalisation. Logic lives in
 	// data_normalise.ts so the contract can be unit-tested.
 	const next = applyRunMetadataPatch(
-		run.metadata as Record<string, unknown> | null | undefined,
+		run.metadata as JsonObject | null | undefined,
 		fields,
 		new Date().toISOString(),
 	);
@@ -2382,7 +2385,7 @@ export async function updateRaceListing(
 	id: string,
 	patch: Partial<RaceListingInput>
 ): Promise<void> {
-	const fields: Record<string, unknown> = {};
+	const fields: Updatable<'race_listings'> = {};
 	if (patch.name != null) fields.name = patch.name.trim();
 	if (patch.race_date != null) fields.race_date = patch.race_date;
 	if (patch.distance_m !== undefined) fields.distance_m = patch.distance_m;
@@ -4274,7 +4277,7 @@ export async function endRace(
 	// `event-race-control.spec.ts:170` Cancel-from-armed test timed
 	// out on every CI run for this reason. Only stamp finished_at
 	// when transitioning to `finished`.
-	const patch: Record<string, unknown> = {
+	const patch: Updatable<'race_sessions'> = {
 		status,
 		updated_at: new Date().toISOString(),
 	};
@@ -4611,7 +4614,7 @@ export async function setPlanIsTemplate(
 	isTemplate: boolean,
 	clubId: string | null = null
 ): Promise<void> {
-	const patch: Record<string, unknown> = {
+	const patch: Updatable<'training_plans'> = {
 		is_template: isTemplate,
 		updated_at: new Date().toISOString(),
 	};
@@ -5316,7 +5319,7 @@ export async function updatePlanWorkout(
 		pace_zone: string | null;
 		notes: string | null;
 		scheduled_date: string;
-		structure: Record<string, unknown> | null;
+		structure: JsonObject | null;
 	}>
 ): Promise<void> {
 	// Normalise the `notes` patch the same way `createTrainingPlan`
@@ -7087,7 +7090,7 @@ export async function addRouteMarker(input: {
 	label: string;
 	lat: number;
 	lng: number;
-	meta?: Record<string, unknown>;
+	meta?: JsonObject;
 }): Promise<RouteMarker> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not signed in');
@@ -7111,9 +7114,9 @@ export async function addRouteMarker(input: {
 
 export async function updateRouteMarker(
 	id: string,
-	patch: { kind?: RouteMarkerKind; label?: string; lat?: number; lng?: number; meta?: Record<string, unknown> }
+	patch: { kind?: RouteMarkerKind; label?: string; lat?: number; lng?: number; meta?: JsonObject }
 ): Promise<void> {
-	const update: Record<string, unknown> = {};
+	const update: Updatable<'route_markers'> = {};
 	if (patch.kind !== undefined) update.kind = patch.kind;
 	if (patch.label !== undefined) update.label = patch.label.trim();
 	if (patch.lat !== undefined) update.lat = patch.lat;
@@ -8352,7 +8355,7 @@ export async function computeGlobalSegmentEffortsForRun(input: {
 			.select('id', { count: 'exact', head: true })
 			.eq('is_active', true),
 	]);
-	const runMetadata = (runRow?.metadata ?? null) as Record<string, unknown> | null;
+	const runMetadata = (runRow?.metadata ?? null) as JsonObject | null;
 	if (!shouldRescoreGlobalSegments(runMetadata, activeCount)) return 0;
 
 	const { segments } = await fetchGlobalSegmentsWithError(GLOBAL_SEGMENT_SCORING_LIMIT);
@@ -8418,7 +8421,7 @@ export async function computeGlobalSegmentEffortsForRun(input: {
 		.eq('id', input.run_id)
 		.maybeSingle();
 	const next = stampGlobalSegmentsScored(
-		(freshRow?.metadata ?? null) as Record<string, unknown> | null,
+		(freshRow?.metadata ?? null) as JsonObject | null,
 		segments.length,
 	);
 	const { error: stampErr } = await supabase
@@ -9169,7 +9172,7 @@ export interface GymWorkout {
 	/// Schemaless bag (migration 20270101_001) holding the guided-runner
 	/// execution trio and, while a session is in flight, the
 	/// `gym_session_draft` snapshot. Registered in docs/backend/metadata.md.
-	metadata: Record<string, unknown> | null;
+	metadata: JsonObject | null;
 	/// Trigger-maintained totals over the workout's sets (migration
 	/// 20261214_001, contract in docs/backend/derived_state.md) — the list row
 	/// reads them off the row rather than summing raw sets client-side.
@@ -9704,7 +9707,7 @@ export async function createGymWorkout(input: {
 	notes?: string | null;
 	is_public?: boolean;
 	sets?: GymSetInput[];
-	metadata?: Record<string, unknown> | null;
+	metadata?: JsonObject | null;
 }): Promise<GymWorkout> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not signed in');
@@ -11319,7 +11322,7 @@ export async function updateEventCheckpoint(
 		requiresWeighIn: boolean;
 	}>
 ): Promise<void> {
-	const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+	const row: Updatable<'event_checkpoints'> = { updated_at: new Date().toISOString() };
 	if (patch.name !== undefined) row.name = patch.name.trim();
 	if (patch.ordinal !== undefined) row.ordinal = patch.ordinal;
 	if (patch.routeMarkerId !== undefined) row.route_marker_id = patch.routeMarkerId;
@@ -11977,7 +11980,7 @@ export async function updateFundraiser(
 	id: string,
 	patch: Partial<Pick<CreateFundraiserInput, 'charityName' | 'charityUrl' | 'title' | 'story' | 'goalCents'>>
 ): Promise<void> {
-	const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+	const row: Updatable<'fundraisers'> = { updated_at: new Date().toISOString() };
 	if (patch.charityName !== undefined) row.charity_name = patch.charityName.trim();
 	if (patch.charityUrl !== undefined) row.charity_url = patch.charityUrl?.trim() || null;
 	if (patch.title !== undefined) row.title = patch.title.trim();

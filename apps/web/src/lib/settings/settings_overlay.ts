@@ -1,10 +1,11 @@
+import type { JsonObject } from '../types';
 /// Pure overlay-lookup helper for the universal + per-device prefs
 /// bags. Lives in its own module so tests can import it without
 /// dragging in `./supabase` (which transitively pulls in the
 /// SvelteKit `$env/static/public` virtual import — that breaks the
 /// `tsx --test` loader). `settings.ts` re-exports both names.
 
-export type PrefsBag = Record<string, unknown>;
+export type PrefsBag = JsonObject;
 
 export interface LoadedSettings {
 	universal: PrefsBag;

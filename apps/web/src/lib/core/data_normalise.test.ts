@@ -16,6 +16,7 @@ import {
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { stripComments } from './strip_comments.js';
+import type { JsonObject } from '../types.js';
 import {
 	PUBLIC_ROUTE_LIST_COLUMNS,
 	ROUTE_LIST_COLUMNS,
@@ -291,8 +292,8 @@ test('stampGlobalSegmentsScored: round-trips through the reader as not-needing-r
 // does not. `computeGlobalSegmentEffortsForRun` must do the latter — pinned
 // structurally in data.test.ts.
 function stampRun(
-	store: { metadata: Record<string, unknown> },
-	bagToMergeInto: Record<string, unknown> | null,
+	store: { metadata: JsonObject },
+	bagToMergeInto: JsonObject | null,
 	catalogueCount: number,
 ): void {
 	store.metadata = stampGlobalSegmentsScored(bagToMergeInto, catalogueCount);
@@ -300,7 +301,7 @@ function stampRun(
 
 test('stampGlobalSegmentsScored: merging a bag re-read before the write keeps a '
 	+ 'concurrent title/notes edit', () => {
-	const store = { metadata: { title: 'Morning run' } as Record<string, unknown> };
+	const store = { metadata: { title: 'Morning run' } as JsonObject };
 
 	// t0 — the gate reads the bag, then the expensive scoring pass starts.
 	const gateRead = { ...store.metadata };
@@ -321,7 +322,7 @@ test('stampGlobalSegmentsScored: merging a bag re-read before the write keeps a 
 
 test('stampGlobalSegmentsScored: merging the STALE pre-pass bag silently reverts '
 	+ 'the concurrent edit (the bug this ordering exists to prevent)', () => {
-	const store = { metadata: { title: 'Morning run' } as Record<string, unknown> };
+	const store = { metadata: { title: 'Morning run' } as JsonObject };
 	const gateRead = { ...store.metadata };
 	store.metadata = { ...store.metadata, title: 'Tempo 8k', notes: 'negative split' };
 

@@ -16,6 +16,7 @@ import JSZip from 'jszip';
 import { parseRouteFile, type ImportedRoute } from './import';
 import { parseFitBuffer, computeEmbeddedBests } from './garmin-fit';
 import { saveRun, addRunPhoto } from '../core/data';
+import type { JsonObject } from '../types';
 import { TABLES, METADATA_KEYS } from '../core/schema';
 import { parseStravaMediaPaths, STRAVA_PHOTO_MIME } from './strava_media';
 import { collectStravaDedupeSet, type StravaDedupeRow } from './strava-zip-dedupe';
@@ -256,7 +257,7 @@ async function importOne(
 		}
 	}
 
-	const metadata: Record<string, unknown> = {
+	const metadata: JsonObject = {
 		[METADATA_KEYS.strava_id]: stravaId,
 		[METADATA_KEYS.imported_from]: 'strava',
 		[METADATA_KEYS.imported_at]: new Date().toISOString(),

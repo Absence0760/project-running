@@ -57,6 +57,8 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { consent } from '$lib/settings/consent.svelte';
+	import type { PrefsBag } from '$lib/settings/settings';
+	import type { Updatable } from '$lib/core/database';
 
 	let settings = $state<LoadedSettings | null>(null);
 	let loading = $state(true);
@@ -192,10 +194,10 @@
 	// snapshot. updateUniversal is offline-first (write-through cache + pending
 	// queue, decisions §79). A short debounce keeps it invisible; beforeNavigate
 	// flushes anything still pending so leaving the page never drops a change.
-	let pendingChanges: Record<string, unknown> = {};
+	let pendingChanges: PrefsBag = {};
 	let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
-	function autoSave(changes: Record<string, unknown>) {
+	function autoSave(changes: PrefsBag) {
 		if (!auth.user) return;
 		Object.assign(pendingChanges, changes);
 		saveStatus = 'saving';
@@ -541,7 +543,19 @@
 	async function persistZones(next: PrivacyZone[]) {
 		if (!auth.user) return;
 		try {
-			await updateUniversal(auth.user.id, { [PRIVACY_ZONES_KEY]: next });
+			// The zone list is restated as an object literal on the way into the
+			// jsonb prefs bag: `PrivacyZone` is an interface, and an interface
+			// has no implicit index signature, so TypeScript refuses one as a
+			// `Json` however JSON-shaped it is. Naming the three fields also
+			// pins what a zone persists as — decisions § 33 makes this a
+			// privacy contract, not an incidental serialisation.
+			await updateUniversal(auth.user.id, {
+				[PRIVACY_ZONES_KEY]: next.map((z) => ({
+					lat: z.lat,
+					lng: z.lng,
+					radius_m: z.radius_m,
+				})),
+			});
 			privacyZones = next;
 		} catch (e) {
 			showToast(m('prefs.zoneSaveFailed', { error: (e as Error).message }), 'error');
@@ -657,7 +671,7 @@
 			// alone, so this write records an edit rather than undoing one.
 			// gender + height are the Art 9 fields and go null the moment
 			// consent is off.
-			const profileUpdate: Record<string, unknown> = {
+			const profileUpdate: Updatable<'user_profiles'> = {
 				date_of_birth: dateOfBirth || null,
 				gender: healthDataConsent && gender ? gender : null,
 				height_cm: healthDataConsent && heightVal != null ? heightVal : null,
@@ -703,7 +717,7 @@
 		}
 	}
 
-	function saveNutritionPref(changes: Record<string, unknown>) {
+	function saveNutritionPref(changes: PrefsBag) {
 		autoSave(changes);
 	}
 </script>

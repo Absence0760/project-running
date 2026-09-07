@@ -14,6 +14,7 @@
  */
 
 import JSZip from 'jszip';
+import type { JsonObject } from '../types';
 
 import { BACKUP_FORMAT, BACKUP_VERSION } from './backup_writer';
 
@@ -21,13 +22,13 @@ export interface ParsedBackup {
 	/** The parsed manifest. Guaranteed `format == BACKUP_FORMAT` and `version <= BACKUP_VERSION`. */
 	manifest: { format: string; version: number; [k: string]: unknown };
 	/** Rows from `runs.json`. Empty array when the file is absent. */
-	runs: Record<string, unknown>[];
+	runs: JsonObject[];
 	/** Rows from `routes.json`. Empty array when the file is absent. */
-	routes: Record<string, unknown>[];
+	routes: JsonObject[];
 	/** Parsed `profile` field from `profile.json`. Null when absent. */
-	profile: Record<string, unknown> | null;
+	profile: JsonObject | null;
 	/** Parsed `settings_prefs` field from `profile.json`. Empty when absent. */
-	settingsPrefs: Record<string, unknown>;
+	settingsPrefs: JsonObject;
 	/** Lazy fetch of `tracks/<runId>.json.gz` as raw bytes; null when absent. */
 	getTrackBytes(runId: string): Promise<Uint8Array | null>;
 }
@@ -67,16 +68,16 @@ export async function parseBackupArchive(
 
 	const runsFile = zip.file('runs.json');
 	const runs = runsFile
-		? (JSON.parse(await runsFile.async('string')) as Record<string, unknown>[])
+		? (JSON.parse(await runsFile.async('string')) as JsonObject[])
 		: [];
 
 	const routesFile = zip.file('routes.json');
 	const routes = routesFile
-		? (JSON.parse(await routesFile.async('string')) as Record<string, unknown>[])
+		? (JSON.parse(await routesFile.async('string')) as JsonObject[])
 		: [];
 
-	let profile: Record<string, unknown> | null = null;
-	let settingsPrefs: Record<string, unknown> = {};
+	let profile: JsonObject | null = null;
+	let settingsPrefs: JsonObject = {};
 	const profileFile = zip.file('profile.json');
 	if (profileFile) {
 		const parsed = JSON.parse(await profileFile.async('string')) as {
@@ -84,10 +85,10 @@ export async function parseBackupArchive(
 			settings_prefs?: unknown;
 		};
 		if (parsed.profile && typeof parsed.profile === 'object') {
-			profile = parsed.profile as Record<string, unknown>;
+			profile = parsed.profile as JsonObject;
 		}
 		if (parsed.settings_prefs && typeof parsed.settings_prefs === 'object') {
-			settingsPrefs = parsed.settings_prefs as Record<string, unknown>;
+			settingsPrefs = parsed.settings_prefs as JsonObject;
 		}
 	}
 
@@ -141,13 +142,13 @@ export function stripServerManagedProfileFields(
  * restored row doesn't double-store it. Returns the column value plus the
  * cleaned metadata bag.
  */
-export function coalesceRunActivity(row: Record<string, unknown>): {
+export function coalesceRunActivity(row: JsonObject): {
 	activity_type: string;
-	metadata: Record<string, unknown> | null;
+	metadata: JsonObject | null;
 } {
 	const md =
-		row.metadata && typeof row.metadata === 'object'
-			? { ...(row.metadata as Record<string, unknown>) }
+		row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+			? { ...row.metadata }
 			: null;
 	let activityType =
 		typeof row.activity_type === 'string' ? row.activity_type : undefined;

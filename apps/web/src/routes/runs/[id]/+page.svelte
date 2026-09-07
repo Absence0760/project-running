@@ -582,7 +582,7 @@
 			// scoring; the PR trigger drops it on the next refresh.
 			if (editIsDnf !== isDnf) {
 				const nextMeta = applyRunMetadataPatch(
-					run.metadata as Record<string, unknown> | null | undefined,
+					run.metadata,
 					{ title: editTitle, notes: editNotes },
 					new Date().toISOString(),
 				);
@@ -595,7 +595,7 @@
 			} else {
 				await updateRunMetadata(run.id, { title: editTitle, notes: editNotes });
 				const metadata = {
-					...(run.metadata as Record<string, unknown> ?? {}),
+					...(run.metadata ?? {}),
 					[METADATA_KEYS.title]: editTitle,
 					[METADATA_KEYS.notes]: editNotes,
 				};

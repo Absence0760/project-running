@@ -4,6 +4,7 @@
 	import { supabase } from '$lib/core/supabase';
 	import { fetchLatestWeightKg, fetchRuns, fetchGymWorkouts } from '$lib/core/data';
 	import { loadSettings, effective, updateUniversal } from '$lib/settings/settings';
+	import type { PrefsBag } from '$lib/settings/settings';
 	import {
 		computeNutritionTargets,
 		ageFromDob,
@@ -120,7 +121,7 @@
 		});
 	}
 
-	async function savePref(changes: Record<string, unknown>) {
+	async function savePref(changes: PrefsBag) {
 		recompute();
 		saveError = null;
 		try {
