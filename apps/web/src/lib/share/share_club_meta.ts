@@ -5,9 +5,9 @@
 
 import { normaliseSiteUrl } from './share_meta';
 import { escapeHtml } from '../util/html_escape';
-import type { SharedClub } from './share_club_lookup';
 import { serialiseJsonLd } from '../util/json_ld';
 import { collapseAndClip } from '../util/clip_text';
+import type { SharedClub } from './share_club_lookup';
 
 const SITE_NAME = 'Threkir';
 

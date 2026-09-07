@@ -4,9 +4,9 @@
 
 import { formatKmStable, formatDateStable, normaliseSiteUrl } from './share_meta';
 import { escapeHtml } from '../util/html_escape';
-import type { SharedRace } from './share_race_lookup';
 import { serialiseJsonLd } from '../util/json_ld';
 import { collapseAndClip } from '../util/clip_text';
+import type { SharedRace } from './share_race_lookup';
 
 const SITE_NAME = 'Threkir';
 

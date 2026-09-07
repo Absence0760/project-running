@@ -19,9 +19,9 @@
 import { normaliseSiteUrl } from './share_meta';
 import { escapeHtml } from '../util/html_escape';
 import { expandSessionSteps } from '../social/session_steps';
-import type { SharedSession } from './share_session_lookup';
 import { serialiseJsonLd } from '../util/json_ld';
 import { collapseAndClip } from '../util/clip_text';
+import type { SharedSession } from './share_session_lookup';
 
 const SITE_NAME = 'Threkir';
 

@@ -21,9 +21,9 @@
 import { formatDateStable, normaliseSiteUrl } from './share_meta';
 import { distinctExerciseCount as countDistinctExercises } from '../gym/gym_prs';
 import { escapeHtml } from '../util/html_escape';
-import type { SharedWorkout, SharedWorkoutSet } from './share_workout_lookup';
 import { serialiseJsonLd } from '../util/json_ld';
 import { collapseAndClip } from '../util/clip_text';
+import type { SharedWorkout, SharedWorkoutSet } from './share_workout_lookup';
 
 const SITE_NAME = 'Threkir';
 
