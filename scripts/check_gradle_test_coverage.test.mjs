@@ -58,7 +58,7 @@ function workflow(opts = {}) {
 			? ''
 			: `        env:
           GRADLE_UNTESTED: |
-            ${opts.untested ?? `apps/host/android=${REASON}`}
+            ${opts.untested ?? `apps/host/android=1=${REASON}`}
 `;
 	const dir = opts.dir ?? 'apps/watch_wear/android';
 	// Claim 4 reads the job's `~/.gradle` cache step, so every fixture that is
@@ -139,7 +139,7 @@ test('an excuse for a project that has stopped holding tests is stale, and fails
 test('an excuse for a project that is not in this tree is stale, and fails', () => {
 	const root = fixture({
 		projects: PROJECTS,
-		workflow: workflow({ untested: `apps/gone/android=${REASON}` }),
+		workflow: workflow({ untested: `apps/gone/android=1=${REASON}` }),
 	});
 	const { errors } = check({ root });
 	assert.equal(errors.length, 2);
@@ -151,7 +151,7 @@ test('an excuse for a project whose tests DO run is stale in the other direction
 	const root = fixture({
 		projects: PROJECTS,
 		workflow: workflow({
-			untested: `apps/watch_wear/android=${REASON}\n            apps/host/android=${REASON}`,
+			untested: `apps/watch_wear/android=1=${REASON}\n            apps/host/android=1=${REASON}`,
 		}),
 	});
 	const { errors } = check({ root });
@@ -160,7 +160,7 @@ test('an excuse for a project whose tests DO run is stale in the other direction
 });
 
 test('an excuse bought with a placeholder reason fails', () => {
-	const root = fixture({ projects: PROJECTS, workflow: workflow({ untested: 'apps/host/android=TODO' }) });
+	const root = fixture({ projects: PROJECTS, workflow: workflow({ untested: 'apps/host/android=1=TODO' }) });
 	const { errors } = check({ root });
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /4-character reason/);
@@ -172,7 +172,7 @@ test('an excuse list that has swallowed every project fails rather than testing 
 		projects: PROJECTS,
 		workflow: workflow({
 			dir: 'apps/nowhere',
-			untested: `apps/watch_wear/android=${REASON}\n            apps/host/android=${REASON}`,
+			untested: `apps/watch_wear/android=1=${REASON}\n            apps/host/android=1=${REASON}`,
 		}),
 	});
 	const { errors } = check({ root });
@@ -182,7 +182,26 @@ test('an excuse list that has swallowed every project fails rather than testing 
 test('a malformed declaration line names no project, and is refused rather than ignored', () => {
 	const root = fixture({ projects: PROJECTS, workflow: workflow({ untested: 'apps/host/android' }) });
 	const { errors } = check({ root });
-	assert.ok(errors.some((e) => /which is not `<path>=<reason>`/.test(e)));
+	assert.ok(errors.some((e) => /which is not `<path>=<untested-source-count>=<reason>`/.test(e)));
+});
+
+test('an excuse whose declared size no longer matches the project fails, both directions', () => {
+	// The half a reason cannot carry: tests are added to a project no job runs,
+	// and the excuse still reads as if it covered a known quantity. Shares
+	// `parseUnbuilt` with the CodeQL exclusion list for exactly this rule.
+	const grown = check({
+		root: fixture({ projects: PROJECTS, workflow: workflow({ untested: `apps/host/android=0=${REASON}` }) }),
+	});
+	assert.equal(grown.errors.length, 1);
+	assert.match(grown.errors[0], /hides 0 test source file\(s\) and it now holds 1/);
+	assert.match(grown.errors[0], /a green CI says nothing about them/);
+
+	const shrunk = check({
+		root: fixture({ projects: PROJECTS, workflow: workflow({ untested: `apps/host/android=4=${REASON}` }) }),
+	});
+	assert.equal(shrunk.errors.length, 1);
+	assert.match(shrunk.errors[0], /hides 4 test source file\(s\) and it now holds 1/);
+	assert.match(shrunk.errors[0], /covers more than the project still holds/);
 });
 
 test('a walk that finds fewer projects than the floor fails rather than passing over an empty tree', () => {

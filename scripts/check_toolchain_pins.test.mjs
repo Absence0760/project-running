@@ -20,6 +20,7 @@ import {
 	checkNode,
 	checkRustToolchain,
 	checkToolVersions,
+	EXACT_NODE,
 	parseActionUses,
 	parseDefmtPrint,
 	parseDefmtPrintByJob,
@@ -695,16 +696,50 @@ test('a setup-node step naming no version floats to the runner image, and fails'
 	assert.match(errors[0], /names no `node-version`/);
 });
 
+const nodeWf = (/** @type {string} */ v) =>
+	`jobs:\n  a:\n    steps:\n      - uses: actions/setup-node@abc\n        with:\n          node-version: ${v}\n`;
+
 test('two workflows on different Node versions is the reported bug', () => {
-	const wf = (/** @type {string} */ v) =>
-		`jobs:\n  a:\n    steps:\n      - uses: actions/setup-node@abc\n        with:\n          node-version: ${v}\n`;
 	const { errors } = checkNode([
-		{ name: 'ci.yml', text: wf('24') },
-		{ name: 'release-web.yml', text: wf('26') },
+		{ name: 'ci.yml', text: nodeWf('24.20.0') },
+		{ name: 'release-web.yml', text: nodeWf('26.0.0') },
 	]);
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /pin 2 different Node versions/);
 	assert.match(errors[0], /release-web\.yml/);
+});
+
+test('a release line is refused where an exact Node version is required', () => {
+	// The § 1214 state, which every step naming a version and all of them
+	// agreeing does not exclude: `24` resolves to whatever the runner installs
+	// that morning, and `release-web.yml` builds the shipped bundle through one
+	// of these steps.
+	for (const line of ['24', 'v24', '24.x', '24.20.x', 'lts/*', 'latest', 'node']) {
+		const { errors, versions } = checkNode([{ name: 'release-web.yml', text: nodeWf(line) }]);
+		assert.equal(errors.length, 1, line);
+		assert.match(errors[0], /release line rather than a version/);
+		assert.equal(versions.size, 0, line);
+	}
+});
+
+test('an exact Node version passes, with or without the leading v, and normalises', () => {
+	const { errors, versions } = checkNode([
+		{ name: 'a.yml', text: nodeWf('24.20.0') },
+		{ name: 'b.yml', text: nodeWf('v24.20.0') },
+		{ name: 'c.yml', text: nodeWf("'24.20.0'") },
+	]);
+	assert.deepEqual(errors, []);
+	assert.equal(versions.size, 1);
+	assert.ok(versions.has('24.20.0'));
+});
+
+test('EXACT_NODE and the Deno rail answer the same question the same way', () => {
+	// The two rails were written apart and the file carried opposite claims
+	// about them until § 1502. Whatever else changes, a bare major must not
+	// pass one and fail the other.
+	assert.equal(EXACT_NODE.test('24'), false);
+	assert.equal(EXACT_NODE.test('24.20.0'), true);
+	assert.equal(EXACT_NODE.test('v24.20.0'), true);
 });
 
 test('checkNode fails rather than passing vacuously over no setup-node step', () => {
@@ -714,12 +749,10 @@ test('checkNode fails rather than passing vacuously over no setup-node step', ()
 });
 
 test('quoting is not a divergence', () => {
-	const wf = (/** @type {string} */ v) =>
-		`jobs:\n  a:\n    steps:\n      - uses: actions/setup-node@abc\n        with:\n          node-version: ${v}\n`;
 	const { errors, versions } = checkNode([
-		{ name: 'a.yml', text: wf('24') },
-		{ name: 'b.yml', text: wf('"24"') },
-		{ name: 'c.yml', text: wf("'24'") },
+		{ name: 'a.yml', text: nodeWf('24.20.0') },
+		{ name: 'b.yml', text: nodeWf('"24.20.0"') },
+		{ name: 'c.yml', text: nodeWf("'24.20.0'") },
 	]);
 	assert.deepEqual(errors, []);
 	assert.equal(versions.size, 1);
@@ -733,8 +766,8 @@ const denoWf = (/** @type {string} */ v) =>
 test('a channel is refused where an exact Deno version is required', () => {
 	// The state this rail was added over: both steps took `v2.x`, so a Deno
 	// release landing between two runs changed the toolchain under code nobody
-	// touched. A major alone is enough for Node because the runner image
-	// resolves the rest; a Deno MINOR carries new `deno check` diagnostics.
+	// touched. The Node rail refuses the same shapes for the same reason since
+	// § 1502; this comment used to claim a major was enough there.
 	for (const channel of ['v2.x', '2.x', '2', 'canary', 'v2']) {
 		const { errors } = checkDeno([{ name: 'ci.yml', text: denoWf(channel) }]);
 		assert.equal(errors.length, 1, channel);
