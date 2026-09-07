@@ -15,7 +15,7 @@ import { resolve } from 'node:path';
 import { stripComments } from './strip_comments';
 // Type-only, so nothing in `data.ts` (the supabase singleton, `$env/static/public`)
 // is evaluated when this file runs under `tsx --test`.
-import type { PeriodSummaryRun } from './data';
+import type { PeriodSummaryRun, RunColumns } from './data';
 
 function read(...parts: string[]): string {
 	return readFileSync(resolve(...parts), 'utf-8');
@@ -1848,4 +1848,331 @@ test('a CHECK-constrained union is narrowed at the read boundary, not asserted',
 		'the tier must fail closed to free — an unrecognised value read as pro opens every gated surface',
 	);
 	assert.match(store, /preferred_unit: parsePreferredUnit\(/, 'the unit must be narrowed too');
+});
+
+/// The body of a top-level function in `data.ts`, bounded by the closing brace
+/// at column 0. `indexOf('\nexport ')` cannot bound one that isn't exported,
+/// and two of the three exercise writers below are module-private.
+function functionBody(source: string, name: string): string {
+	const start = source.indexOf(`function ${name}(`);
+	assert.ok(start >= 0, `${name} moved — re-anchor this guard`);
+	const end = source.indexOf('\n}\n', start);
+	assert.ok(end > start, `could not find the end of ${name} — re-anchor`);
+	return source.slice(start, end);
+}
+
+test('no write in data.ts decides an exercise name is blank on the display spelling', () => {
+	// Reason: the three exercise writes are keyed on a column the SERVER
+	// derives — `exercises.name_key`, `gym_routine_exercises.exercise_key` and
+	// `gym_sets.exercise_key`, each trigger-stamped and each under a
+	// `length >= 1` CHECK — and the fold's whitespace class is not the set JS
+	// `trim()` strips. A name of one U+0085 trims non-empty and folds to
+	// nothing, so a spelling test lets through exactly the row the column
+	// refuses, as a 23514 the composer cannot act on (§ 1367).
+	//
+	// `lib/gym/exercise_key_source_guard.test.ts` runs this scan over the tree
+	// and spares `lib/core/data.ts` by name — its own heuristic is file-scoped
+	// ("a file that names an exercise"), which a 12,000-line module holding
+	// club names, checkpoint names and meal-template names would drown. This
+	// is the narrower claim that file is exempt from: a blankness test whose
+	// RECEIVER names an exercise, anywhere in data.ts.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const offenders = source
+		.split('\n')
+		.map((text, i) => ({ line: i + 1, text: text.trim() }))
+		.filter(({ text }) => /[Ee]xercise\w*(?:\.\w+)*\s*\.trim\(\)/.test(text))
+		.filter(({ text }) => /\.length\s*[<>=!]|[=!]==?\s*''|''\s*[=!]==?|!\w*[Ee]xercise/.test(text));
+	assert.deepEqual(
+		offenders,
+		[],
+		'Decide blankness with namesAnExercise from $lib/gym/gym_prs, never on the trimmed spelling:\n' +
+			offenders.map((h) => `  data.ts:${h.line}  ${h.text}`).join('\n'),
+	);
+});
+
+test('the blank-exercise scan sees the shape it bans, and spares the ones it must not', () => {
+	// The mutation test for the scan above: a guard nothing can trip is a guard
+	// that proves nothing. Each caught line is the exact shape one of the three
+	// writers carried before § 1367; each spared line is a shape that lives in
+	// `data.ts` today and must not start failing.
+	const scan = (text: string) =>
+		/[Ee]xercise\w*(?:\.\w+)*\s*\.trim\(\)/.test(text) &&
+		/\.length\s*[<>=!]|[=!]==?\s*''|''\s*[=!]==?|!\w*[Ee]xercise/.test(text);
+	for (const caught of [
+		"const exercises = input.exercises.filter((e) => e.exercise_name.trim().length > 0);",
+		".filter((r) => r.exercise_name.trim().length > 0);",
+		"if (ex.exercise_name.trim() === '') continue;",
+		"if (!exerciseName.trim()) return null;",
+	]) {
+		assert.ok(scan(caught), `missed: ${caught}`);
+	}
+	for (const spared of [
+		"exercise_name: s.exercise_name.trim(),",
+		".filter((s) => namesAnExercise(s.exercise_name))",
+		"const items = input.items.filter((it) => it.item_name.trim().length > 0);",
+		"if (!input.name.trim()) throw new Error('Name is required.');",
+		"if (patch.name !== undefined) row.name = patch.name.trim();",
+	]) {
+		assert.ok(!scan(spared), `false positive: ${spared}`);
+	}
+});
+
+test('the three exercise writes drop on the key the column is stamped from', () => {
+	// Reason: the negative scan above cannot see a writer that stopped testing
+	// blankness at all. `createCustomExercise` refuses, the other two drop, and
+	// all three decide it the same way.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	for (const fn of ['createCustomExercise', 'replaceGymSets', 'createGymRoutine']) {
+		assert.match(
+			functionBody(source, fn),
+			/namesAnExercise\(/,
+			`${fn} must decide blankness on the folded key, not the spelling`,
+		);
+	}
+});
+
+test('a dropped blank set does not leave a hole in the set numbering', () => {
+	// Reason: `replaceGymSets` stamped `set_index` from the map index and then
+	// filtered, so a blank in the middle of a composed workout shipped 0, 2, 3
+	// — the surviving sets claiming positions that were never their order in
+	// the saved workout, on the column every read orders and every planned-vs-
+	// actual match keys on. Filtering first is what makes the index contiguous.
+	const body = functionBody(stripComments(read('src/lib/core/data.ts')), 'replaceGymSets');
+	const filterAt = body.indexOf('.filter(');
+	const mapAt = body.indexOf('.map(');
+	assert.ok(filterAt >= 0 && mapAt >= 0, 'replaceGymSets no longer filters and maps — re-anchor');
+	assert.ok(
+		filterAt < mapAt,
+		'the drop must precede the map, or set_index counts rows that never ship',
+	);
+});
+
+/// The columns one `.select('…')` inside a named function asks for, split into
+/// the top-level list and each embedded resource's own. `nth` picks among the
+/// several a detail reader makes.
+function inlineSelect(
+	source: string,
+	fn: string,
+	nth: number,
+): { columns: Set<string>; embedded: Set<string> } {
+	const selects = [...functionBody(source, fn).matchAll(/\.select\(\s*'([^']*)'/g)];
+	assert.ok(
+		selects.length > nth,
+		`${fn} makes ${selects.length} inline selects, not ${nth + 1} — re-anchor this guard`,
+	);
+	const columns = new Set<string>();
+	const embedded = new Set<string>();
+	let depth = 0;
+	let part = '';
+	const take = () => {
+		const t = part.trim();
+		part = '';
+		if (!t) return;
+		const embed = t.match(/^[\w!]+\(([^)]*)\)$/);
+		if (embed) {
+			for (const c of embed[1].split(',')) embedded.add(c.trim());
+		} else {
+			columns.add(t);
+		}
+	};
+	for (const ch of selects[nth][1]) {
+		if (ch === '(') depth++;
+		if (ch === ')') depth--;
+		if (ch === ',' && depth === 0) take();
+		else part += ch;
+	}
+	take();
+	return { columns, embedded };
+}
+
+/// The keys an `export interface X { … }` in `data.ts` declares. The
+/// counterpart of `overlayColumns` for the reads whose row type is written out
+/// beside the projection rather than derived from a generated row.
+function interfaceKeys(name: string): Set<string> {
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const start = source.indexOf(`export interface ${name} {`);
+	assert.ok(start >= 0, `could not locate the ${name} interface — re-anchor`);
+	const body = source.slice(start, source.indexOf('\n}', start));
+	return new Set([...body.matchAll(/^\t(\w+)\??:/gm)].map((m) => m[1]));
+}
+
+test('every gym / meal-template / recipe read and the row type it is read as name the same columns', () => {
+	// Reason: the same claim § 1294 / § 1327 / § 1329 made for `routes`,
+	// `events` and `clubs`, for the seventeen reads whose row type is a
+	// hand-written interface beside an inline select rather than a shared
+	// `*_SELECT_COLS` constant plus a `types.ts` overlay — the two-declaration
+	// shape § 641 is about. A narrowed select handed back under a type that
+	// promises more is `undefined` at runtime with no throw and no error; a
+	// column in the select and not the type is paid for on the wire and
+	// unreadable. Neither direction was checked here before, only measured
+	// once by hand.
+	//
+	// Every exception is declared with the reason it is one, and a stale
+	// exception fails as loudly as a drifted column: an `absent` key the select
+	// has started fetching, or an `extra` column the type has started
+	// declaring, is reported.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const pairs: Array<{
+		fn: string;
+		nth?: number;
+		type: string;
+		table: string;
+		/// Selected, deliberately not a field of the row type.
+		extra?: Record<string, string>;
+		/// Declared, deliberately not fetched by THIS select.
+		absent?: Record<string, string>;
+		/// Declared, and fetched through an embedded resource.
+		embedded?: Record<string, string>;
+	}> = [
+		{
+			fn: 'fetchGymSetHistoryWithError',
+			type: 'GymSetWithDate',
+			table: 'gym_sets',
+			embedded: { started_at: "the joined workout's start, the point of the !inner embed" },
+			extra: { user_id: 'embedded so the RLS-scope filter can name it, never read' },
+		},
+		{ fn: 'fetchGymRoutinesWithError', type: 'GymRoutineSummary', table: 'gym_routines' },
+		{ fn: 'fetchGymRoutineDetail', type: 'GymRoutineSummary', table: 'gym_routines' },
+		{
+			fn: 'fetchGymRoutineDetail',
+			nth: 1,
+			type: 'GymRoutineSummary',
+			table: 'public_gym_routines',
+			absent: {
+				last_modified_at: 'redacted by the view (20270319_001); created_at stands in',
+			},
+		},
+		{
+			fn: 'fetchGymRoutineDetail',
+			nth: 2,
+			type: 'GymRoutineExercise',
+			table: 'gym_routine_exercises',
+			absent: { sets: 'assembled from the third read, not a column of this one' },
+		},
+		{
+			fn: 'fetchGymRoutineDetail',
+			nth: 3,
+			type: 'GymRoutineSet',
+			table: 'gym_routine_sets',
+			extra: { routine_exercise_id: 'the grouping key the rows are bucketed by, not a field of a set' },
+		},
+		{ fn: 'createGymRoutine', type: 'GymRoutineSummary', table: 'gym_routines' },
+		{ fn: 'fetchClubGymRoutineTemplates', type: 'GymRoutineSummary', table: 'gym_routines' },
+		{
+			fn: 'fetchPublicGymRoutineLibrary',
+			type: 'GymRoutineSummary',
+			table: 'public_gym_routines',
+			absent: {
+				last_modified_at: 'redacted by the view (20270319_001); created_at stands in',
+			},
+		},
+		{ fn: 'fetchMealTemplatesWithError', type: 'MealTemplateSummary', table: 'meal_templates' },
+		{ fn: 'fetchMealTemplateDetail', type: 'MealTemplateSummary', table: 'meal_templates' },
+		{
+			fn: 'fetchMealTemplateDetail',
+			nth: 1,
+			type: 'MealTemplateItemRow',
+			table: 'meal_template_items',
+		},
+		{ fn: 'createMealTemplate', type: 'MealTemplateSummary', table: 'meal_templates' },
+		{ fn: 'fetchRecipesWithError', type: 'RecipeSummary', table: 'recipes' },
+		{ fn: 'fetchRecipeDetail', type: 'RecipeSummary', table: 'recipes' },
+		{ fn: 'fetchRecipeDetail', nth: 1, type: 'RecipeIngredientRow', table: 'recipe_ingredients' },
+		{ fn: 'createRecipe', type: 'RecipeSummary', table: 'recipes' },
+	];
+	for (const p of pairs) {
+		const at = `${p.fn}[${p.nth ?? 0}] / ${p.type}`;
+		const { columns, embedded } = inlineSelect(source, p.fn, p.nth ?? 0);
+		const declared = interfaceKeys(p.type);
+		const generated = generatedColumns(p.table);
+		for (const c of columns) {
+			assert.ok(generated.has(c), `${at}: the select asks ${p.table} for ${c}, which it has not got`);
+		}
+		for (const c of columns) {
+			if (declared.has(c)) continue;
+			assert.ok(p.extra?.[c], `${at}: ${c} is fetched and ${p.type} does not declare it`);
+		}
+		for (const k of declared) {
+			if (columns.has(k)) {
+				assert.ok(!p.extra?.[k], `${at}: ${k} is declared an extra but ${p.type} declares it`);
+				continue;
+			}
+			if (embedded.has(k)) {
+				assert.ok(p.embedded?.[k], `${at}: ${k} arrives via the embed undeclared`);
+				continue;
+			}
+			assert.ok(p.absent?.[k], `${at}: ${p.type} promises ${k} and the select never fetches it`);
+		}
+		for (const k of Object.keys(p.absent ?? {})) {
+			assert.ok(!columns.has(k), `${at}: ${k} is declared absent and the select now fetches it`);
+		}
+		for (const c of Object.keys(p.extra ?? {})) {
+			assert.ok(
+				columns.has(c) || embedded.has(c),
+				`${at}: ${c} is declared an extra and the select no longer asks for it`,
+			);
+		}
+	}
+});
+
+// ── Compile-time: a run projection can only name a column `runs` has ──
+//
+// `svelte-check` is the gate for these too. `RunColumns` was `keyof Run`, and
+// the overlay adds two keys that are not columns: `track`, the lazy Storage
+// download, and `has_track`, which only the `public_runs` view carries. Either
+// in a projection is a PostgREST 42703 that fails the WHOLE read — the runner
+// sees no runs at all, not a run missing a field — and both compiled.
+
+// @ts-expect-error — `track` is a lazy Storage download, never a `runs` column
+export const trackIsNotAProjectableRunColumn = ['track'] as const satisfies RunColumns;
+
+// @ts-expect-error — `has_track` is a `public_runs` view field, not a base column
+export const hasTrackIsNotAProjectableRunColumn = ['has_track'] as const satisfies RunColumns;
+
+/// The narrowing has to leave the real columns projectable, or the pins above
+/// are the only thing still passing. `source`, `activity_type` and `metadata`
+/// are the three the overlay re-declares — they stay columns.
+export const realRunColumnsStayProjectable = [
+	'id',
+	'started_at',
+	'distance_m',
+	'track_url',
+	'source',
+	'activity_type',
+	'metadata',
+] as const satisfies RunColumns;
+
+test('every clubs read narrows join_policy, and none of them fails open', () => {
+	// Reason: `join_policy` is a CHECK-constrained union the generated row
+	// types as a bare `string`, and it decides whether a club is free to join.
+	// Four sites asserted it into the union with a `?? 'open'` fallback — the
+	// value that grants entry to anyone — against the one narrower the module
+	// already had, whose fallback is `'request'`. `fetchMyClubsWithError`
+	// reached `enrichClubs` without narrowing at all, which only surfaced when
+	// the `(row: any)` on its embed came off (§ 1330's premise: a typed client
+	// is what turns an assertion into a check).
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const asserted = source
+		.split('\n')
+		.map((text, i) => ({ line: i + 1, text: text.trim() }))
+		.filter(({ text }) => /join_policy\b/.test(text) && /\bas JoinPolicy\b/.test(text));
+	assert.deepEqual(
+		asserted,
+		[],
+		'join_policy must come through parseJoinPolicy, which fails closed to `request`:\n' +
+			asserted.map((h) => `  data.ts:${h.line}  ${h.text}`).join('\n'),
+	);
+	for (const fn of [
+		'browseClubsWithError',
+		'searchClubsWithError',
+		'fetchMyClubsWithError',
+		'fetchClubBySlug',
+		'createClub',
+	]) {
+		assert.match(
+			functionBody(source, fn),
+			/\basClub\b|parseJoinPolicy\(/,
+			`${fn} must narrow join_policy at the read boundary, not assert it`,
+		);
+	}
 });
