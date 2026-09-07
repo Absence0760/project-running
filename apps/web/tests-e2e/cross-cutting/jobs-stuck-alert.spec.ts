@@ -65,7 +65,7 @@ test.describe('jobs-stuck-alert — read-only operator surface', () => {
 			duration_s: 1_200,
 			is_public: false,
 			track: [
-				{ lat: -33.89, lng: 151.27, t: '2026-05-01T07:00:00Z' }
+				{ lat: -33.89, lng: 151.27, ts: '2026-05-01T07:00:00Z' }
 			]
 		});
 
@@ -136,7 +136,7 @@ test.describe('jobs-stuck-alert — read-only operator surface', () => {
 			duration_s: 1_200,
 			is_public: false,
 			track: [
-				{ lat: -33.89, lng: 151.27, t: '2026-05-01T08:00:00Z' }
+				{ lat: -33.89, lng: 151.27, ts: '2026-05-01T08:00:00Z' }
 			]
 		});
 

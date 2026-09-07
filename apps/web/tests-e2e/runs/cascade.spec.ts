@@ -55,8 +55,8 @@ test.describe('/runs/[id] — delete cascades through every child table', () => 
 			started_at: '2026-04-01T08:00:00Z',
 			// Add a track so the Storage object is on disk to be swept.
 			track: [
-				{ lat: -33.89, lng: 151.27, ele: 10, t: '2026-04-01T08:00:00Z' },
-				{ lat: -33.89, lng: 151.28, ele: 11, t: '2026-04-01T08:01:00Z' }
+				{ lat: -33.89, lng: 151.27, ele: 10, ts: '2026-04-01T08:00:00Z' },
+				{ lat: -33.89, lng: 151.28, ele: 11, ts: '2026-04-01T08:01:00Z' }
 			]
 		});
 		await insertKudos(runId, USER_B.id);

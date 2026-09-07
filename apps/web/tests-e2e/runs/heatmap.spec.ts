@@ -12,7 +12,7 @@ import { USER_A } from '../fixtures/users';
 const HEATMAP_TRACK = Array.from({ length: 12 }, (_, i) => ({
 	lat: 37.5407 + i * 0.0008,
 	lng: -77.436 + i * 0.0006,
-	t: new Date(Date.UTC(2026, 0, 1, 8, i)).toISOString()
+	ts: new Date(Date.UTC(2026, 0, 1, 8, i)).toISOString()
 }));
 
 test.describe('/runs/heatmap — anon visitor', () => {

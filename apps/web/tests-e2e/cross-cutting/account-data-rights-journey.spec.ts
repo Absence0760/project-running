@@ -136,9 +136,9 @@ test.describe('saga: account data-rights cradle-to-grave (export → delete)', (
 				duration_s: 2_040,
 				is_public: true,
 				track: [
-					{ lat: -33.86, lng: 151.21, ele: 8, t: '2026-05-01T07:00:00Z' },
-					{ lat: -33.861, lng: 151.211, ele: 9, t: '2026-05-01T07:00:30Z' },
-					{ lat: -33.862, lng: 151.212, ele: 10, t: '2026-05-01T07:01:00Z' },
+					{ lat: -33.86, lng: 151.21, ele: 8, ts: '2026-05-01T07:00:00Z' },
+					{ lat: -33.861, lng: 151.211, ele: 9, ts: '2026-05-01T07:00:30Z' },
+					{ lat: -33.862, lng: 151.212, ele: 10, ts: '2026-05-01T07:01:00Z' },
 				],
 			});
 
