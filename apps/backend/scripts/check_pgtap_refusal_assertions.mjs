@@ -1012,23 +1012,75 @@ export function validateUnregisteredDefinerRelations(relations) {
 // so the value is always discarded and the claim is always empty.
 
 /**
- * The body of each `create [or replace] function` in [text], keyed by name,
- * lower-cased. Later definitions win, so replaying the migrations in order
- * leaves the body the database actually has.
+ * The offset of the `)` closing a `(` whose contents start at [open], reading
+ * strings, dollar-quoted bodies and comments as opaque. `null` when it never
+ * closes.
  * @param {string} text
- * @returns {Map<string, string>}
+ * @param {number} open
+ * @returns {number | null}
+ */
+export function closingParen(text, open) {
+  let depth = 1;
+  let i = open;
+  while (i < text.length) {
+    const skip = skipToken(text, i);
+    if (skip !== null && skip > i) {
+      i = skip;
+      continue;
+    }
+    const c = text[i];
+    if (c === '(') depth += 1;
+    else if (c === ')') {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+    i += 1;
+  }
+  return null;
+}
+
+/**
+ * The parameter NAMES of a `create function` signature, in declaration order,
+ * so an argument at a call site can be resolved to the parameter it binds.
+ * @param {string} signature
+ * @returns {string[]}
+ */
+export function signatureParameters(signature) {
+  return splitArgs(signature)
+    .map((p) => p.trim().replace(/^(?:in|out|inout|variadic)\s+/i, ''))
+    .map((p) => /^([a-z0-9_]+)/i.exec(p)?.[1]?.toLowerCase() ?? '')
+    .filter((p) => p !== '');
+}
+
+/**
+ * The signature and body of each `create [or replace] function` in [text],
+ * keyed by name, lower-cased. Later definitions win, so replaying the
+ * migrations in order leaves what the database actually has.
+ *
+ * An overloaded name collapses onto its last definition. Nothing in this tree
+ * overloads a function that writes a table, and a collapse would over-report
+ * rather than under-report: the surviving parameter list is what a call site is
+ * resolved against, so a mismatched one names columns the guard then asks about.
+ * @param {string} text
+ * @returns {Map<string, { params: string[], body: string }>}
  */
 export function functionBodies(text) {
-  /** @type {Map<string, string>} */
+  /** @type {Map<string, { params: string[], body: string }>} */
   const out = new Map();
   for (const m of text.matchAll(/create\s+(?:or\s+replace\s+)?function\s+(?:public\.)?([a-z0-9_]+)\s*\(/gi)) {
-    const rest = text.slice(m.index ?? 0);
+    const open = (m.index ?? 0) + m[0].length;
+    const close = closingParen(text, open);
+    if (close === null) continue;
+    const rest = text.slice(close);
     const tag = /\$[A-Za-z0-9_]*\$/.exec(rest)?.[0];
     if (tag === undefined) continue;
     const start = rest.indexOf(tag) + tag.length;
     const end = rest.indexOf(tag, start);
     if (end < 0) continue;
-    out.set(m[1].toLowerCase(), rest.slice(start, end));
+    out.set(m[1].toLowerCase(), {
+      params: signatureParameters(text.slice(open, close)),
+      body: rest.slice(start, end),
+    });
   }
   return out;
 }
@@ -1261,7 +1313,7 @@ export function stampedColumns(migrations, mode = 'unconditional') {
   /** @type {Map<string, { table: string, fn: string, ops: Set<TriggerOp> }>} */
   const triggers = new Map();
   for (const { text } of migrations) {
-    for (const [name, body] of functionBodies(text)) bodies.set(name, body);
+    for (const [name, fn] of functionBodies(text)) bodies.set(name, fn.body);
     for (const m of text.matchAll(
       /drop\s+trigger\s+(?:if\s+exists\s+)?([a-z0-9_]+)\s+on\s+(?:public\.)?([a-z0-9_]+)/gi,
     )) {
@@ -1394,6 +1446,204 @@ export const STAMPED_VALUE_ASSERTIONS = [
     reason:
       'The catalogue half of the entry above, paired with the same read-back and covered by the same ' +
       'trigger-disabling mutation.',
+  },
+];
+
+
+// ── ...and the same positives supplied through an RPC ARGUMENT ───────────────
+//
+// The two scans above read INSERT column lists and UPDATE SET lists out of the
+// `lives_ok`'s own SQL, so a value handed to a FUNCTION was invisible to them.
+// For `checkpoint_crossings` and `event_results` the RPC is the only write
+// surface there is -- the tables carry no INSERT or UPDATE policy -- so the
+// whole of their positive-assertion surface sat outside both populations.
+//
+// Resolving an argument to the column it lands in is the step that closes it,
+// and it is the same question one indirection further out: is the value this
+// assertion supplied the value that reaches the table? A parameter that lands
+// VERBATIM answers yes, and the pair is then handed to the trigger scan above
+// exactly as a direct write would be. A parameter that lands through any
+// expression at all answers no -- `case when v_allow_health then
+// p_body_weight_kg end` drops it, `coalesce(cc.runner_name, p_runner_name)`
+// lets the stored row win, and `jsonb_build_object('user_id', p_user_id)`
+// stores something that is not the argument -- so what a server that stopped
+// computing that expression would leave behind still satisfies the `lives_ok`.
+//
+// Deliberately no vocabulary of function names. "Not the bare parameter" is
+// decidable from the expression itself; a list of discarding constructs would
+// be a guard keyed on spelling, and would miss the next one written.
+
+/**
+ * @typedef {{
+ *   table: string,
+ *   column: string,
+ *   param: string,
+ *   op: TriggerOp,
+ *   verbatim: boolean,
+ * }} ParameterLanding
+ */
+
+/**
+ * Where each of a function body's parameters lands: the table and column it is
+ * written to, under which operation, and whether it arrives unchanged.
+ * @param {string} body
+ * @param {string[]} params
+ * @returns {ParameterLanding[]}
+ */
+export function parameterLandings(body, params) {
+  const clean = body.replace(/--[^\n]*/g, '');
+  /** @type {ParameterLanding[]} */
+  const out = [];
+  /** @param {string} expr */
+  const mentions = (expr) => params.find((p) => new RegExp(`\\b${p}\\b`, 'i').test(expr));
+  /** @param {string} table @param {string} column @param {string} expr @param {TriggerOp} op */
+  const land = (table, column, expr, op) => {
+    const param = mentions(expr);
+    if (param === undefined) return;
+    out.push({
+      table: table.toLowerCase(),
+      column: column.toLowerCase(),
+      param,
+      op,
+      verbatim: expr.trim().toLowerCase() === param,
+    });
+  };
+  for (const m of clean.matchAll(
+    /insert\s+into\s+(?:public\.)?([a-z0-9_]+)\s*\(([^)]*)\)\s*values\s*\(/gi,
+  )) {
+    const open = (m.index ?? 0) + m[0].length;
+    const close = closingParen(clean, open);
+    if (close === null) continue;
+    const columns = m[2].split(',').map((c) => c.trim());
+    const exprs = splitArgs(clean.slice(open, close));
+    // A positional mismatch means the parse did not line up, and guessing which
+    // value went where would attribute a landing to the wrong column.
+    if (exprs.length !== columns.length) continue;
+    columns.forEach((column, i) => land(m[1], column, exprs[i], 'insert'));
+  }
+  for (const m of clean.matchAll(
+    /update\s+(?:public\.)?([a-z0-9_]+)(?:\s+(?!set\b)[a-z0-9_]+)?\s+set\s+([\s\S]*?)(?:\bwhere\b|\breturning\b|;)/gi,
+  )) {
+    for (const part of splitArgs(m[2])) {
+      const pair = /^([a-z0-9_]+)\s*=\s*([\s\S]+)$/.exec(part.trim());
+      if (pair === null) continue;
+      land(m[1], pair[1], pair[2], 'update');
+    }
+  }
+  return out;
+}
+
+/**
+ * Every function the migrations leave behind that plants one of its own
+ * parameters in a column, with the parameter list a call site is resolved
+ * against.
+ * @param {{ name: string, text: string }[]} migrations
+ * @returns {Map<string, { params: string[], lands: ParameterLanding[] }>}
+ */
+export function writerFunctions(migrations) {
+  /** @type {Map<string, { params: string[], lands: ParameterLanding[] }>} */
+  const out = new Map();
+  for (const { text } of migrations) {
+    for (const [name, fn] of functionBodies(text)) {
+      const lands = parameterLandings(fn.body, fn.params);
+      if (lands.length === 0) {
+        out.delete(name);
+        continue;
+      }
+      out.set(name, { params: fn.params, lands });
+    }
+  }
+  return out;
+}
+
+/**
+ * The landings an assertion's own SQL reaches by CALLING one of those
+ * functions, restricted to the parameters it actually supplies an argument for
+ * — a parameter left on its default was supplied by nobody and its column is
+ * not this assertion's claim.
+ * @param {string} sql
+ * @param {Map<string, { params: string[], lands: ParameterLanding[] }>} writers
+ * @returns {(ParameterLanding & { fn: string })[]}
+ */
+export function rpcArgumentLandings(sql, writers) {
+  /** @type {(ParameterLanding & { fn: string })[]} */
+  const out = [];
+  for (const [name, fn] of writers) {
+    for (const m of sql.matchAll(new RegExp(`(?<![A-Za-z0-9_.])${name}\\s*\\(`, 'gi'))) {
+      const open = (m.index ?? 0) + m[0].length;
+      const close = closingParen(sql, open);
+      if (close === null) continue;
+      const inner = sql.slice(open, close);
+      /** @type {Set<string>} */
+      const supplied = new Set();
+      if (inner.trim() !== '') {
+        splitArgs(inner).forEach((arg, i) => {
+          const named = /^([a-z0-9_]+)\s*=>/i.exec(arg.trim());
+          if (named !== null) supplied.add(named[1].toLowerCase());
+          else if (fn.params[i] !== undefined) supplied.add(fn.params[i]);
+        });
+      }
+      for (const landing of fn.lands) {
+        if (!supplied.has(landing.param)) continue;
+        out.push({ fn: name, ...landing });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * The stamped columns an assertion reaches through an RPC that plants an
+ * argument verbatim — the same defect the direct scan measures, one
+ * indirection out, so it is reported through the same two populations.
+ * @param {(ParameterLanding & { fn: string })[]} landings
+ * @param {Record<TriggerOp, Map<string, string>>} stamped
+ * @returns {{ op: TriggerOp, table: string, column: string, trigger: string }[]}
+ */
+export function stampedThroughRpc(landings, stamped) {
+  /** @type {{ op: TriggerOp, table: string, column: string, trigger: string }[]} */
+  const out = [];
+  for (const { op, table, column, verbatim } of landings) {
+    if (!verbatim) continue;
+    const trigger = stamped[op].get(`${table}.${column}`);
+    if (trigger !== undefined) out.push({ op, table, column, trigger });
+  }
+  return out;
+}
+
+/**
+ * Positive assertions that hand a value to a function which does not plant it
+ * verbatim, with why the claim survives that. Same discipline as the two
+ * registries above: `columns` is matched exactly, and a `readBack` must still
+ * name an assertion in the same file.
+ * @type {{ file: string, description: string, columns: string[], readBack?: string, reason: string }[]}
+ */
+export const FILTERED_RPC_ARGUMENTS = [
+  {
+    file: 'checkpoint_crossings_test.sql',
+    description: 'an event organiser can write a crossing via upsert_checkpoint_crossing',
+    columns: [
+      'checkpoint_crossings.in_time',
+      'checkpoint_crossings.out_time',
+      'checkpoint_crossings.runner_name',
+    ],
+    readBack: "the organiser's crossing stored the bib, name and in_time it supplied",
+    reason:
+      'The `lives_ok` measures the PRIVILEGE -- this write not raising 42501 where the two ' +
+      '`throws_ok` below it do -- and no expression inside the RPC can cause or prevent a privilege ' +
+      'error. What it cannot measure is that the crossing landed carrying the values handed over, ' +
+      'because the merge arm decides all three through `least` / `greatest` / `coalesce`; the named ' +
+      'read-back states each of them, including the supplied NULL `out_time`.',
+  },
+  {
+    file: 'data_export_jobs_test.sql',
+    description: 'a different subject may enqueue while the first is in flight',
+    columns: ['jobs.payload'],
+    reason:
+      "The subject is the in-flight slot being per-USER: that a second subject's enqueue is not " +
+      'refused by the first one\'s open job. `p_user_id` reaches `jobs.payload` only inside a ' +
+      '`jsonb_build_object`, so the payload was never this assertion\'s claim, and the ' +
+      '`data_export_jobs` row it IS about is read back by the assertions around it.',
   },
 ];
 
@@ -1563,14 +1813,20 @@ function main() {
   const migrations = readMigrations();
   const stamped = stampedColumns(migrations);
   const conditional = conditionallyStampedColumns(migrations);
+  const writers = writerFunctions(migrations);
   const registered = new Set(STAMPED_VALUE_ASSERTIONS.map((e) => `${e.file}\u0000${e.description}`));
   const conditionallyRegistered = new Map(
     CONDITIONALLY_STAMPED_ASSERTIONS.map((e) => [`${e.file}\u0000${e.description}`, e]),
+  );
+  const filteredRegistered = new Map(
+    FILTERED_RPC_ARGUMENTS.map((e) => [`${e.file}\u0000${e.description}`, e]),
   );
   /** @type {Set<string>} */
   const matched = new Set();
   /** @type {Set<string>} */
   const conditionallyMatched = new Set();
+  /** @type {Set<string>} */
+  const filteredMatched = new Set();
 
   for (const file of files) {
     const text = readFileSync(join(TESTS_DIR, file), 'utf8');
@@ -1588,7 +1844,11 @@ function main() {
       const description = call.argv[1] === undefined ? '' : (descriptionOf(call.argv[1]) ?? '');
       const key = `${file}\u0000${description}`;
 
-      const writes = stampedValueWrites(sql, stamped);
+      const landings = rpcArgumentLandings(sql, writers);
+      const writes = [
+        ...stampedValueWrites(sql, stamped),
+        ...stampedThroughRpc(landings, stamped),
+      ];
       if (writes.length > 0) {
         if (registered.has(key)) {
           matched.add(key);
@@ -1602,6 +1862,45 @@ function main() {
               .map((w) => w.trigger)
               .join(' / ')} assigns unconditionally under that operation BEFORE the row is checked — so the value this assertion supplies never reaches the constraint and the assertion survives a server that stopped deriving it at all (decisions 1324). Stop supplying the column, read the stored value back through \`returning\`, or register the assertion in STAMPED_VALUE_ASSERTIONS with the reason its claim is unaffected.`,
           );
+        }
+      }
+
+      const filtered = [
+        ...new Set(landings.filter((l) => !l.verbatim).map((l) => `${l.table}.${l.column}`)),
+      ].sort();
+      if (filtered.length > 0) {
+        const entry = filteredRegistered.get(key);
+        if (entry === undefined) {
+          failures.push(
+            `${file}:${call.line}  "${description}" hands a value to ${[
+              ...new Set(landings.filter((l) => !l.verbatim).map((l) => l.fn)),
+            ].join(
+              ' / ',
+            )}, which does not plant it verbatim: ${filtered.join(', ')} is written from an ` +
+              `expression over the argument, so what a server that stopped computing that ` +
+              `expression would store still satisfies this assertion (decisions 1486). Read the ` +
+              `stored value back and register the assertion in FILTERED_RPC_ARGUMENTS naming that ` +
+              `read-back, or register it with the reason its claim survives.`,
+          );
+        } else {
+          filteredMatched.add(key);
+          if (entry.columns.join('\u0000') !== filtered.join('\u0000')) {
+            failures.push(
+              `FILTERED_RPC_ARGUMENTS entry ${file} / "${description}" names ${entry.columns.join(
+                ', ',
+              )} but the assertion now reaches ${filtered.join(
+                ', ',
+              )}. The reason was written about the old set — re-read it against the new one.`,
+            );
+          }
+          if (entry.readBack !== undefined) {
+            descriptions ??= assertionDescriptions(text);
+            if (!descriptions.has(entry.readBack)) {
+              failures.push(
+                `FILTERED_RPC_ARGUMENTS entry ${file} / "${description}" names the read-back "${entry.readBack}", and no assertion in that file carries that description any more. The read-back is what makes the entry's reason true, so restore it or replace the entry's justification.`,
+              );
+            }
+          }
         }
       }
 
@@ -1654,13 +1953,23 @@ function main() {
     );
   }
 
+  for (const entry of FILTERED_RPC_ARGUMENTS) {
+    const key = `${entry.file}\u0000${entry.description}`;
+    if (filteredMatched.has(key)) continue;
+    failures.push(
+      `FILTERED_RPC_ARGUMENTS entry ${entry.file} / "${entry.description}" is stale: no lives_ok there hands a value to a function that filters it any more. It was rewritten, renamed or deleted, or the function now plants the argument verbatim — remove the entry so the next one cannot hide behind it.`,
+    );
+  }
+
   if (process.argv.includes('--static-only')) {
     report(
       failures,
       `${files.length} test files scanned for unpinned negatives, for positives emptied by one of ` +
         `the ${stampedPairCount(stamped)} unconditionally stamped columns, and for the ` +
         `${CONDITIONALLY_STAMPED_ASSERTIONS.length} positives supplying one of the ` +
-        `${stampedPairCount(conditional)} conditionally stamped ones`,
+        `${stampedPairCount(conditional)} conditionally stamped ones, and for the ` +
+        `${FILTERED_RPC_ARGUMENTS.length} handing one to a function that does not plant it ` +
+        `verbatim`,
     );
     return;
   }

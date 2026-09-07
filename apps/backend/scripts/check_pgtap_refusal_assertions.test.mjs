@@ -13,12 +13,18 @@ import {
 import {
   CONDITIONALLY_STAMPED_ASSERTIONS,
   EXPECTED_SURVIVORS,
+  FILTERED_RPC_ARGUMENTS,
   STAMPED_VALUE_ASSERTIONS,
   assertionDescriptions,
   assignedColumns,
   conditionallyStampedColumns,
   descriptionOf,
+  parameterLandings,
   readMigrations,
+  rpcArgumentLandings,
+  signatureParameters,
+  stampedThroughRpc,
+  writerFunctions,
   stampedColumns,
   stampedPairCount,
   stampedValueWrites,
@@ -888,6 +894,170 @@ test('every pgtap positive supplying a conditionally stamped column is registere
 		assert.ok(
 			matched.has(`${entry.file} ${entry.description}`),
 			`CONDITIONALLY_STAMPED_ASSERTIONS entry ${entry.file} / "${entry.description}" is stale`,
+		);
+	}
+});
+
+test('signatureParameters names the parameters a call site is resolved against', () => {
+	assert.deepEqual(
+		signatureParameters("p_event_id uuid,\n  p_bib text default null,\n  p_note text default 'x, y'"),
+		['p_event_id', 'p_bib', 'p_note'],
+	);
+	// A default carrying a comma must not split into two parameters, or every
+	// argument after it binds to the wrong name.
+	assert.deepEqual(signatureParameters('in a int, out b int, variadic c text[]'), ['a', 'b', 'c']);
+	assert.deepEqual(signatureParameters(''), []);
+});
+
+test('parameterLandings separates a parameter planted verbatim from one an expression decides', () => {
+	const body =
+		'begin\n' +
+		'  insert into t (a, b, c) values (p_a, case when g then p_b end, 1);\n' +
+		'  update t x set d = coalesce(x.d, p_d), e = p_e where x.id = 1;\n' +
+		'  return null;\nend;';
+	assert.deepEqual(parameterLandings(body, ['p_a', 'p_b', 'p_d', 'p_e']), [
+		{ table: 't', column: 'a', param: 'p_a', op: 'insert', verbatim: true },
+		{ table: 't', column: 'b', param: 'p_b', op: 'insert', verbatim: false },
+		{ table: 't', column: 'd', param: 'p_d', op: 'update', verbatim: false },
+		{ table: 't', column: 'e', param: 'p_e', op: 'update', verbatim: true },
+	]);
+
+	// A column list and a values list of different lengths is a failed parse,
+	// and lining them up anyway would attribute a landing to the wrong column.
+	assert.deepEqual(parameterLandings('begin\n  insert into t (a, b) values (p_a);\nend;', ['p_a']), []);
+});
+
+test('rpcArgumentLandings resolves an argument to its parameter, positionally and by name', () => {
+	const writers = new Map([
+		[
+			'f',
+			{
+				params: ['p_one', 'p_two', 'p_three'],
+				lands: /** @type {import('./check_pgtap_refusal_assertions.mjs').ParameterLanding[]} */ ([
+					{ table: 't', column: 'one', param: 'p_one', op: 'insert', verbatim: true },
+					{ table: 't', column: 'three', param: 'p_three', op: 'insert', verbatim: false },
+				]),
+			},
+		],
+	]);
+	// A parameter left on its default was supplied by nobody, so the column it
+	// would have reached is not this assertion's claim.
+	assert.deepEqual(rpcArgumentLandings('select f(1, 2)', writers), [
+		{ fn: 'f', table: 't', column: 'one', param: 'p_one', op: 'insert', verbatim: true },
+	]);
+	assert.deepEqual(
+		rpcArgumentLandings('select f(1, 2, 3)', writers).map((l) => l.column),
+		['one', 'three'],
+	);
+	assert.deepEqual(
+		rpcArgumentLandings('select f(p_three => 3, p_one => 1)', writers).map((l) => l.column),
+		['one', 'three'],
+	);
+	// A comma inside an argument must not shift every later argument onto the
+	// wrong parameter.
+	assert.deepEqual(
+		rpcArgumentLandings("select f('a, b', 2, 3)", writers).map((l) => l.column),
+		['one', 'three'],
+	);
+	// Another function whose name merely ends the same way is not this one.
+	assert.deepEqual(rpcArgumentLandings('select gf(1, 2, 3)', writers), []);
+});
+
+test('a verbatim landing carries the trigger scan through the RPC', () => {
+	/** @type {import('./check_pgtap_refusal_assertions.mjs').ParameterLanding[]} */
+	const landings = [
+		{ table: 'exercises', column: 'name_key', param: 'p_key', op: 'insert', verbatim: true },
+		{ table: 'exercises', column: 'name_key', param: 'p_key', op: 'update', verbatim: false },
+	];
+	const stamped = {
+		insert: new Map([['exercises.name_key', 'exercises_stamp_name_key_trigger']]),
+		update: new Map([['exercises.name_key', 'exercises_stamp_name_key_trigger']]),
+	};
+	// Only the verbatim one: where an expression already decides the value, the
+	// trigger is not what emptied the assertion and the filtered registry is.
+	assert.deepEqual(
+		stampedThroughRpc(
+			landings.map((l) => ({ fn: 'f', ...l })),
+			stamped,
+		),
+		[
+			{
+				op: 'insert',
+				table: 'exercises',
+				column: 'name_key',
+				trigger: 'exercises_stamp_name_key_trigger',
+			},
+		],
+	);
+});
+
+test('the writer-function population is non-empty and names the RPC-only write surfaces', () => {
+	// 510 again: a scan whose input has moved reports nothing at all. The two
+	// tables whose ONLY write surface is an RPC are asserted by name, because
+	// those are the ones the direct INSERT/UPDATE scan can never see.
+	const writers = writerFunctions(readMigrations());
+	assert.ok(writers.size >= 20, `only ${writers.size} parameter-planting functions found`);
+	const crossing = writers.get('upsert_checkpoint_crossing');
+	assert.ok(crossing !== undefined, 'upsert_checkpoint_crossing is not read as a writer');
+	assert.ok(crossing.params.includes('p_body_weight_kg'));
+	const health = crossing.lands.filter((l) => l.column === 'body_weight_kg');
+	assert.equal(health.length, 2, 'both arms of the upsert should land body_weight_kg');
+	assert.ok(
+		health.every((l) => !l.verbatim),
+		'the Art 9 gate means no arm plants body_weight_kg verbatim',
+	);
+	// And the bib does arrive unchanged on the insert arm, so the two answers
+	// are distinguished rather than everything reading as filtered.
+	assert.ok(
+		crossing.lands.some((l) => l.column === 'bib' && l.op === 'insert' && l.verbatim),
+		'p_bib should be read as landing verbatim on the insert arm',
+	);
+});
+
+test('every pgtap positive handing a value to a filtering RPC is registered', () => {
+	const writers = writerFunctions(readMigrations());
+	const registry = new Map(FILTERED_RPC_ARGUMENTS.map((e) => [`${e.file} ${e.description}`, e]));
+	/** @type {Set<string>} */
+	const matched = new Set();
+	/** @type {string[]} */
+	const offenders = [];
+	for (const file of readdirSync(TESTS_DIR).filter((f) => f.endsWith('.sql'))) {
+		const text = readFileSync(join(TESTS_DIR, file), 'utf8');
+		/** @type {Set<string> | null} */
+		let descriptions = null;
+		for (const call of findCalls(text, 'lives_ok')) {
+			const sql = literalOf(call.argv[0]);
+			if (sql === null) continue;
+			const filtered = [
+				...new Set(
+					rpcArgumentLandings(sql, writers)
+						.filter((l) => !l.verbatim)
+						.map((l) => `${l.table}.${l.column}`),
+				),
+			].sort();
+			if (filtered.length === 0) continue;
+			const key = `${file} ${call.argv[1] === undefined ? '' : (descriptionOf(call.argv[1]) ?? '')}`;
+			const entry = registry.get(key);
+			if (entry === undefined) {
+				offenders.push(`${file}:${call.line}`);
+				continue;
+			}
+			matched.add(key);
+			assert.deepEqual(entry.columns, filtered, `${entry.file} names a stale column set`);
+			assert.ok(entry.reason.length > 40, `${entry.file} entry needs a real reason`);
+			if (entry.readBack === undefined) continue;
+			descriptions ??= assertionDescriptions(text);
+			assert.ok(
+				descriptions.has(entry.readBack),
+				`${entry.file} names a read-back no assertion carries: "${entry.readBack}"`,
+			);
+		}
+	}
+	assert.deepEqual(offenders, []);
+	for (const entry of FILTERED_RPC_ARGUMENTS) {
+		assert.ok(
+			matched.has(`${entry.file} ${entry.description}`),
+			`FILTERED_RPC_ARGUMENTS entry ${entry.file} / "${entry.description}" is stale`,
 		);
 	}
 });
