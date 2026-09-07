@@ -21,6 +21,7 @@
  */
 
 import { lonDeltaDeg, wrapLonDeg } from './geo';
+import { haversineMetres } from '../runs/run_stats';
 
 export interface SnapResult {
 	/** Snapped longitude — on the polyline. */
@@ -39,16 +40,6 @@ export interface SnapResult {
 
 const R = 6_371_000;
 const toRad = (d: number) => (d * Math.PI) / 180;
-
-function haversine(aLng: number, aLat: number, bLng: number, bLat: number): number {
-	const dLat = toRad(bLat - aLat);
-	const dLng = toRad(bLng - aLng);
-	const sinLat = Math.sin(dLat / 2);
-	const sinLng = Math.sin(dLng / 2);
-	const h =
-		sinLat * sinLat + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * sinLng * sinLng;
-	return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
-}
 
 /**
  * Project `point` onto the polyline `coords` ([lng, lat] pairs) and return
@@ -72,7 +63,7 @@ export function snapToPolyline(
 	for (let i = 0; i < coords.length - 1; i++) {
 		const [aLng, aLat] = coords[i];
 		const [bLng, bLat] = coords[i + 1];
-		const segLen = haversine(aLng, aLat, bLng, bLat);
+		const segLen = haversineMetres(aLat, aLng, bLat, bLng);
 
 		// Local planar frame: metres east/north of segment start `a`,
 		// with longitude scaled by cos(lat) so a degree of lng matches a
@@ -93,7 +84,7 @@ export function snapToPolyline(
 
 		const sLng = wrapLonDeg(aLng + lonDeltaDeg(aLng, bLng) * t);
 		const sLat = aLat + (bLat - aLat) * t;
-		const offset = haversine(point.lng, point.lat, sLng, sLat);
+		const offset = haversineMetres(point.lat, point.lng, sLat, sLng);
 
 		if (offset < bestOffset) {
 			bestOffset = offset;
