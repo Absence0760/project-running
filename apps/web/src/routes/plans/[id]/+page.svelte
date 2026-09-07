@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { activeFormatLocale } from '$lib/format/time';
+	import { fold } from '$lib/segments/catalogue_browse';
 	import { onMount, tick } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { page } from '$app/stores';
@@ -146,10 +147,18 @@
 		};
 	}
 
+	/// The exported file's name, derived from the plan's.
+	///
+	/// Folded through `catalogue_browse`'s generated table rather than
+	/// `toLowerCase`, for the reason `clubSlug` folds: JS lower-cases U+0130 to
+	/// `i` plus a combining dot, which the strip below then turns into a
+	/// SEPARATOR — so a plan named `İstanbul Marathon` downloaded as
+	/// `i-stanbul-marathon.md`. The fold also leaves the base letter where a
+	/// diacritic was, so `Zürich Build` reaches `zurich-build` instead of
+	/// `z-rich-build` (decisions § 1251, § 1398).
 	function planSlug(): string {
 		return (
-			(plan?.name ?? 'plan')
-				.toLowerCase()
+			fold(plan?.name ?? 'plan')
 				.replace(/[^a-z0-9]+/g, '-')
 				.replace(/^-|-$/g, '') || 'plan'
 		);
