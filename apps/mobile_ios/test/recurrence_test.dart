@@ -177,6 +177,19 @@ void main() {
       expect(next, isNull);
     });
 
+    test('nextInstanceAfter — returns null past recurrence_until', () {
+      // The series ended in April; asking in May must report no next
+      // occurrence rather than the last one that ever ran. Ported from the web
+      // mirror, which was the only rail asserting it (decisions § 1444).
+      final e = EventRecurrence(
+        startsAt: DateTime.utc(2026, 4, 1, 8, 0, 0),
+        freq: RecurrenceFreq.weekly,
+        until: DateTime.utc(2026, 4, 30, 23, 59, 59),
+      );
+      final next = nextInstanceAfter(e, DateTime.utc(2026, 5, 1));
+      expect(next, isNull);
+    });
+
     test('nextInstanceAfter — a years-old weekly series still reports its next occurrence', () {
       // The scan budget used to be derived from `max` (1 here), so the walk gave
       // up 49 days after the series began and a club's long-running Monday-night
@@ -493,6 +506,40 @@ void main() {
         isFalse,
         reason: 'A raw (UTC-flagged) startsAt on the legacy path is the monthly-branch bug.',
       );
+    });
+  });
+
+  // The sentence the phone renders on event detail, ported case for case from
+  // the web mirror `apps/web/src/lib/social/recurrence.test.ts`. Both halves
+  // hard-code the same English, the same ISO day ordering and the same ` · `
+  // separator, and until this port only one of them was measured — so a
+  // divergence would have shown a runner a different recurrence sentence on
+  // the phone with nothing failing (decisions § 1444).
+  group('describeRecurrence', () {
+    test('null freq is "One-off event"', () {
+      expect(describeRecurrence(null, const []), 'One-off event');
+      expect(describeRecurrence(null, null), 'One-off event');
+    });
+
+    test('monthly is "Repeats monthly"', () {
+      expect(describeRecurrence(RecurrenceFreq.monthly, null), 'Repeats monthly');
+      expect(
+        describeRecurrence(RecurrenceFreq.monthly, const [Weekday.mo]),
+        'Repeats monthly',
+      );
+    });
+
+    test('weekly with byday lists days in ISO order', () {
+      // Even when input order is shuffled, output order is MO,TU,...,SU.
+      expect(
+        describeRecurrence(RecurrenceFreq.weekly, const [Weekday.we, Weekday.mo]),
+        'Every week · Mon, Wed',
+      );
+    });
+
+    test('biweekly without byday is bare', () {
+      expect(describeRecurrence(RecurrenceFreq.biweekly, null), 'Every other week');
+      expect(describeRecurrence(RecurrenceFreq.biweekly, const []), 'Every other week');
     });
   });
 }
