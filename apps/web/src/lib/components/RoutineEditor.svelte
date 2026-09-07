@@ -11,6 +11,7 @@
 	import type { GymExerciseModality, GymProgressionScheme, GymSetType } from '$lib/types';
 	import { trackDirty } from '$lib/core/form_dirty';
 	import UnsavedChangesGuard from './UnsavedChangesGuard.svelte';
+	import type { JsonObject } from '$lib/types';
 
 	interface Props {
 		/// Optional in-memory blocks to seed the editor with (e.g. the output of
@@ -149,8 +150,8 @@
 		return t(`gym.routine.progression.${s}`);
 	}
 
-	function progressionParams(ex: EditExercise): Record<string, unknown> {
-		const params: Record<string, unknown> = {};
+	function progressionParams(ex: EditExercise): JsonObject {
+		const params: JsonObject = {};
 		const inc = floatOrNull(ex.incrementKg);
 		if (inc != null) params.incrementKg = parseWeight(ex.incrementKg);
 		if (ex.progression === 'percent_cycle') {

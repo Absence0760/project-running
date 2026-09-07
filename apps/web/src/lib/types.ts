@@ -329,6 +329,23 @@ export type EventAttendance = 'attended' | 'no_show';
 // union that already told it the value was impossible.
 export type MembershipStatus = 'active' | 'pending' | 'rejected';
 export type JoinPolicy = 'open' | 'request' | 'invite';
+
+/// Defensive narrow on read, mirroring `parseRunSource`. `clubs.join_policy`
+/// carries a CHECK, so the server cannot store anything else — but the
+/// generated row types it `string`, and every club read fed the raw row into
+/// `Club`, which promises the union. `'request'` is the fallback because it is
+/// the only value that neither opens a club nor makes it unjoinable: a policy
+/// this build has not learned about must not silently read as `'open'`.
+export function parseJoinPolicy(raw: string | null | undefined): JoinPolicy {
+	switch (raw) {
+		case 'open':
+		case 'request':
+		case 'invite':
+			return raw;
+		default:
+			return 'request';
+	}
+}
 export type RecurrenceFreq = 'weekly' | 'biweekly' | 'monthly';
 export type Weekday = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
 // Names track ActivityType ('cycle', not 'ride') so the app keeps one type
