@@ -38,7 +38,7 @@
 	import { fetchGymSetHistory, fetchGymWorkouts } from '$lib/core/data';
 	import { fetchFoodLog, fetchLatestWeightKg, type FoodEntry } from '$lib/core/data';
 	import { supabase } from '$lib/core/supabase';
-	import type { GymWorkout, GymSetWithDate } from '$lib/core/data';
+	import type { GymWorkout, GymSetWithDate, DashboardRun } from '$lib/core/data';
 	import { liftsFromSetHistory } from '$lib/gym/lift_load';
 	import { distinctExerciseCount } from '$lib/gym/gym_prs';
 	import {
@@ -90,7 +90,7 @@
 
 	// Recent runs only (~2-year window, column-narrowed) — the dashboard's
 	// cards are all recency-scoped. Lifetime totals come from `allTimeStats`.
-	let runs = $state<Run[]>([]);
+	let runs = $state<DashboardRun[]>([]);
 	// All-time run count + longest run, served by a cheap aggregate so the
 	// "all sources" / "all time" stat cards stay exact for a deep history
 	// even though `runs` above is windowed. See fetchRunAllTimeStats.
@@ -500,7 +500,7 @@
 		// Promise.all rejects the whole batch, and a settings or gym blip must
 		// not take the run-derived cards down with it — the same contract the
 		// per-read try/catch blocks gave.
-		let runsRead: { runs: Run[]; error: string | null };
+		let runsRead: { runs: DashboardRun[]; error: string | null };
 		let settingsRead: LoadedSettings | null;
 		let gymRead: [GymWorkout[], GymSetWithDate[]] | null;
 		let profileRead: DashboardProfile | null;

@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { selfLoad, shouldSurfaceSelfLoad } from '$lib/training/self_load';
+	import type { RunForVolume } from '$lib/training/plan_ramp';
 	import { fmtKm } from '$lib/format/units.svelte';
 	import { activeFormatLocale } from '$lib/format/time';
 	import { m } from '$lib/i18n/store.svelte';
-	import type { Run } from '$lib/types';
 
 	interface Props {
-		runs: Run[];
+		runs: RunForVolume[];
 	}
 	let { runs }: Props = $props();
 

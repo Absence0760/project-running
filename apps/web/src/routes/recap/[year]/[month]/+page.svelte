@@ -3,7 +3,7 @@
 	import { page } from '$app/stores';
 	import { activeFormatLocale } from '$lib/format/time';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { fetchRunsForRecap, fetchRecapExtras, publishRecap } from '$lib/core/data';
+	import { fetchRunsForRecap, fetchRecapExtras, publishRecap, type RecapRun } from '$lib/core/data';
 	import { buildMonthInRunningRecap, type YearInRunningRecap } from '$lib/runs/recap';
 	import { buildRecapShareSvg } from '$lib/share/recap_share_image';
 	import { buildRecapShareCanonical } from '$lib/share/share_recap_meta';
@@ -14,7 +14,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import type { Run } from '$lib/types';
 
-	let runs = $state<Run[]>([]);
+	let runs = $state<RecapRun[]>([]);
 	let extras = $state<{ photoCount: number; personalRecordCount: number }>({
 		photoCount: 0,
 		personalRecordCount: 0
@@ -48,7 +48,7 @@
 		}
 		const yr = year;
 		[runs, extras] = await Promise.all([
-			valid ? fetchRunsForRecap(yr) : Promise.resolve([] as Run[]),
+			valid ? fetchRunsForRecap(yr) : Promise.resolve([] as RecapRun[]),
 			valid ? fetchRecapExtras(yr) : Promise.resolve({ photoCount: 0, personalRecordCount: 0 })
 		]);
 		loading = false;
