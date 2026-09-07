@@ -19,7 +19,7 @@ import org.junit.Test
 /// but humanErrorMessage strips that string the moment the response body has
 /// any of the four well-known fields — which Supabase always populates for
 /// auth failures. So 401 → refresh+retry was effectively dead code, and the
-/// user saw "JWT expired" / "unauthorized" surface as a sticky syncError.
+/// user saw "JWT expired" / "unauthorized" surface as a sticky sync banner.
 class SupabaseErrorClassificationTest {
 
     // ---------- humanErrorMessage field precedence ----------

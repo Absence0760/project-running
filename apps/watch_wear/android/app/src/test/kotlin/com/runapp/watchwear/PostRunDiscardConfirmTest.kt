@@ -8,9 +8,11 @@ import org.junit.Test
 /// Source-level guard over the PostRun screen's Discard, the twin of the
 /// crash-recovery Discard § 1206 guarded and of the two watchOS ones § 1208 did.
 ///
-/// `RunViewModel.discard` is `store.remove(id)` and the button renders only on
-/// the `!synced` branch, so the run it deletes has not reached Supabase and the
-/// local queue is the only place it exists. One tap must not end it.
+/// `RunViewModel.discard` drops the queue entry and the track file it points at
+/// (§ 1388), and the button renders only on the `!synced` branch, so the run it
+/// deletes has not reached Supabase and those two are the only place it exists.
+/// One tap must not end it. What the discard does when that drop FAILS is a
+/// different claim on a different level, evaluated in `DiscardRunTest`.
 ///
 /// Compose wiring is not host-JVM testable without Robolectric, which this
 /// module avoids, so this is a source grep per the module's convention

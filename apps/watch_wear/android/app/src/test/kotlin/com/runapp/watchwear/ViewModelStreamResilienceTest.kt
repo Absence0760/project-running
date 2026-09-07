@@ -210,10 +210,11 @@ class ViewModelStreamResilienceTest {
             branch.contains("drainBackoff.onFailure()"),
         )
         assertTrue(
-            "the failure branch must surface it as syncError — a queue that " +
-                "cannot be read is the one state in which 'Synced' is a lie: " +
-                "$branch",
-            branch.contains("syncError ="),
+            "the failure branch must surface it as a catalogued `syncFault` — a " +
+                "queue that cannot be read is the one state in which 'Synced' is " +
+                "a lie, and the sentence has to be one a runner in any of the " +
+                "seven locales can read: $branch",
+            branch.contains("syncFault = SyncFault.QueueUnreadable"),
         )
         assertTrue(
             "the failure branch must return rather than fall through into the " +

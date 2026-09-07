@@ -78,16 +78,30 @@ internal fun classifyDrainError(e: Throwable): DrainAction {
             else -> DrainAction.SkipAndContinue
         }
     }
-    // Network-layer failures must classify transient so the drain loop
-    // short-circuits and arms backoff, mirroring the Go worker's isTransient
-    // (apps/job_worker/internal/worker.go). OkHttp / java.net surface a
-    // dropped connection as "Failed to connect to …", "ECONNREFUSED
-    // (Connection refused)", "Connection reset", or a truncated body as
-    // "unexpected end of stream" — none of which match a bare "timeout", so
-    // without these markers a real outage was mis-classified permanent,
-    // hammered every queued run, and reset backoff via onSuccess.
+    return if (isTransientNetworkFailure(e)) {
+        DrainAction.StopAndRetryLater
+    } else {
+        DrainAction.SkipAndContinue
+    }
+}
+
+/// Did the request fail below HTTP — before any server had a chance to answer?
+///
+/// Network-layer failures must classify transient so the drain loop
+/// short-circuits and arms backoff, mirroring the Go worker's isTransient
+/// (apps/job_worker/internal/worker.go). OkHttp / java.net surface a dropped
+/// connection as "Failed to connect to …", "ECONNREFUSED (Connection
+/// refused)", "Connection reset", or a truncated body as "unexpected end of
+/// stream" — none of which match a bare "timeout", so without these markers a
+/// real outage was mis-classified permanent, hammered every queued run, and
+/// reset backoff via onSuccess.
+///
+/// One home for the marker list because the sign-in path asks the same
+/// question of the same OkHttp stack, and a second copy would answer it
+/// differently the first time a marker was added to only one of them.
+internal fun isTransientNetworkFailure(e: Throwable): Boolean {
     val msg = e.message.orEmpty()
-    val transientMarkers = listOf(
+    val markers = listOf(
         "timeout",
         "Unable to resolve",
         "Software caused",
@@ -97,8 +111,7 @@ internal fun classifyDrainError(e: Throwable): DrainAction {
         "no such host",
         "unexpected end of stream",
     )
-    val transient = transientMarkers.any { msg.contains(it, ignoreCase = true) }
-    return if (transient) DrainAction.StopAndRetryLater else DrainAction.SkipAndContinue
+    return markers.any { msg.contains(it, ignoreCase = true) }
 }
 
 data class UiState(
@@ -118,6 +131,13 @@ data class UiState(
     /// than current. DataStore reports a corrupt or unreadable file by failing
     /// the read, and the two facts are orthogonal: the count is the last figure
     /// anyone saw, this is whether it still stands (decisions § 1104).
+    ///
+    /// A failed queue MUTATION raises it too, and for the same reason rather
+    /// than by analogy: DataStore applies a write by reading the file, editing
+    /// and replacing it, so an `edit` that throws has failed on the same file
+    /// this flag is about, and the count on the arc no longer stands either
+    /// way. That is how the PostRun discard reports a drop it could not make
+    /// (decisions § 1491).
     val queueUnreadable: Boolean = false,
     /// Queue entries the server has permanently REFUSED — a 400/404/409/422
     /// that no retry will ever move. They stay in the queue by design (§ 17:
@@ -135,15 +155,31 @@ data class UiState(
     /// property of the file.
     val rejectedRunIds: Set<String> = emptySet(),
     val authed: Boolean = false,
-    val authError: String? = null,
+    /// Why the watch could not authenticate, as a member of a catalogued
+    /// vocabulary rather than as the throwable's own message.
+    ///
+    /// The same defect § 1490 closed one screen over: it held GoTrue's own
+    /// English error prose, or — on the refresh path — that prose interpolated
+    /// into a translated frame, so the half of the sentence carrying the
+    /// meaning was in nobody's language but English. The raw text goes to
+    /// `Log.e` where a bug report can reach it (decisions § 1492).
+    val authFault: AuthFault? = null,
     val signInLoading: Boolean = false,
     val syncing: Boolean = false,
-    val syncError: String? = null,
+    /// Why the last sync attempt did not get through, as a member of a
+    /// catalogued vocabulary rather than as the throwable's own message.
+    ///
+    /// It held `e.message ?: e.javaClass.simpleName` — English, technical and
+    /// unbounded, on a 1.4-inch display where every other caption is a
+    /// `caption3` resource, and in all seven locales alike. The raw text is
+    /// still what a bug report needs, so it goes to `Log.e` at the point of
+    /// failure instead of to the wrist (decisions § 1490).
+    val syncFault: SyncFault? = null,
     /// True when the last COMPLETED drain pass stopped on a transient failure
     /// — a 5xx, a timeout, a dropped connection — which is also what arms
     /// `drainBackoff`.
     ///
-    /// Deliberately not carried on [syncError], which is the PostRun banner
+    /// Deliberately not carried on [syncFault], which is the PostRun banner
     /// and a fact about one pass: `startNextRun` clears it, and PreRun is the
     /// screen the runner is on for every drain but the first, so the banner's
     /// lifetime is exactly wrong for the surface that needed it. This is the
@@ -743,7 +779,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         authReady.value = false
         _state.value = _state.value.copy(
             authed = false,
-            authError = null,
+            authFault = null,
             stage = Stage.PreRun,
             routes = emptyList(),
             selectedRoute = null,
@@ -952,7 +988,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             baseUrl = s.baseUrl,
             anonKey = s.anonKey,
         )
-        _state.value = _state.value.copy(authed = true, authError = null)
+        _state.value = _state.value.copy(authed = true, authFault = null)
         authReady.value = true
         // Pull the universal prefs bag once per session restore so the
         // pre-run activity picker opens on the user's phone-side
@@ -1033,12 +1069,12 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                 )
             )
         } catch (e: Throwable) {
-            _state.value = _state.value.copy(
-                authError = getApplication<Application>().getString(
-                    R.string.token_refresh_failed,
-                    e.message ?: e.javaClass.simpleName,
-                ),
-            )
+            // A refused refresh grant is a spent session, never a mistyped
+            // password — the runner typed nothing. `refreshFaultFor` is what
+            // keeps the two endpoints' identical status codes from reaching
+            // the wrist as the same sentence (decisions § 1492).
+            Log.e(TAG, "token refresh failed", e)
+            _state.value = _state.value.copy(authFault = refreshFaultFor(e))
         }
     }
 
@@ -1057,7 +1093,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             bpm = null,
             hrAvailability = HeartRateAvailability.Off,
             lapCount = 0,
-            syncError = null,
+            syncFault = null,
             thisRunId = runId,
             thisRunSynced = false,
             offRouteDistanceM = null,
@@ -1342,7 +1378,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
 
     fun sync() {
         launchGuarded {
-            _state.value = _state.value.copy(syncing = true, syncError = null)
+            _state.value = _state.value.copy(syncing = true, syncFault = null)
             drainQueue(force = true)
             _state.value = _state.value.copy(syncing = false)
         }
@@ -1353,7 +1389,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             stage = Stage.PreRun,
             thisRunId = null,
             thisRunSynced = false,
-            syncError = null,
+            syncFault = null,
         )
     }
 
@@ -1370,10 +1406,22 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     /// snapshot lookup then finds nothing and only the no-op removal runs,
     /// which is the right answer rather than a case to special-case — there is
     /// no file left to delete.
+    /// The advance is unconditional, and that is the decision. A `×` that could
+    /// not remove the entry has left the run QUEUED — the safe direction for a
+    /// destructive action that did not happen, since the next drain will still
+    /// upload it — so holding the runner on the screen buys nothing and costs
+    /// them the thing § 1107 already refused to cost them: stranding someone
+    /// who wants to record now behind a corrupt file takes the next run as well
+    /// as this one. What the failure does buy is a sentence, on the screen they
+    /// land on rather than the one they just left.
     fun discard() {
         val id = _state.value.thisRunId
         launchGuarded {
-            if (id != null) dropQueuedRun(id, store.queue.first())
+            val outcome = discardRun(id) { dropQueuedRun(it, store.queue.first()) }
+            if (outcome is DiscardOutcome.Failed) {
+                Log.e(TAG, "discard could not drop the queued run", outcome.error)
+                _state.value = _state.value.copy(queueUnreadable = true)
+            }
             startNextRun()
         }
     }
@@ -1385,7 +1433,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openSignIn() {
-        _state.value = _state.value.copy(stage = Stage.SignIn, authError = null)
+        _state.value = _state.value.copy(stage = Stage.SignIn, authFault = null)
     }
 
     fun cancelSignIn() {
@@ -1396,7 +1444,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         launchGuarded {
             _state.value = _state.value.copy(
                 authed = false,
-                authError = null,
+                authFault = null,
                 signInLoading = true,
             )
             try {
@@ -1406,8 +1454,9 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                     signInLoading = false,
                 )
             } catch (e: Throwable) {
+                Log.e(TAG, "sign-in failed", e)
                 _state.value = _state.value.copy(
-                    authError = e.message ?: e.javaClass.simpleName,
+                    authFault = signInFaultFor(e),
                     signInLoading = false,
                 )
             }
@@ -1483,8 +1532,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             // the reverse.
             _state.value = _state.value.copy(
                 queueUnreadable = true,
-                syncError = getApplication<Application>()
-                    .getString(R.string.sync_queue_unreadable),
+                syncFault = SyncFault.QueueUnreadable,
             )
             return
         }
@@ -1526,14 +1574,23 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             drainBackoff.onSuccess()
         }
-        // `syncError` keeps its clear-on-success semantics — a trailing
+        // Every failure the pass met, with its throwable, because this is the
+        // only place the raw text survives now that the wrist states a
+        // catalogued fault instead (decisions § 1490). Logged per failure
+        // rather than once at the end: a pass that refuses four runs and then
+        // drains a fifth clears the banner and still has four things a bug
+        // report needs.
+        for (failure in result.failures) {
+            Log.e(TAG, "drain failed for ${failure.runId} (${failure.fault})", failure.error)
+        }
+        // `syncFault` keeps its clear-on-success semantics — a trailing
         // success clearing the banner is a stated decision, pinned twice in
         // `DrainQueueLoopTest`, and this does not reverse it. The permanent
         // rejections ride a separate field precisely because they must
         // survive that clear: the banner is about this pass, a refused entry
         // is about the queue (decisions § 1347).
         _state.value = _state.value.copy(
-            syncError = result.lastError,
+            syncFault = result.lastFault,
             syncFailed = result.anyTransientFailure,
             rejectedRunIds = rejectedAfterPass(
                 previouslyRejected = _state.value.rejectedRunIds,
@@ -1573,8 +1630,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                 Log.e(TAG, "run queue unreadable — discard skipped", e)
                 _state.value = _state.value.copy(
                     queueUnreadable = true,
-                    syncError = getApplication<Application>()
-                        .getString(R.string.sync_queue_unreadable),
+                    syncFault = SyncFault.QueueUnreadable,
                 )
                 return@launchGuarded
             }
@@ -1583,7 +1639,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             }
             _state.value = _state.value.copy(
                 rejectedRunIds = emptySet(),
-                syncError = null,
+                syncFault = null,
             )
         }
     }
