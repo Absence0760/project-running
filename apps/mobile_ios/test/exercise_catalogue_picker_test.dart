@@ -37,16 +37,15 @@ class _ScriptedApi extends ApiClient {
   /// Every call's arguments, so a test can assert what was SENT rather than
   /// only what came back — the category the picker derives from the dropdown
   /// is not observable any other way.
-  final List<({String name, String nameKey, String category})> calls = [];
+  final List<({String name, String category})> calls = [];
 
   @override
   Future<ExerciseRow?> createCustomExercise({
     required String name,
-    required String nameKey,
     String category = 'other',
     String modality = 'weight_reps',
   }) async {
-    calls.add((name: name, nameKey: nameKey, category: category));
+    calls.add((name: name, category: category));
     return fail ? null : result;
   }
 }
@@ -63,6 +62,8 @@ ExerciseRow _row(String id, String name, String category) => ExerciseRow(
       id: id,
       authorId: 'me',
       name: name,
+      // The COLUMN still exists and the DTO still requires it -- decisions 1370
+      // removed the key from createCustomExercise's arguments, not from the row.
       nameKey: name.toLowerCase(),
       category: category,
       modality: 'weight_reps',
@@ -377,8 +378,11 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(api.calls.single.name, 'Farmer Carry');
-    expect(api.calls.single.nameKey, 'farmer carry',
-        reason: 'the key the logged set binds by is stamped by the caller');
+    // The key is no longer asserted here because the caller no longer computes
+    // one: decisions 1370 removed `nameKey` from createCustomExercise, and the
+    // server stamps it. The record this mock collects has no such field, so the
+    // analyzer is what refuses a caller that tries to send one, and
+    // exercise_key_source_guard_test holds the source-level claim.
     expect(picked()?.id, 'new-1');
     expect(announced?.id, 'new-1',
         reason: 'the host merges it so the id binds without a reload');
