@@ -266,6 +266,23 @@ export function rawNameComparisonHits(path: string, source: string): Hit[] {
 /// while saying everything inside `GymEditor.svelte`.
 const NAMES_A_DISPLAY_FIELD = /\.name\b/;
 
+/// A value whose OWN identifier is the display spelling, judged under the same
+/// file-level rule. The scan trusted a `.name` READ and not a value called
+/// `name`, which is the difference between a spelling taken off a row and one
+/// typed by the user — and the typed one is the whole reason the catalogue
+/// picker's create path exists. There the value reaches the test through
+/// `$derived(query.trim())`, whose text carries no `.name` and no "exercise",
+/// so no amount of chasing the declaration can reach it: the evidence is the
+/// subject, not the origin (decisions § 1483).
+///
+/// Anchored at the start so the trimming chain the defect is usually spelled
+/// with (`name.trim() === ''`) is still the same subject, and so `named`,
+/// whose `length === 0` is a count of blocks rather than a blank name, is not.
+/// Unlike the `.name` read this sits beside, it is judged on the length shape
+/// too: `named` is what that carve-out exists for and the word boundary
+/// already excludes it.
+const IS_A_NAME_IDENTIFIER = /^name\b/;
+
 /// An empty-string literal, read out of the comment-stripped text where string
 /// BODIES are still present. [blankQuoted] preserves offsets by replacing a
 /// body with spaces, so `'x'` would read as an empty literal there.
@@ -360,6 +377,7 @@ export function blankSpellingTestHits(path: string, source: string): Hit[] {
 		if (/normaliseExerciseName\s*\(|namesAnExercise\s*\(/.test(origin)) continue;
 		const spelling =
 			NAMES_A_SPELLING.test(origin) ||
+			(fileNamesAnExercise && IS_A_NAME_IDENTIFIER.test(found.subject.trim())) ||
 			(found.chase && fileNamesAnExercise && NAMES_A_DISPLAY_FIELD.test(origin));
 		if (!spelling) continue;
 		const line = code.slice(0, at).split('\n').length;
@@ -636,6 +654,21 @@ test('the blankness scan sees the shapes it bans, and spares the ones it must no
 			'lib/components/Composer.svelte',
 			"const exercises = [];\n\tconst raw = block.name;\n\tconst name = raw;\n\tif (name === '') continue;",
 		],
+		[
+			"the picker's create path, whose value came from a search box through a rune",
+			'lib/components/ExerciseCataloguePicker.svelte',
+			"const catalogue = [];\n\tconst trimmed = $derived(query.trim());\n\tasync function create() {\n\t\tconst name = trimmed;\n\t\tif (name === '') return;\n\t\tawait createCustomExercise({ name });\n\t}",
+		],
+		[
+			'the same call site written with the trimming chain the defect usually wears',
+			'lib/components/ExerciseCataloguePicker.svelte',
+			"const catalogue = [];\n\tconst trimmed = $derived(query.trim());\n\tasync function create() {\n\t\tconst name = trimmed;\n\t\tif (name.trim() === '') return;\n\t\tawait createCustomExercise({ name });\n\t}",
+		],
+		[
+			'the same call site written as a length test',
+			'lib/components/ExerciseCataloguePicker.svelte',
+			"const catalogue = [];\n\tconst trimmed = $derived(query.trim());\n\tasync function create() {\n\t\tconst name = trimmed;\n\t\tif (name.length === 0) return;\n\t\tawait createCustomExercise({ name });\n\t}",
+		],
 	];
 	for (const [label, path, source] of caught) {
 		assert.equal(blankSpellingTestHits(path, source).length, 1, `missed: ${label}`);
@@ -690,16 +723,23 @@ test('the blankness scan sees the shapes it bans, and spares the ones it must no
 		assert.deepEqual(blankSpellingTestHits(path, source), [], `false positive: ${label}`);
 	}
 
-	// The scan's own edge, stated rather than left to be rediscovered: a value
-	// that reaches the test through a PROP or a `$derived` is out of the
-	// declaration chase's reach, so the catalogue picker's `query.trim()` is not
-	// reported. Its call site is fixed and its shape is pinned here, not by the
-	// scan.
-	assert.deepEqual(
+	// The picker's own file, as it stands, plus the regression the three cases
+	// above plant into it. Read from disk rather than restated, because what
+	// makes the call site reachable is a property of the FILE — it names an
+	// exercise, and the value under test is called `name` — and a restatement
+	// would keep passing after the file stopped having it.
+	const picker = 'lib/components/ExerciseCataloguePicker.svelte';
+	const source = readFileSync(join(SRC, picker), 'utf-8');
+	assert.deepEqual(blankSpellingTestHits(picker, source), [], 'the picker create path is fixed');
+	assert.equal(
 		blankSpellingTestHits(
-			'lib/components/ExerciseCataloguePicker.svelte',
-			"const trimmed = $derived(query.trim());\n\tconst name = trimmed;\n\tif (name === '') return;",
-		),
-		[],
+			picker,
+			source.replace(
+				'if (!namesAnExercise(name) || creating) return;',
+				"if (name === '' || creating) return;",
+			),
+		).length,
+		1,
+		'a regression at the picker create path must fail this scan',
 	);
 });

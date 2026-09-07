@@ -36,12 +36,11 @@
  * caller's row type needs no relationship to this file.
  */
 
-import { normaliseExerciseName } from './gym_prs';
-
 /// The two fields the precedence rule reads. `author_id` is null for a seeded
-/// global and set for an owner custom.
+/// global and set for an owner custom; `name_key` is the STORED key, not a
+/// re-derivation of it.
 export interface ShadowableExercise {
-	name: string;
+	name_key: string;
 	author_id: string | null;
 }
 
@@ -51,22 +50,39 @@ export interface ShadowableExercise {
  * keeps the position of the FIRST row under its key — so a caller that ordered
  * the list before calling still holds an ordered list afterwards.
  *
+ * Keyed on the STORED `exercises.name_key`, which is the column both partial
+ * uniques are built on — so "the database considers these one exercise" is read
+ * off the database's own value rather than inferred by re-deriving it. The two
+ * agree on any migrated row (`exercises_name_key_canonical` is validated, and
+ * `exercises_stamp_name_key` re-stamps on every write), and they are not
+ * guaranteed to agree in the window between a client carrying a regenerated
+ * fold table and the migration that re-folds the column — which is exactly a
+ * window in which a re-derivation splits a pair the unique index will not let
+ * anyone add a third row to. The Dart half keys on the same column.
+ *
  * This is also what removes the ordering hazard the picker's comparator has:
- * `normaliseExerciseName` collapses the shared whitespace class where
- * `catalogue_browse`'s `fold` does not, so `Bench Press` and
- * `Bench<U+00A0>Press` are ONE exercise that a folded-name comparator files in
- * two different places in the list. After the dedupe no catalogue surface holds
- * both, so the two can no longer be rendered as unrelated neighbours — and the
- * two functions keep answering the different questions § 1334 says they must.
+ * the key collapses the shared whitespace class where `catalogue_browse`'s
+ * `fold` does not, so `Bench Press` and `Bench<U+00A0>Press` are ONE exercise
+ * that a folded-name comparator files in two different places in the list.
+ * After the dedupe no catalogue surface holds both, so the two can no longer be
+ * rendered as unrelated neighbours — and the two functions keep answering the
+ * different questions § 1334 says they must.
+ *
+ * Applied to every list a surface works from, not only to the read. A custom
+ * created in the picker can shadow a global the CLIENT's list still carries,
+ * because that list is a snapshot and the author's partial unique cannot see a
+ * row whose `author_id` is null — so the insert succeeds and a merge of the two
+ * holds both. Folding the created customs in through here is what stops that
+ * being a second answer to which row a typed name binds to; a de-duplication by
+ * `id`, which is what both editors did instead, cannot see it at all.
  */
 export function dedupeShadowedExercises<E extends ShadowableExercise>(entries: readonly E[]): E[] {
 	const at = new Map<string, number>();
 	const out: E[] = [];
 	for (const e of entries) {
-		const key = normaliseExerciseName(e.name);
-		const seen = at.get(key);
+		const seen = at.get(e.name_key);
 		if (seen === undefined) {
-			at.set(key, out.length);
+			at.set(e.name_key, out.length);
 			out.push(e);
 			continue;
 		}
@@ -78,3 +94,4 @@ export function dedupeShadowedExercises<E extends ShadowableExercise>(entries: r
 	}
 	return out;
 }
+

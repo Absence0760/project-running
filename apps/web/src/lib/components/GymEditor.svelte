@@ -7,6 +7,7 @@
 		type GymSetInput,
 	} from '$lib/core/data';
 	import type { Exercise, GymSetType } from '$lib/types';
+	import { dedupeShadowedExercises } from '$lib/gym/exercise_catalogue';
 	import {
 		namesAnExercise,
 		normaliseExerciseName,
@@ -75,17 +76,8 @@
 
 	/// The effective catalogue: the prop (which can arrive late — the host loads
 	/// it async, so this must track it, not snapshot it) unioned with this
-	/// session's created customs, de-duplicated by id.
-	const entries = $derived.by(() => {
-		const seen = new Set<string>();
-		const out: Exercise[] = [];
-		for (const e of [...catalogue, ...createdCustoms]) {
-			if (seen.has(e.id)) continue;
-			seen.add(e.id);
-			out.push(e);
-		}
-		return out;
-	});
+	/// session's created customs, under the read's own shadow precedence.
+	const entries = $derived(dedupeShadowedExercises([...catalogue, ...createdCustoms]));
 
 	/// normalised name -> catalogue exercise id, for binding a typed name to its
 	/// catalogue entry at save time. Empty when no catalogue is supplied, in
