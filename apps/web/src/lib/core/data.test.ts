@@ -1946,3 +1946,171 @@ test('a dropped blank set does not leave a hole in the set numbering', () => {
 		'the drop must precede the map, or set_index counts rows that never ship',
 	);
 });
+
+/// The columns one `.select('…')` inside a named function asks for, split into
+/// the top-level list and each embedded resource's own. `nth` picks among the
+/// several a detail reader makes.
+function inlineSelect(
+	source: string,
+	fn: string,
+	nth: number,
+): { columns: Set<string>; embedded: Set<string> } {
+	const selects = [...functionBody(source, fn).matchAll(/\.select\(\s*'([^']*)'/g)];
+	assert.ok(
+		selects.length > nth,
+		`${fn} makes ${selects.length} inline selects, not ${nth + 1} — re-anchor this guard`,
+	);
+	const columns = new Set<string>();
+	const embedded = new Set<string>();
+	let depth = 0;
+	let part = '';
+	const take = () => {
+		const t = part.trim();
+		part = '';
+		if (!t) return;
+		const embed = t.match(/^[\w!]+\(([^)]*)\)$/);
+		if (embed) {
+			for (const c of embed[1].split(',')) embedded.add(c.trim());
+		} else {
+			columns.add(t);
+		}
+	};
+	for (const ch of selects[nth][1]) {
+		if (ch === '(') depth++;
+		if (ch === ')') depth--;
+		if (ch === ',' && depth === 0) take();
+		else part += ch;
+	}
+	take();
+	return { columns, embedded };
+}
+
+/// The keys an `export interface X { … }` in `data.ts` declares. The
+/// counterpart of `overlayColumns` for the reads whose row type is written out
+/// beside the projection rather than derived from a generated row.
+function interfaceKeys(name: string): Set<string> {
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const start = source.indexOf(`export interface ${name} {`);
+	assert.ok(start >= 0, `could not locate the ${name} interface — re-anchor`);
+	const body = source.slice(start, source.indexOf('\n}', start));
+	return new Set([...body.matchAll(/^\t(\w+)\??:/gm)].map((m) => m[1]));
+}
+
+test('every gym / meal-template / recipe read and the row type it is read as name the same columns', () => {
+	// Reason: the same claim § 1294 / § 1327 / § 1329 made for `routes`,
+	// `events` and `clubs`, for the seventeen reads whose row type is a
+	// hand-written interface beside an inline select rather than a shared
+	// `*_SELECT_COLS` constant plus a `types.ts` overlay — the two-declaration
+	// shape § 641 is about. A narrowed select handed back under a type that
+	// promises more is `undefined` at runtime with no throw and no error; a
+	// column in the select and not the type is paid for on the wire and
+	// unreadable. Neither direction was checked here before, only measured
+	// once by hand.
+	//
+	// Every exception is declared with the reason it is one, and a stale
+	// exception fails as loudly as a drifted column: an `absent` key the select
+	// has started fetching, or an `extra` column the type has started
+	// declaring, is reported.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const pairs: Array<{
+		fn: string;
+		nth?: number;
+		type: string;
+		table: string;
+		/// Selected, deliberately not a field of the row type.
+		extra?: Record<string, string>;
+		/// Declared, deliberately not fetched by THIS select.
+		absent?: Record<string, string>;
+		/// Declared, and fetched through an embedded resource.
+		embedded?: Record<string, string>;
+	}> = [
+		{
+			fn: 'fetchGymSetHistoryWithError',
+			type: 'GymSetWithDate',
+			table: 'gym_sets',
+			embedded: { started_at: "the joined workout's start, the point of the !inner embed" },
+			extra: { user_id: 'embedded so the RLS-scope filter can name it, never read' },
+		},
+		{ fn: 'fetchGymRoutinesWithError', type: 'GymRoutineSummary', table: 'gym_routines' },
+		{ fn: 'fetchGymRoutineDetail', type: 'GymRoutineSummary', table: 'gym_routines' },
+		{
+			fn: 'fetchGymRoutineDetail',
+			nth: 1,
+			type: 'GymRoutineSummary',
+			table: 'public_gym_routines',
+			absent: {
+				last_modified_at: 'redacted by the view (20270319_001); created_at stands in',
+			},
+		},
+		{
+			fn: 'fetchGymRoutineDetail',
+			nth: 2,
+			type: 'GymRoutineExercise',
+			table: 'gym_routine_exercises',
+			absent: { sets: 'assembled from the third read, not a column of this one' },
+		},
+		{
+			fn: 'fetchGymRoutineDetail',
+			nth: 3,
+			type: 'GymRoutineSet',
+			table: 'gym_routine_sets',
+			extra: { routine_exercise_id: 'the grouping key the rows are bucketed by, not a field of a set' },
+		},
+		{ fn: 'createGymRoutine', type: 'GymRoutineSummary', table: 'gym_routines' },
+		{ fn: 'fetchClubGymRoutineTemplates', type: 'GymRoutineSummary', table: 'gym_routines' },
+		{
+			fn: 'fetchPublicGymRoutineLibrary',
+			type: 'GymRoutineSummary',
+			table: 'public_gym_routines',
+			absent: {
+				last_modified_at: 'redacted by the view (20270319_001); created_at stands in',
+			},
+		},
+		{ fn: 'fetchMealTemplatesWithError', type: 'MealTemplateSummary', table: 'meal_templates' },
+		{ fn: 'fetchMealTemplateDetail', type: 'MealTemplateSummary', table: 'meal_templates' },
+		{
+			fn: 'fetchMealTemplateDetail',
+			nth: 1,
+			type: 'MealTemplateItemRow',
+			table: 'meal_template_items',
+		},
+		{ fn: 'createMealTemplate', type: 'MealTemplateSummary', table: 'meal_templates' },
+		{ fn: 'fetchRecipesWithError', type: 'RecipeSummary', table: 'recipes' },
+		{ fn: 'fetchRecipeDetail', type: 'RecipeSummary', table: 'recipes' },
+		{ fn: 'fetchRecipeDetail', nth: 1, type: 'RecipeIngredientRow', table: 'recipe_ingredients' },
+		{ fn: 'createRecipe', type: 'RecipeSummary', table: 'recipes' },
+	];
+	for (const p of pairs) {
+		const at = `${p.fn}[${p.nth ?? 0}] / ${p.type}`;
+		const { columns, embedded } = inlineSelect(source, p.fn, p.nth ?? 0);
+		const declared = interfaceKeys(p.type);
+		const generated = generatedColumns(p.table);
+		for (const c of columns) {
+			assert.ok(generated.has(c), `${at}: the select asks ${p.table} for ${c}, which it has not got`);
+		}
+		for (const c of columns) {
+			if (declared.has(c)) continue;
+			assert.ok(p.extra?.[c], `${at}: ${c} is fetched and ${p.type} does not declare it`);
+		}
+		for (const k of declared) {
+			if (columns.has(k)) {
+				assert.ok(!p.extra?.[k], `${at}: ${k} is declared an extra but ${p.type} declares it`);
+				continue;
+			}
+			if (embedded.has(k)) {
+				assert.ok(p.embedded?.[k], `${at}: ${k} arrives via the embed undeclared`);
+				continue;
+			}
+			assert.ok(p.absent?.[k], `${at}: ${p.type} promises ${k} and the select never fetches it`);
+		}
+		for (const k of Object.keys(p.absent ?? {})) {
+			assert.ok(!columns.has(k), `${at}: ${k} is declared absent and the select now fetches it`);
+		}
+		for (const c of Object.keys(p.extra ?? {})) {
+			assert.ok(
+				columns.has(c) || embedded.has(c),
+				`${at}: ${c} is declared an extra and the select no longer asks for it`,
+			);
+		}
+	}
+});
