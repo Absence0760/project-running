@@ -402,7 +402,7 @@
     "packageJson": {
       "dependencies": [
         "npm:@types/node@^26.4.0",
-        "npm:svelte@5.56.10"
+        "npm:svelte@5.57.0"
       ],
       "overrides": {
         "cookie": "^1.0.2",
@@ -443,7 +443,7 @@
             "npm:mdsvex@~0.12.8",
             "npm:oauth2-mock-server@9.1.0",
             "npm:svelte-check@4.7.6",
-            "npm:svelte@5.56.10",
+            "npm:svelte@5.57.0",
             "npm:tsx@^4.23.12",
             "npm:typescript@6.0.3",
             "npm:vite@8.2.2"
