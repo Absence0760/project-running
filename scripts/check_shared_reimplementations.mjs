@@ -56,8 +56,10 @@
 //     the house rule ("three similar lines is better than a premature helper")
 //     tolerates it. The nine copies of `escapeJsonLd` are invisible here.
 //   - Anchor A finds identical copies, not the whole equivalence class: the
-//     tree holds eleven haversines and only the two structurally identical
-//     ones are one group.
+//     tree held seventeen great-circle distances (not the eleven this comment
+//     once claimed) and only the two structurally identical ones were one
+//     group. `routes/great_circle_sources.test.ts` reads the CLASS instead,
+//     by the arc-of-a-square-root every haversine has to compute (§ 1470).
 //   - Anonymous callbacks are not extracted; a copy pasted into an inline
 //     arrow is missed. Named function declarations and named `const` arrows
 //     are, which is every shape a copied helper has taken here.
@@ -146,12 +148,6 @@ export const REGISTERED = [
 		key: 'apps/web/src/lib/format/time.ts:formatDuration|apps/web/src/lib/runs/race_day.ts:fmtSplitTime',
 		reason:
 			'Real duplicate, filed. `fmtSplitTime` is `formatDuration` rebuilt in the race-day module. Not fixed here because `race_day.ts` is a mid-round tree for another lane and the change is a behavioural one (`formatDuration` is the localised formatter, `fmtSplitTime` is not).',
-	},
-	{
-		kind: 'clone',
-		key: 'apps/web/src/lib/integrations/import.ts:haversine|apps/web/src/lib/routes/geocoding_math.ts:haversineM',
-		reason:
-			'Real duplicate, filed. Two of the ELEVEN great-circle distances the web tree carries. Consolidating them is a route/geo refactor with a parity-pair obligation on `run_stats.haversineMetres` (whose clamp is a recorded near-miss, § 305) and does not fit one lane.',
 	},
 	{
 		kind: 'clone',

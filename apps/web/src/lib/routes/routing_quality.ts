@@ -17,6 +17,7 @@
 
 import type { TrackPoint } from '../types';
 import { lonDeltaDeg } from './geo';
+import { haversineMetres } from '../runs/run_stats';
 
 /// One OSRM-routed segment between two consecutive waypoints. The
 /// polyline is `[[lng, lat], ...]` (OSRM's GeoJSON convention) and
@@ -47,24 +48,19 @@ export interface QualityReport {
 	worstDetourSegmentIndex: number;
 }
 
-const EARTH_RADIUS_M = 6371000;
-
 function toRad(d: number): number {
 	return (d * Math.PI) / 180;
 }
 
+/// Great-circle metres between two `{lng, lat}` points. The shared
+/// `haversineMetres` takes four numbers; this is the object-shaped door onto
+/// it that the route builder, the loop generator and this module's own detour
+/// ratio all read through, not a second formula.
 export function haversineM(
 	a: { lng: number; lat: number },
 	b: { lng: number; lat: number },
 ): number {
-	const dLat = toRad(b.lat - a.lat);
-	const dLng = toRad(b.lng - a.lng);
-	const sinLat = Math.sin(dLat / 2);
-	const sinLng = Math.sin(dLng / 2);
-	const h =
-		sinLat * sinLat +
-		Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * sinLng * sinLng;
-	return EARTH_RADIUS_M * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+	return haversineMetres(a.lat, a.lng, b.lat, b.lng);
 }
 
 /// Perpendicular distance from `p` to the closest point on segment

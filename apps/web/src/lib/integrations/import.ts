@@ -12,6 +12,7 @@
  */
 import JSZip from 'jszip';
 import type { TrackPoint } from '../types';
+import { haversineMetres } from '../runs/run_stats';
 
 export interface ImportedRoute {
 	name: string;
@@ -377,7 +378,12 @@ function buildRoute(name: string, waypoints: TrackPoint[]): ImportedRoute {
 	let elevGain = 0;
 
 	for (let i = 1; i < waypoints.length; i++) {
-		distance += haversine(waypoints[i - 1], waypoints[i]);
+		distance += haversineMetres(
+			waypoints[i - 1].lat,
+			waypoints[i - 1].lng,
+			waypoints[i].lat,
+			waypoints[i].lng,
+		);
 		// Only count climb between two points that BOTH carry a real
 		// elevation. Coercing a missing reading to 0 (the old behaviour)
 		// fabricated a full descent-then-climb every time a single point
@@ -396,15 +402,4 @@ function buildRoute(name: string, waypoints: TrackPoint[]): ImportedRoute {
 		distance_m: Math.round(distance * 100) / 100,
 		elevation_m: elevGain > 0 ? Math.round(elevGain) : null,
 	};
-}
-
-function haversine(a: TrackPoint, b: TrackPoint): number {
-	const R = 6371000;
-	const toRad = (d: number) => (d * Math.PI) / 180;
-	const dLat = toRad(b.lat - a.lat);
-	const dLng = toRad(b.lng - a.lng);
-	const sinLat = Math.sin(dLat / 2);
-	const sinLng = Math.sin(dLng / 2);
-	const h = sinLat * sinLat + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * sinLng * sinLng;
-	return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
