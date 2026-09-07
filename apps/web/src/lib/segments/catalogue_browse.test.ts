@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 
+import { normaliseExerciseName } from '../gym/gym_prs';
 import {
 	catalogueRegions,
 	catalogueSurfaces,
@@ -386,4 +387,23 @@ test('compareFoldedNames: ties break on id, so the order never depends on sort s
 
 test('compareFoldedNames: the same row compares equal to itself', () => {
 	assert.equal(compareFoldedNames('Loop', 'x', 'Loop', 'x'), 0);
+});
+
+test('the display fold leaves whitespace alone where the exercise key collapses it', () => {
+	// The two functions answer different questions and are kept apart on purpose
+	// (decisions 1334): the key says whether two spellings are the same
+	// exercise, the fold says where a reader looks for a name. So one exercise
+	// can wear two orderable names, and `Bench Press` sorts away from
+	// `Bench<U+00A0>Press` even though both bind to the same PRs.
+	//
+	// Pinned from BOTH sides because the tempting repair is to collapse
+	// whitespace in `fold`, which would silently re-order every route and every
+	// segment on two platforms to fix a problem that belongs to the exercise
+	// catalogue — and which `dedupeShadowedExercises` already fixes there, by
+	// reducing a catalogue to one row per key before anything orders it.
+	const spaced = 'Bench Press';
+	const nbsp = 'Bench\u00A0Press';
+	assert.equal(normaliseExerciseName(spaced), normaliseExerciseName(nbsp));
+	assert.notEqual(fold(spaced), fold(nbsp));
+	assert.notEqual(compareFoldedNames(spaced, 'a', nbsp, 'b'), 0);
 });
