@@ -19,8 +19,11 @@ import { join } from 'node:path';
 import {
 	check,
 	findExpression,
+	globNamesSomething,
 	jobsDeclaring,
+	parseNarrowing,
 	parseUnbuilt,
+	reasonAbove,
 	runScripts,
 	walkSurfaces,
 } from './check_codeql_coverage.mjs';
@@ -46,7 +49,34 @@ const GO_STEP = `      - name: Build every Go module for CodeQL
           echo "$MODULES"
 `;
 
-/** @param {{ kotlinStep?: string }} [opts] */
+/// A reason long enough to buy a narrowing, so a case testing something else
+/// does not fail on the reason floor.
+const REASON = '# a reason long enough to say what would have to change to close this narrowing';
+
+/** @param {{ jsWith?: string, actionsWith?: string }} [opts] */
+function interpretedJobs(opts = {}) {
+	const jsWith =
+		opts.jsWith ?? `          languages: javascript-typescript
+          build-mode: none
+          queries: security-and-quality
+`;
+	const actionsWith =
+		opts.actionsWith ?? `          languages: actions
+          build-mode: none
+          queries: security-and-quality
+`;
+	return `  codeql-javascript:
+    steps:
+      - uses: github/codeql-action/init@abc
+        with:
+${jsWith}  codeql-actions:
+    steps:
+      - uses: github/codeql-action/init@abc
+        with:
+${actionsWith}`;
+}
+
+/** @param {{ kotlinStep?: string, jsWith?: string, actionsWith?: string }} [opts] */
 function workflow(opts = {}) {
 	const kotlin =
 		opts.kotlinStep ??
@@ -73,7 +103,7 @@ ${GO_STEP}  codeql-kotlin:
       - uses: github/codeql-action/init@abc
         with:
           languages: java-kotlin
-${kotlin}`;
+${kotlin}${interpretedJobs(opts)}`;
 }
 
 const TREES = [
@@ -87,8 +117,9 @@ test('a workflow that enumerates every tree passes', () => {
 	const root = fixtureRoot(TREES);
 	const { errors, ok } = check({ root, workflowText: workflow() });
 	assert.deepEqual(errors, []);
-	assert.equal(ok.length, 2);
+	assert.equal(ok.length, 4);
 	assert.match(ok[1], /1 scanned, 1 declared unbuilt/);
+	assert.match(ok[2], /scans the whole checkout$/);
 });
 
 test('a build step that names a fixed path instead of walking the tree fails', () => {
@@ -212,4 +243,233 @@ test('walkSurfaces skips vendored and build trees', () => {
 test('the shipped security.yml builds every tree this repo holds', () => {
 	const { errors } = check();
 	assert.deepEqual(errors, []);
+});
+
+// --- the interpreted legs -------------------------------------------------
+//
+// `build-mode: none` means no build step can narrow these, which is what the
+// guard used to take for "nothing can". The cases below are the routes that
+// still can: a `paths` / `paths-ignore` in the init config, a `query-filters`
+// exclusion, a narrower `queries:` suite, and a `config-file` holding any of
+// the three out of the guard's sight. Each has to fail, because each reads as
+// a clean scan afterwards.
+
+test('an interpreted leg that narrows nothing passes and says it scans the whole checkout', () => {
+	const root = fixtureRoot(TREES);
+	const { errors, ok } = check({ root, workflowText: workflow() });
+	assert.deepEqual(errors, []);
+	assert.match(ok[2], /javascript-typescript: .* scans the whole checkout$/);
+	assert.match(ok[3], /actions: .* scans the whole checkout$/);
+});
+
+test('a paths-ignore bought with no reason fails', () => {
+	const root = fixtureRoot(TREES);
+	const { errors } = check({
+		root,
+		workflowText: workflow({
+			jsWith:
+				'          languages: javascript-typescript\n' +
+				'          build-mode: none\n' +
+				'          queries: security-and-quality\n' +
+				'          config: |\n' +
+				'            paths-ignore:\n' +
+				'              - apps/job_worker\n',
+		}),
+	});
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /`paths-ignore` entry `apps\/job_worker` carries a 0-character reason/);
+});
+
+test('a paths entry that has stopped matching anything fails, exclusion or inclusion', () => {
+	const root = fixtureRoot(TREES);
+	for (const key of ['paths', 'paths-ignore']) {
+		const { errors } = check({
+			root,
+			workflowText: workflow({
+				jsWith:
+					'          languages: javascript-typescript\n' +
+					'          build-mode: none\n' +
+					'          queries: security-and-quality\n' +
+					'          config: |\n' +
+					`            ${key}:\n` +
+					`              ${REASON}\n` +
+					'              - apps/deleted_last_year\n',
+			}),
+		});
+		assert.equal(errors.length, 1, key);
+		assert.match(errors[0], /`apps\/deleted_last_year` matches no path in this tree/);
+	}
+});
+
+test('a paths-ignore that is declared, reasoned and still real is allowed', () => {
+	const root = fixtureRoot(TREES);
+	const { errors, ok } = check({
+		root,
+		workflowText: workflow({
+			jsWith:
+				'          languages: javascript-typescript\n' +
+				'          build-mode: none\n' +
+				'          queries: security-and-quality\n' +
+				'          config: |\n' +
+				'            paths-ignore:\n' +
+				`              ${REASON}\n` +
+				'              - apps/job_worker\n',
+		}),
+	});
+	assert.deepEqual(errors, []);
+	assert.match(ok[2], /less 1 declared narrowing\(s\) \(apps\/job_worker\)/);
+});
+
+test('a narrower query suite is a narrowing and costs a reason of its own', () => {
+	const root = fixtureRoot(TREES);
+	const bare =
+		'          languages: javascript-typescript\n' +
+		'          build-mode: none\n' +
+		'          queries: security\n';
+	const { errors } = check({ root, workflowText: workflow({ jsWith: bare }) });
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /runs `queries: security` .* rather than `security-and-quality`/);
+
+	const excused = check({
+		root,
+		workflowText: workflow({
+			jsWith:
+				'          languages: javascript-typescript\n' +
+				'          build-mode: none\n' +
+				`          ${REASON}\n` +
+				'          queries: security\n',
+		}),
+	});
+	assert.deepEqual(excused.errors, []);
+});
+
+test('a reason may not be reached across a key that carries a value', () => {
+	// Measured regression: an earlier version skipped ANY single line, so
+	// `queries:` adopted the comment written about `build-mode:` and a narrowed
+	// suite passed with a reason that never mentioned queries.
+	const lines = ['# a comment about the line below it, long enough to buy something', 'build-mode: none', 'queries: security'];
+	assert.equal(reasonAbove(lines, 2), '');
+	assert.match(reasonAbove(lines, 1), /^a comment about/);
+	// One container key IS reached across — that is the shape a first list item
+	// under its own key always has.
+	assert.match(reasonAbove(['# why this filter exists at all', 'query-filters:', '- exclude:'], 2), /^why this filter/);
+});
+
+test('a second exclusion appended under the first one’s reason fails rather than inheriting it', () => {
+	const root = fixtureRoot(TREES);
+	const { errors } = check({
+		root,
+		workflowText: workflow({
+			actionsWith:
+				'          languages: actions\n' +
+				'          build-mode: none\n' +
+				'          queries: security-and-quality\n' +
+				'          config: |\n' +
+				'            query-filters:\n' +
+				`              ${REASON}\n` +
+				'              - exclude:\n' +
+				'                  id: actions/first-rule\n' +
+				'              - exclude:\n' +
+				'                  id: actions/second-rule\n',
+		}),
+	});
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /`actions\/second-rule` carries a 0-character reason/);
+});
+
+test('a query filter naming a rule family this leg cannot emit excludes nothing, and fails', () => {
+	const root = fixtureRoot(TREES);
+	const { errors } = check({
+		root,
+		workflowText: workflow({
+			actionsWith:
+				'          languages: actions\n' +
+				'          build-mode: none\n' +
+				'          queries: security-and-quality\n' +
+				'          config: |\n' +
+				'            query-filters:\n' +
+				`              ${REASON}\n` +
+				'              - exclude:\n' +
+				'                  id: js/incomplete-url-substring-sanitization\n',
+		}),
+	});
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /is not a rule family this leg emits/);
+	assert.match(errors[0], /no-op/);
+});
+
+test('narrowing moved into a config-file is refused, not assumed harmless', () => {
+	const root = fixtureRoot(TREES);
+	const { errors } = check({
+		root,
+		workflowText: workflow({
+			jsWith:
+				'          languages: javascript-typescript\n' +
+				'          build-mode: none\n' +
+				'          queries: security-and-quality\n' +
+				'          config-file: ./.github/codeql/js.yml\n',
+		}),
+	});
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /does not follow/);
+});
+
+test('an interpreted leg that names no query suite runs a narrower default and says so nowhere', () => {
+	const root = fixtureRoot(TREES);
+	const { errors } = check({
+		root,
+		workflowText: workflow({
+			jsWith: '          languages: javascript-typescript\n          build-mode: none\n',
+		}),
+	});
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /names no `queries:` suite/);
+});
+
+test('a leg whose scope stops being the whole checkout is sent to SURFACES, not measured here', () => {
+	const root = fixtureRoot(TREES);
+	const { errors } = check({
+		root,
+		workflowText: workflow({
+			jsWith:
+				'          languages: javascript-typescript\n          queries: security-and-quality\n',
+		}),
+	});
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /does not declare `build-mode: none`/);
+	assert.match(errors[0], /belongs in SURFACES/);
+});
+
+test('globNamesSomething reads a bare directory as everything under it, and * as one segment', () => {
+	const paths = ['apps', 'apps/web', 'apps/web/src', 'apps/web/src/app.css', 'infra/dns'];
+	assert.equal(globNamesSomething('apps/web', paths), true);
+	assert.equal(globNamesSomething('apps/web/', paths), true);
+	assert.equal(globNamesSomething('apps/*', paths), true);
+	assert.equal(globNamesSomething('apps/**/*.css', paths), true);
+	// `*` must not cross a separator, or every stale glob "names something".
+	assert.equal(globNamesSomething('apps/*.css', paths), false);
+	assert.equal(globNamesSomething('apps/mobile_ios', paths), false);
+	assert.equal(globNamesSomething('', paths), false);
+});
+
+test('parseNarrowing reads both path keys and a query filter, each with its own reason', () => {
+	const entries = parseNarrowing(
+		[
+			'paths-ignore:',
+			'  # the generated bundle tree, re-derived from source on every build',
+			'  - apps/web/build',
+			'query-filters:',
+			'  # this note fires on our own advanced config and is not actionable',
+			'  - exclude:',
+			'      id: actions/unnecessary-use-of-advanced-config',
+		].join('\n'),
+	);
+	assert.deepEqual(
+		entries.map((e) => [e.kind, e.value]),
+		[
+			['paths-ignore', 'apps/web/build'],
+			['query-filter', 'actions/unnecessary-use-of-advanced-config'],
+		],
+	);
+	assert.ok(entries.every((e) => e.reason.length >= 40));
 });
