@@ -27213,3 +27213,62 @@ The fix is a settle anchor, not a different reader. `runs/matched-track-render.s
 Surveyed across `tests-e2e/`: **no offender exists today.** Every one of the eighteen files that seeds a Storage-backed run already tears down through `deleteRun` (two seed one and never delete at all, both being account-deletion specs where the removal is the feature under test). The forty-odd direct `from('runs').delete()` calls elsewhere are all on rows that wrote no object, and are not offences. The filing that named "several specs" was written without the survey and is refuted as a live defect.
 
 The rule is stated anyway, as `fixtures/storage-teardown.test.ts`, because the cost of it is one line at the point somebody adds the fourth object. **Nothing in it is a list**: the uploading helpers are found by scanning `simulate.ts` for an exported function whose body reaches `.upload(`; the option names that make them upload (`track`, `hrSeries`) are the `opts.X` guarding those calls; and the columns (`track_url`, `hr_series_url`, `matched_track_url`) are the `*_url` keys those bodies write. A fourth object needs no edit here, a renamed helper cannot leave the scan silently matching nothing, and a call passing a spread counts as seeding because the scan cannot see through it. Three claims follow: the derivations found something (or every assertion below is vacuous), `deleteRun` reads back every column the uploaders write, and no seeding file deletes a `runs` row directly. All four mutations were verified killing them — a planted `track:` beside a direct delete, a spread argument beside one, `deleteRun` losing its `matched_track_url` read, and `.upload(` renamed so nothing is found.
+
+---
+
+## 1397. A private copy of a shared helper is invisible to every registry guard, so the guard reads the source instead
+
+[§ 1340](#1340-dm_recipients-carried-a-fourth-private-copy-of-the-fold-and-had-reintroduced-the-sigma-sensitivity-the-canonical-one-exists-to-remove) named the shape and left it unguarded: `check_parity_pair_registry.mjs` compares the two REGISTRIES rather than the two behaviours, so a module that rewrites a shared helper privately is simply not a pair anyone declared, and `check_shared_constants.mjs` only compares rails it has been told about. The tree has hit it four times — § 852's hand-written Dart fold table, § 1340's fourth private `fold`, the round-42 catalogue picker's byte-identical `compareFoldedNames`, and § 1398's `planSlug` — with every guard green through all four.
+
+**The anchor is the part worth recording.** § 1340's own suggestion was to fail on the literal `normalize('NFD')` outside `catalogue_browse.ts`, which is a spelling: it fails correct code that mentions the string and passes a copy written any other way, and it needs a new rule per primitive, so the register of primitives becomes the thing that goes stale. A guard keyed on a NAME dies at the first rename; one keyed on the existence of a DECLARATION passes a copy that declares nothing. `scripts/check_shared_reimplementations.mjs` is keyed on two things that cannot be removed without changing behaviour, and neither is a name:
+
+- **The normalised BODY.** Every token the function runs, with only what is free to change erased — comments, whitespace, the function's own name, and the SPELLING of its parameters and locals, alpha-renamed to `$0..$n` by first occurrence. What survives is the operations it calls, the properties it reads, the literals it passes and its control-flow shape. A property after `.` stays verbatim even when a local shares its name, because `.length` is behaviour and not a spelling.
+- **The distinctive OPERATIONS it reaches for** — method calls carrying a string or regex literal, rendered `normalize('NFD')` or `replace(/\p{Diacritic}/gu,'')`. A copy that was rewritten, or that omits a step, has a different body but must still reach for the same primitives. This is the only anchor that sees § 1340, whose copy differed from the canonical by one `.replace`.
+
+Both thresholds were measured rather than picked. At one shared operation the tree yields 37 pairs and substantially all are noise — two functions querying `from('coach_messages')`, nine calling `createElement('div')`; at two, with an operation held by at most three functions tree-wide, it yields four pairs and three are real. The body floor of 20 normalised tokens leaves 36 cross-file identical groups over 3,068 extracted functions, eight of them holding a shared `lib/` export; below it the count runs away into accessors.
+
+**A group is reported only when one member is an EXPORTED `apps/web/src/lib/**` function**, which is what makes this guard about reimplementing something that was already importable rather than about duplication in general — the house rule ("three similar lines is better than a premature helper") tolerates the latter, and the nine copies of `escapeJsonLd` are deliberately invisible here. The other stated false negatives: anchor A finds identical copies and not the whole equivalence class (the tree holds eleven haversines and only the two structurally identical ones are one group), anonymous callbacks are not extracted, and cross-LANGUAGE reimplementation is out of reach of a reader of one language and stays with the parity-pair registry.
+
+Five mutations were verified killing it: § 1340's copy verbatim and again with its function, parameter and shape all renamed; the round-42 copy verbatim and again with its function, all four parameters and both locals renamed; and a registration matching no finding. The escape register is a census of eleven remaining pairs, each stating what the thing actually IS — three "real duplicate, filed", four "deliberate", one "false positive" (`detectPlatform` maps a user agent to a platform token and `platformIcon` maps that token to an icon, so they share `includes('android')` from opposite ends) — and it FAILS when an entry goes stale, which is how a defect in the guard's own reading of a parameter type was caught: an inline object type `a: { lng: number; lat: number }` read as a destructuring pattern bound `number`, and every `number` in the body was then alpha-renamed, so two byte-identical haversines disagreed. The register said so.
+
+The tokenizer is hand-rolled rather than `typescript`'s own scanner: `typescript` is a dependency of `apps/web` and not of the root, and every guard under `scripts/` advertises "stdlib only, no install needed". Reaching for a hoisted package would make this the one guard whose result depends on npm's hoisting.
+
+---
+
+## 1398. `planSlug` lower-cased where `clubSlug` folds — § 1251's reversal in a fourth place
+
+Found by § 1397's guard on its first run over the real tree, which is the point of building it.
+
+`/plans/[id]` derived its export filename as `(plan.name).toLowerCase().replace(/[^a-z0-9]+/g, '-')`. JS lower-cases U+0130 to `i` plus a combining dot, and the strip then turns that dot into a SEPARATOR — so a plan named `İstanbul Marathon` downloaded as `i-stanbul-marathon.md`, which is § 1251 verbatim, one surface further on. A diacritic is worse than a rename: it is not folded away but deleted into a hyphen, so `Champs-Élysées 10K` reached `champs-lys-es-10k`.
+
+Folded through `catalogue_browse`'s generated table it reaches `istanbul-marathon` and `champs-elysees-10k`, and `Zürich Build` reaches `zurich-build` rather than `z-rich-build`.
+
+**What was deliberately not done.** The remaining overlap with `clubSlug` — the kebab transform — is registered rather than extracted. They are not one contract: the club slug is a PERSISTED public identity with a length cap, a fallback and a Dart twin under a registered parity pair, and this is a download filename with two call sites. Extracting a common `slugify` would restructure one half of a pair whose other half this lane could not run, so the trade is stated and filed rather than taken quietly.
+
+The web half ships unpinned for the reason § 1278 recorded: `/plans/[id]` is a Svelte page and the web unit suite runs under `tsx --test`, which cannot compile one. That is now the third instance of the same gap.
+
+---
+
+## 1399. Two SVG rasterisers, one of them written beside an export that was already importable
+
+`share/svg_to_png.ts`'s `svgToPngBlob` was `format/svg_raster.ts`'s `rasterizeSvgToPng` written again: the same `createObjectURL`, the same `Image` load, the same canvas, the same `toBlob('image/png')` and the same two rejections, differing only in taking one `size` where the other takes a width and a height, and in one error message. Both were exported from the shared tree, and their doc comments made nearly the same argument for existing.
+
+Anchor A did not see it — the parameter difference changes the body — and anchor B did, on three shared distinctive operations. That is the case the second anchor was added for, found on the guard's first run.
+
+The recap pages take the square form through the general one and the module is deleted. `downloadBlob` already lived beside `rasterizeSvgToPng`, so the two halves of the share path are now in one place.
+
+---
+
+## 1400. The four `localeCompare` display-name sorts stay a collation, measured — a folded compare would give every reader the English answer
+
+§ 1337 closed the routes-list sort by folding, and the sweep that closed it filed four web surfaces that still collate a user-authored `display_name`: `social/search_ranking.ts`'s `comparePeopleRank`, `core/data.ts`'s `fetchSuggestedPeople`, `/coaching`'s roster sort, and `social/dm_recipients.ts`'s candidate list. This round verified the rule-out and then declined to change them.
+
+**The rule-out holds.** None of the four modules appears in either parity registry, no Dart file is named for any of them, and the Dart tree's only name-sorts are `catalogue_browse.dart`, `routes_screen.dart` and `exercise_catalogue_picker.dart` — all three of which fold, since § 1334 and § 1337. There is no mobile people-search, DM-recipient or coach-roster sort at all, so none of the four can be a cross-platform divergence.
+
+**What a change would actually do, measured.** `localeCompare` with no locale argument resolves to the HOST's collation, and over nine realistic names — `Åsa Berg`, `Ärnst Vogel`, `Øyvind Dahl`, `İpek Yilmaz`, `Chana Novak`, `Hana Dvorak` and three plain ones — seven locales produce **five distinct orders**: `en-US` and `de-DE` agree, `sv-SE` files `Å`, `Ä` and `Ø` after `Z`, `da-DK` orders those three differently again, `tr-TR` puts `İ` after `I`, and `cs-CZ` files `Chana` after `Hana` because `ch` is one letter in Czech. That variation is the FEATURE on a web-only human-facing list: each reader gets their own correct order. A folded code-unit compare is stable across all of them precisely because it gives every reader the English answer — it would file `Åsa` before `Zoe` for the Swedish reader who expects the opposite. § 1337's argument does not transfer, because its whole premise was a second platform whose runtime ships no collator; here there is no second platform.
+
+So the instrument is right and the surfaces stay. The residual is narrower than the filing said, and in one respect the filing was already out of date: it named "any of these that later grows an order-asserting test" as the future trigger, and `search_ranking.test.ts` already carries one. It is not flaky only because its names are `Alpha` / `Bravo` / `Charlie`, where every collation agrees — so the guard against that is to keep such a test's fixtures ASCII, not to change the comparator.
+
+**A different gap the sweep did surface, and it is not about collation.** `dm_recipients` breaks ties on `id` and says why — two renders of the same follow graph must list people in the same order. The other three do not, and a collation returns 0 for two DIFFERENT strings: two people genuinely called `John Smith`, or a display name stored precomposed against one stored decomposed. `Array.prototype.sort` is stable, so the order then falls through to whatever the query returned, which no `ORDER BY` in these paths makes unique. Filed rather than fixed, because the natural fix widens `RankablePerson` with an id and the caller that would supply it lives in `core/data.ts`.
+
+The reason is now a comment at each of the three sites this lane owns, because leaving it only in `followups.md` is what let two consecutive rounds re-derive the same sweep.
