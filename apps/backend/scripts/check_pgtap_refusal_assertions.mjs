@@ -1685,11 +1685,13 @@ export const CONDITIONALLY_STAMPED_ASSERTIONS = [
     file: 'notify_event_rsvp_organisers_test.sql',
     description: 'a member can RSVP going to the event',
     columns: ['event_attendees.status'],
-    readBack: 'the event creator is notified of the RSVP',
+    readBack: 'the RSVP is stored going, not silently waitlisted',
     reason:
-      "`notify_event_rsvp` returns early on any status other than 'going', and it is an AFTER " +
-      'trigger, so it sees whatever `enforce_event_capacity` left. The three notification counts ' +
-      'below would therefore all be 0 had the row been waitlisted -- the fan-out IS the read-back.',
+      'The stored status is read back directly. The fan-out below is a second, indirect proof -- ' +
+      "`notify_event_rsvp` returns early on any status other than 'going' and is an AFTER trigger, " +
+      'so it sees whatever `enforce_event_capacity` left -- but that is a claim about ANOTHER ' +
+      "trigger's control flow, and a fan-out widened to notify a waitlisted RSVP would falsify it " +
+      'in silence (decisions 1487).',
   },
   {
     file: 'paid_events_test.sql',
