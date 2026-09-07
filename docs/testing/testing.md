@@ -418,10 +418,11 @@ does and the **2.109.1** on this workstation's PATH does not. **Do not "fix" it
 with a `grant execute … to service_role` in a migration**: production's client
 traffic is anon/authenticated, so that widens a production grant to silence a
 local-only artifact. Drive the stack from the repo's own `npx supabase` (2.116.0
-restored the default — measured 2026-08-28 across the whole pgtap suite,
-including the two files that fail this same way), or trust CI. Same split, same
-cause, as the `donations_status_lock_test` / `coach_roster_summary_test` pgtap
-failures recorded in [test_inventory.md](test_inventory.md).
+restored the default — measured 2026-08-28, when the whole pgtap suite passed
+under it including `donations_status_lock_test` and `coach_roster_summary_test`,
+which fail under 2.109.1 for exactly this reason), or trust CI. Those two pgtap
+failures are recorded in [test_inventory.md](test_inventory.md) as the same
+split.
 
 **`tests-e2e/settings/account.spec.ts` § "change email — request path".** The
 second case fails as `element(s) not found` on `email-change-pending`, which
