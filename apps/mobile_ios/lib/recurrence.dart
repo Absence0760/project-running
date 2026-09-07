@@ -145,6 +145,14 @@ class EventRecurrence {
 /// time zone`). Legacy rows with no timezone keep the original local-zone
 /// stamping so their already-placed RSVPs don't shift. Mirrors
 /// apps/web/src/lib/social/recurrence.ts — keep the two in lockstep.
+///
+/// A legacy instance is therefore a LOCAL `DateTime`, and that is fine here:
+/// it names the same absolute instant web's `new Date(y, m, d, …)` does. It
+/// stops being fine at SERIALISATION, because `toIso8601String()` writes no
+/// zone designator for a local `DateTime` where JS's `toISOString()` always
+/// emits `Z` — so the wire form is normalised at the boundary that owns it
+/// (`instanceStartKey` in `api_client`), not here, where changing it would
+/// move the pair away from its twin (decisions § 1343).
 List<DateTime> expandInstances(
   EventRecurrence e,
   DateTime from,

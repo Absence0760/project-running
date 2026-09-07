@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, SelectionHint;
 
 import '../auth_error.dart';
+import '../catalogue_browse.dart' show compareFoldedNames, fold;
 import '../l10n/gen/app_localizations.dart';
 import '../fab_clearance.dart';
 import '../local_route_store.dart';
@@ -399,7 +400,15 @@ class RoutesScreenState extends State<RoutesScreen> {
   /// Apply the current filter + sort to the merged owned + bookmarks
   /// list. Pure pass over the input — no setState, no I/O.
   List<cm.Route> _filteredAndSorted(List<cm.Route> all) {
-    final q = _search.trim().toLowerCase();
+    // Folded on BOTH sides of the comparison, never `toLowerCase`. The two
+    // runtimes' own lower-case answers differ at 466 code points, and the one
+    // reachable in Latin text is U+0130: this side's simple mapping turns
+    // `İstanbul Loop` into `istanbul loop`, while a browser emits `i` plus a
+    // combining dot and does NOT match `istanbul`. So the same route was
+    // findable by typing `istanbul` here and not on the web (decisions
+    // § 1337). Folding also strips the accent, which is what lets `zurich`
+    // reach `Zürich Loop` from a keyboard without one.
+    final q = fold(_search.trim());
     Iterable<cm.Route> stream = all;
     if (_starredOnly) stream = stream.where((r) => r.isStarred);
     if (_surfaceFilter != _SurfaceFilter.any) {
@@ -410,7 +419,7 @@ class RoutesScreenState extends State<RoutesScreen> {
           .where((r) => _inDistanceBucket(r.distanceMetres, _distanceFilter));
     }
     if (q.isNotEmpty) {
-      stream = stream.where((r) => r.name.toLowerCase().contains(q));
+      stream = stream.where((r) => fold(r.name).contains(q));
     }
     final out = stream.toList();
     switch (_sort) {
@@ -430,8 +439,7 @@ class RoutesScreenState extends State<RoutesScreen> {
       case _RouteSort.mostRun:
         out.sort((a, b) => b.runCount.compareTo(a.runCount));
       case _RouteSort.az:
-        out.sort((a, b) =>
-            a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        out.sort((a, b) => compareFoldedNames(a.name, a.id, b.name, b.id));
     }
     return out;
   }

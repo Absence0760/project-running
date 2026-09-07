@@ -2891,6 +2891,7 @@
   "gymCatalogueSearchPlaceholder": "種目を検索",
   "gymCatalogueCategoryLabel": "カテゴリ",
   "gymCatalogueEmpty": "該当する種目がありません。",
+  "gymCatalogueOtherCategory": "「{name}」はすでにカタログにあります（{category}）。",
   "gymCatalogueCustomBadge": "カスタム",
   "gymCatalogueCreate": "「{name}」をカスタム種目として追加",
   "gymCatalogueCreateFailed": "種目を追加できませんでした。",

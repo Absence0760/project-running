@@ -82,6 +82,60 @@ test('routineFromWorkout: drops blank-named sets', () => {
 	assert.equal(draft.exercises[0].exerciseName, 'Row');
 });
 
+test('routineFromWorkout: two spellings of one lift merge into one block', () => {
+	// Adjacency is measured on the canonical key, so the block cannot carry a
+	// second row under the SAME exercise_key -- which nothing in the schema
+	// refuses (decisions § 1286 keeps the column non-unique on purpose).
+	const draft = routineFromWorkout(null, [
+		lset('Bench Press', 5, 80),
+		lset('bench press', 5, 82.5),
+		lset('Bench\u00a0Press', 4, 85),
+		lset('\u0130ncline Press', 8, 40),
+		lset('incline press', 8, 40),
+	]);
+	assert.equal(draft.exercises.length, 2);
+	assert.equal(draft.exerciseCount, 2);
+	assert.equal(draft.exercises[0].exerciseName, 'Bench Press');
+	assert.equal(draft.exercises[0].exerciseKey, 'bench press');
+	assert.equal(draft.exercises[0].sets.length, 3);
+	assert.deepEqual(
+		draft.exercises[0].sets.map((x) => x.setIndex),
+		[0, 1, 2],
+	);
+	assert.equal(draft.exercises[1].exerciseKey, 'incline press');
+	assert.equal(draft.exercises[1].sets.length, 2);
+});
+
+test('routineFromWorkout: an interleaved lift still splits the blocks', () => {
+	// Merging must not reach across a different lift -- a superset alternates
+	// A/B/A and has to stay three blocks.
+	const draft = routineFromWorkout(null, [
+		lset('Bench Press', 5, 80),
+		lset('Row', 8, 60),
+		lset('bench press', 5, 80),
+	]);
+	assert.equal(draft.exercises.length, 3);
+	assert.deepEqual(
+		draft.exercises.map((e) => e.exerciseKey),
+		['bench press', 'row', 'bench press'],
+	);
+});
+
+test('routineFromWorkout: a name whose canonical key is empty is dropped', () => {
+	// U+0085 is the one code point that survives JS trim() while the shared
+	// whitespace class folds it away, so the old name-blank guard let it
+	// through and minted exerciseKey '' -- which the column's own
+	// length(exercise_key) between 1 and 120 CHECK refuses. Dart's trim()
+	// strips U+0085, so the two rails answered differently (decisions § 1322).
+	const draft = routineFromWorkout(null, [
+		lset('\u0085', 5, 50),
+		lset('\u0085\u0085', 5, 50),
+		lset('Row', 8, 60),
+	]);
+	assert.equal(draft.exercises.length, 1);
+	assert.equal(draft.exercises[0].exerciseName, 'Row');
+});
+
 test('routineFromWorkout: null reps/weight carry through as null targets', () => {
 	const draft = routineFromWorkout(null, [lset('Plank', null, null)]);
 	const s = draft.exercises[0].sets[0];

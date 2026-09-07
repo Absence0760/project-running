@@ -234,11 +234,19 @@ select is(
   'exactly the roles that can write the two keyed tables may evaluate the CHECK'
 );
 
--- 15. And the write itself, as service_role, which is what 14 is about.
+-- 15. And the write itself, as service_role, which is what 14 is about. The
+--     CHECK still runs after the trigger has stamped, so it still calls
+--     `normalise_exercise_name` and a missing EXECUTE still surfaces as 42501
+--     rather than 23514 -- which is the whole subject here. `exercise_key` is
+--     deliberately NOT supplied: since 20270711000001 the trigger assigns it
+--     unconditionally, so a value here would never reach the constraint and
+--     would leave this assertion passing against a server that had stopped
+--     folding entirely (decisions 1324). The fold itself is 13's subject, and
+--     13 reads the stored key back.
 set local role service_role;
 select lives_ok(
-  $$insert into gym_routine_exercises (routine_id, exercise_name, exercise_key, position)
-    values ('00000000-0000-0000-0000-0000000b2001', 'Front Squat', 'front squat', 1)$$,
+  $$insert into gym_routine_exercises (routine_id, exercise_name, position)
+    values ('00000000-0000-0000-0000-0000000b2001', 'Front Squat', 1)$$,
   'a service_role insert satisfying the constraint is not refused by it'
 );
 

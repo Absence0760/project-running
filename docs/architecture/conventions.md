@@ -597,6 +597,28 @@ way — eleven of twenty-two columns absent behind `Route`
   into one list, the narrower half supplies the difference with values that
   state what is true ([§ 1229](decisions.md)) — and the fill's coverage is a
   type-level claim, so it cannot be partially right.
+- **A read type must not name a column the client's grants withhold.** SELECT on
+  `clubs` and `events` is revoked wholesale and re-granted column by column, so
+  `invite_token`, `location_point`, `host_user_id`, `meet_lat` and `meet_lng`
+  do not read as null — a select naming one raises 42501 and the whole query
+  fails. A `Omit<XRow, …>` overlay that declares them promises what the reader
+  is not permitted to ask for ([§ 1329](decisions.md)). The same applies to a
+  column the read strips for privacy (`shadow_hidden`, `activity_waiver_ack_at`)
+  or moderation: unanimous withholding is the strongest reason to leave a field
+  off the type, not a reason to leave it on.
+- **The projection-vs-type claim is guard-able at runtime, and the guard is an
+  equality.** Parse the column set out of the `.select()` literal, derive the
+  key set from the `Omit`/intersection crossed with `database.types.ts`, and
+  assert they are equal — never restate either as a literal in the test, which
+  would be a third declaration of the same thing. Both directions fail for a
+  reason: a column on the type and not the wire is the original defect; one on
+  the wire and not the type is width paid for and unreadable.
+- **A `setof <view>` RPC is typed from the view, not from the table behind it.**
+  The server fixes the projection, so derive the row type from the generated
+  view row rather than casting to the table's — and `Pick` it from the client
+  overlay rather than taking the generated view row verbatim, because postgres
+  cannot prove a view column NOT NULL and the generated row types every one of
+  them nullable ([§ 1328](decisions.md)).
 
 ## Local stores — a directory transition is serialised, not just atomic
 

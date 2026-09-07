@@ -16,12 +16,15 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { publicRouteListFill } from '../core/data_normalise';
+import type { Route } from '../types';
+import type { Database } from '../database.types';
 import {
 	PUBLIC_ROUTE_LIST_COLS,
 	PUBLIC_ROUTE_LIST_COLUMNS,
 	ROUTE_LIST_COLS,
 	ROUTE_LIST_COLUMNS,
 	type PublicRouteListRow,
+	type PublicRouteSummary,
 	type RouteListItem,
 } from './route_list_columns';
 
@@ -30,6 +33,16 @@ import {
 /// `T extends never` only holds for the empty union, so a non-empty argument
 /// is a compile error naming the columns that broke the claim.
 type AssertNever<T extends never> = T;
+
+/// `shadow_hidden` is not merely absent from the list projection — it left the
+/// `Route` overlay entirely (§ 1327), because every read path strips it:
+/// `fetchRouteById` destructures it off the owner read, `public_routes`
+/// projects it away, and neither column tuple names it. Pinned on `Route`
+/// rather than only on `RouteListItem`, because re-adding it to the overlay
+/// would put it back on `fetchRouteById`'s return without touching the `Pick`
+/// below — the `@ts-expect-error` further down would still be used, and
+/// nothing else would notice.
+export type RouteDeclaresNoModerationState = AssertNever<Extract<keyof Route, 'shadow_hidden'>>;
 
 /// The saved-route half reads `public_routes` and fills what the view
 /// withholds. If the fill ever stops covering the difference — or starts
@@ -61,7 +74,8 @@ export const withheldReadsDoNotCompile = (r: RouteListItem) => [
 	r.is_featured,
 	// @ts-expect-error — not in ROUTE_LIST_COLUMNS
 	r.featured_at,
-	// @ts-expect-error — server-owned moderation column, stripped at every read boundary
+	// @ts-expect-error — server-owned moderation column: not in the projection,
+	// and since § 1327 not on `Route` either
 	r.shadow_hidden,
 	// @ts-expect-error — server-spatial only, doubles the wire payload
 	r.geom,
@@ -70,6 +84,56 @@ export const withheldReadsDoNotCompile = (r: RouteListItem) => [
 	// @ts-expect-error — leaks the run start location
 	r.start_point,
 ];
+
+/// `PublicRouteSummary` is the intersection of the generated `public_routes`
+/// row with `Route`, so a view column `Route` does not have would be dropped
+/// silently — the type would still compile and still be wrong. This is the one
+/// direction the intersection cannot state for itself.
+export type PublicViewNamesNothingRouteDoesNot = AssertNever<
+	Exclude<keyof Database['public']['Views']['public_routes']['Row'], keyof Route>
+>;
+
+/// The catalogue RPCs serve the view, not the table, so the seven columns
+/// `public_routes` withholds must not be readable off their result. `waypoints`
+/// is the one that mattered: it is `TrackPoint[]`, non-nullable, and a caller
+/// that mapped over it got `undefined.map` — § 1229 — under a `Route` cast.
+export const viewWithheldReadsDoNotCompile = (r: PublicRouteSummary) => [
+	// @ts-expect-error — served only through clip_route_for_viewer (§ 33)
+	r.waypoints,
+	// @ts-expect-error — the owner's own flag, not a property of a public route
+	r.is_starred,
+	// @ts-expect-error — server-spatial only
+	r.geom,
+	// @ts-expect-error — server-spatial only
+	r.geom_public,
+	// @ts-expect-error — leaks the route start location
+	r.start_point,
+	// @ts-expect-error — server-owned moderation column (§ 1327)
+	r.shadow_hidden,
+];
+
+/// The catalogue card reads these nine off every row, so they have to survive
+/// the narrowing or the RouteExplorer stops compiling instead of the type
+/// stopping being a lie.
+export const catalogueReadsCompile = (r: PublicRouteSummary) => [
+	r.id,
+	r.user_id,
+	r.name,
+	r.distance_m,
+	r.elevation_m,
+	r.surface,
+	r.run_count,
+	r.is_featured,
+	r.tags,
+];
+
+/// The saved-route half of the list reads the same view, so its tuple is a
+/// subset of what the view serves — not merely of what `routes` has, which is
+/// what the column check further down proves and is not the same claim: adding
+/// `waypoints` to the public tuple passes that one and 400s at runtime.
+export type PublicListIsAViewSubset = AssertNever<
+	Exclude<keyof PublicRouteListRow, keyof PublicRouteSummary>
+>;
 
 /// Every column the list DOES read has to stay readable, or the narrowing has
 /// gone too far and the pin above would be the only thing left passing.

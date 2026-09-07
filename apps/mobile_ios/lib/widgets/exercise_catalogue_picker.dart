@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 
+import '../catalogue_browse.dart' show compareFoldedNames;
 import '../gym_prs.dart';
 import '../l10n/gen/app_localizations.dart';
 import 'gym_compose_sheet.dart';
@@ -76,6 +77,30 @@ String categoryLabel(AppLocalizations l10n, String category) {
   }
 }
 
+/// Total order on catalogue display names.
+///
+/// Compares DIACRITIC-FOLDED display names, not the normalised exercise KEY.
+/// Ordering a human-facing list is not keying it (decisions § 1276), and the
+/// key comparison this replaces was a UTF-16 code-unit compare that filed
+/// every accented name after "z": measured over `['Ab Wheel', 'Bench Press',
+/// 'Élévation latérale', 'Overhead Press', 'Row', 'Überzug', 'źcisk',
+/// 'Zercher Squat']` it put all three accented names behind `Zercher Squat`
+/// and diverged from the web picker's list at position 2.
+///
+/// Dart's core library ships no collator, so this cannot BE web's
+/// `localeCompare`; [fold] — the generated Unicode diacritic strip
+/// `catalogue_browse` already uses for exactly this reason (§ 852) — is the
+/// closest instrument this platform has, and it puts each of those three names
+/// where a reader expects it. What remains is the letters Unicode gives no
+/// canonical decomposition (`ø`, `đ`, `ł`, `ß`, `æ`), which a collation
+/// interleaves and a folded compare still files after `z`.
+///
+/// Ties break on `id`, so the answer does not depend on sort stability —
+/// Dart's `List.sort` is not stable, and the folded compare calls two
+/// spellings of one name equal.
+int _byName(GymCatalogueEntry a, GymCatalogueEntry b) =>
+    compareFoldedNames(a.name, a.id, b.name, b.id);
+
 class _ExerciseCataloguePickerScreenState
     extends State<ExerciseCataloguePickerScreen> {
   final TextEditingController _search = TextEditingController();
@@ -98,25 +123,50 @@ class _ExerciseCataloguePickerScreenState
 
   String get _query => _search.text.trim();
 
+  bool _inCategory(GymCatalogueEntry e) =>
+      _category == 'all' || e.category == _category;
+
   List<GymCatalogueEntry> get _filtered {
     final q = normaliseExerciseName(_query);
     final out = _entries
-        .where((e) => _category == 'all' || e.category == _category)
+        .where(_inCategory)
         .where((e) => q.isEmpty || normaliseExerciseName(e.name).contains(q))
         .toList();
-    out.sort((a, b) =>
-        normaliseExerciseName(a.name).compareTo(normaliseExerciseName(b.name)));
+    out.sort(_byName);
     return out;
   }
 
-  bool get _hasExact {
+  /// Every catalogue entry the query names EXACTLY, category filter ignored.
+  ///
+  /// Scanning the whole catalogue is what [_canCreate] needs: `exercises` is
+  /// keyed on the folded name, so a second row under a key the catalogue
+  /// already holds is a duplicate whichever category it claims. Narrowing this
+  /// to the visible set would trade the dead end below for a duplicate write.
+  List<GymCatalogueEntry> get _exact {
     final key = normaliseExerciseName(_query);
-    return key.isNotEmpty &&
-        _entries.any((e) => normaliseExerciseName(e.name) == key);
+    if (key.isEmpty) return const [];
+    return _entries
+        .where((e) => normaliseExerciseName(e.name) == key)
+        .toList(growable: false);
+  }
+
+  /// The entry the query names exactly while the category filter hides it,
+  /// else null.
+  ///
+  /// Without this the state had no honest rendering: the list is empty and
+  /// [_canCreate] is false, which used to resolve to a bare "No exercises
+  /// match." beside no create button and no explanation — the exercise
+  /// existed, was not shown, and could not be added (decisions § 1276's
+  /// residual half). Always null under 'all', where a key EQUAL to the query
+  /// necessarily contains it and the entry is therefore listed.
+  GymCatalogueEntry? get _hiddenExact {
+    final exact = _exact;
+    if (exact.isEmpty) return null;
+    return exact.any(_inCategory) ? null : exact.first;
   }
 
   bool get _canCreate =>
-      widget.api != null && _query.isNotEmpty && !_hasExact && !_creating;
+      widget.api != null && _query.isNotEmpty && _exact.isEmpty && !_creating;
 
   Future<void> _create() async {
     final api = widget.api;
@@ -150,6 +200,7 @@ class _ExerciseCataloguePickerScreenState
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final filtered = _filtered;
+    final hiddenExact = _hiddenExact;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.gymCatalogueTitle)),
@@ -217,7 +268,13 @@ class _ExerciseCataloguePickerScreenState
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Text(
-                        l10n.gymCatalogueEmpty,
+                        hiddenExact == null
+                            ? l10n.gymCatalogueEmpty
+                            : l10n.gymCatalogueOtherCategory(
+                                hiddenExact.name,
+                                categoryLabel(l10n, hiddenExact.category),
+                              ),
+                        textAlign: TextAlign.center,
                         style: theme.textTheme.bodyMedium
                             ?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,

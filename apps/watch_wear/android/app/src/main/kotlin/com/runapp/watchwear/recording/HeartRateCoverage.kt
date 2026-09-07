@@ -2,6 +2,20 @@ package com.runapp.watchwear.recording
 
 import kotlin.math.round
 
+/// The Wear OS half of watchOS's `HeartRateCoverage` / `HeartRateClaim`
+/// (`apps/watch_ios/WatchApp/HealthKitManager.swift`). Not a registered parity
+/// pair — the registries pair web with mobile, and the two watch clients are
+/// additive surfaces under decisions § 24 — but both write the same
+/// `runs.avg_bpm` and `runs.metadata.hr_coverage` on the same account, so the
+/// two constants below have to mean the same thing on either wrist.
+///
+/// That much IS enforced: claim (12) of `scripts/check_watch_ios_source.mjs`
+/// reads both files, converts the milliseconds-versus-seconds difference, and
+/// fails the PR on a disagreement — or on a rename that leaves either figure
+/// unreadable, because a rename is the edit most likely to take them apart
+/// unobserved (decisions § 1348). The guard lives on the watchOS side because
+/// that tier already has one; a change HERE is what it most often catches.
+
 /// The share of a run's active time the wrist sensor must have been delivering
 /// for the mean of its samples to be saved as THE RUN'S average heart rate.
 ///

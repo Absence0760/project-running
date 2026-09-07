@@ -16,7 +16,10 @@ import '../preferences.dart';
 /// plan's week bucket on the plan-detail screen, not the calendar.
 ///
 /// The day-bucketing + windowing live in the pure `currentWeek` helper
-/// (`current_week.dart`, byte-identical twin of web's `current_week.ts`);
+/// (`current_week.dart`, the Dart half of a registered parity pair with web's
+/// `current_week.ts` — same algorithm, edge cases, outputs and test counts,
+/// not the same bytes; "byte-identical" in this repo means the iOS twin of a
+/// Dart file, decisions § 39);
 /// this widget is presentation only. Self-hides nothing — a zeroed week still
 /// renders the empty frame, matching web.
 class ThisWeekStrip extends StatelessWidget {

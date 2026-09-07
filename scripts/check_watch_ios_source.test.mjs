@@ -27,8 +27,13 @@ import {
 	buildSettingsBlocks,
 	INGEST,
 	ROUTE_BRIDGE,
+	PHONE_PBXPROJ,
 	UNGUARDED_DESTRUCTIVE,
+	WEAR_COVERAGE,
 	check,
+	watchBundleIdentifiers,
+	kotlinNumericConstant,
+	swiftNumericConstant,
 	confirmationDialogSpans,
 	dartInvokeKeys,
 	destructiveButtons,
@@ -62,6 +67,12 @@ const ROUTE_BRIDGE_ABS = join(REPO_ROOT, ROUTE_BRIDGE);
 const STAGED_INGEST = 'WatchIngestBridge.swift';
 /** …and of the Dart end of the route-push envelope. */
 const STAGED_ROUTE_BRIDGE = 'apple_watch_route_bridge.dart';
+/** …and of Wear OS's half of the heart-rate coverage contract. */
+const STAGED_WEAR_COVERAGE = 'HeartRateCoverage.kt';
+const WEAR_COVERAGE_ABS = join(REPO_ROOT, WEAR_COVERAGE);
+/** …and of the phone project claim (10) holds the plist against. */
+const STAGED_PHONE_PBX = 'Runner.project.pbxproj';
+const PHONE_PBXPROJ_ABS = join(REPO_ROOT, PHONE_PBXPROJ);
 const ARMED = join('WatchApp', 'ArmedRoute.swift');
 const DIRECT = join('WatchApp', 'SupabaseService.swift');
 const PBX = join('WatchApp.xcodeproj', 'project.pbxproj');
@@ -71,7 +82,7 @@ const HK = join('WatchApp', 'HealthKitManager.swift');
 function stage() {
 	const dir = mkdtempSync(join(tmpdir(), 'watch-ios-source-'));
 	const rels = [CATALOG, PLIST, ENTS, README, PBX];
-	for (const sub of ['WatchApp', 'Complications']) {
+	for (const sub of ['WatchApp', 'Complications', 'WatchAppTests']) {
 		for (const name of readdirSync(join(WATCH_IOS, sub))) {
 			if (name.endsWith('.swift')) rels.push(join(sub, name));
 		}
@@ -82,6 +93,8 @@ function stage() {
 	}
 	cpSync(INGEST_ABS, join(dir, STAGED_INGEST));
 	cpSync(ROUTE_BRIDGE_ABS, join(dir, STAGED_ROUTE_BRIDGE));
+	cpSync(WEAR_COVERAGE_ABS, join(dir, STAGED_WEAR_COVERAGE));
+	cpSync(PHONE_PBXPROJ_ABS, join(dir, STAGED_PHONE_PBX));
 	return dir;
 }
 
@@ -93,7 +106,13 @@ function runMutated(mutate) {
 	const dir = stage();
 	try {
 		mutate(dir);
-		return check(dir, join(dir, STAGED_INGEST), join(dir, STAGED_ROUTE_BRIDGE));
+		return check(
+			dir,
+			join(dir, STAGED_INGEST),
+			join(dir, STAGED_ROUTE_BRIDGE),
+			join(dir, STAGED_WEAR_COVERAGE),
+			join(dir, STAGED_PHONE_PBX),
+		);
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}
@@ -908,4 +927,194 @@ test('buildSettingsBlocks brace-matches rather than running to the next block', 
 	assert.equal(blocks.length, 2);
 	assert.ok(blocks[0].includes('A = 1') && !blocks[0].includes('B = 2'));
 	assert.deepEqual(buildSettingsBlocks('nothing here'), []);
+});
+
+// ─────────────── claim (12): the two wrists' coverage figures ───────────────
+
+test('claim (12) refuses a coverage threshold that differs by wrist', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, STAGED_WEAR_COVERAGE, (s) =>
+			s.replace('const val MIN_AVG_BPM_COVERAGE = 0.5', 'const val MIN_AVG_BPM_COVERAGE = 0.6'),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('minAverageBPMCoverage') && e.includes('0.6')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (12) refuses a freshness window that differs by wrist', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, join('WatchApp', 'HealthKitManager.swift'), (s) =>
+			s.replace('static let sampleFreshInterval: TimeInterval = 30', 'static let sampleFreshInterval: TimeInterval = 45'),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('sampleFreshInterval') && e.includes('45000')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (12) compares the MEANING, not the spelling, across the unit change', () => {
+	// The two hold the window in different units on purpose. Spelling the Wear
+	// figure the way the Swift one is spelled is the divergence, not the fix:
+	// 30 ms is a window nothing survives, and a guard comparing raw literals
+	// would call it agreement.
+	const { errors } = runMutated((dir) => {
+		edit(dir, STAGED_WEAR_COVERAGE, (s) =>
+			s.replace('const val HR_SAMPLE_FRESH_MS = 30_000L', 'const val HR_SAMPLE_FRESH_MS = 30L'),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('Wear OS `HR_SAMPLE_FRESH_MS` is 30 ')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (12) reports rather than passes when a constant is renamed', () => {
+	// A rename is exactly the edit that would take the two figures apart with
+	// nothing watching, so the unreadable rail has to fail loudly rather than
+	// skip. Anchoring on the name is safe only because of this.
+	const { errors } = runMutated((dir) => {
+		edit(dir, join('WatchApp', 'HealthKitManager.swift'), (s) =>
+			s.replaceAll('minAverageBPMCoverage', 'minimumAverageBPMCoverage'),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('Claim (12) cannot read') && e.includes('minAverageBPMCoverage')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (12) reports rather than passes when a figure stops being a literal', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, STAGED_WEAR_COVERAGE, (s) =>
+			s.replace('const val HR_SAMPLE_FRESH_MS = 30_000L', 'const val HR_SAMPLE_FRESH_MS = 30L * 1000L'),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('Claim (12) cannot read') && e.includes('HR_SAMPLE_FRESH_MS')),
+		errors.join('\n'),
+	);
+});
+
+test('the two numeric-constant readers take the literal and nothing around it', () => {
+	assert.equal(swiftNumericConstant('    static let a = 0.5\n', 'a'), 0.5);
+	assert.equal(swiftNumericConstant('    static let b: TimeInterval = 30\n', 'b'), 30);
+	assert.equal(kotlinNumericConstant('const val C = 30_000L\n', 'C'), 30000);
+	assert.equal(kotlinNumericConstant('const val D: Double = 0.5\n', 'D'), 0.5);
+	// A prose mention is not a declaration, and a computed value is not a
+	// literal — both answer null so the caller can report rather than guess.
+	assert.equal(swiftNumericConstant('/// a is 0.5 on both wrists\n', 'a'), null);
+	assert.equal(kotlinNumericConstant('const val C = OTHER * 1000L\n', 'C'), null);
+	assert.equal(kotlinNumericConstant('const val C = 30_000L\n', 'MISSING'), null);
+});
+
+// ───────── claim (10): the plist follows the build, in both directions ─────────
+
+test('claim (10) refuses WKWatchOnly once the phone project embeds the watch', () => {
+	// The day § 1256's build integration lands is the day the key becomes a
+	// live defect rather than an accurate description of a project that ships
+	// nothing. Planted as the Embed Watch Content destination Apple writes.
+	const { errors } = runMutated((dir) => {
+		edit(dir, STAGED_PHONE_PBX, (s) =>
+			s.replace(
+				'objects = {',
+				'objects = {\n\t\tdstPath = "$(CONTENTS_FOLDER_PATH)/Watch";',
+			),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('now bundles the watch app') && e.includes('WKWatchOnly')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (10) refuses a companion named while nothing embeds', () => {
+	// The other direction, and the one § 1256 called "moving the lie": flipping
+	// the key alone declares a companion relationship no build produces.
+	const { errors } = runMutated((dir) => {
+		edit(dir, PLIST, (s) =>
+			s.replace(
+				'\t<key>WKWatchOnly</key>\n\t<true/>',
+				'\t<key>WKCompanionAppBundleIdentifier</key>\n\t<string>com.threkir.app</string>',
+			),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('names a companion') && e.includes('does not exist')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (10) recognises the embed by the watch bundle id too', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, STAGED_PHONE_PBX, (s) =>
+			s.replace('objects = {', 'objects = {\n\t\tPRODUCT_BUNDLE_IDENTIFIER = com.threkir.app.watchapp;'),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('now bundles the watch app')),
+		errors.join('\n'),
+	);
+});
+
+test('watchBundleIdentifiers drops the test target and dedupes', () => {
+	const src = [
+		'PRODUCT_BUNDLE_IDENTIFIER = com.threkir.app.watchapp;',
+		'PRODUCT_BUNDLE_IDENTIFIER = com.threkir.app.watchapp;',
+		'PRODUCT_BUNDLE_IDENTIFIER = com.threkir.app.watchapp.tests;',
+	].join('\n');
+	assert.deepEqual(watchBundleIdentifiers(src), ['com.threkir.app.watchapp']);
+	assert.deepEqual(watchBundleIdentifiers('nothing here'), []);
+});
+
+// ───────── claim (13): a Swift file Xcode never compiles ─────────
+
+test('claim (13) refuses a test file that is in no target', () => {
+	// The § 1156 class, on the directory where it costs the most: an orphaned
+	// test file is not a red, it is an absence, and `test-watch-ios` goes green
+	// having never run it.
+	const { errors } = runMutated((dir) => {
+		edit(dir, PBX, (s) =>
+			s.replaceAll('HealthKitFailureTests.swift in Sources */', 'Orphaned.swift in Sources */'),
+		);
+	});
+	assert.ok(
+		errors.some(
+			(e) => e.includes('HealthKitFailureTests.swift') && e.includes('is in no target'),
+		),
+		errors.join('\n'),
+	);
+});
+
+test('claim (13) fails when an unbuilt exemption goes stale', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, PBX, (s) =>
+			s.replace(
+				'\tobjects = {',
+				'\tobjects = {\n\t\tAAAA /* ActiveRunComplication.swift in Sources */ = {isa = PBXBuildFile; };',
+			),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('exempted from claim (13) but IS now a target member')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (13) fails when an unbuilt exemption names a file that is gone', () => {
+	const { errors } = runMutated((dir) => {
+		rmSync(join(dir, 'Complications', 'ActiveRunComplication.swift'));
+	});
+	assert.ok(
+		errors.some((e) => e.includes('which this tree no longer has')),
+		errors.join('\n'),
+	);
+	// …and claim (4), which reads the same file, must NAME it rather than
+	// throwing an ENOENT stack a reader cannot act on.
+	assert.ok(
+		errors.some((e) => e.includes('ActiveRunComplication.swift is gone')),
+		errors.join('\n'),
+	);
 });

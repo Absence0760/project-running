@@ -2,15 +2,16 @@
 /// select string built from them, and the row type that says so.
 ///
 /// `fetchRoutes` / `fetchRoutesWithError` select eleven of `routes`' twenty-two
-/// columns and used to hand the rows back as `Route`, which declares all
-/// twenty-two. Eleven of those fields — `description`, `tags`, `is_public`,
-/// `updated_at`, `slug`, `is_featured`, `featured_at`, `shadow_hidden`,
-/// `geom`, `geom_public`, `start_point` — are `undefined` at runtime under a
-/// type promising them, so a consumer that reads one gets `undefined` with the
-/// compiler's blessing. Narrowing the select is right (§ 1229 and the guard
-/// above it): `geom` duplicates `waypoints` for server-side spatial queries and
-/// doubles the wire payload, and `shadow_hidden` is a moderation column the
-/// read boundary strips everywhere else. The defect is the type, not the query.
+/// columns and used to hand the rows back as `Route`, which declares twenty-one
+/// of them (`shadow_hidden` left the overlay in § 1327, because every read path
+/// strips it). Ten of those fields — `description`, `tags`, `is_public`,
+/// `updated_at`, `slug`, `is_featured`, `featured_at`, `geom`, `geom_public`,
+/// `start_point` — are `undefined` at runtime under a type promising them, so a
+/// consumer that reads one gets `undefined` with the compiler's blessing.
+/// Narrowing the select is right (§ 1229 and the guard above it): `geom`
+/// duplicates `waypoints` for server-side spatial queries and doubles the wire
+/// payload, and `shadow_hidden` is a moderation column the read boundary strips
+/// everywhere else. The defect is the type, not the query.
 ///
 /// So the contract is declared ONCE, here, and both halves are derived from it:
 /// the wire string is computed from the column tuple, and `RouteListItem` is
@@ -19,6 +20,7 @@
 /// column that no longer exists after a migration fails to compile rather than
 /// silently asking PostgREST for nothing.
 import type { Route } from '../types';
+import type { Database } from '../database.types';
 
 /// The PostgREST separator. A select list is comma-separated; the space is
 /// cosmetic and matches the hand-written literal this replaced.
@@ -87,6 +89,28 @@ export type RouteListItem = Pick<Route, (typeof ROUTE_LIST_COLUMNS)[number]>;
 /// `publicRouteListFill` supplies what the view withholds. Union it with the
 /// fill and the result is a `RouteListItem`.
 export type PublicRouteListRow = Pick<Route, (typeof PUBLIC_ROUTE_LIST_COLUMNS)[number]>;
+
+/// Everything `public_routes` serves. Not a select list — the two catalogue
+/// RPCs (`nearby_routes`, `search_public_routes`) are declared `setof
+/// public_routes`, so the server fixes the projection and the client's only
+/// job is to say what it is. Both readers used to end `as Route[]`, promising
+/// the caller seven columns the view withholds by construction, of which
+/// `waypoints` is the non-nullable `TrackPoint[]` whose absence was the whole
+/// of § 1229.
+///
+/// Derived from the generated view row rather than enumerated, so a migration
+/// that widens or narrows the view moves this type in the same regeneration;
+/// `route_list_columns.test.ts` pins that the view names nothing `Route` does
+/// not, which is the one way the intersection could silently drop a column.
+type PublicRouteViewRow = Database['public']['Views']['public_routes']['Row'];
+
+/// A row of the public-route catalogue. `Pick`ed from `Route` rather than
+/// taken as the generated view row: postgres cannot prove a view column NOT
+/// NULL, so the generated row types every one of the fifteen as nullable,
+/// while the base columns behind them are not. `PublicRouteListRow` below
+/// already takes that decision for the same view — this is the same view read
+/// through a different door.
+export type PublicRouteSummary = Pick<Route, keyof PublicRouteViewRow & keyof Route>;
 
 /// The columns of `routes` the list deliberately does not ask for. Exported so
 /// a caller that needs one has to say so — by widening the tuple above, which

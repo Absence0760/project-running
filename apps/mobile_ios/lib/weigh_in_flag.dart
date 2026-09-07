@@ -2,9 +2,16 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'env_flag.dart';
 
-/// The dart-define / dotenv key the gate reads. Web spells the same flag
-/// `PUBLIC_WEIGH_IN_GATE`; mobile drops the web-only `PUBLIC_` prefix, as
-/// every other mobile deploy flag does.
+/// The dart-define / dotenv key the gate reads.
+///
+/// The dropped-`PUBLIC_`-prefix convention the other two deploy gates follow
+/// is BROKEN here, and it is broken in the stem rather than the prefix: web
+/// reads `PUBLIC_WEIGH_IN_ENABLED` (`apps/web/src/lib/runs/weigh_in_flag.ts`),
+/// mobile reads `WEIGH_IN_GATE`. So the two names do not derive from one
+/// another and an operator who has set one has NOT set the other -- which
+/// matters, because each half is the fail-closed gate on its own platform's
+/// Art 9 weigh-in surface. `deploy_gate_names_test.dart` re-measures the
+/// exception, so a name stated here that nothing reads fails the PR.
 const String kWeighInEnvKey = 'WEIGH_IN_GATE';
 
 /// Pure parse of the checkpoint weigh-in deploy flag, delegating to the one

@@ -12,6 +12,13 @@
 /// row "can't be messaged" would require leaking exactly that. Those sends are
 /// refused server-side and surfaced by `sendDm`'s 42501 branch.
 
+// The canonical accent-and-case fold, not a local copy. The copy that used
+// to live here skipped the final-sigma collapse, which made this the only
+// sigma-SENSITIVE search key left in the product: a display name `ΟΔΟΣ`
+// folds to a trailing ς, so a reader typing the medial σ their keyboard
+// produces could not find it (decisions § 1340).
+import { fold } from '../segments/catalogue_browse';
+
 export type DmRelation = 'mutual' | 'follows_you' | 'you_follow';
 
 /// The profile shape both `fetchFollowers` and `fetchFollowing` return.
@@ -28,12 +35,6 @@ export interface DmRecipient {
 	relation: DmRelation;
 }
 
-function fold(value: string): string {
-	return value
-		.normalize('NFD')
-		.replace(/\p{Diacritic}/gu, '')
-		.toLowerCase();
-}
 
 /// Merge the two follow directions into one deduped, display-ordered list.
 ///

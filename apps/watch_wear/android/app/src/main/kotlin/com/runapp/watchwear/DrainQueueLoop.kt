@@ -28,12 +28,35 @@ package com.runapp.watchwear
 /// down-network state can't hammer the backend with every run in the
 /// queue. Permanent failures (`SkipAndContinue`) keep iterating
 /// because retrying them would just re-skip — the queue entry is
-/// stuck and the user can clear it manually.
+/// stuck, and [rejectedIds] is what carries that fact out to a surface
+/// the runner can act on (decisions § 1347).
 
 data class DrainQueueLoopResult(
     /// Run ids removed from the persistent queue this pass — the runs
     /// whose upload succeeded (200).
     val drainedIds: List<String>,
+    /// Run ids the server permanently REFUSED this pass (`SkipAndContinue`
+    /// — 400/404/409/422 and unknown). They are still in the queue and no
+    /// retry will ever move them.
+    ///
+    /// Separate from [lastError] rather than folded into it, because the two
+    /// have different lifetimes on purpose. `lastError` is the transient
+    /// banner and a later success in the same pass clears it — a decision
+    /// `DrainQueueLoopTest` states twice and this does not reverse. A
+    /// permanent rejection is not a banner: it is a standing fact about a
+    /// queue entry that outlives every later success, and folding it into a
+    /// field designed to be cleared is exactly how "Sync" reported success
+    /// on every tap while the queue count never fell.
+    val rejectedIds: List<String>,
+    /// Every run whose upload was ATTEMPTED this pass, in order.
+    ///
+    /// The loop breaks on the first transient failure, so this is a prefix of
+    /// the snapshot and the runs after it were not judged at all. A caller
+    /// carrying [rejectedIds] across passes needs to know which entries this
+    /// pass has an opinion about: one it never reached must keep the verdict
+    /// of the last pass that did reach it, and one it reached and did not
+    /// reject must lose an older rejection rather than keep it.
+    val attemptedIds: List<String>,
     /// True iff at least one classification was `StopAndRetryLater`
     /// or `RetryAfterRefresh` followed by another transient failure.
     /// Caller arms backoff when set.
@@ -42,6 +65,30 @@ data class DrainQueueLoopResult(
     /// `syncError` until the next success clears it.
     val lastError: String?,
 )
+
+/// Fold one pass's verdicts into the set of queue entries known to be
+/// permanently rejected.
+///
+/// Pure so it can be tested: the state it maintains lives on `RunViewModel`,
+/// which needs an Android runtime to construct.
+///
+/// Three rules, and each exists for a case the other two get wrong:
+///   - a run this pass ATTEMPTED takes this pass's verdict, so a rejection
+///     that has since become a success or a transient stops being claimed;
+///   - a run this pass never reached keeps the verdict it already had, so a
+///     server that goes down before the loop reaches the stuck entry does not
+///     take the only notice of it off the screen;
+///   - anything no longer in the queue is dropped, so a drained or discarded
+///     run cannot leave a rejection behind for an id that no longer exists.
+internal fun rejectedAfterPass(
+    previouslyRejected: Set<String>,
+    queuedIdsBeforePass: List<String>,
+    result: DrainQueueLoopResult,
+): Set<String> {
+    val stillQueued = queuedIdsBeforePass.toSet() - result.drainedIds.toSet()
+    val carried = previouslyRejected - result.attemptedIds.toSet()
+    return (carried + result.rejectedIds).intersect(stillQueued)
+}
 
 /// Test seam: lets a fake mock the SupabaseClient.saveRun call.
 fun interface PushQueuedRun {
@@ -70,10 +117,13 @@ internal suspend fun drainQueueLoop(
     classify: (Throwable) -> DrainAction = ::classifyDrainError,
 ): DrainQueueLoopResult {
     val drained = mutableListOf<String>()
+    val rejected = mutableListOf<String>()
+    val attempted = mutableListOf<String>()
     var anyTransientFailure = false
     var lastError: String? = null
 
     for (run in snapshot) {
+        attempted += run.id
         try {
             push(run)
             onSuccessfulDrain.invoke(run.id)
@@ -118,15 +168,21 @@ internal suspend fun drainQueueLoop(
                 }
                 DrainAction.SkipAndContinue -> {
                     // Permanent (400/404/409/422 / unknown). Move on to
-                    // the next run — retrying would just re-skip. The
-                    // run stays in the queue until the user manually
-                    // discards it from the UI.
+                    // the next run — retrying would just re-skip. The run
+                    // stays in the queue, and recording it here is what
+                    // gives the PreRun chip something to say about it: the
+                    // loop's own comment used to point at a manual discard
+                    // that only ever existed on the screen the runner had
+                    // just left (decisions § 1347).
+                    rejected += run.id
                 }
             }
         }
     }
     return DrainQueueLoopResult(
         drainedIds = drained,
+        rejectedIds = rejected,
+        attemptedIds = attempted,
         anyTransientFailure = anyTransientFailure,
         lastError = lastError,
     )

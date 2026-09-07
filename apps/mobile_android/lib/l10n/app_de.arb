@@ -2891,6 +2891,7 @@
   "gymCatalogueSearchPlaceholder": "Übungen suchen",
   "gymCatalogueCategoryLabel": "Kategorie",
   "gymCatalogueEmpty": "Keine Übung passt.",
+  "gymCatalogueOtherCategory": "„{name}“ ist bereits im Katalog, unter {category}.",
   "gymCatalogueCustomBadge": "Eigene",
   "gymCatalogueCreate": "„{name}“ als eigene Übung hinzufügen",
   "gymCatalogueCreateFailed": "Übung konnte nicht hinzugefügt werden.",

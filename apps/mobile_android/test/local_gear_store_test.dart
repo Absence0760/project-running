@@ -12,6 +12,8 @@ import '../lib/local_gear_store.dart';
 /// so we can assert the drain order (create → update → delete).
 class _FakeGearApi extends ApiClient {
   final List<String> calls = [];
+  final List<Map<String, dynamic>> creates = [];
+  final List<Map<String, dynamic>> updates = [];
   Set<String> failOn = const {};
   Set<String> failedCreates = const {};
   Set<String> failedUpdates = const {};
@@ -29,6 +31,7 @@ class _FakeGearApi extends ApiClient {
     String? notes,
   }) async {
     calls.add('create:$id');
+    creates.add({'id': id, 'purchased_at': purchasedAt});
     if (failedCreates.contains(id)) throw StateError('create failed');
     return GearRow(
       id: id ?? 'server-generated',
@@ -54,6 +57,11 @@ class _FakeGearApi extends ApiClient {
     String? notes,
   }) async {
     calls.add('update:$id');
+    updates.add({
+      'id': id,
+      'purchased_at': purchasedAt,
+      'retired_at': retiredAt,
+    });
     if (failedUpdates.contains(id)) throw StateError('update failed');
   }
 
@@ -98,6 +106,85 @@ void main() {
       await fresh.init(overrideDirectory: dir);
       expect(fresh.rows, hasLength(1));
       expect(fresh.rows.first['name'], 'Trek Domane');
+    });
+  });
+
+  group('a `date` column is never rolled over on its way back to the server',
+      () {
+    /// Seeds a gear row on disk with an arbitrary `purchased_at` text and
+    /// returns a store that has cold-loaded it.
+    Future<LocalGearStore> seed(String id, String purchasedAt,
+        {required GearSyncState state}) async {
+      final stored = StoredGear(
+        row: <String, dynamic>{
+          'id': id,
+          'kind': 'shoe',
+          'name': 'Seeded',
+          'purchased_at': purchasedAt,
+          'retired_at': null,
+          'total_distance_m': 0,
+          'created_at': DateTime.utc(2026, 6, 1).toIso8601String(),
+        },
+        syncState: state,
+      );
+      File('${dir.path}/$id.json').writeAsStringSync(jsonEncode(stored.toJson()));
+      final reloaded = LocalGearStore();
+      await reloaded.init(overrideDirectory: dir);
+      return reloaded;
+    }
+
+    test('an impossible day is sent as NO date, not as the day it rolls to',
+        () async {
+      // decisions § 1344. `DateTime.tryParse('2026-06-32')` is the 2nd of
+      // July, and this value goes straight back to a `date` column through
+      // `createGear` — so the rolled-over day would become the stored day and
+      // `gearBackfillCandidates` would then measure the wrong purchase date.
+      final store = await seed('rolled', '2026-06-32',
+          state: GearSyncState.pendingCreate);
+      final api = _FakeGearApi();
+      await store.syncWithServer(api);
+      expect(api.creates, hasLength(1));
+      expect(api.creates.single['purchased_at'], isNull,
+          reason: 'a refusal, not 2026-07-02');
+    });
+
+    test('the same shape on the update path', () async {
+      final store = await seed('rolled-update', '2026-02-30',
+          state: GearSyncState.pendingUpdate);
+      final api = _FakeGearApi();
+      await store.syncWithServer(api);
+      expect(api.updates, hasLength(1));
+      expect(api.updates.single['purchased_at'], isNull);
+    });
+
+    test('a real date still reaches the server as its own calendar day',
+        () async {
+      // The refusal must not have narrowed what a legitimate row can carry,
+      // and the day must not have moved: a purchase on the 3rd stays the 3rd,
+      // which is the whole reason this reader does not normalise to UTC
+      // (decisions § 1289).
+      final store = await seed('kept', '2026-06-03',
+          state: GearSyncState.pendingCreate);
+      final api = _FakeGearApi();
+      await store.syncWithServer(api);
+      final at = api.creates.single['purchased_at'] as DateTime;
+      expect([at.year, at.month, at.day], [2026, 6, 3]);
+    });
+
+    test('a leap day is a date; the same day in a common year is not',
+        () async {
+      final leap = await seed('leap', '2024-02-29',
+          state: GearSyncState.pendingCreate);
+      final leapApi = _FakeGearApi();
+      await leap.syncWithServer(leapApi);
+      expect((leapApi.creates.single['purchased_at'] as DateTime).day, 29);
+
+      File('${dir.path}/leap.json').deleteSync();
+      final common = await seed('common', '2027-02-29',
+          state: GearSyncState.pendingCreate);
+      final commonApi = _FakeGearApi();
+      await common.syncWithServer(commonApi);
+      expect(commonApi.creates.single['purchased_at'], isNull);
     });
   });
 

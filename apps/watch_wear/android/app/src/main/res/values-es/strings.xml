@@ -42,6 +42,19 @@
     <string name="sync_count">Sincronizar %1$d</string>
     <string name="sync_retry">Reintentar</string>
     <string name="cd_sync_unreadable_retry">Carreras guardadas ilegibles, toca para reintentar</string>
+    <plurals name="sync_rejected">
+        <item quantity="one">%1$d rechazada</item>
+        <item quantity="other">%1$d rechazadas</item>
+    </plurals>
+    <string name="sync_rejected_discard">¿Descartar %1$d?</string>
+    <plurals name="cd_sync_rejected">
+        <item quantity="one">%1$d carrera guardada rechazada por el servidor. Toca para descartar.</item>
+        <item quantity="other">%1$d carreras guardadas rechazadas por el servidor. Toca para descartar.</item>
+    </plurals>
+    <plurals name="cd_sync_rejected_confirm">
+        <item quantity="one">Confirmar el descarte de %1$d carrera. No se guarda en ningún otro sitio.</item>
+        <item quantity="other">Confirmar el descarte de %1$d carreras. No se guardan en ningún otro sitio.</item>
+    </plurals>
     <string name="offline">Sin conexión</string>
     <string name="not_signed_in">Sesión no iniciada</string>
     <string name="race_armed">CARRERA LISTA</string>

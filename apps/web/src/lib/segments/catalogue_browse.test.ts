@@ -4,6 +4,7 @@ import { strict as assert } from 'node:assert';
 import {
 	catalogueRegions,
 	catalogueSurfaces,
+	compareFoldedNames,
 	filterCatalogue,
 	fold,
 	sortCatalogue,
@@ -345,4 +346,44 @@ test('fold: a name outside the table passes through untouched', () => {
 	assert.equal(fold(''), '');
 	assert.equal(fold('central park - harlem hill'), 'central park - harlem hill');
 	assert.equal(fold('東京 5K'), '東京 5k');
+});
+
+// ── compareFoldedNames ───────────────────────────────────────────────────
+//
+// The shared name order. Exported because the routes list sorts through it
+// too: it used to call `localeCompare` here and `toLowerCase().compareTo()`
+// on the phone, two orderings that disagree about 31.75 % of all pairs of
+// Unicode letters (decisions § 1337).
+
+test('compareFoldedNames: orders on the folded name, not on a collation or a code-unit order', () => {
+	// `localeCompare` sorts Å beside A; a raw code-unit order sorts it after Z,
+	// because U+00C5 > U+005A. The fold answers the same as the collation here
+	// without depending on the host's ICU data.
+	assert.equal(compareFoldedNames('Åre', 'a', 'Zaragoza', 'b'), -1);
+	assert.equal(compareFoldedNames('Zaragoza', 'b', 'Åre', 'a'), 1);
+	// Pin the order it is NOT: raw code units put Zaragoza first.
+	assert.ok('Åre' > 'Zaragoza');
+});
+
+test('compareFoldedNames: case and accent do not decide the order', () => {
+	// Folds equal, so the id breaks the tie rather than the spelling.
+	assert.equal(compareFoldedNames('ÉCOLE', 'a', 'ecole', 'b'), -1);
+	assert.equal(compareFoldedNames('ÉCOLE', 'b', 'ecole', 'a'), 1);
+});
+
+test('compareFoldedNames: U+0130 sorts with i, not apart from it', () => {
+	// The reachable half of the 466-code-point lower-case gap. A browser's
+	// `toLowerCase` emits i + a combining dot here, which sorts after a bare i
+	// and does not even contain it; the fold strips the mark on both platforms.
+	assert.equal(fold('İstanbul'), fold('Istanbul'));
+	assert.equal(compareFoldedNames('İstanbul', 'a', 'Istanbul', 'b'), -1);
+});
+
+test('compareFoldedNames: ties break on id, so the order never depends on sort stability', () => {
+	assert.equal(compareFoldedNames('Loop', 'a', 'Loop', 'b'), -1);
+	assert.equal(compareFoldedNames('Loop', 'b', 'Loop', 'a'), 1);
+});
+
+test('compareFoldedNames: the same row compares equal to itself', () => {
+	assert.equal(compareFoldedNames('Loop', 'x', 'Loop', 'x'), 0);
 });

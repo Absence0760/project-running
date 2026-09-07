@@ -46,7 +46,7 @@ test.describe('/gym/[id] — two spellings of one lift', () => {
 	// one row. That is what made this look order-dependent: nothing here waited
 	// for the second save at all, so whether it had landed was a matter of how
 	// loaded the machine was.
-	test('both blocks keep their PR chips and the header counts one exercise', async ({ page }) => {
+	test('the two spellings render as one block whose PR chip resolves on the key', async ({ page }) => {
 		const admin = getAdminClient();
 		const stamp = Date.now();
 		const single = `E2E Fold ${stamp}`;
@@ -95,16 +95,27 @@ test.describe('/gym/[id] — two spellings of one lift', () => {
 
 		try {
 			await page.goto(`/gym/${workoutIds[titles[1]]}`);
-			const blocks = page.locator('.exercise-block');
-			await expect(blocks).toHaveCount(2, { timeout: 10_000 });
+			// The two spellings differ only by an internal whitespace run, so they
+			// are ONE lift and now render as one block (decisions § 1323). This spec
+			// previously pinned two blocks beside a header that counted one -- that
+			// disagreement between the list and its own count was the defect, not the
+			// contract. `.notes` is the other user of the class and is excluded.
+			const blocks = page.locator('.exercise-block:not(.notes)');
+			await expect(blocks).toHaveCount(1, { timeout: 10_000 });
 
-			// The chip on the SECOND block is the regression. Its spelling is not
-			// the one the PR engine reports as the display name, so the naive
-			// key missed and the chip never rendered.
-			await expect(blocks.nth(0).locator('.pr-chip').first()).toBeVisible();
-			await expect(blocks.nth(1).locator('.pr-chip').first()).toBeVisible();
+			// Assert the MERGE, not merely the count: the surviving block has to
+			// carry the sets from both spellings, or a block that simply failed to
+			// render would satisfy a bare count of one.
+			const setVals = blocks.first().locator('ol.sets li:not(.sets-head) .set-val');
+			await expect(setVals).toHaveCount(2);
+			await expect(setVals.nth(0)).toContainText('110');
+			await expect(setVals.nth(1)).toContainText('120');
 
-			// Two blocks, one exercise: the header stat buckets on the key.
+			// The original regression: the doubled-spelling set's PR resolves through
+			// the canonical key rather than the display spelling, so the chip renders.
+			await expect(blocks.first().locator('.pr-chip').first()).toBeVisible();
+
+			// One block, one exercise -- the page and its own header now agree.
 			const exercisesStat = page
 				.locator('.summary-stat')
 				.filter({ hasText: 'Exercises' })

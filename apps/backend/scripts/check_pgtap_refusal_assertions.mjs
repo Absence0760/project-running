@@ -74,6 +74,13 @@ export const TESTS_DIR = join(
   'tests',
 );
 
+export const MIGRATIONS_DIR = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '..',
+  'supabase',
+  'migrations',
+);
+
 export const DB_URL =
   process.env.SUPABASE_DB_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
 
@@ -906,6 +913,191 @@ export function validateUnregisteredDefinerRelations(relations) {
   return failures;
 }
 
+
+// ── Positive assertions a correcting BEFORE trigger has emptied ──────────────
+//
+// The mirror image of everything above, and it arrived the same way: adding
+// the two exercise-key stamping triggers (20270711000001) broke ONE assertion
+// loudly and silently emptied two more, whose whole content was "this
+// client-supplied key satisfies the CHECK" (decisions 1287). A BEFORE trigger
+// that assigns `new.<col>` unconditionally makes the supplied value
+// unreachable: the row that meets the constraint is the row the TRIGGER built,
+// so a `lives_ok` there survives a server that had stopped folding, or
+// clipping, or blanking, entirely. It is not a refusal assertion, so nothing
+// above measures it; it is not a zero-or-empty read, so widening RLS says
+// nothing about it.
+//
+// Static, deliberately. The stronger instrument is the mutation one -- disable
+// the trigger and require the assertion to change -- and `exercise_key_server_
+// stamped_test`'s own assertion 11 does exactly that by hand. What generalises
+// cheaply is the POPULATION: which positive assertions supply a value a trigger
+// overwrites. That set was invisible, which is why the emptying went unnoticed,
+// and it is small (4 of the suite's 224 `lives_ok` calls at introduction).
+//
+// Only UNCONDITIONAL assignments count. A `freeze_*_managed_columns` or a
+// privacy-zone clipper assigns inside an `if`, so whether the supplied value
+// survives depends on the fixture, and a caller may legitimately be asserting
+// the branch does NOT fire. An assignment at the top of the body always fires,
+// so the value is always discarded and the claim is always empty.
+
+/**
+ * The body of each `create [or replace] function` in [text], keyed by name,
+ * lower-cased. Later definitions win, so replaying the migrations in order
+ * leaves the body the database actually has.
+ * @param {string} text
+ * @returns {Map<string, string>}
+ */
+export function functionBodies(text) {
+  /** @type {Map<string, string>} */
+  const out = new Map();
+  for (const m of text.matchAll(/create\s+(?:or\s+replace\s+)?function\s+(?:public\.)?([a-z0-9_]+)\s*\(/gi)) {
+    const rest = text.slice(m.index ?? 0);
+    const tag = /\$[A-Za-z0-9_]*\$/.exec(rest)?.[0];
+    if (tag === undefined) continue;
+    const start = rest.indexOf(tag) + tag.length;
+    const end = rest.indexOf(tag, start);
+    if (end < 0) continue;
+    out.set(m[1].toLowerCase(), rest.slice(start, end));
+  }
+  return out;
+}
+
+/**
+ * The columns a trigger function assigns at the TOP LEVEL of its body — outside
+ * every `if` and `case`, so the assignment cannot be skipped.
+ * @param {string} body
+ * @returns {string[]}
+ */
+export function unconditionalAssignments(body) {
+  // One ordered pass rather than a per-line count: `end if` has to be read
+  // before the bare `if` inside it, and a whole `if ... end if` written on one
+  // line has to close before the next assignment is judged. `elsif` carries no
+  // word boundary before its `if`, so it never opens a second block.
+  const clean = body.replace(/--[^\n]*/g, '').toLowerCase();
+  /** @type {Set<string>} */
+  const out = new Set();
+  let depth = 0;
+  const tokens = /\bend\s+if\b|\bend\s+case\b|\bcase\b|\bif\b|\bnew\.([a-z0-9_]+)\s*:=/g;
+  for (const m of clean.matchAll(tokens)) {
+    if (m[1] !== undefined) {
+      if (depth === 0) out.add(m[1]);
+      continue;
+    }
+    if (/^end/.test(m[0])) depth = Math.max(0, depth - 1);
+    else depth += 1;
+  }
+  return [...out];
+}
+
+/**
+ * Every `<table>.<column>` a live BEFORE INSERT/UPDATE trigger stamps
+ * unconditionally, mapped to the trigger that stamps it. Built by replaying the
+ * migrations in version order, so a `drop trigger` retires its entry and a
+ * `create or replace function` re-reads the body.
+ * @param {{ name: string, text: string }[]} migrations
+ * @returns {Map<string, string>}
+ */
+export function stampedColumns(migrations) {
+  /** @type {Map<string, string>} */
+  const bodies = new Map();
+  /** @type {Map<string, { table: string, fn: string }>} */
+  const triggers = new Map();
+  for (const { text } of migrations) {
+    for (const [name, body] of functionBodies(text)) bodies.set(name, body);
+    for (const m of text.matchAll(
+      /drop\s+trigger\s+(?:if\s+exists\s+)?([a-z0-9_]+)\s+on\s+(?:public\.)?([a-z0-9_]+)/gi,
+    )) {
+      triggers.delete(`${m[2].toLowerCase()}.${m[1].toLowerCase()}`);
+    }
+    for (const m of text.matchAll(
+      /create\s+trigger\s+([a-z0-9_]+)\s+(before[^;]*?)\s+on\s+(?:public\.)?([a-z0-9_]+)([^;]*?)execute\s+(?:function|procedure)\s+(?:public\.)?([a-z0-9_]+)/gi,
+    )) {
+      if (!/insert|update/i.test(m[2])) continue;
+      triggers.set(`${m[3].toLowerCase()}.${m[1].toLowerCase()}`, {
+        table: m[3].toLowerCase(),
+        fn: m[5].toLowerCase(),
+      });
+    }
+  }
+  /** @type {Map<string, string>} */
+  const out = new Map();
+  for (const [key, { table, fn }] of triggers) {
+    const body = bodies.get(fn);
+    if (body === undefined) continue;
+    for (const col of unconditionalAssignments(body)) {
+      out.set(`${table}.${col}`, key.slice(table.length + 1));
+    }
+  }
+  return out;
+}
+
+/** Read the migrations off disk in version order. */
+export function readMigrations() {
+  return readdirSync(MIGRATIONS_DIR)
+    .filter((f) => f.endsWith('.sql'))
+    .sort()
+    .map((name) => ({ name, text: readFileSync(join(MIGRATIONS_DIR, name), 'utf8') }));
+}
+
+/**
+ * The stamped columns a statement supplies a value for. An INSERT is read off
+ * its column list, an UPDATE off its SET list.
+ * @param {string} sql
+ * @param {Map<string, string>} stamped
+ * @returns {{ table: string, column: string, trigger: string }[]}
+ */
+export function stampedValueWrites(sql, stamped) {
+  /** @type {{ table: string, column: string, trigger: string }[]} */
+  const out = [];
+  /** @param {string} table @param {string[]} cols */
+  const collect = (table, cols) => {
+    for (const col of cols) {
+      const trigger = stamped.get(`${table}.${col}`);
+      if (trigger !== undefined) out.push({ table, column: col, trigger });
+    }
+  };
+  for (const m of sql.matchAll(/insert\s+into\s+(?:public\.)?([a-z0-9_]+)\s*\(([^)]*)\)/gi)) {
+    collect(
+      m[1].toLowerCase(),
+      m[2].split(',').map((c) => c.trim().toLowerCase()),
+    );
+  }
+  for (const m of sql.matchAll(
+    /update\s+(?:public\.)?([a-z0-9_]+)\s+set\s+([\s\S]*?)(?:\bwhere\b|;|$)/gi,
+  )) {
+    collect(
+      m[1].toLowerCase(),
+      [...m[2].matchAll(/([a-z0-9_]+)\s*=/gi)].map((x) => x[1].toLowerCase()),
+    );
+  }
+  return out;
+}
+
+/**
+ * Positive assertions that deliberately supply a stamped column, with why the
+ * claim survives the stamping. The staleness test below fails when an entry
+ * stops naming a real one, so an exemption cannot outlive its site.
+ * @type {{ file: string, description: string, reason: string }[]}
+ */
+export const STAMPED_VALUE_ASSERTIONS = [
+  {
+    file: 'exercise_key_server_stamped_test.sql',
+    description: "a stale client's exercise_key is accepted rather than refused",
+    reason:
+      'The claim IS the acceptance -- that a key the server disagrees with no longer raises 23514 -- ' +
+      'and it is deliberately paired: the very next assertion reads the stored key back and requires ' +
+      "the server's fold, so the pair together says accepted AND corrected. Assertion 11 then disables " +
+      'the trigger and requires the 23514 to return, which is the mutation this static scan cannot do.',
+  },
+  {
+    file: 'exercise_key_server_stamped_test.sql',
+    description: "a stale client's name_key is accepted rather than refused",
+    reason:
+      'The catalogue half of the entry above, paired with the same read-back and covered by the same ' +
+      'trigger-disabling mutation.',
+  },
+];
+
 /**
  * @param {string[]} failures
  * @param {string} summary
@@ -924,6 +1116,11 @@ function main() {
   /** @type {string[]} */
   const failures = [];
 
+  const stamped = stampedColumns(readMigrations());
+  const registered = new Set(STAMPED_VALUE_ASSERTIONS.map((e) => `${e.file}\u0000${e.description}`));
+  /** @type {Set<string>} */
+  const matched = new Set();
+
   for (const file of files) {
     const text = readFileSync(join(TESTS_DIR, file), 'utf8');
     for (const call of findCalls(text, 'throws_ok')) {
@@ -932,10 +1129,41 @@ function main() {
         `${file}:${call.line}  throws_ok pins neither a SQLSTATE nor an error message, so it passes on ANY error: a typo'd table name, or a refusal at a different layer than the policy under test, satisfies it just as well.`,
       );
     }
+    for (const call of findCalls(text, 'lives_ok')) {
+      const sql = literalOf(call.argv[0]);
+      if (sql === null) continue;
+      const writes = stampedValueWrites(sql, stamped);
+      if (writes.length === 0) continue;
+      const description = call.argv[1] === undefined ? '' : (literalOf(call.argv[1]) ?? '');
+      const key = `${file}\u0000${description}`;
+      if (registered.has(key)) {
+        matched.add(key);
+        continue;
+      }
+      failures.push(
+        `${file}:${call.line}  "${description}" supplies ${writes
+          .map((w) => `${w.table}.${w.column}`)
+          .join(', ')}, which ${writes
+          .map((w) => w.trigger)
+          .join(' / ')} assigns unconditionally BEFORE the row is checked — so the value this assertion supplies never reaches the constraint and the assertion survives a server that stopped deriving it at all (decisions 1324). Stop supplying the column, read the stored value back through \`returning\`, or register the assertion in STAMPED_VALUE_ASSERTIONS with the reason its claim is unaffected.`,
+      );
+    }
+  }
+
+  for (const entry of STAMPED_VALUE_ASSERTIONS) {
+    const key = `${entry.file}\u0000${entry.description}`;
+    if (matched.has(key)) continue;
+    failures.push(
+      `STAMPED_VALUE_ASSERTIONS entry ${entry.file} / "${entry.description}" is stale: no lives_ok there supplies a stamped column any more. It was rewritten, renamed or deleted, or its trigger is gone — remove the entry so the next one cannot hide behind it.`,
+    );
   }
 
   if (process.argv.includes('--static-only')) {
-    report(failures, `${files.length} test files scanned for unpinned negatives`);
+    report(
+      failures,
+      `${files.length} test files scanned for unpinned negatives and for positives emptied by ` +
+        `one of the ${stamped.size} unconditionally stamped columns`,
+    );
     return;
   }
 
