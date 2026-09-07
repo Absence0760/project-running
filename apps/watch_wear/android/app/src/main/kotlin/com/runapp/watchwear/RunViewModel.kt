@@ -118,6 +118,13 @@ data class UiState(
     /// than current. DataStore reports a corrupt or unreadable file by failing
     /// the read, and the two facts are orthogonal: the count is the last figure
     /// anyone saw, this is whether it still stands (decisions § 1104).
+    ///
+    /// A failed queue MUTATION raises it too, and for the same reason rather
+    /// than by analogy: DataStore applies a write by reading the file, editing
+    /// and replacing it, so an `edit` that throws has failed on the same file
+    /// this flag is about, and the count on the arc no longer stands either
+    /// way. That is how the PostRun discard reports a drop it could not make
+    /// (decisions § 1491).
     val queueUnreadable: Boolean = false,
     /// Queue entries the server has permanently REFUSED — a 400/404/409/422
     /// that no retry will ever move. They stay in the queue by design (§ 17:
@@ -1378,10 +1385,22 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     /// snapshot lookup then finds nothing and only the no-op removal runs,
     /// which is the right answer rather than a case to special-case — there is
     /// no file left to delete.
+    /// The advance is unconditional, and that is the decision. A `×` that could
+    /// not remove the entry has left the run QUEUED — the safe direction for a
+    /// destructive action that did not happen, since the next drain will still
+    /// upload it — so holding the runner on the screen buys nothing and costs
+    /// them the thing § 1107 already refused to cost them: stranding someone
+    /// who wants to record now behind a corrupt file takes the next run as well
+    /// as this one. What the failure does buy is a sentence, on the screen they
+    /// land on rather than the one they just left.
     fun discard() {
         val id = _state.value.thisRunId
         launchGuarded {
-            if (id != null) dropQueuedRun(id, store.queue.first())
+            val outcome = discardRun(id) { dropQueuedRun(it, store.queue.first()) }
+            if (outcome is DiscardOutcome.Failed) {
+                Log.e(TAG, "discard could not drop the queued run", outcome.error)
+                _state.value = _state.value.copy(queueUnreadable = true)
+            }
             startNextRun()
         }
     }
