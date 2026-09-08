@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
+
+import { stripComments } from '../core/strip_comments';
 import {
 	cataloguePickerView,
 	shadowsSeededGlobal,
@@ -300,11 +302,16 @@ const PICKER = readFileSync(
 
 /// The component's `<script>` body with comments blanked, so a rune named in
 /// prose is not read as a declaration.
+///
+/// Through the shared stripper rather than a pair of regexes: it is the only
+/// copy that survives a `/*` inside a line comment, a string or a regex
+/// literal, and `source_scanner_guards.test.ts` fails a scanner that spells
+/// its own.
 function pickerScript(source: string): string {
 	const open = source.indexOf('<script');
 	const start = source.indexOf('>', open) + 1;
 	const body = source.slice(start, source.indexOf('</script>', start));
-	return body.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+	return stripComments(body);
 }
 
 /// Every `$state` / `$derived` declaration in a Svelte 5 script, as the rune it
