@@ -38,6 +38,7 @@ import {
 	parseBadgeCatalogue,
 	parseKotlinIntRange,
 	parseNamedInt,
+	parseNamedNumber,
 	parseNearbyCase,
 	parseNumberList,
 	parseStringList,
@@ -258,6 +259,20 @@ test('a named integer is read from its declaration in Dart and in Kotlin', () =>
 	assert.deepEqual(parseNamedInt('  static const kMaxRoutesPerPush = 30;', 'kMaxRoutesPerPush'), ['30']);
 	assert.deepEqual(parseNamedInt('        const val MAX_ROUTES = 30', 'MAX_ROUTES'), ['30']);
 	assert.deepEqual(parseNamedInt('const val OTHER = 30', 'MAX_ROUTES'), []);
+});
+
+// `parseNamedInt` reads `1e-9` as `1`, so a tolerance registered through it
+// would certify agreement between three rails carrying three different
+// numbers. The value, not the spelling, is what has to agree.
+test('a named number is read by value, in every spelling of the same number', () => {
+	assert.deepEqual(parseNamedNumber('export const R = 1e-9;', 'R'), ['1e-9']);
+	assert.deepEqual(parseNamedNumber('const double r = 0.000000001;', 'r'), ['1e-9']);
+	assert.deepEqual(parseNamedNumber('const R = 1E-9', 'R'), ['1e-9']);
+	assert.deepEqual(parseNamedNumber('const R = 42;', 'R'), ['42']);
+	assert.deepEqual(parseNamedNumber('const OTHER = 1e-9;', 'R'), []);
+	// The exponent is part of the literal: reading only the mantissa is the
+	// failure this helper exists to avoid.
+	assert.notDeepEqual(parseNamedNumber('const R = 1e-9;', 'R'), ['1']);
 });
 
 // A Kotlin range is ONE declaration where the other rails carry two constants.
