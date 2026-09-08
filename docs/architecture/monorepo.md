@@ -10,12 +10,30 @@ A step-by-step guide to bootstrapping the monorepo from scratch, understanding t
 
 | Tool | Version | Install |
 |---|---|---|
-| Flutter | 3.19+ | `flutter.dev/docs/get-started/install` |
-| Dart | 3.3+ | Bundled with Flutter |
-| Melos | 7.x | `dart pub global activate melos` |
-| Node.js | 20 LTS | `nodejs.org` |
+| Flutter | 3.47.0 | `flutter.dev/docs/get-started/install` |
+| Dart | bundled with Flutter | — |
+| Melos | 7.8.2 | `dart pub global activate melos 7.8.2` |
+| Node.js | 24.20.0 | `nodejs.org`, or `asdf install` — see below |
 | Xcode | 15+ | Mac App Store (macOS only) |
 | Android Studio | Hedgehog+ | `developer.android.com/studio` |
+
+The first three are **exact versions, not floors**, and
+`scripts/check_toolchain_pins.mjs` reads this table against the places the repo
+pins them — `env.FLUTTER_VERSION` in every workflow, `pubspec.lock`, and every
+`actions/setup-node` step. It said 3.19+, 7.x and Node 20 LTS against a CI
+running 3.47.0, 7.8.2 and 24.20.0 until [§ 1536](decisions.md); a prerequisite
+table is a pin like any other and was simply the one nothing compared. Xcode and
+Android Studio carry no in-repo pin, so nothing checks them and they stay floors.
+
+**`.tool-versions` is a pin REGISTRY, not an install manifest.** Six of its
+seven lines are commented on purpose: Flutter, Rust, Go, Terraform, Deno and
+Python are each installed by their own manager (the Flutter SDK from
+flutter.dev, `rustup`, the distro's Go, `tfenv`, Deno's installer), and having
+`asdf install` materialise a second copy of any of them is not what anyone
+wants. `nodejs` is the one active line because Node is the one toolchain here
+with no other manager. Every line is checked against the repo's own pin whether
+commented or not ([§ 911](decisions.md)) — a commented pin is a claim the next
+reader will uncomment.
 
 ---
 

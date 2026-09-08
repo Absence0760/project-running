@@ -133,6 +133,7 @@ export const LOCKFILE = join(REPO_ROOT, 'pubspec.lock');
 // installs from it (`rustup show` honours it automatically).
 export const RUST_TOOLCHAIN = join(REPO_ROOT, 'apps', 'custom_watch', 'rust-toolchain.toml');
 export const TOOL_VERSIONS = join(REPO_ROOT, '.tool-versions');
+export const PREREQ_DOC = join(REPO_ROOT, 'docs', 'architecture', 'monorepo.md');
 export const GO_MODS = ['apps/job_worker/go.mod', 'apps/graph_cycle/go.mod'];
 export const TERRAFORM_WORKFLOW = 'terraform.yml';
 
@@ -1044,6 +1045,113 @@ export function checkToolVersions(toolVersionsText, pins) {
 	return { errors, ok, unbacked };
 }
 
+/// The prerequisite rows whose version this repo pins somewhere else, keyed on
+/// the row LABEL as the table writes it.
+///
+/// `.tool-versions` is a REGISTRY rather than an install manifest — six of its
+/// seven lines are commented, because every one of those toolchains is
+/// installed by its own manager and `asdf install` materialising a second copy
+/// is not what anyone wants (decisions § 1536). So the file a contributor
+/// actually follows is this table, and until it was read against the pins it
+/// said Node.js 20 LTS against a CI that runs 24.20.0 and Flutter `3.19+`
+/// against 3.47.0. A prerequisite table is a pin like any other; it was simply
+/// the one nothing compared.
+/** @type {Array<{ label: string, pin: string }>} */
+export const PREREQ_ROWS = [
+	{ label: 'Flutter', pin: 'flutter' },
+	{ label: 'Melos', pin: 'melos' },
+	{ label: 'Node.js', pin: 'nodejs' },
+];
+
+/**
+ * The rows of the first markdown table under `## Prerequisites`, as
+ * `label -> { version cell, line }`.
+ *
+ * @param {string} text
+ * @returns {Map<string, { version: string, line: number }>}
+ */
+export function parsePrerequisites(text) {
+	/** @type {Map<string, { version: string, line: number }>} */
+	const out = new Map();
+	const lines = text.split('\n');
+	let inSection = false;
+	for (let i = 0; i < lines.length; i++) {
+		if (/^##\s+Prerequisites\s*$/.test(lines[i])) {
+			inSection = true;
+			continue;
+		}
+		if (!inSection) continue;
+		if (/^##\s/.test(lines[i])) break;
+		const cells = lines[i].split('|').map((c) => c.trim());
+		// A table row is `| a | b | c |`, so the split yields empty ends.
+		if (cells.length < 4 || cells[0] !== '' || cells[cells.length - 1] !== '') continue;
+		if (/^-+$/.test(cells[1].replace(/[: ]/g, '-'))) continue;
+		if (!out.has(cells[1])) out.set(cells[1], { version: cells[2], line: i + 1 });
+	}
+	return out;
+}
+
+/**
+ * A version cell names the pinned version, as a whole token — `3.4` must not
+ * satisfy a pin of `3.47.0`, and neither must `13.47.0`.
+ * @param {string} cell @param {string} version
+ */
+export function prereqNames(cell, version) {
+	return new RegExp(`(?<![\\d.])${version.replace(/\./g, '\\.')}(?![\\d.])`).test(cell);
+}
+
+/**
+ * @param {string | null} docText
+ * @param {Map<string, { version: string, source: string }>} pins
+ * @returns {{ errors: string[], ok: string[] }}
+ */
+export function checkPrerequisites(docText, pins) {
+	/** @type {string[]} */
+	const errors = [];
+	/** @type {string[]} */
+	const ok = [];
+	if (docText === null) return { errors, ok };
+
+	const rows = parsePrerequisites(docText);
+	if (rows.size === 0) {
+		errors.push(
+			`docs/architecture/monorepo.md has no readable Prerequisites table. That table is ` +
+				`what a contributor installs from, so a reader that stopped matching it would ` +
+				`report no drift over a table saying anything at all.`,
+		);
+		return { errors, ok };
+	}
+
+	for (const { label, pin } of PREREQ_ROWS) {
+		const pinned = pins.get(pin);
+		if (!pinned) continue;
+		const row = rows.get(label);
+		if (!row) {
+			errors.push(
+				`docs/architecture/monorepo.md's Prerequisites table has no \`${label}\` row, and ` +
+					`this repo pins ${pin} to ${pinned.version} in ${pinned.source}. Either restore ` +
+					`the row or drop it from PREREQ_ROWS — an entry matching nothing checks nothing.`,
+			);
+			continue;
+		}
+		if (!prereqNames(row.version, pinned.version)) {
+			errors.push(
+				`docs/architecture/monorepo.md:${row.line} tells a contributor to install ` +
+					`${label} \`${row.version}\` where this repo pins ${pinned.version} in ` +
+					`${pinned.source}. A floor or a range is not a pin: whoever follows the table ` +
+					`develops on a toolchain CI never runs, and finds out from a red check on a ` +
+					`diff that did not cause it.`,
+			);
+			continue;
+		}
+		ok.push(
+			`docs/architecture/monorepo.md:${row.line} -> ${label} ${pinned.version} matches ` +
+				`${pinned.source}`,
+		);
+	}
+	return { errors, ok };
+}
+
 /// The `go` directive of every module, which must agree with itself before it
 /// can be a pin.
 /**
@@ -1087,6 +1195,7 @@ export function parseTerraformVersion(text) {
  * @param {string | null} [rustToolchainText]
  * @param {string | null} [toolVersionsText]
  * @param {readonly {path: string, text: string}[]} [goMods]
+ * @param {string | null} [prereqText]
  */
 export function checkAll(
 	files,
@@ -1095,6 +1204,7 @@ export function checkAll(
 	rustToolchainText = null,
 	toolVersionsText = null,
 	goMods = [],
+	prereqText = null,
 ) {
 	const flutter = checkFlutter(files);
 	const melos = checkMelos(files, lockText);
@@ -1108,17 +1218,17 @@ export function checkAll(
 		const f = files.find((x) => x.name === TERRAFORM_WORKFLOW);
 		return f ? parseTerraformVersion(f.text) : null;
 	})();
-	const tools = checkToolVersions(
-		toolVersionsText,
-		repoPins({
-			node: node.versions.size === 1 ? [...node.versions.keys()][0] : null,
-			rust: rust.channel ?? null,
-			go: go.version,
-			flutter: flutter.versions.size === 1 ? [...flutter.versions.keys()][0] : null,
-			terraform,
-			deno: deno.versions.size === 1 ? [...deno.versions.keys()][0] : null,
-		}),
-	);
+	const pins = repoPins({
+		node: node.versions.size === 1 ? [...node.versions.keys()][0] : null,
+		rust: rust.channel ?? null,
+		go: go.version,
+		flutter: flutter.versions.size === 1 ? [...flutter.versions.keys()][0] : null,
+		terraform,
+		deno: deno.versions.size === 1 ? [...deno.versions.keys()][0] : null,
+	});
+	const tools = checkToolVersions(toolVersionsText, pins);
+	if (melos.locked) pins.set('melos', { version: melos.locked, source: 'pubspec.lock' });
+	const prereq = checkPrerequisites(prereqText, pins);
 	return {
 		errors: [
 			...flutter.errors,
@@ -1130,6 +1240,7 @@ export function checkAll(
 			...deno.errors,
 			...go.errors,
 			...tools.errors,
+			...prereq.errors,
 		],
 		ok: [
 			...flutter.ok,
@@ -1140,6 +1251,7 @@ export function checkAll(
 			...node.ok,
 			...deno.ok,
 			...tools.ok,
+			...prereq.ok,
 		],
 		flutter,
 		melos,
@@ -1149,6 +1261,7 @@ export function checkAll(
 		node,
 		deno,
 		tools,
+		prereq,
 	};
 }
 
@@ -1185,6 +1298,7 @@ function main() {
 			path,
 			text: readFileSync(join(REPO_ROOT, path), 'utf-8'),
 		})),
+		existsSync(PREREQ_DOC) ? readFileSync(PREREQ_DOC, 'utf-8') : null,
 	);
 
 	for (const line of ok) console.log(`[OK] ${line}`);
