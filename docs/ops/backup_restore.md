@@ -247,6 +247,19 @@ migrations — see `personal_data_export_profile_guard_test.go` and
   is the failure mode that check exists to prevent. Value types are still the
   server's to refuse: a `distance_m` of `"far"` comes back as a 400 into
   `result.warnings`.
+- **The archived `handle` is not claimed by the restore.** `20270424000002`
+  makes `user_profiles.handle` a public identity claimed through
+  `set_my_handle` — SECURITY DEFINER, and named there as the ONLY write path —
+  because that function is what enforces the format and the case-insensitive
+  uniqueness and tells a caller which of the two it failed. Upserting the
+  column directly answers neither: into a DIFFERENT account it always collides
+  with `user_profiles_handle_lower_key`, into a FRESH one it silently re-claims
+  a name the deleted account released or collides with whoever took it since,
+  and either way it arrives as a 23505 that fails the whole profile row. It is
+  stripped beside `subscription_tier` / `subscription_at` / `parkrun_number`,
+  so the rest of the profile lands; the archive still CARRIES the handle, and
+  re-claiming it goes through the normal flow, which is the only path that can
+  say whether it is still free.
 - **An archive that declares itself incomplete says so at restore time.**
   `RestoreResult.archiveIncomplete` + `archiveIncompleteSections` carry the
   manifest verdict, and both Settings → Account surfaces render a persistent
