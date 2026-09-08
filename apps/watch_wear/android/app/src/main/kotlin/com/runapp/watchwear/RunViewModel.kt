@@ -175,9 +175,8 @@ data class UiState(
     /// still what a bug report needs, so it goes to `Log.e` at the point of
     /// failure instead of to the wrist (decisions § 1490).
     val syncFault: SyncFault? = null,
-    /// True when the last COMPLETED drain pass stopped on a transient failure
-    /// — a 5xx, a timeout, a dropped connection — which is also what arms
-    /// `drainBackoff`.
+    /// What stopped the last COMPLETED drain pass, or null if it got through.
+    /// Non-null is also what armed `drainBackoff`.
     ///
     /// Deliberately not carried on [syncFault], which is the PostRun banner
     /// and a fact about one pass: `startNextRun` clears it, and PreRun is the
@@ -186,9 +185,16 @@ data class UiState(
     /// same split § 1347 drew for [rejectedRunIds] — a standing fact about the
     /// queue rather than about a pass (decisions § 1390).
     ///
+    /// A fault rather than the boolean it replaced, because "Retry N" is an
+    /// affordance that can never succeed when what stopped the pass was a
+    /// session the server will not renew: it is enabled, it fires, and every
+    /// tap re-runs the same drain, 401s again and fails the same refresh. The arc needs to offer the sign-in instead, and the
+    /// only thing that separates the two cases is which fault it was
+    /// (decisions § 1544).
+    ///
     /// Not persisted, and re-derived by the next completed pass in both
     /// directions: a pass that gets through clears it.
-    val syncFailed: Boolean = false,
+    val syncBlockedBy: SyncFault? = null,
     val thisRunId: String? = null,
     val thisRunSynced: Boolean = false,
     val lastRunSummary: FinishedSummary? = null,
@@ -1597,7 +1603,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         // is about the queue (decisions § 1347).
         _state.value = _state.value.copy(
             syncFault = result.lastFault,
-            syncFailed = result.anyTransientFailure,
+            syncBlockedBy = result.blockedBy,
             rejectedRunIds = rejectedAfterPass(
                 previouslyRejected = _state.value.rejectedRunIds,
                 queuedIdsBeforePass = snapshot.map { it.id },

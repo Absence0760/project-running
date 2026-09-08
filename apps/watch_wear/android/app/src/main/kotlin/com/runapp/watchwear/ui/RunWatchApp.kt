@@ -225,7 +225,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                             queuedCount = state.queuedCount,
                             queueUnreadable = state.queueUnreadable,
                             rejectedCount = state.rejectedRunIds.size,
-                            syncFailed = state.syncFailed,
+                            syncBlockedBy = state.syncBlockedBy,
                             syncing = state.syncing,
                             authed = state.authed,
                             authFault = state.authFault,
@@ -646,7 +646,7 @@ private fun PreRunScreen(
     queuedCount: Int,
     queueUnreadable: Boolean,
     rejectedCount: Int,
-    syncFailed: Boolean,
+    syncBlockedBy: com.runapp.watchwear.SyncFault?,
     syncing: Boolean,
     authed: Boolean,
     authFault: com.runapp.watchwear.AuthFault?,
@@ -842,7 +842,7 @@ private fun PreRunScreen(
                 queueUnreadable = queueUnreadable,
                 rejectedCount = rejectedCount,
                 queuedCount = queuedCount,
-                syncFailed = syncFailed,
+                syncBlockedBy = syncBlockedBy,
                 online = online,
                 authed = authed,
             )
@@ -982,6 +982,59 @@ private fun PreRunScreen(
                             textAlign = TextAlign.Center,
                         )
                     }
+                }
+                SyncChipState.SignInRequired -> {
+                    // The one stop the counted chip cannot describe and must
+                    // not offer. `classifyDrainError` reads a 401 as
+                    // `RetryAfterRefresh`; when the refresh itself is refused,
+                    // the pass ends with `SyncFault.SignInRequired` and every
+                    // tap on "Retry N" re-runs the same drain, 401s again and
+                    // fails the same refresh — an affordance that is enabled,
+                    // fires, and cannot ever succeed (decisions § 1544).
+                    //
+                    // So this one TAKES the slot where a transient only
+                    // relabels it (§ 1390). The reasoning there was that Sync
+                    // is still the useful affordance during a transient; here
+                    // it is not the useful affordance at all, and leaving it
+                    // in place to describe why it cannot work is the state
+                    // being fixed. The drain that follows a successful sign-in
+                    // is automatic (`signInWithEmailInternal` forces one), so
+                    // nothing is lost by spending the slot.
+                    //
+                    // Same three signals as its neighbours: a label that is
+                    // not the counted one, the warning colour, and a content
+                    // description carrying the sentence and the count that
+                    // neither the 100 dp label nor the colour can hold.
+                    val signInCd = pluralStringResource(
+                        R.plurals.cd_sync_sign_in_required, queuedCount, queuedCount
+                    )
+                    CompactChip(
+                        onClick = onSignIn,
+                        enabled = !syncing,
+                        label = {
+                            if (syncing) {
+                                CircularProgressIndicator(
+                                    strokeWidth = 1.5.dp,
+                                    modifier = Modifier.size(12.dp),
+                                    indicatorColor = DuskPalette.warning,
+                                )
+                            } else {
+                                Text(
+                                    stringResource(R.string.sign_in),
+                                    style = MaterialTheme.typography.caption3,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                )
+                            }
+                        },
+                        colors = ChipDefaults.secondaryChipColors(
+                            backgroundColor = Color.White.copy(alpha = 0.15f),
+                            contentColor = DuskPalette.warning,
+                        ),
+                        modifier = Modifier
+                            .widthIn(max = 100.dp)
+                            .semantics { contentDescription = signInCd },
+                    )
                 }
                 SyncChipState.Queued, SyncChipState.RetryQueued -> {
                     // Tappable so the runner can force a retry — the queue

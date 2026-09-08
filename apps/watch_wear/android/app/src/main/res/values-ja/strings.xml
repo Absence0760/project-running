@@ -47,6 +47,9 @@
     <plurals name="cd_sync_failed_retry">
         <item quantity="other">保存済みの記録が %1$d 件待機中。前回の同期は完了しませんでした。タップして再試行。</item>
     </plurals>
+    <plurals name="cd_sync_sign_in_required">
+        <item quantity="other">保存済みの記録が %1$d 件待機中。セッションの有効期限が切れました。タップして再度サインイン。</item>
+    </plurals>
     <string name="cd_sync_unreadable_retry">保存した記録を読み取れません。タップして再試行</string>
     <plurals name="sync_rejected">
         <item quantity="other">%1$d 件を拒否</item>

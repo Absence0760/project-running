@@ -495,6 +495,53 @@ class DrainQueueLoopTest {
         assertEquals(emptyList<String>(), result.drainedIds)
     }
 
+    @Test fun `the pass names what stopped it, and a pass that got through names nothing`() = runBlocking {
+        // `blockedBy` is what the PreRun arc reads to decide between a retry
+        // and a sign-in (decisions § 1544), and it is NOT `lastFault`: a
+        // permanent rejection sets that one and the loop carries on past it,
+        // so a pass that rejects a run and then drains the rest is a pass that
+        // got through.
+        val stopped = drainQueueLoop(
+            snapshot = listOf(run("a")),
+            push = PushQueuedRun { throw HttpException(503, "upstream timeout") },
+            refresh = RefreshAuthForDrain { error("unreachable") },
+            onSuccessfulDrain = OnSuccessfulDrain { error("nothing drains") },
+            report = DrainFailureReport { reported += it },
+            classify = ::classifyDrainError,
+        )
+        assertEquals(SyncFault.ServerBusy, stopped.blockedBy)
+        assertTrue(stopped.anyTransientFailure)
+
+        val carriedOn = drainQueueLoop(
+            snapshot = listOf(run("bad"), run("fine")),
+            push = PushQueuedRun { r ->
+                if (r.id == "bad") throw HttpException(400, "bad request")
+            },
+            refresh = RefreshAuthForDrain { error("unreachable") },
+            onSuccessfulDrain = OnSuccessfulDrain { },
+            report = DrainFailureReport { reported += it },
+            classify = ::classifyDrainError,
+        )
+        assertNull(carriedOn.blockedBy)
+        assertFalse(carriedOn.anyTransientFailure)
+        assertEquals(listOf("bad"), carriedOn.rejectedIds)
+    }
+
+    @Test fun `a 401 the refresh cannot repair blocks the pass on the sign-in fault`() = runBlocking {
+        // The whole reason `blockedBy` carries a fault: this pass and a 5xx
+        // set the same boolean, and the arc must offer a sign-in for one and a
+        // retry for the other.
+        val result = drainQueueLoop(
+            snapshot = listOf(run("a")),
+            push = PushQueuedRun { throw HttpException(401, "JWT expired") },
+            refresh = RefreshAuthForDrain { false },
+            onSuccessfulDrain = OnSuccessfulDrain { error("nothing drains") },
+            report = DrainFailureReport { reported += it },
+            classify = ::classifyDrainError,
+        )
+        assertEquals(SyncFault.SignInRequired, result.blockedBy)
+    }
+
     @Test fun `a report sink that throws does not take the drain with it`() = runBlocking {
         // The report is an L4 diagnostic hanging off the one path that carries
         // a runner's unsynced runs. A sink that throws must cost the log line
@@ -598,7 +645,7 @@ class DrainQueueLoopTest {
         drainedIds = drained,
         rejectedIds = rejected,
         attemptedIds = attempted,
-        anyTransientFailure = false,
+        blockedBy = null,
         lastFault = null,
     )
 

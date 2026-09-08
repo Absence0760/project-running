@@ -60,10 +60,22 @@ data class DrainQueueLoopResult(
     /// of the last pass that did reach it, and one it reached and did not
     /// reject must lose an older rejection rather than keep it.
     val attemptedIds: List<String>,
-    /// True iff at least one classification was `StopAndRetryLater`
-    /// or `RetryAfterRefresh` followed by another transient failure.
-    /// Caller arms backoff when set.
-    val anyTransientFailure: Boolean,
+    /// The fault that STOPPED this pass, or null if the loop reached the end
+    /// of the snapshot.
+    ///
+    /// A fault rather than a flag, because the two questions a caller asks of
+    /// a stopped pass have different answers: backoff wants to know THAT it
+    /// stopped, and the PreRun arc wants to know ON WHAT — a 5xx the runner
+    /// retries and a session the server will not renew are the same boolean
+    /// and different sentences (decisions § 1544). Deriving the second from
+    /// [lastFault] at the call site would work only because every stop breaks
+    /// immediately, which is an invariant of this loop that nothing outside it
+    /// could see.
+    ///
+    /// Distinct from [lastFault], which is the banner: that one is cleared by
+    /// a trailing success and set by a permanent rejection the loop then
+    /// carries on past. This one is set only where the pass ends.
+    val blockedBy: SyncFault?,
     /// The fault the wrist states — sticks on the UI as `syncFault` until the
     /// next success clears it.
     ///
@@ -72,7 +84,11 @@ data class DrainQueueLoopResult(
     /// user-facing string on the watch that never went through a catalogue
     /// (decisions § 1490). The raw text is not lost: it goes to [report].
     val lastFault: SyncFault?,
-)
+) {
+    /// Backoff's own question, answered off [blockedBy] so the two can never
+    /// disagree about whether the pass got through.
+    val anyTransientFailure: Boolean get() = blockedBy != null
+}
 
 /// One failed upload attempt, as the log needs it.
 data class DrainFailure(
@@ -159,7 +175,7 @@ internal suspend fun drainQueueLoop(
     val drained = mutableListOf<String>()
     val rejected = mutableListOf<String>()
     val attempted = mutableListOf<String>()
-    var anyTransientFailure = false
+    var blockedBy: SyncFault? = null
     var lastFault: SyncFault? = null
 
     fun record(runId: String, fault: SyncFault, error: Throwable) {
@@ -195,7 +211,7 @@ internal suspend fun drainQueueLoop(
                         false
                     }
                     if (!refreshed) {
-                        anyTransientFailure = true
+                        blockedBy = lastFault
                         break
                     }
                     try {
@@ -209,7 +225,7 @@ internal suspend fun drainQueueLoop(
                         // again names the one thing that has just succeeded.
                         lastFault = syncFaultFor(inner)
                         record(run.id, lastFault, inner)
-                        anyTransientFailure = true
+                        blockedBy = lastFault
                         break
                     }
                 }
@@ -218,7 +234,7 @@ internal suspend fun drainQueueLoop(
                     // iterating so we don't hammer the backend, keep
                     // the queue intact for the next drain trigger,
                     // and arm backoff.
-                    anyTransientFailure = true
+                    blockedBy = lastFault
                     break
                 }
                 DrainAction.SkipAndContinue -> {
@@ -238,7 +254,7 @@ internal suspend fun drainQueueLoop(
         drainedIds = drained,
         rejectedIds = rejected,
         attemptedIds = attempted,
-        anyTransientFailure = anyTransientFailure,
+        blockedBy = blockedBy,
         lastFault = lastFault,
     )
 }
