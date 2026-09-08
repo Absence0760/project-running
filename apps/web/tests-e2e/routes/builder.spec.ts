@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { resetRateLimit } from '../fixtures/local-supabase';
 import { deleteRoute } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 
@@ -1585,6 +1586,11 @@ test.describe('/routes/new — save flow', () => {
 	// The new route row is written for real; delete it after each test so
 	// the suite stays idempotent (same shape as save-as-route.spec.ts).
 	let routeId: string | null = null;
+	// `rate_limits` holds one row per (user, bucket, hour) shared by every
+	// spec in the run, so a create budget is whatever the last test left.
+	test.beforeEach(async () => {
+		await resetRateLimit(USER_A.id, 'create_route');
+	});
 	test.afterEach(async () => {
 		if (routeId) {
 			try {

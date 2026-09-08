@@ -27,6 +27,13 @@ test.describe('/routes/new — save round-trip', () => {
 
 	let plantedRouteId: string | null = null;
 
+	// `rate_limits` holds one row per (user, bucket, hour) shared by every
+	// spec in the run, so a create budget is whatever the last test left
+	// rather than a fresh 30. State the precondition instead of inheriting it.
+	test.beforeEach(async () => {
+		await resetRateLimit(USER_A.id, 'create_route');
+	});
+
 	test.afterEach(async () => {
 		if (plantedRouteId) {
 			try {
@@ -36,6 +43,9 @@ test.describe('/routes/new — save round-trip', () => {
 			}
 			plantedRouteId = null;
 		}
+		// Playwright abandons a timed-out test rather than unwinding it, so
+		// the cap test below cannot undo its own plant from the test body.
+		await resetRateLimit(USER_A.id, 'create_route');
 	});
 
 	test('drop waypoints + fill modal + submit → /routes/[id] with persisted name, description, public flag', async ({
@@ -125,41 +135,37 @@ test.describe('/routes/new — save round-trip', () => {
 			count: 30,
 		});
 
-		try {
-			await page.goto('/routes/new');
-			await expect(page.getByRole('heading', { level: 1, name: 'Route Builder' }))
-				.toBeVisible({ timeout: 10_000 });
-			await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
+		await page.goto('/routes/new');
+		await expect(page.getByRole('heading', { level: 1, name: 'Route Builder' }))
+			.toBeVisible({ timeout: 10_000 });
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 10_000 });
 
-			// Same force-enable trick as the happy-path test — OSRM isn't
-			// reachable here, so we open the modal without a real route.
-			const saveBtn = page.getByRole('button', { name: /Save Route/ });
-			await saveBtn.evaluate((el: HTMLButtonElement) => (el.disabled = false));
-			await saveBtn.click();
+		// Same force-enable trick as the happy-path test — OSRM isn't
+		// reachable here, so we open the modal without a real route.
+		const saveBtn = page.getByRole('button', { name: /Save Route/ });
+		await saveBtn.evaluate((el: HTMLButtonElement) => (el.disabled = false));
+		await saveBtn.click();
 
-			const modal = page.locator('.modal', { hasText: 'Save route' });
-			await expect(modal).toBeVisible({ timeout: 5_000 });
-			await modal.getByPlaceholder('My Route').fill(`rate-limited ${Date.now()}`);
+		const modal = page.locator('.modal', { hasText: 'Save route' });
+		await expect(modal).toBeVisible({ timeout: 5_000 });
+		await modal.getByPlaceholder('My Route').fill(`rate-limited ${Date.now()}`);
 
-			const submit = modal.getByRole('button', { name: /Save route/ });
-			await submit.evaluate((el: HTMLButtonElement) => (el.disabled = false));
-			await submit.click();
+		const submit = modal.getByRole('button', { name: /Save route/ });
+		await submit.evaluate((el: HTMLButtonElement) => (el.disabled = false));
+		await submit.click();
 
-			// Friendly wording lands in the save modal's persistent inline
-			// .save-error banner — handleSaveRoute's catch sets `saveError` so
-			// the modal stays open with the user's work intact (a transient
-			// toast would vanish and read as a half-navigated dead end).
-			const saveErr = modal.locator('.save-error');
-			await expect(saveErr).toBeVisible({ timeout: 10_000 });
-			await expect(saveErr).toHaveText(/creating routes too quickly/i);
-			// Negative pin: the generic "Failed to save route" fallback
-			// (and the raw "rate limit exceeded for create_route" leak)
-			// must NOT appear.
-			await expect(page.getByText('Failed to save route')).toHaveCount(0);
-			await expect(page.getByText(/rate limit exceeded for create_route/i))
-				.toHaveCount(0);
-		} finally {
-			await resetRateLimit(USER_A.id, 'create_route');
-		}
+		// Friendly wording lands in the save modal's persistent inline
+		// .save-error banner — handleSaveRoute's catch sets `saveError` so
+		// the modal stays open with the user's work intact (a transient
+		// toast would vanish and read as a half-navigated dead end).
+		const saveErr = modal.locator('.save-error');
+		await expect(saveErr).toBeVisible({ timeout: 10_000 });
+		await expect(saveErr).toHaveText(/creating routes too quickly/i);
+		// Negative pin: the generic "Failed to save route" fallback
+		// (and the raw "rate limit exceeded for create_route" leak)
+		// must NOT appear.
+		await expect(page.getByText('Failed to save route')).toHaveCount(0);
+		await expect(page.getByText(/rate limit exceeded for create_route/i))
+			.toHaveCount(0);
 	});
 });

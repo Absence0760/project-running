@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { resetRateLimit } from '../fixtures/local-supabase';
 import { deleteRoute, deleteRun, insertRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 
@@ -40,6 +41,12 @@ test.describe('/runs/[id] — Save as route', () => {
 		{ lat: -33.872, lng: 151.212, ele: 18 },
 		{ lat: -33.873, lng: 151.213, ele: 20 }
 	];
+
+	// `rate_limits` holds one row per (user, bucket, hour) shared by every
+	// spec in the run, so a create budget is whatever the last test left.
+	test.beforeEach(async () => {
+		await resetRateLimit(USER_A.id, 'create_route');
+	});
 
 	test.afterEach(async () => {
 		if (routeId) {
