@@ -2310,7 +2310,7 @@ The Dart half of the exercise-catalogue pair (§ 1460, § 1513). The ten mirror 
 
 ### `apps/watch_wear/.../SyncFaultTest.kt` — 8 · `DiscardRunTest.kt` — 6 · `AuthFaultTest.kt` — 7
 
-The wrist's two classified faults and the PostRun discard. Counted in the Wear OS glob row above (826 across 80 files); listed here because the three are what moved it. `SyncFaultTest` gained three cases with `syncFaultForRefresh` (§ 1590): the two endpoints disagree about a 400 and a 429, a refresh that never reached the server is not a session that expired, and `Refused` is unreachable from the refresh classifier because it is a sentence about a queue entry the refresh grant does not carry.
+The wrist's two classified faults and the PostRun discard. Counted in the Wear OS glob row above (832 across 81 files); listed here because the three are what moved it. `SyncFaultTest` gained three cases with `syncFaultForRefresh` (§ 1590): the two endpoints disagree about a 400 and a 429, a refresh that never reached the server is not a session that expired, and `Refused` is unreachable from the refresh classifier because it is a sentence about a queue entry the refresh grant does not carry.
 
 ## #789 round 46 — web-data lane (2026-09-07)
 
