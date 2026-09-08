@@ -73,19 +73,6 @@ function workflow(opts = {}) {
           path: ~/.gradle/caches
           key: gradle-${opts.cacheKey ?? `\${{ hashFiles('${dir}/**/*.gradle*') }}`}
 `;
-	const dir = opts.dir ?? 'apps/watch_wear/android';
-	// Claim 4 reads the job's `~/.gradle` cache step, so every fixture that is
-	// not about claim 4 carries a well-formed one — a fixture missing it would
-	// fail for a reason the case is not about, which is how these eight tests
-	// started failing when claim 4 landed without them.
-	const cache =
-		opts.cacheKey === null
-			? ''
-			: `      - uses: actions/cache@v4
-        with:
-          path: ~/.gradle/caches
-          key: gradle-${opts.cacheKey ?? `\${{ hashFiles('${dir}/**/*.gradle*') }}`}
-`;
 	return `name: CI
 jobs:
   build-watch-wear:
