@@ -1040,7 +1040,7 @@ pgTAP tests against the highest-blast-radius RLS policies, run by `cd apps/backe
 
 These twenty-three files cover the tables + RPCs + triggers where a single-row leak / single-trigger bypass would be a privacy, impersonation, or revenue incident. They do NOT exhaustively cover every table (37 in total) — the original seven gaps (`clubs`, `club_members`, `club_posts`, `events`, `event_attendees`, `route_reviews`, `segments`) are now closed; remaining uncovered tables are lower-blast-radius (`run_kudos` / `run_comments` / `run_photos` are pinned indirectly via the `engagement_chain` helper, plus auxiliary tables like `webhook_events`, `rate_limits`, etc. that don't carry user content). Add a file when you touch a sensitive policy, or when an audit lands.
 
-### `apps/backend/supabase/functions/**/*.test.ts` — 953 deno tests across 70 files
+### `apps/backend/supabase/functions/**/*.test.ts` — 957 deno tests across 71 files
 
 Run the pure-helper slices with `cd apps/backend && deno test --no-check supabase/functions/_shared/*.test.ts` plus the per-function `lib.test.ts` / `wiring.test.ts` / `handler.test.ts` files (`auth-email`, `delete-account`, `donations-checkout`, `events-cancel`, `events-checkout`, `events-connect-onboard`, `export-data`, `parkrun-import`, `race-results-import`, `refresh-tokens`, `revenuecat-webhook`, `strava-import`, `strava-webhook`, `stripe-events-webhook`); the network-touching ones (e.g. `_shared/handler_envelope.test.ts`) need `SUPABASE_TEST_URL=http://127.0.0.1:54321 supabase functions serve --env-file .env.local` and the `--allow-net --allow-env` flags. The `edge-functions` CI job runs all of them on every PR.
 
