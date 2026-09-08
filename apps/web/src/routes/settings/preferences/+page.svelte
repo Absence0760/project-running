@@ -583,12 +583,12 @@
 	async function persistZones(next: PrivacyZone[]) {
 		if (!auth.user) return;
 		try {
-			// The zone list is restated as an object literal on the way into the
-			// jsonb prefs bag: `PrivacyZone` is an interface, and an interface
-			// has no implicit index signature, so TypeScript refuses one as a
-			// `Json` however JSON-shaped it is. Naming the three fields also
-			// pins what a zone persists as — decisions § 33 makes this a
-			// privacy contract, not an incidental serialisation.
+			// The zone list is projected field by field on the way into the jsonb
+			// prefs bag, which pins what a zone persists as: § 33 makes that a
+			// privacy contract, so a field later added to `PrivacyZone` has to
+			// be admitted here rather than riding along. `PrivacyZone` is an
+			// alias now (§ 1474) and would assign as a `Json` on its own — the
+			// projection is kept for the contract, not for the type.
 			await updateUniversal(auth.user.id, {
 				[PRIVACY_ZONES_KEY]: next.map((z) => ({
 					lat: z.lat,
