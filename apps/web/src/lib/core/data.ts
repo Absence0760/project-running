@@ -1240,20 +1240,7 @@ export async function saveRunAsRoute(
 ): Promise<{ id: string }> {
 	const { summarizeRouteFromTrack } = await import('../routes/route_simplify');
 	if (track.length < 2) throw new Error('Not enough GPS points to save a route');
-	// `waypoints` is annotated rather than inferred: `route_simplify`'s `LatLng`
-	// is an interface, and an interface has no implicit index signature, so an
-	// array of them is refused as the `Json` the column takes. `TrackPoint` is
-	// the same shape declared as an alias, which is what `Route.waypoints`
-	// already promises the row holds.
-	const {
-		waypoints,
-		distance_m,
-		elevation_m,
-	}: {
-		waypoints: Array<{ lat: number; lng: number; ele?: number | null }>;
-		distance_m: number;
-		elevation_m: number;
-	} = summarizeRouteFromTrack(track, 10);
+	const { waypoints, distance_m, elevation_m } = summarizeRouteFromTrack(track, 10);
 
 	const { data: authUser } = await supabase.auth.getUser();
 	const userId = authUser.user?.id;
@@ -3496,15 +3483,7 @@ export async function createEvent(input: {
 			category: input.category,
 			is_public: input.is_public ?? true,
 			discipline: input.discipline?.trim() || null,
-			// Restated as an object literal on the way into the jsonb column.
-			// TypeScript gives an implicit index signature only to a type ALIAS
-			// of an object type, never to an `interface` — which stays open to
-			// declaration merging — so a named record shape is refused as a
-			// `Json` however JSON-shaped it is. Declaring these two as aliases
-			// where they live is the fix; both are TS<->Dart parity modules this
-			// change does not own.
-			gym_template:
-				input.category === 'class' && input.gym_template ? { ...input.gym_template } : null,
+			gym_template: input.category === 'class' ? (input.gym_template ?? null) : null,
 			description: input.description?.trim() || null,
 			starts_at: input.starts_at,
 			// Anchor the event to the organiser's local timezone so discovery's
@@ -3551,19 +3530,13 @@ export async function updateEvent(
 	// RLS `is_event_organiser` gates the UPDATE; owner/admin/event_organiser
 	// only. `events` stays bare here per the F11 registry tail (see schema.ts).
 	//
-	// `gym_template` is pulled out and restated for the reason `createEvent`
-	// states: an interface has no implicit index signature, so it is refused as
-	// the `Json` the column takes. Left out of the update entirely when the
-	// caller did not patch it — putting the key back with an `undefined` would
-	// turn "leave it alone" into a write.
+	// `gym_template` is left out of the update entirely when the caller did not
+	// patch it — putting the key back with an `undefined` would turn "leave it
+	// alone" into a write.
 	const { gym_template, ...fields } = patch;
 	const { error } = await supabase
 		.from('events')
-		.update(
-			gym_template === undefined
-				? fields
-				: { ...fields, gym_template: gym_template ? { ...gym_template } : null },
-		)
+		.update(gym_template === undefined ? fields : { ...fields, gym_template })
 		.eq('id', id);
 	if (error) throw error;
 }
@@ -5193,9 +5166,7 @@ export async function createTrainingPlan(input: {
 			target_duration_seconds: wo.target_duration_seconds,
 			target_pace_sec_per_km: wo.target_pace_sec_per_km,
 			target_pace_tolerance_sec: wo.target_pace_tolerance_sec,
-			// Same restatement as `createEvent`'s `gym_template`: `WorkoutStructure`
-			// is an interface, and an interface has no implicit index signature.
-			structure: wo.structure ? { ...wo.structure } : null,
+			structure: wo.structure ?? null,
 			notes: wo.notes
 		}))
 	);
