@@ -75,7 +75,7 @@ export function normaliseExerciseName(name: string): string {
 /// other two agree on rejects outright (decisions § 1175). The table is
 /// generated from Unicode's own data by `scripts/gen_exercise_fold_table.mjs`
 /// and frozen at the version stamped into it; the mirrors are
-/// `apps/mobile_android/lib/exercise_fold_table.dart` and the `translate()`
+/// `packages/core_models/lib/src/exercise_fold_table.dart` and the `translate()`
 /// inside `public.exercise_fold_case`.
 ///
 /// Iterating with `for..of` is load-bearing: 307 of the 1,488 entries are
