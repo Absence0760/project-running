@@ -2285,3 +2285,32 @@ The Dart half of the exercise-catalogue pair (§ 1460). The nine mirror the web 
 ### `apps/watch_wear/.../SyncFaultTest.kt` — 5 · `DiscardRunTest.kt` — 6 · `AuthFaultTest.kt` — 7
 
 The wrist's two classified faults and the PostRun discard. Counted in the Wear OS glob row above (802 across 79 files); listed here because the three are what moved it.
+
+## #789 round 46 (2026-09-07)
+
+### `apps/web/src/lib/util/clip_text.test.ts` — 13 tests (6 rewritten, 2 added)
+
+The clipper's budget is grapheme clusters rather than UTF-16 code units, so the
+suite is now about two properties instead of one. The first is uniformity: 160
+of anything — ASCII, CJK, a ZWJ family, a regional-indicator flag, a skin-tone
+modifier, a base letter with its combining mark — fits a budget of 160, which
+under the code-unit budget held for the first two and for nothing else. The
+second is that the cut lands on a cluster boundary, swept over every budget
+from 1 to 20 against five multi-code-unit clusters. Six of the thirteen fail
+against the pre-change clipper. The last case deletes `Intl.Segmenter` and
+pins the documented degradation — the previous code-unit cut, which can leave
+half a flag — so the fallback is a stated behaviour rather than an assumption.
+`share_club_meta.test.ts` carries the surface half at 9 (1 added): the club
+head's UTF-8 round-trip, and a description cut mid-ZWJ-sequence keeping the
+cluster whole.
+
+### `apps/web/src/lib/training/plan_slug.test.ts` — 5 tests
+
+The plan export's filename, moved out of `/plans/[id]/+page.svelte` so a
+`tsx --test` suite can reach it at all — § 1398 shipped with nothing asserting
+it, which is § 1278's structural gap in its third instance. Two of the five
+fail against the pre-§ 1398 `toLowerCase` form: `İstanbul Marathon` reaching
+`istanbul-marathon` rather than `i-stanbul-marathon`, and a diacritic leaving
+its base letter rather than a hyphen. The other three pin the fallback (a name
+in a script the strip removes yields `plan`, not a row of hyphens) and the
+deliberate refusal to transliterate `ß` or `ø`.

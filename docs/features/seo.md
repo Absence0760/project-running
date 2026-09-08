@@ -492,7 +492,21 @@ builder fails the suite until it is registered with an invocation that proves
 it escapes.
 
 **Clip user text with `clipText` / `collapseAndClip` from `$lib/util/clip_text`.**
-A `<head>` budget is measured in UTF-16 code units, and a raw `slice` can cut
-between the halves of a surrogate pair — a lone surrogate has no UTF-8
-encoding, so a club description crossing the 160-character og:description
-budget mid-emoji reached the crawler with a U+FFFD on the end.
+A `<head>` budget is measured in **grapheme clusters** — what a reader counts
+as characters, and what the author counted when they wrote the description —
+and the cut lands only on a cluster boundary. Neither was true of a raw
+`slice`, and each cost a defect. A code-unit index can fall between the halves
+of a surrogate pair, and a lone surrogate has no UTF-8 encoding, so a club
+description crossing the 160-character `og:description` budget mid-emoji
+reached the crawler with a U+FFFD on the end
+([§ 1478](../architecture/decisions.md)). Counting in code units
+then made the same budget mean a different amount of text per script: 160
+running emoji came back as 79, 160 flags as 39 plus a bare regional indicator,
+160 ZWJ families as 19 plus a dangling joiner, while 160 CJK characters were
+kept whole ([§ 1528](../architecture/decisions.md)). Cutting on cluster
+boundaries subsumes the first fix — a
+surrogate pair is inside a cluster — and is why a flag, a skin-tone modifier
+and a base letter with its combining mark now survive whole or are dropped
+whole. **Never pass a `.slice()` result into a meta tag**; the budget is a
+ceiling on characters, not on bytes or on pixels, and no consumer's own
+truncation is being predicted here.
