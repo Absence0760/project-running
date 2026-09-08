@@ -9685,7 +9685,11 @@ export async function fetchExerciseRecords(): Promise<ExerciseRecord[]> {
 export async function fetchExerciseSetHistoryWithError(
 	name: string
 ): Promise<{ sets: GymSetWithDate[]; error: string | null }> {
-	if (!auth.user?.id || !name.trim()) return { sets: [], error: null };
+	// The RPC matches `s.exercise_key = normalise_exercise_name(p_name)`, so the
+	// only blankness that means anything here is the fold's — a name of one
+	// U+0085 survives JS `trim()` and folds to the empty key no row can hold
+	// (§ 1367).
+	if (!auth.user?.id || !namesAnExercise(name)) return { sets: [], error: null };
 	const { data, error } = await supabase.rpc('gym_exercise_set_history', { p_name: name });
 	if (error) return { sets: [], error: error.message };
 	return {

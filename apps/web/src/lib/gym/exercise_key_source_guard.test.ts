@@ -83,6 +83,39 @@ interface Hit {
 	text: string;
 }
 
+/// A declaration starting at column 0 — the top-level functions and consts a
+/// `.ts` module is made of. Anchored there on purpose: the nearest PRECEDING
+/// declaration at any depth would be a `const q = …` one line up, and naming
+/// the enclosing scope after that is worse than not naming it. A `.svelte`
+/// file's `<script>` body is indented, so this finds nothing there and the
+/// file-level rule is what covers it.
+const TOP_LEVEL_DECL =
+	/^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\s+|const\s+|let\s+|var\s+|class\s+)([A-Za-z_$][\w$]*)/gm;
+
+/// Whether the top-level declaration enclosing [at] names an exercise.
+///
+/// The rule that reaches a broad module, where the file-level one is waived and
+/// has to be: `data.ts` is 12,000 lines of club, checkpoint and meal-template
+/// names beside its exercise ones, so "this file names an exercise" says
+/// nothing about any one value in it — but "this value is inside
+/// `fetchExerciseSetHistoryBatch`" says everything. Both of that module's
+/// spelling-blankness defects were written under exactly such a name, on a
+/// subject called `name` and `n`, where neither the receiver rule nor the file
+/// rule could see them and a local line-regex in `data.test.ts` — the reason
+/// the waiver was thought covered — missed them too (§ 1508).
+///
+/// Additive everywhere rather than a replacement for the file rule: it can only
+/// widen what a scan sees, so no shape either scan caught before stops being
+/// caught.
+function scopeNamesAnExercise(code: string, at: number): boolean {
+	let name = '';
+	for (const m of code.matchAll(TOP_LEVEL_DECL)) {
+		if ((m.index ?? 0) > at) break;
+		name = m[1];
+	}
+	return NAMES_AN_EXERCISE.test(name);
+}
+
 /// The receiver expression a fold is applied to: the member chain immediately
 /// left of the `.`, with balanced call and index groups walked over so
 /// `(s.exercise_name ?? '').trim().toLowerCase()` reports the whole chain
@@ -143,7 +176,8 @@ export function foldHits(path: string, source: string): Hit[] {
 		const named =
 			NAMES_AN_EXERCISE.test(receiverOf(code, at)) || NAMES_AN_EXERCISE.test(statementAt(code, at));
 		const lowering = m.groups?.case === 'Lower';
-		if (!(lowering && fileNamesAnExercise) && !named) continue;
+		const scoped = lowering && scopeNamesAnExercise(code, at);
+		if (!(lowering && fileNamesAnExercise) && !named && !scoped) continue;
 		const line = code.slice(0, at).split('\n').length;
 		out.push({ path, line, text: source.split('\n')[line - 1]?.trim() ?? '' });
 	}
@@ -299,6 +333,24 @@ function isEmptyLiteral(operand: string): boolean {
 
 const LENGTH_TAIL = /\.length\s*$/;
 
+/// Every operator a blankness test is written with. Deliberately wider than
+/// [COMPARISON], which the identity scan uses: `x === ''`, `x.length > 0` and
+/// `x.length < 1` ask one question of one value, and the ordering spellings are
+/// the ones the defect actually wore — two of the three writes § 1367 fixed
+/// were `.trim().length > 0` and neither this scan nor anything else in the
+/// tree could see them (§ 1508).
+///
+/// A generic parameter (`$state<Exercise[]>`) matches the `<` here and is
+/// rejected by [emptinessSubject], which admits an ordering only against a
+/// `.length` receiver and a 0-or-1 bound. Excluding it here instead would need
+/// a parser.
+const BLANKNESS_COMPARISON = /(?<![<>=!])(?:===|!==|==|!=|<=|>=|<|>)(?!=)/g;
+
+/// The only bounds an ordering comparison can be asking about emptiness at.
+/// `length > 2` is a minimum-length rule, which is a different claim and not
+/// this scan's.
+const EMPTY_BOUND = /^[01]$/;
+
 /// The operand to the LEFT of an operator, a quoted literal included.
 /// [receiverOf] walks a member chain and stops dead at a quote, so `'' === name`
 /// reads as no left operand at all — and the emptiness scan has to see the
@@ -319,8 +371,9 @@ function leftOperand(code: string, at: number): string {
 /// emptiness test at all, paired with whether the subject may be judged on its
 /// DECLARATION as well as on the operand itself.
 ///
-/// `x === ''` and `x.length === 0` are the same question asked of a string, but
-/// only the first says the subject is one. A list is emptied the same way, and
+/// `x === ''`, `x.length === 0` and `x.length > 0` are one question asked of a
+/// string, but only the first says the subject is one. A list is emptied the
+/// same way, and
 /// `named.length === 0` two lines under `const named = exercises.filter((e) =>
 /// e.name.trim() !== '')` is a count of blocks, not a blank name — so the
 /// length shape is judged on the operand alone, where the spelling has to be
@@ -328,9 +381,9 @@ function leftOperand(code: string, at: number): string {
 function emptinessSubject(left: string, right: string): { subject: string; chase: boolean } | null {
 	if (isEmptyLiteral(right)) return { subject: left, chase: true };
 	if (isEmptyLiteral(left)) return { subject: right, chase: true };
-	if (right.trim() === '0' && LENGTH_TAIL.test(left))
+	if (EMPTY_BOUND.test(right.trim()) && LENGTH_TAIL.test(left))
 		return { subject: left.replace(LENGTH_TAIL, ''), chase: false };
-	if (left.trim() === '0' && LENGTH_TAIL.test(right))
+	if (EMPTY_BOUND.test(left.trim()) && LENGTH_TAIL.test(right))
 		return { subject: right.replace(LENGTH_TAIL, ''), chase: false };
 	return null;
 }
@@ -358,6 +411,32 @@ function originOf(code: string, operand: string): string {
 	return expr;
 }
 
+/// A blankness test written with no comparison at all: `if (!name.trim())`.
+/// Returns the offset of each such `.trim()` paired with the subject it is
+/// applied to.
+///
+/// `!x` on its own is deliberately NOT bannable — it is how a nullable is
+/// tested all over the tree — but `!x.trim()` can only be asking whether the
+/// trimmed spelling is empty, which is the question JS `trim()` answers
+/// differently from the fold at U+0085. A `.trim()` that continues into
+/// `.length` or an `===` belongs to the comparison pass, so a chain is only
+/// read here when the call ENDS the expression.
+function negatedTrims(code: string, scan: string): { at: number; subject: string }[] {
+	const out: { at: number; subject: string }[] = [];
+	for (const m of scan.matchAll(/\.trim\(\s*\)/g)) {
+		const at = m.index ?? 0;
+		if (/^\s*[.[]/.test(code.slice(at + m[0].length, at + m[0].length + 8))) continue;
+		// `receiverOf`'s character class carries `!` for the non-null assertion
+		// (`x!.trim()`), so the negation arrives INSIDE the chain rather than
+		// beside it. `x !== y.trim()` ends in `=`, not `!`, so the equality
+		// operators exclude themselves.
+		const chain = receiverOf(code, at).trim();
+		if (!chain.startsWith('!')) continue;
+		out.push({ at, subject: chain.replace(/^!+/, '') });
+	}
+	return out;
+}
+
 /// Every blankness test in [source] taken on an exercise SPELLING rather than
 /// on its key. Exported so the mutation test below can feed it planted
 /// violations, as the other two scans are.
@@ -374,22 +453,29 @@ export function blankSpellingTestHits(path: string, source: string): Hit[] {
 	const code = stripComments(source);
 	const scan = blankQuoted(code);
 	const fileNamesAnExercise = NAMES_AN_EXERCISE.test(scan) && !BROAD_MODULES.includes(path);
-	const out: Hit[] = [];
-	for (const m of scan.matchAll(COMPARISON)) {
+	const candidates: { at: number; subject: string; chase: boolean }[] = [];
+	for (const m of scan.matchAll(BLANKNESS_COMPARISON)) {
 		const at = m.index ?? 0;
 		const found = emptinessSubject(leftOperand(code, at), operandAfter(code, at + m[0].length));
-		if (found === null) continue;
+		if (found !== null) candidates.push({ at, ...found });
+	}
+	for (const n of negatedTrims(code, scan)) candidates.push({ ...n, chase: true });
+	const out: Hit[] = [];
+	for (const found of candidates) {
+		const at = found.at;
 		const origin = found.chase ? originOf(code, found.subject) : found.subject;
 		// The fix itself, on either the operand or its declaration.
 		if (/normaliseExerciseName\s*\(|namesAnExercise\s*\(/.test(origin)) continue;
+		const scoped = fileNamesAnExercise || scopeNamesAnExercise(code, at);
 		const spelling =
 			NAMES_A_SPELLING.test(origin) ||
-			(fileNamesAnExercise && IS_A_NAME_IDENTIFIER.test(found.subject.trim())) ||
-			(found.chase && fileNamesAnExercise && NAMES_A_DISPLAY_FIELD.test(origin));
+			(scoped && IS_A_NAME_IDENTIFIER.test(found.subject.trim())) ||
+			(found.chase && scoped && NAMES_A_DISPLAY_FIELD.test(origin));
 		if (!spelling) continue;
 		const line = code.slice(0, at).split('\n').length;
 		out.push({ path, line, text: source.split('\n')[line - 1]?.trim() ?? '' });
 	}
+	out.sort((a, b) => a.line - b.line);
 	return out;
 }
 
@@ -680,6 +766,20 @@ test('the blankness scan sees the shapes it bans, and spares the ones it must no
 			'lib/components/ExerciseCataloguePicker.svelte',
 			"const catalogue = [];\n\tconst trimmed = $derived(query.trim());\n\tasync function create() {\n\t\tconst name = trimmed;\n\t\tif (name.length === 0) return;\n\t\tawait createCustomExercise({ name });\n\t}",
 		],
+		// The three shapes below are the ones the scan could not see until
+		// § 1508, and two of them are how the defect was actually written.
+		['blankness as an ordering test', 'lib/share/x.ts', 'const ok = s.exercise_name.trim().length > 0;'],
+		['the same, below the boundary', 'lib/share/x.ts', 'if (s.exercise_name.trim().length < 1) continue;'],
+		['the same, at the boundary', 'lib/share/x.ts', 'if (s.exercise_name.trim().length >= 1) keep();'],
+		['blankness as a negation, with no comparison at all', 'lib/share/x.ts', 'if (!exerciseName.trim()) return null;'],
+		[
+			// The rule that reaches a broad module: the file is waived, the
+			// subject is called `name`, and the enclosing declaration is what
+			// says the value is an exercise.
+			'a broad module, under a declaration that names an exercise',
+			'lib/core/data.ts',
+			'export async function fetchExerciseSetHistory(\n\tname: string\n) {\n\tif (!auth.user?.id || !name.trim()) return [];\n}',
+		],
 	];
 	for (const [label, path, source] of caught) {
 		assert.equal(blankSpellingTestHits(path, source).length, 1, `missed: ${label}`);
@@ -728,6 +828,47 @@ test('the blankness scan sees the shapes it bans, and spares the ones it must no
 			'the broad module, judged by the fold scan instead',
 			'lib/core/data.ts',
 			"const name = (row.movement_name ?? '').trim();\n\tif (name === '') continue;",
+		],
+		[
+			// The ordering shapes admit a `.length` against 0 or 1 and nothing
+			// else, so a list count in a file full of exercises is untouched —
+			// `exerciseProgress` has two of these.
+			'a list counted in a file that names an exercise',
+			'lib/gym/exercise_history.ts',
+			'const exercises = [];\n\tconst first = withE1rm.length > 0 ? withE1rm[0] : null;',
+		],
+		[
+			'a minimum-length rule, which is a different claim',
+			'lib/share/x.ts',
+			'if (s.exercise_name.trim().length >= 3) keep();',
+		],
+		[
+			// `receiverOf` carries `!` for the non-null assertion, so the
+			// negation pass reads it out of the chain — and an inequality ends
+			// in `=`, not `!`.
+			'an inequality against a trimmed value, which is not a negation',
+			'lib/share/x.ts',
+			'if (key !== s.exercise_name.trim()) continue;',
+		],
+		[
+			// A generic parameter matches the `<` the ordering shapes need and
+			// is rejected on the operands rather than by excluding it up front.
+			'a generic parameter in a file that names an exercise',
+			'lib/components/GymEditor.svelte',
+			'let catalogue = $state<Exercise[]>([]);',
+		],
+		[
+			'a broad module, under a declaration that names nothing of the kind',
+			'lib/core/data.ts',
+			"const exercises = [];\nexport async function createClub(input) {\n\tif (!input.name.trim()) throw new Error('x');\n}",
+		],
+		[
+			// The fold's own trim, and the display-spelling trim beside it, are
+			// operations rather than blankness decisions — neither is a
+			// comparison and neither is negated.
+			'the display spelling trimmed before an insert decides on the key',
+			'lib/core/data.ts',
+			'export async function createCustomExercise(input) {\n\tconst name = input.name.trim();\n\tif (!namesAnExercise(name)) return null;\n}',
 		],
 	];
 	for (const [label, path, source] of spared) {
