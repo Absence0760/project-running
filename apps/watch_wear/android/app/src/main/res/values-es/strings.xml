@@ -50,6 +50,10 @@
         <item quantity="one">%1$d carrera guardada en espera. La última sincronización no llegó. Toca para reintentar.</item>
         <item quantity="other">%1$d carreras guardadas en espera. La última sincronización no llegó. Toca para reintentar.</item>
     </plurals>
+    <plurals name="cd_sync_sign_in_required">
+        <item quantity="one">%1$d carrera guardada en espera. Tu sesión ha caducado. Toca para iniciar sesión de nuevo.</item>
+        <item quantity="other">%1$d carreras guardadas en espera. Tu sesión ha caducado. Toca para iniciar sesión de nuevo.</item>
+    </plurals>
     <string name="cd_sync_unreadable_retry">Carreras guardadas ilegibles, toca para reintentar</string>
     <plurals name="sync_rejected">
         <item quantity="one">%1$d rechazada</item>

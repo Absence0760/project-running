@@ -70,6 +70,10 @@
         <item quantity="one">%1$d saved run waiting. The last sync did not get through. Tap to try again.</item>
         <item quantity="other">%1$d saved runs waiting. The last sync did not get through. Tap to try again.</item>
     </plurals>
+    <plurals name="cd_sync_sign_in_required">
+        <item quantity="one">%1$d saved run waiting. Your session has expired. Tap to sign in again.</item>
+        <item quantity="other">%1$d saved runs waiting. Your session has expired. Tap to sign in again.</item>
+    </plurals>
     <string name="cd_sync_unreadable_retry">Saved runs unreadable, tap to retry</string>
     <!-- Queue entries the server permanently refused. The chip states the
          refusal, arms on the first tap, and only the second tap discards. -->

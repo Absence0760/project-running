@@ -50,6 +50,10 @@
         <item quantity="one">%1$d corrida salva aguardando. A última sincronização não foi concluída. Toque para tentar de novo.</item>
         <item quantity="other">%1$d corridas salvas aguardando. A última sincronização não foi concluída. Toque para tentar de novo.</item>
     </plurals>
+    <plurals name="cd_sync_sign_in_required">
+        <item quantity="one">%1$d corrida salva aguardando. Sua sessão expirou. Toque para entrar novamente.</item>
+        <item quantity="other">%1$d corridas salvas aguardando. Sua sessão expirou. Toque para entrar novamente.</item>
+    </plurals>
     <string name="cd_sync_unreadable_retry">Corridas salvas ilegíveis, toque para tentar de novo</string>
     <plurals name="sync_rejected">
         <item quantity="one">%1$d recusada</item>

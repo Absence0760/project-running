@@ -50,6 +50,10 @@
         <item quantity="one">%1$d course enregistrée en attente. La dernière synchronisation n\'a pas abouti. Appuyez pour réessayer.</item>
         <item quantity="other">%1$d courses enregistrées en attente. La dernière synchronisation n\'a pas abouti. Appuyez pour réessayer.</item>
     </plurals>
+    <plurals name="cd_sync_sign_in_required">
+        <item quantity="one">%1$d course enregistrée en attente. Votre session a expiré. Appuyez pour vous reconnecter.</item>
+        <item quantity="other">%1$d courses enregistrées en attente. Votre session a expiré. Appuyez pour vous reconnecter.</item>
+    </plurals>
     <string name="cd_sync_unreadable_retry">Courses enregistrées illisibles, appuyez pour réessayer</string>
     <plurals name="sync_rejected">
         <item quantity="one">%1$d refusée</item>

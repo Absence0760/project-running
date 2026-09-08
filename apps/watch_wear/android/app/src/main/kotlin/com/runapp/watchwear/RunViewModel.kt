@@ -175,9 +175,8 @@ data class UiState(
     /// still what a bug report needs, so it goes to `Log.e` at the point of
     /// failure instead of to the wrist (decisions § 1490).
     val syncFault: SyncFault? = null,
-    /// True when the last COMPLETED drain pass stopped on a transient failure
-    /// — a 5xx, a timeout, a dropped connection — which is also what arms
-    /// `drainBackoff`.
+    /// What stopped the last COMPLETED drain pass, or null if it got through.
+    /// Non-null is also what armed `drainBackoff`.
     ///
     /// Deliberately not carried on [syncFault], which is the PostRun banner
     /// and a fact about one pass: `startNextRun` clears it, and PreRun is the
@@ -186,9 +185,16 @@ data class UiState(
     /// same split § 1347 drew for [rejectedRunIds] — a standing fact about the
     /// queue rather than about a pass (decisions § 1390).
     ///
+    /// A fault rather than the boolean it replaced, because "Retry N" is an
+    /// affordance that can never succeed when what stopped the pass was a
+    /// session the server will not renew: it is enabled, it fires, and every
+    /// tap re-runs the same drain, 401s again and fails the same refresh. The arc needs to offer the sign-in instead, and the
+    /// only thing that separates the two cases is which fault it was
+    /// (decisions § 1544).
+    ///
     /// Not persisted, and re-derived by the next completed pass in both
     /// directions: a pass that gets through clears it.
-    val syncFailed: Boolean = false,
+    val syncBlockedBy: SyncFault? = null,
     val thisRunId: String? = null,
     val thisRunSynced: Boolean = false,
     val lastRunSummary: FinishedSummary? = null,
@@ -1432,12 +1438,31 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         launchGuarded { tearDownSession() }
     }
 
+    /// Where leaving the sign-in screen goes back to.
+    ///
+    /// Hardcoding PreRun was fine while PreRun was the only way in. PostRun
+    /// now offers the sign-in too — it is the screen the `SyncFault.
+    /// SignInRequired` banner renders on, and the one that had no way to act
+    /// on it (decisions § 1545) — and sending a runner who signs in from there
+    /// to PreRun throws away the summary of the run they had just finished, at
+    /// the exact moment the sign-in has made it uploadable.
+    private var signInReturnStage: Stage = Stage.PreRun
+
+    /// The stage to leave the sign-in screen for.
+    ///
+    /// Anything that moved the stage on while the runner was typing keeps it:
+    /// the return is a restore, not a claim about where they should be.
+    private fun stageAfterSignIn(): Stage =
+        if (_state.value.stage == Stage.SignIn) signInReturnStage else _state.value.stage
+
     fun openSignIn() {
+        val from = _state.value.stage
+        if (from != Stage.SignIn) signInReturnStage = from
         _state.value = _state.value.copy(stage = Stage.SignIn, authFault = null)
     }
 
     fun cancelSignIn() {
-        _state.value = _state.value.copy(stage = Stage.PreRun)
+        _state.value = _state.value.copy(stage = stageAfterSignIn())
     }
 
     fun signInWithEmail(email: String, password: String) {
@@ -1450,7 +1475,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 signInWithEmailInternal(email, password)
                 _state.value = _state.value.copy(
-                    stage = Stage.PreRun,
+                    stage = stageAfterSignIn(),
                     signInLoading = false,
                 )
             } catch (e: Throwable) {
@@ -1549,39 +1574,45 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         val result = drainQueueLoop(
             snapshot = snapshot,
             push = { run -> pushRun(run) },
+            // Deliberately NOT wrapped: the loop catches, and catching here
+            // instead discarded the only account of why the session could not
+            // be renewed. A spent refresh token and a socket that died between
+            // the 401 and the refresh both arrived as a bare `false`, and the
+            // one diagnostic a wrist ever produces was the one thing thrown
+            // away.
             refresh = {
-                try {
-                    val refreshed = supabase.refreshAccessToken()
-                    val cached = sessionStore.current()
-                    if (cached != null) {
-                        sessionStore.save(
-                            cached.copy(
-                                accessToken = refreshed.accessToken,
-                                refreshToken = refreshed.refreshToken,
-                                expiresAtMs = refreshed.expiresAtMs,
-                            )
+                val refreshed = supabase.refreshAccessToken()
+                val cached = sessionStore.current()
+                if (cached != null) {
+                    sessionStore.save(
+                        cached.copy(
+                            accessToken = refreshed.accessToken,
+                            refreshToken = refreshed.refreshToken,
+                            expiresAtMs = refreshed.expiresAtMs,
                         )
-                    }
-                    true
-                } catch (_: Throwable) {
-                    false
+                    )
                 }
+                true
             },
             onSuccessfulDrain = OnSuccessfulDrain { id -> dropQueuedRun(id, snapshot) },
+            // Every failure the pass meets, with its throwable, because this is
+            // the only place the raw text survives now that the wrist states a
+            // catalogued fault instead (decisions § 1490). Reported per failure
+            // rather than once at the end: a pass that refuses four runs and
+            // then drains a fifth clears the banner and still has four things a
+            // bug report needs.
+            //
+            // A required parameter rather than a list on the result the caller
+            // reads back, because nothing held the caller to reading it: the
+            // whole diagnostic could be dropped and every test still passed.
+            report = DrainFailureReport { failure ->
+                Log.e(TAG, "drain failed for ${failure.runId} (${failure.fault})", failure.error)
+            },
         )
         if (result.anyTransientFailure) {
             drainBackoff.onFailure()
         } else {
             drainBackoff.onSuccess()
-        }
-        // Every failure the pass met, with its throwable, because this is the
-        // only place the raw text survives now that the wrist states a
-        // catalogued fault instead (decisions § 1490). Logged per failure
-        // rather than once at the end: a pass that refuses four runs and then
-        // drains a fifth clears the banner and still has four things a bug
-        // report needs.
-        for (failure in result.failures) {
-            Log.e(TAG, "drain failed for ${failure.runId} (${failure.fault})", failure.error)
         }
         // `syncFault` keeps its clear-on-success semantics — a trailing
         // success clearing the banner is a stated decision, pinned twice in
@@ -1591,7 +1622,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         // is about the queue (decisions § 1347).
         _state.value = _state.value.copy(
             syncFault = result.lastFault,
-            syncFailed = result.anyTransientFailure,
+            syncBlockedBy = result.blockedBy,
             rejectedRunIds = rejectedAfterPass(
                 previouslyRejected = _state.value.rejectedRunIds,
                 queuedIdsBeforePass = snapshot.map { it.id },
