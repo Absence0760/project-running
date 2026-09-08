@@ -972,6 +972,14 @@ test('a version cell names the pin as a whole token, not as a substring', () => 
 	assert.equal(prereqNames('3.4', '3.47.0'), false);
 	assert.equal(prereqNames('3.47.0.1', '3.47.0'), false);
 	assert.equal(prereqNames('13.47.0', '3.47.0'), false);
+	// The version is data read out of a pin file, so the whole-token rule must
+	// not be expressed as a pattern built from it. Escaping only `.` left every
+	// other metacharacter live: a pin of `3.4+` matched the cell `3.444`, and a
+	// pin carrying an unbalanced bracket threw a SyntaxError out of a guard.
+	assert.equal(prereqNames('3.444', '3.4+'), false);
+	assert.equal(prereqNames('3.4+', '3.4+'), true);
+	assert.equal(prereqNames('x', '1.2('), false);
+	assert.equal(prereqNames('anything', ''), false);
 });
 
 test('a row the table has lost fails rather than going unchecked', () => {

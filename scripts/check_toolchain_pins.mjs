@@ -1097,7 +1097,17 @@ export function parsePrerequisites(text) {
  * @param {string} cell @param {string} version
  */
 export function prereqNames(cell, version) {
-	return new RegExp(`(?<![\\d.])${version.replace(/\./g, '\\.')}(?![\\d.])`).test(cell);
+	// Scanned rather than matched through a built regex: the version is data
+	// read out of a pin file, and escaping it for a pattern is a rule that has
+	// to be complete to be worth anything.
+	if (version === '') return false;
+	const tight = (/** @type {string} */ ch) => ch !== '' && (ch === '.' || (ch >= '0' && ch <= '9'));
+	for (let i = cell.indexOf(version); i >= 0; i = cell.indexOf(version, i + 1)) {
+		const before = i > 0 ? cell[i - 1] : '';
+		const after = cell[i + version.length] ?? '';
+		if (!tight(before) && !tight(after)) return true;
+	}
+	return false;
 }
 
 /**
