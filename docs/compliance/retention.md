@@ -13,6 +13,8 @@ The GDPR Art 5(1)(e) storage-limitation principle requires retention to be "no l
 | Category | Storage | Retention | Trigger | Notes |
 |---|---|---|---|---|
 | **Account** (`auth.users`, `user_profiles`) | Supabase Postgres | Until user deletes the account | `delete-account` Edge Function | Recovery email is also deleted; re-signup creates a fresh account |
+| **Account-deletion receipt guard** (`account_deletion_receipts`) | Postgres | 30 days from `sent_at` | `cleanup-account-deletion-receipts` cron (hourly, `20270217_001_account_deletion_receipt.sql`) | **Personal data, and deliberately outlives the deleted account.** It is the send-once guard for the deletion-receipt email, so it must survive the `auth.users` cascade that takes a `lifecycle_email_log` row with it, and it carries no FK. One row per receipt: an **unsalted, unkeyed** hex SHA-256 of the lowercased, trimmed address (`handler_lifecycle_email.go`) and a timestamp. That is pseudonymisation, not anonymisation — an email address is a guessable input, so anyone holding a candidate address can compute the digest and test membership, which Recital 26 puts squarely in scope. The migration's "not a directory of deleted-account addresses" is true only of *enumeration*: the table cannot be read out, but it can be asked. 30 days is the Art 5(1)(e) answer, and it is generous — the guard only has to outlive a job's retry budget |
+| **Deletion evidence trail** (`deletion_audit_log`) | Postgres | **Unbounded — no sweep** (Art 17(2) + Art 5(2) accountability evidence) | Written by `delete-account`; service-role read only, no user-side read path | A hash of the **user id**, a timestamp, a result code and the per-table deleted-row counts. Not the same shape as the receipt guard above, despite the migration saying it mirrors it: the input is a 122-bit random UUID, so there is no candidate to guess even though the legacy salt is a source constant in this public repo, and setting `DELETION_AUDIT_KEY` upgrades new rows to HMAC (operator task, `deployment.md`). Kept so "did you delete user X on date Y" can be answered after the auth row is gone — bounding that retention is an open compliance call, not an oversight |
 | **Runs + tracks** (`runs`, Storage `runs/{user_id}/*.json.gz`) | Postgres + Storage (S3) | Until user deletes the run, OR account deletion | `delete-account` walks `{user_id}/*` recursively | Decisions §33 — non-owner viewers see privacy-zone-clipped tracks |
 | **Routes** (`routes`, including `geom` LineString) | Postgres | Until user deletes, OR account deletion | `delete-account` cascade | Public routes survive deletion only if explicitly transferred to a club (rare) |
 | **Coach chat history** (`coach_messages`) | Postgres | 18 months from `created_at` | `purge-stale-coach-messages` cron (`20260922_001_data_retention_purge_jobs.sql`) | Window chosen for season-on-season recall; tighten via the function body |
@@ -69,13 +71,22 @@ checkpoint health job (scrubs columns) and the export reap (enqueues the job
 that erases Storage bytes). The other ten live schedules are not retention
 jobs and are excluded: `enqueue-token-refresh`, `enqueue-event-reminders`,
 `enqueue-weekly-digest`, `enqueue-lifecycle-drip`,
-`enqueue-safety-overdue-emails`, `sweep-challenge-completions`, the
-`jobs-stuck` / `jobs-failed` / `jobs-backlog` alerts and
+`enqueue-safety-overdue-emails`, `sweep-challenge-completions`,
+`jobs-stuck-alert`, `jobs-failed-alert`, `jobs-backlog-alert` and
 `export-retention-overrun-alert`. (`refresh-mv-weekly-mileage` is gone
 entirely — `20270530_001` dropped the materialized view and unscheduled it.) Window tightening is a
 single-file edit to the function body. The `gdpr_dsar_closeouts_test.sql`
 pgtap suite pins the existence of `purge-stale-jobs`; the matching pins for
 the others ride alongside their defining migrations.
+
+Both counts, every job name and every schedule above are re-derived from the
+migration tree by `scripts/check_retention_cron_register.mjs`, which fails the
+PR when a `cron.schedule` or `cron.unschedule` lands without this table moving
+with it. That guard exists because nothing did: `20270709000001` unscheduled
+`cleanup-stale-export-blobs` and this table went on advertising it as a nightly
+sweep for nine migrations ([decisions § 1507](../architecture/decisions.md)).
+The ten exclusions are declared **by name** in the guard, so a new schedule
+cannot join them by being forgotten — an unclassified job fails.
 
 ## Backups
 
