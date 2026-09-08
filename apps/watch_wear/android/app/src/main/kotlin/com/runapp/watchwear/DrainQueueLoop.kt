@@ -200,10 +200,13 @@ internal suspend fun drainQueueLoop(
             record(run.id, lastFault, e)
             when (classify(e)) {
                 DrainAction.RetryAfterRefresh -> {
-                    // One-shot refresh-then-retry. If refresh fails OR
-                    // the retry itself fails, stop the loop and arm
-                    // backoff — the next drain trigger (network flap,
-                    // manual sync) will retry from this run forward.
+                    // One-shot refresh-then-retry. A refresh that fails stops
+                    // the loop and arms backoff — the next drain trigger
+                    // (network flap, manual sync) retries from this run
+                    // forward. A retry that fails is judged like any other
+                    // attempt: the refresh has already spent its one shot, so
+                    // what remains is the same three-way verdict the outer
+                    // `when` acts on.
                     val refreshFault: SyncFault? = try {
                         if (refresh()) {
                             null
@@ -242,8 +245,31 @@ internal suspend fun drainQueueLoop(
                         // again names the one thing that has just succeeded.
                         lastFault = syncFaultFor(inner)
                         record(run.id, lastFault, inner)
-                        blockedBy = lastFault
-                        break
+                        // And the retry's own VERDICT, for the same reason the
+                        // fault is its own. This branch used to break on every
+                        // failure, so a 400/404/409/422 here left the entry
+                        // queued, armed backoff as though it were transient,
+                        // and put the arc on `RetryQueued` for a run no retry
+                        // will ever move — the exact state § 1347 built
+                        // `rejectedIds` and the two-press discard chip to
+                        // escape, reached through the one branch that bypassed
+                        // them.
+                        when (classify(inner)) {
+                            // A refusal is not a stop: the queue's later
+                            // entries may be perfectly acceptable, and the
+                            // permanent verdict is what the chip acts on.
+                            DrainAction.SkipAndContinue -> rejected += run.id
+                            // A second 401 with a token minted seconds ago is
+                            // not a refresh this loop may repeat — the
+                            // one-shot contract is what keeps a rejecting
+                            // server from being asked twice per run — so it
+                            // stops the pass exactly as a transient does.
+                            DrainAction.RetryAfterRefresh,
+                            DrainAction.StopAndRetryLater -> {
+                                blockedBy = lastFault
+                                break
+                            }
+                        }
                     }
                 }
                 DrainAction.StopAndRetryLater -> {
