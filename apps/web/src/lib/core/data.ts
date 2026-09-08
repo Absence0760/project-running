@@ -9770,7 +9770,13 @@ export async function fetchExerciseCatalogue(): Promise<{
 	catalogue: Exercise[];
 	error: string | null;
 }> {
-	if (!auth.user?.id) return { catalogue: [], error: null };
+	// Signed out is not a vouched-for empty catalogue either — the read never
+	// happened, so nothing downstream may claim a typed name is free. The `/gym`
+	// page returns before `load()` when there is no user and so never reaches
+	// this branch, which is exactly why the branch has to be right on its own:
+	// the next caller inherits whatever it says, and `null` here says the
+	// catalogue is known to hold nothing.
+	if (!auth.user?.id) return { catalogue: [], error: 'signed_out' };
 	const rows: Exercise[] = [];
 	let from = 0;
 	let previous: number | null = null;
