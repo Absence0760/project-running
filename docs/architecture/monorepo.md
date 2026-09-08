@@ -22,8 +22,27 @@ The first three are **exact versions, not floors**, and
 pins them — `env.FLUTTER_VERSION` in every workflow, `pubspec.lock`, and every
 `actions/setup-node` step. It said 3.19+, 7.x and Node 20 LTS against a CI
 running 3.47.0, 7.8.2 and 24.20.0 until [§ 1536](decisions.md); a prerequisite
-table is a pin like any other and was simply the one nothing compared. Xcode and
-Android Studio carry no in-repo pin, so nothing checks them and they stay floors.
+table is a pin like any other and was simply the one nothing compared.
+
+**Every row is in one of two states, and a new row must declare which**
+([§ 1587](decisions.md)). If the repo pins the tool somewhere a guard can read,
+the row states that **exact version** and is added to `PREREQ_ROWS` naming the
+pin — the guard then fails when the two disagree. If nothing in the repo pins
+it, the row states a **floor** (`15+`) and is added to `PREREQ_UNPINNED` with
+the reason no pin exists. A row in neither register is unread, which is how the
+three above drifted; the guard now fails on one, and fails on a floor row that
+states an exact version, since an exact version nothing compares is the one kind
+of pin that cannot go stale loudly.
+
+Xcode and Android Studio are floors because there is genuinely nothing to
+compare them to, re-checked 2026-09-08: `release-ios.yml` and the watchOS jobs
+run on `macos-latest` and take whatever Xcode that image ships (the repo holds
+no `xcode-select`, `DEVELOPER_DIR` or `xcode-version` anywhere), and no workflow
+names an Android Studio version at all. The Gradle plugin (`settings.gradle.kts`
+— 8.13.2 for the Flutter host, 9.4.0 for Wear OS) and the JDK
+(`actions/setup-java`) **are** pinned, but they are build inputs the wrapper
+resolves rather than the IDE this row tells a contributor to install, so neither
+belongs in the Android Studio cell.
 
 **`.tool-versions` is a pin REGISTRY, not an install manifest.** Six of its
 seven lines are commented on purpose: Flutter, Rust, Go, Terraform, Deno and

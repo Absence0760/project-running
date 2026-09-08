@@ -36,6 +36,14 @@ import {
 	runBody,
 	checkStatedJobCount,
 	ORIENTATION_DOC,
+	checkGateDocs,
+	gateDisplayName,
+	jobDisplayNames,
+	docSection,
+	advisoryBullets,
+	sentences,
+	GATE_DOC,
+	ADVISORY_CHECK_NAMES,
 } from './check_ci_diagnostics.mjs';
 
 const CENSUS_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -1023,7 +1031,7 @@ test('rules 2, 3 and 4 are not applied to a composite action', () => {
 test('RULE_SUBJECTS names every rule exactly once, with a reason', () => {
 	assert.deepEqual(
 		RULE_SUBJECTS.map((r) => r.rule),
-		[1, 2, 3, 4, 5, 6, 7],
+		[1, 2, 3, 4, 5, 6, 7, 8],
 	);
 	for (const r of RULE_SUBJECTS) {
 		assert.ok(r.what.length > 10 && r.why.length > 10, `rule ${r.rule} states no reason`);
@@ -1210,4 +1218,207 @@ test('a trigger reader that stopped matching fails rather than reporting no gaps
 
 test('the committed workflows either reach the gate or are declared advisory', () => {
 	assert.deepEqual(checkPrGates(readWorkflows(WORKFLOW_DIR)).errors, []);
+});
+
+
+// ---------------------------------------------------------------------------
+// Rule 8 — the documents that describe the merge gate say what the register
+// holds. Fixtures rather than the real files, so each half can be broken on
+// its own; the last test runs the rule against the committed documents.
+// ---------------------------------------------------------------------------
+
+const CI_NAMED_GATE = `${CI_CALLING.replace('  ci-gate:\n', '  ci-gate:\n    name: CI gate\n')}`;
+
+/** @param {{ advisory?: string[], names?: boolean, gate?: boolean }} [opts] */
+function gateDoc(opts = {}) {
+	const advisory = opts.advisory ?? ['scanner.yml'];
+	const bullets = advisory.map((a) => `- \`${a}\` -- a reason.`).join('\n');
+	return (
+		`# Deployment\n\n## Merge gates -- what protects main\n\n` +
+		`${opts.gate === false ? 'Branch protection requires one context.' : 'Branch protection requires exactly one status context: `CI gate`.'}\n\n` +
+		`${opts.names === false ? 'Nothing points at the code.' : 'The register is `PR_ADVISORY` in `scripts/check_ci_diagnostics.mjs`.'}\n\n` +
+		`### What runs on a pull request and does not block it\n\n${bullets}\n\n` +
+		`## Release vs deploy\n\nsomething else entirely, with \`labeler.yml\` in it.\n`
+	);
+}
+
+const ORIENTATION_OK = 'Titles are lint-checked and the `lint title` check is advisory. Fix it anyway.\n';
+
+/// `scanner.yml` stands in for `pr-title-lint.yml`: the check name a fixture
+/// registers has to be a job `name:` some workflow actually declares.
+const RULE8_FILES = [
+	{ name: 'ci.yml', text: CI_NAMED_GATE },
+	{ name: 'scanner.yml', text: 'on:\n  pull_request:\njobs:\n  lint:\n    name: lint title\n' },
+];
+
+/** @type {ReadonlyMap<string, string>} */
+const ONE_ADVISORY = new Map([['scanner.yml', 'x'.repeat(80)]]);
+/** @type {ReadonlyMap<string, string>} */
+const ONE_CHECK = new Map([['scanner.yml', 'lint title']]);
+
+test('gateDisplayName reads the gate job own name, and null when it has none', () => {
+	assert.equal(gateDisplayName(CI_NAMED_GATE), 'CI gate');
+	assert.equal(gateDisplayName(CI_CALLING), null);
+	assert.equal(gateDisplayName('jobs:\n  other:\n    name: X\n'), null);
+});
+
+test('docSection stops at the next `## ` and advisoryBullets stops at the next heading', () => {
+	const section = docSection(gateDoc(), /^##\s+Merge gates\b/);
+	assert.ok(section);
+	assert.ok(!section.join('\n').includes('Release vs deploy'));
+	// `labeler.yml` lives past the section end, so a whole-document scan would
+	// have found it and this one must not.
+	assert.deepEqual(advisoryBullets(section, /^###\s+What runs on a pull request and does not block it\s*$/), [
+		'scanner.yml',
+	]);
+});
+
+test('sentences keeps a bolded clause ending `.**` off the sentence after it', () => {
+	const out = sentences('**It is advisory.** The `lint title` row is red. Next.');
+	assert.equal(out.length, 3);
+	assert.equal(out[1], 'The `lint title` row is red.');
+});
+
+test('rule 8 passes on documents that agree with the register', () => {
+	const { errors } = checkGateDocs(
+		RULE8_FILES,
+		ORIENTATION_OK,
+		gateDoc(),
+		ONE_ADVISORY,
+		ONE_CHECK,
+	);
+	assert.deepEqual(errors, []);
+});
+
+test('an advisory workflow the section never lists fails, and so does one it lists alone', () => {
+	const files = RULE8_FILES;
+	const missing = checkGateDocs(files, ORIENTATION_OK, gateDoc({ advisory: [] }), ONE_ADVISORY, new Map());
+	assert.equal(missing.errors.length, 1);
+	assert.match(missing.errors[0], /^PR_ADVISORY holds scanner\.yml and the Merge-gates section does not list it/);
+
+	const extra = checkGateDocs(files, ORIENTATION_OK, gateDoc({ advisory: ['scanner.yml', 'ghost.yml'] }), ONE_ADVISORY, new Map());
+	assert.equal(extra.errors.length, 1);
+	assert.match(extra.errors[0], /^the Merge-gates section lists ghost\.yml as advisory/);
+});
+
+test('a section that names neither the register nor the guard fails', () => {
+	const { errors } = checkGateDocs(
+		RULE8_FILES,
+		ORIENTATION_OK,
+		gateDoc({ names: false }),
+		ONE_ADVISORY,
+		new Map(),
+	);
+	assert.equal(errors.length, 2);
+	assert.match(errors[0], /never names `PR_ADVISORY`/);
+	assert.match(errors[1], /never names `check_ci_diagnostics\.mjs`/);
+});
+
+test('a section that no longer names the gate job display name fails', () => {
+	const { errors } = checkGateDocs(
+		RULE8_FILES,
+		ORIENTATION_OK,
+		gateDoc({ gate: false }),
+		ONE_ADVISORY,
+		new Map(),
+	);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /never names `CI gate`/);
+});
+
+test('a moved anchor is a hard error rather than a rule that reads nothing', () => {
+	const files = RULE8_FILES;
+	const noSection = checkGateDocs(files, ORIENTATION_OK, '# Deployment\n\n## Something else\n', ONE_ADVISORY, new Map());
+	assert.equal(noSection.errors.length, 1);
+	assert.match(noSection.errors[0], /holds no section matching/);
+
+	const noHeading = checkGateDocs(
+		files,
+		ORIENTATION_OK,
+		gateDoc().replace('### What runs on a pull request and does not block it', '### Advisory checks'),
+		ONE_ADVISORY,
+		new Map(),
+	);
+	assert.equal(noHeading.errors.length, 1);
+	assert.match(noHeading.errors[0], /holds no heading matching/);
+
+	const absent = checkGateDocs(files, ORIENTATION_OK, null, ONE_ADVISORY, new Map());
+	assert.equal(absent.errors.length, 1);
+	assert.match(absent.errors[0], /was not read/);
+});
+
+test('CLAUDE.md describing an advisory check as a gate fails, and any wording calling it advisory passes', () => {
+	const files = RULE8_FILES;
+	const gated = checkGateDocs(
+		files,
+		'**PR titles are lint-gated -- get this right or the `lint title` check fails the PR on open.**\n',
+		gateDoc(),
+		ONE_ADVISORY,
+		ONE_CHECK,
+	);
+	assert.equal(gated.errors.length, 1);
+	assert.match(gated.errors[0], /names `lint title` in a sentence that never calls it advisory/);
+
+	// Re-spelled, same claim: the rule is anchored on what is asserted, not on
+	// the sentence it was first written as.
+	for (const reworded of [
+		'The `lint title` check is advisory and blocks no merge.\n',
+		'Nothing waits for `lint title`; it is purely advisory.\n',
+		'`lint title` is ADVISORY, so a red row still merges.\n',
+	]) {
+		assert.deepEqual(
+			checkGateDocs(files, reworded, gateDoc(), ONE_ADVISORY, ONE_CHECK).errors,
+			[],
+			reworded,
+		);
+	}
+});
+
+test('a check-name entry fails once its workflow leaves the register, and once the doc stops naming it', () => {
+	const files = RULE8_FILES;
+	const stale = checkGateDocs(files, ORIENTATION_OK, gateDoc(), new Map(), ONE_CHECK);
+	assert.ok(stale.errors.some((e) => /ADVISORY_CHECK_NAMES names scanner\.yml/.test(e)));
+
+	const silent = checkGateDocs(files, 'Nothing about titles at all.\n', gateDoc(), ONE_ADVISORY, ONE_CHECK);
+	assert.equal(silent.errors.length, 1);
+	assert.match(silent.errors[0], /never names `lint title`/);
+});
+
+test('the committed documents agree with the committed register', () => {
+	assert.ok(ADVISORY_CHECK_NAMES.size > 0);
+	const { errors } = checkGateDocs(
+		readWorkflows(WORKFLOW_DIR),
+		readFileSync(ORIENTATION_DOC, 'utf-8'),
+		readFileSync(GATE_DOC, 'utf-8'),
+	);
+	assert.deepEqual(errors, []);
+});
+
+test('a check name no job in its workflow declares fails, and so does a renamed job', () => {
+	const wrong = checkGateDocs(
+		RULE8_FILES,
+		ORIENTATION_OK,
+		gateDoc(),
+		ONE_ADVISORY,
+		new Map([['scanner.yml', 'title lint']]),
+	);
+	assert.equal(wrong.errors.length, 1);
+	assert.match(wrong.errors[0], /no job in it carries that `name:`/);
+
+	const unread = checkGateDocs(
+		[{ name: 'ci.yml', text: CI_NAMED_GATE }],
+		ORIENTATION_OK,
+		gateDoc(),
+		ONE_ADVISORY,
+		ONE_CHECK,
+	);
+	assert.equal(unread.errors.length, 1);
+	assert.match(unread.errors[0], /not among the workflows read/);
+});
+
+test('jobDisplayNames reads every job name and nothing at another indent', () => {
+	assert.deepEqual(
+		jobDisplayNames('jobs:\n  a:\n    name: One\n  b:\n    name: "Two"\n    steps:\n      - name: deep\n'),
+		['One', 'Two'],
+	);
 });

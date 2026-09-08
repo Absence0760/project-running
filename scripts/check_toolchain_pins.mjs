@@ -1063,6 +1063,60 @@ export const PREREQ_ROWS = [
 	{ label: 'Node.js', pin: 'nodejs' },
 ];
 
+/// The prerequisite rows whose version this repo does NOT pin anywhere a guard
+/// can read, keyed on the row LABEL as the table writes it.
+///
+/// Every row of the table is in exactly one of the two registers, and that is
+/// the point of this one existing: PREREQ_ROWS alone checks the rows it names
+/// and is silent about the rest, so a new row could be added in either state
+/// and nothing would ask which it was — the state the three drifted rows of
+/// § 1536 were added in. A row here states a FLOOR and must not state an exact
+/// version, because an exact version nothing compares is a pin in the one form
+/// that cannot be checked.
+///
+/// Measured 2026-09-08 for the two that were filed as worth re-reading: neither
+/// `release-ios.yml` nor `release-android.yml` pins a toolchain the table could
+/// state. `release-ios.yml` takes whatever Xcode `macos-latest` ships — the
+/// repo holds no `xcode-select`, `DEVELOPER_DIR` or `xcode-version` anywhere —
+/// and `release-android.yml` names no Android Studio version at all. What IS
+/// pinned near the Android row is neither: the Gradle plugin
+/// (`settings.gradle.kts`, 8.13.2 for the Flutter host and 9.4.0 for Wear OS)
+/// and the JDK (`actions/setup-java`), which are build inputs rather than the
+/// IDE this row tells a contributor to install.
+/** @type {Array<{ label: string, reason: string }>} */
+export const PREREQ_UNPINNED = [
+	{
+		label: 'Dart',
+		reason:
+			'not a version at all — the SDK ships inside Flutter, so the Flutter row above is ' +
+			'the pin and a second number here could only ever contradict it.',
+	},
+	{
+		label: 'Xcode',
+		reason:
+			'no in-repo pin: release-ios.yml and the watchOS jobs run on `macos-latest` and take ' +
+			"whatever Xcode that image ships, so a version here would be this table's own " +
+			'invention rather than a transcription of something CI enforces.',
+	},
+	{
+		label: 'Android Studio',
+		reason:
+			'no in-repo pin: nothing names an IDE version. The Gradle plugin and the JDK are ' +
+			'pinned in settings.gradle.kts and actions/setup-java, but those are build inputs ' +
+			'the wrapper resolves, not the IDE a contributor installs from this row.',
+	},
+];
+
+/// A version cell that names an exact release — `3.47.0`, `7.8.2`, `24.20.0` —
+/// as opposed to a floor (`15+`), a range, or prose (`bundled with Flutter`).
+/**
+ * @param {string} cell
+ * @returns {boolean}
+ */
+export function looksPinned(cell) {
+	return /(?:^|[^\d.])\d+\.\d+(?:\.\d+)?(?![\d.]|\s*\+|\+)/.test(cell);
+}
+
 /**
  * The rows of the first markdown table under `## Prerequisites`, as
  * `label -> { version cell, line }`.
@@ -1075,6 +1129,8 @@ export function parsePrerequisites(text) {
 	const out = new Map();
 	const lines = text.split('\n');
 	let inSection = false;
+	/** @type {string | null} the row above, dropped when a separator follows it */
+	let previous = null;
 	for (let i = 0; i < lines.length; i++) {
 		if (/^##\s+Prerequisites\s*$/.test(lines[i])) {
 			inSection = true;
@@ -1085,8 +1141,16 @@ export function parsePrerequisites(text) {
 		const cells = lines[i].split('|').map((c) => c.trim());
 		// A table row is `| a | b | c |`, so the split yields empty ends.
 		if (cells.length < 4 || cells[0] !== '' || cells[cells.length - 1] !== '') continue;
-		if (/^-+$/.test(cells[1].replace(/[: ]/g, '-'))) continue;
+		// The separator identifies the row above it as the HEADER, which is a
+		// label like any other to a line reader — and `Tool` in neither register
+		// is a row the coverage rule below would report as undecided.
+		if (/^-+$/.test(cells[1].replace(/[: ]/g, '-'))) {
+			if (previous !== null) out.delete(previous);
+			previous = null;
+			continue;
+		}
 		if (!out.has(cells[1])) out.set(cells[1], { version: cells[2], line: i + 1 });
+		previous = cells[1];
 	}
 	return out;
 }
@@ -1113,9 +1177,16 @@ export function prereqNames(cell, version) {
 /**
  * @param {string | null} docText
  * @param {Map<string, { version: string, source: string }>} pins
+ * @param {ReadonlyArray<{ label: string, pin: string }>} [pinnedRows]
+ * @param {ReadonlyArray<{ label: string, reason: string }>} [unpinnedRows]
  * @returns {{ errors: string[], ok: string[] }}
  */
-export function checkPrerequisites(docText, pins) {
+export function checkPrerequisites(
+	docText,
+	pins,
+	pinnedRows = PREREQ_ROWS,
+	unpinnedRows = PREREQ_UNPINNED,
+) {
 	/** @type {string[]} */
 	const errors = [];
 	/** @type {string[]} */
@@ -1132,7 +1203,7 @@ export function checkPrerequisites(docText, pins) {
 		return { errors, ok };
 	}
 
-	for (const { label, pin } of PREREQ_ROWS) {
+	for (const { label, pin } of pinnedRows) {
 		const pinned = pins.get(pin);
 		if (!pinned) continue;
 		const row = rows.get(label);
@@ -1157,6 +1228,59 @@ export function checkPrerequisites(docText, pins) {
 		ok.push(
 			`docs/architecture/monorepo.md:${row.line} -> ${label} ${pinned.version} matches ` +
 				`${pinned.source}`,
+		);
+	}
+
+	// Every row is in exactly one of the two registers. Without this half the
+	// table's OTHER rows are outside the guard entirely, which is the state
+	// Flutter, Melos and Node.js were in while they said 3.19+, 7.x and Node 20
+	// against a CI running 3.47.0, 7.8.2 and 24.20.0 (decisions § 1536, § 1587).
+	const pinnedLabels = new Set(pinnedRows.map((r) => r.label));
+	const floors = new Map(unpinnedRows.map((r) => [r.label, r.reason]));
+	for (const [label, row] of rows) {
+		const isPin = pinnedLabels.has(label);
+		const reason = floors.get(label);
+		if (isPin && reason !== undefined) {
+			errors.push(
+				`docs/architecture/monorepo.md:${row.line} — \`${label}\` is in BOTH PREREQ_ROWS ` +
+					`and PREREQ_UNPINNED, so the row is checked against a pin and excused from ` +
+					`having one at the same time. Pick the state it is in.`,
+			);
+			continue;
+		}
+		if (!isPin && reason === undefined) {
+			errors.push(
+				`docs/architecture/monorepo.md:${row.line} — \`${label}\` is a prerequisite row in ` +
+					`neither register, so nothing reads it. A row is either PINNED (add it to ` +
+					`PREREQ_ROWS naming the in-repo pin, and the table states that exact version) ` +
+					`or a FLOOR (add it to PREREQ_UNPINNED with the reason no in-repo pin exists). ` +
+					`A row in neither is how a table drifts three versions behind CI without ` +
+					`anything noticing.`,
+			);
+			continue;
+		}
+		if (isPin || !looksPinned(row.version)) continue;
+		errors.push(
+			`docs/architecture/monorepo.md:${row.line} — \`${label}\` is registered as having no ` +
+				`in-repo pin (${reason}) and yet states \`${row.version}\`, which reads as an exact ` +
+				`version. An exact version nothing compares is the one form of pin that cannot go ` +
+				`stale loudly. Either find the pin and move the row to PREREQ_ROWS, or write the ` +
+				`cell as the floor it is.`,
+		);
+	}
+	for (const { label } of unpinnedRows) {
+		if (rows.has(label)) continue;
+		errors.push(
+			`PREREQ_UNPINNED names \`${label}\`, which the Prerequisites table no longer has a ` +
+				`row for. Delete the entry — an exemption outliving what it excused is cover for ` +
+				`the next row added without a decision.`,
+		);
+	}
+	if (errors.length === 0) {
+		ok.push(
+			`docs/architecture/monorepo.md's ${rows.size} prerequisite row(s) are each declared: ` +
+				`${pinnedRows.length} pinned and compared, ${unpinnedRows.length} stated as a ` +
+				`floor with the reason no in-repo pin exists`,
 		);
 	}
 	return { errors, ok };
