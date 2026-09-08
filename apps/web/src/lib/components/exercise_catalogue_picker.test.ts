@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { cataloguePickerView, type CatalogueEntry } from './exercise_catalogue_picker';
+import { readFileSync } from 'node:fs';
+import {
+	cataloguePickerView,
+	shadowsSeededGlobal,
+	type CatalogueEntry,
+} from './exercise_catalogue_picker';
 
 // The behavioural pin § 1278 said the tree had nowhere to put. Every case
 // below was mutation-tested against the code it describes: reverting the fold
@@ -266,4 +271,184 @@ test('an absent unavailable flag reads as available', () => {
 	const view = cataloguePickerView(CATALOGUE, { query: 'Front Squat', category: 'all' });
 	assert.equal(view.unavailable, false);
 	assert.equal(view.canCreate, true);
+});
+
+/**
+ * The picker must TRACK its catalogue prop, not snapshot it — and the pin for
+ * that is source-level.
+ *
+ * § 1481 fixed a reactivity property of a Svelte component, and § 1278 records
+ * why nothing here could hold it: `apps/web` runs its unit suite under
+ * `tsx --test`, which cannot compile a component. § 1958 asked for a Playwright
+ * case instead and three rounds running were not permitted to execute one, so
+ * the fix sat unpinned; the tree's own answer to exactly this shape is
+ * `gym_execution_band_seeding.test.ts`, which reads a component's source
+ * because the seeding it pins lives in an `$effect` a DOM-free test cannot
+ * drive. The objection § 1958 raised was to a BLANKET ban — seeding local state
+ * from a prop with `untrack` is correct in five other components in this tree —
+ * and these read one file, so no correct component is in their reach.
+ *
+ * They are anchored on the reactive graph rather than on spelling: the picker's
+ * decisions must be taken over a `$derived` that READS the prop, and no local
+ * `$state` may be initialised from it. Both are properties a regression breaks
+ * and neither is satisfiable by a component that snapshots.
+ */
+const PICKER = readFileSync(
+	new URL('./ExerciseCataloguePicker.svelte', import.meta.url),
+	'utf8',
+);
+
+/// The component's `<script>` body with comments blanked, so a rune named in
+/// prose is not read as a declaration.
+function pickerScript(source: string): string {
+	const open = source.indexOf('<script');
+	const start = source.indexOf('>', open) + 1;
+	const body = source.slice(start, source.indexOf('</script>', start));
+	return body.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
+/// Every `$state` / `$derived` declaration in a Svelte 5 script, as the rune it
+/// uses, the name it binds, and the initialiser it is given.
+function runeDeclarations(
+	script: string,
+): { rune: string; name: string; init: string }[] {
+	const out: { rune: string; name: string; init: string }[] = [];
+	const re =
+		/\b(?:let|const)\s+([A-Za-z_$][\w$]*)(?:\s*:\s*[^=]+?)?\s*=\s*(\$state|\$derived)(?:\.by)?\s*(?:<[^=<>]*>)?\s*\(/g;
+	for (let m = re.exec(script); m !== null; m = re.exec(script)) {
+		let depth = 1;
+		let i = re.lastIndex;
+		for (; i < script.length && depth > 0; i++) {
+			if (script[i] === '(') depth++;
+			else if (script[i] === ')') depth--;
+		}
+		out.push({ rune: m[2], name: m[1], init: script.slice(re.lastIndex, i - 1) });
+	}
+	return out;
+}
+
+/// The picker's own declarations, and the two shapes a regression wears: the
+/// merged snapshot the component had before § 1481, and a snapshot held beside
+/// the prop rather than derived from it.
+const SNAPSHOT_FORMS: [string, string][] = [
+	[
+		'the merged snapshot § 1481 replaced',
+		PICKER.replace(
+			'let created = $state<Exercise[]>([]);',
+			'let created = $state<Exercise[]>([...catalogue]);',
+		),
+	],
+	[
+		'the derived downgraded to a snapshot',
+		PICKER.replace(
+			'const entries = $derived(dedupeShadowedExercises([...catalogue, ...created]));',
+			'let entries = $state(dedupeShadowedExercises([...catalogue, ...created]));',
+		),
+	],
+];
+
+function tracksTheProp(source: string): boolean {
+	const decls = runeDeclarations(pickerScript(source));
+	const entries = decls.find((d) => d.name === 'entries');
+	if (entries === undefined || entries.rune !== '$derived') return false;
+	if (!/\bcatalogue\b/.test(entries.init)) return false;
+	return !decls.some((d) => d.rune === '$state' && /\bcatalogue\b/.test(d.init));
+}
+
+test('the picker derives its entries from the catalogue prop, and snapshots nothing', () => {
+	const decls = runeDeclarations(pickerScript(PICKER));
+	assert.ok(decls.length >= 3, 'no rune declarations parsed — has the script moved?');
+
+	const entries = decls.find((d) => d.name === 'entries');
+	assert.ok(entries, 'the picker no longer names the value its decisions are taken over');
+	assert.equal(
+		entries.rune,
+		'$derived',
+		'a snapshot cannot see a catalogue read that answers after the picker mounts, ' +
+			'and an empty list makes every name look free',
+	);
+	assert.match(
+		entries.init,
+		/\bcatalogue\b/,
+		'the derived must read the prop itself, not a copy of it',
+	);
+
+	const seeded = decls.filter((d) => d.rune === '$state' && /\bcatalogue\b/.test(d.init));
+	assert.deepEqual(
+		seeded.map((d) => d.name),
+		[],
+		'local state seeded from the catalogue prop is the snapshot § 1481 removed',
+	);
+});
+
+test('the picker decides over the derived value, never over the raw prop', () => {
+	const script = pickerScript(PICKER);
+	const at = script.indexOf('cataloguePickerView(');
+	assert.ok(at >= 0, 'the picker no longer calls cataloguePickerView — re-anchor this guard');
+	assert.match(
+		script.slice(at, script.indexOf(')', at)),
+		/cataloguePickerView\(\s*entries\b/,
+		'the view must be taken over the derived entries, or the merge is bypassed',
+	);
+});
+
+test('the tracking pin fails against each snapshot form it replaced', () => {
+	assert.equal(tracksTheProp(PICKER), true, 'the picker as it stands must pass');
+	for (const [label, broken] of SNAPSHOT_FORMS) {
+		assert.notEqual(broken, PICKER, `${label}: the anchor moved — re-anchor this guard`);
+		assert.equal(tracksTheProp(broken), false, `${label} must fail the tracking pin`);
+	}
+});
+
+test('a created custom carrying a seeded global key is reported as a shadow', () => {
+	const global = { name_key: 'bench press', author_id: null };
+	const mine = { name_key: 'bench press', author_id: 'me' };
+	assert.equal(shadowsSeededGlobal([global], mine), true);
+});
+
+test('a created custom under a free name shadows nothing', () => {
+	assert.equal(
+		shadowsSeededGlobal(
+			[{ name_key: 'bench press', author_id: null }],
+			{ name_key: 'farmer carry', author_id: 'me' },
+		),
+		false,
+	);
+});
+
+test('a custom sitting beside another custom of the same key is not a shadow', () => {
+	// Only the GLOBAL disappears from the reader's list. Two customs under one
+	// key cannot both exist — the author's partial unique forbids it — but a
+	// list carrying someone else's row must not be read as a built-in.
+	assert.equal(
+		shadowsSeededGlobal(
+			[{ name_key: 'bench press', author_id: 'someone' }],
+			{ name_key: 'bench press', author_id: 'me' },
+		),
+		false,
+	);
+});
+
+test('a seeded global is never reported as shadowing anything', () => {
+	// The insert RLS forbids it, and reporting it would tell a reader their own
+	// row replaced a built-in when nothing of theirs was created at all.
+	assert.equal(
+		shadowsSeededGlobal(
+			[{ name_key: 'bench press', author_id: null }],
+			{ name_key: 'bench press', author_id: null },
+		),
+		false,
+	);
+});
+
+test('the shadow test reads the stored key, not the display spelling', () => {
+	// The two part in the window a regenerated fold table opens (§ 1176), and
+	// the index is the authority on what a shadow is.
+	assert.equal(
+		shadowsSeededGlobal(
+			[{ name_key: 'bench press', author_id: null }],
+			{ name_key: 'Bench Press', author_id: 'me' },
+		),
+		false,
+	);
 });

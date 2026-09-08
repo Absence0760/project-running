@@ -4285,6 +4285,7 @@ export const messages = {
 	"gym.catalogue.customBadge": "カスタム",
 	"gym.catalogue.create": "「{name}」をカスタム種目として追加",
 	"gym.catalogue.createFailed": "種目を追加できませんでした。",
+	"gym.catalogue.shadowsBuiltIn": "追加しました。同名の組み込み種目を置き換えます。",
 	"gym.catalogue.category.all": "すべて",
 	"gym.catalogue.category.chest": "胸",
 	"gym.catalogue.category.back": "背中",

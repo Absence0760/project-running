@@ -382,6 +382,24 @@ final _folded = RegExp(r'normaliseExerciseName\s*\(|namesAnExercise\s*\(');
 /// while saying everything inside `gym_compose_sheet.dart`.
 final _namesADisplayField = RegExp(r'\.name\b');
 
+/// A value whose OWN identifier is the display spelling, judged under the same
+/// file-level rule. The scan trusted a `.name` READ and not a value called
+/// `name`, which is the difference between a spelling taken off a row and one
+/// TYPED by the user — and the typed one is the whole reason the catalogue
+/// picker's create path exists. There the value reaches the test through a
+/// getter over a `TextEditingController`, whose text carries no `.name` and no
+/// "exercise", so no amount of chasing the declaration can reach it: the
+/// evidence is the identifier the call site binds, exactly as on the web rail
+/// (decisions § 1483).
+///
+/// Anchored at the START so `named`, whose `isEmpty` two lines under a `where`
+/// that already filtered on the key is a count of blocks rather than a blank
+/// name, is not swept in, and so the trimming chain the defect usually wears
+/// (`name.trim().isEmpty`) is still the same subject. Unlike the `.name` read
+/// it sits beside, this is judged on the length shape too — and under the same
+/// file-OR-SCOPE rule that read is, not the file rule alone.
+final _isANameIdentifier = RegExp(r'^name\b');
+
 final _emptyLiteral = RegExp(r"""^(?:''|"")$""");
 
 final _lengthTail = RegExp(r'\.length\s*$');
@@ -402,15 +420,6 @@ final _blanknessComparison = RegExp(r'(?<![<>=!])(?:==|!=|<=|>=|<|>)(?!=)');
 /// `length > 2` is a minimum-length rule, which is a different claim and not
 /// this scan's.
 final _emptyBound = RegExp(r'^[01]$');
-
-/// A value whose OWN identifier is the display spelling, judged under the same
-/// file-or-scope rule the `.name` READ is. The two are different evidence: a
-/// spelling taken off a row against one typed by the user, and the typed one is
-/// what a create path holds. Anchored at the start so the trimming chain the
-/// defect usually wears (`name.trim().isEmpty`) is still the same subject, and
-/// so `named`, whose emptiness is a count of blocks rather than a blank name,
-/// is excluded by the word boundary.
-final _isANameIdentifier = RegExp(r'^name\b');
 
 /// Dart's own spelling of the question, which the web half has no analogue for.
 final _emptinessGetter = RegExp(r'\.is(?:Not)?Empty\b');
@@ -907,6 +916,22 @@ void main() {
             '    if (trimmed.length < 1) return;\n'
             '  }',
       ],
+      // The picker's create path: the value arrives through a getter over a
+      // TextEditingController, so the declaration chase cannot reach anything
+      // that names an exercise and the subject identifier is the only evidence
+      // there is (decisions § 1573).
+      "the picker's create path, whose value came from a search box": [
+        'lib/widgets/exercise_catalogue_picker.dart',
+        'final e = exercise;\n    final name = _query;\n    if (name.isEmpty) return;',
+      ],
+      'the same call site written as a comparison': [
+        'lib/widgets/exercise_catalogue_picker.dart',
+        "final e = exercise;\n    final name = _query;\n    if (name == '') return;",
+      ],
+      'the same call site written as a length test': [
+        'lib/widgets/exercise_catalogue_picker.dart',
+        'final e = exercise;\n    final name = _query;\n    if (name.length == 0) return;',
+      ],
     };
     caught.forEach((label, c) {
       expect(blankSpellingTestHits(c[0], c[1]).length, 1, reason: 'missed: $label');
@@ -998,5 +1023,27 @@ void main() {
       expect(blankSpellingTestHits(c[0], c[1]), isEmpty,
           reason: 'false positive: $label');
     });
+  });
+
+  test('a regression at the picker create path fails the scan', () {
+    // The picker's own file as it stands, plus the regression the three cases
+    // above plant into it. Read from disk rather than restated, because what
+    // makes the call site reachable is a property of the FILE — it names an
+    // exercise, and the value under test is called `name` — and a restatement
+    // would keep passing after the file stopped having it. § 1368 recorded that
+    // this call site was out of the scan's reach on both rails; web closed its
+    // half in § 1483 and this is the port.
+    const picker = 'lib/widgets/exercise_catalogue_picker.dart';
+    final source = File(picker).readAsStringSync();
+    expect(blankSpellingTestHits(picker, source), isEmpty,
+        reason: 'the picker create path is fixed');
+    const fixed = '!namesAnExercise(name) ||';
+    expect(source.contains(fixed), isTrue,
+        reason: 'the create path moved — re-anchor this guard');
+    expect(
+        blankSpellingTestHits(picker, source.replaceFirst(fixed, 'name.isEmpty ||'))
+            .length,
+        1,
+        reason: 'a regression at the picker create path must fail this scan');
   });
 }

@@ -2893,6 +2893,7 @@
   "gymCatalogueCategoryLabel": "Kategorie",
   "gymCatalogueEmpty": "Keine Übung passt.",
   "gymCatalogueUnavailable": "Der Übungskatalog konnte nicht geladen werden, diese Liste ist möglicherweise unvollständig.",
+  "gymCatalogueShadowsBuiltIn": "Hinzugefügt. Sie ersetzt die integrierte Übung mit demselben Namen.",
   "gymCatalogueOtherCategory": "„{name}“ ist bereits im Katalog, unter {category}.",
   "gymCatalogueCustomBadge": "Eigene",
   "gymCatalogueCreate": "„{name}“ als eigene Übung hinzufügen",

@@ -555,6 +555,185 @@ void main() {
     }
   });
 
+
+  testWidgets(
+      'a catalogue landing while the composer is open on its own route still binds an id',
+      (tester) async {
+    // The production shape the StatefulBuilder harness above cannot reach.
+    // `showGymComposeSheet` presents through `showFullScreenForm`, which pushes
+    // a MaterialPageRoute whose builder runs ONCE — so a catalogue passed by
+    // value is frozen for the life of that route however carefully the sheet
+    // reads `widget.catalogue` on every build. A host that reads
+    // asynchronously has to publish a listenable instead (§ 1571).
+    final f = await _store('catalogue_route_');
+    try {
+      final source = ValueNotifier<GymCatalogueState>(
+        (entries: const [], unavailable: true),
+      );
+      addTearDown(source.dispose);
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: Builder(
+            builder: (ctx) => Center(
+              child: ElevatedButton(
+                onPressed: () => showGymComposeSheet(
+                  context: ctx,
+                  store: f.store,
+                  catalogueSource: source,
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      final fields = find.byType(TextField);
+      await tester.enterText(fields.at(0), 'Bench day');
+      await tester.enterText(fields.at(1), 'Bench Press');
+      await tester.enterText(fields.at(2), '5');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      // Only now does the host's read answer.
+      source.value = (
+        entries: const [
+          (
+            name: 'Bench Press',
+            id: 'cat-bench-1',
+            category: 'chest',
+            authorId: null,
+            nameKey: 'bench press',
+          ),
+        ],
+        unavailable: false,
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('Save workout'));
+      await _settleUntil(tester, f.persisted,
+          describe: "the composer's write to land on disk and notify");
+
+      expect(f.store.workouts.first.sets.first['exercise_id'], 'cat-bench-1');
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('the picker tracks a catalogue that lands while browse is open',
+      (tester) async {
+    // The picker is pushed as a route of its own, so its builder runs once too:
+    // a composer tracking its host perfectly still handed the picker a value
+    // frozen at push time, and browse opened during the seconds a first read is
+    // in flight showed an empty catalogue for the life of that route.
+    final f = await _store('catalogue_picker_route_');
+    try {
+      final source = ValueNotifier<GymCatalogueState>(
+        (entries: const [], unavailable: true),
+      );
+      addTearDown(source.dispose);
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: GymComposeSheet(store: f.store, catalogueSource: source),
+        ),
+      ));
+      await tester.pump();
+
+      // Reachable while unavailable by design: a browse affordance that
+      // vanishes on a transient error explains nothing.
+      await tester.tap(find.byIcon(Icons.menu_book_outlined));
+      await tester.pumpAndSettle();
+      expect(find.text('Overhead Press'), findsNothing);
+
+      source.value = (
+        entries: const [
+          (
+            name: 'Overhead Press',
+            id: 'cat-ohp-1',
+            category: 'shoulders',
+            authorId: null,
+            nameKey: 'overhead press',
+          ),
+        ],
+        unavailable: false,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Overhead Press'), findsOneWidget,
+          reason: 'the picker must render the read that answered while it was open');
+
+      await tester.tap(find.text('Overhead Press'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(find.byType(TextField).at(1)).controller?.text,
+        'Overhead Press',
+      );
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets(
+      'a catalogue that goes unavailable while browse is open withdraws the create affordance',
+      (tester) async {
+    // The third state has to cross the same seam as the entries: a picker
+    // holding a stale `unavailable: false` offers to create a name it can no
+    // longer prove is free.
+    final f = await _store('catalogue_picker_unavail_');
+    try {
+      final source = ValueNotifier<GymCatalogueState>(
+        (entries: const [], unavailable: false),
+      );
+      addTearDown(source.dispose);
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: GymComposeSheet(
+            store: f.store,
+            catalogueSource: source,
+            api: _ScriptedApi(_row('mine-1', 'Farmer Carry', 'farmer carry')),
+          ),
+        ),
+      ));
+      await tester.pump();
+
+      // An empty-but-vouched-for catalogue hides browse, so seed one row.
+      source.value = (
+        entries: const [
+          (
+            name: 'Deadlift',
+            id: 'cat-dead-1',
+            category: 'legs',
+            authorId: null,
+            nameKey: 'deadlift',
+          ),
+        ],
+        unavailable: false,
+      );
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.menu_book_outlined));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, 'Farmer Carry');
+      await tester.pumpAndSettle();
+      expect(find.text('Add “Farmer Carry” as a custom exercise'), findsOneWidget);
+
+      source.value = (entries: source.value.entries, unavailable: true);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Add “Farmer Carry” as a custom exercise'), findsNothing,
+          reason: 'a catalogue that stopped being vouched for cannot say a name is free');
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
   testWidgets(
       'a created custom shadowing a seeded global leaves one row, and it is the custom',
       (tester) async {
