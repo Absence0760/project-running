@@ -4499,7 +4499,7 @@ export const messages = {
 	"payouts.statusRestricted": "Tu cuenta de pagos requiere atención antes de poder cobrar",
 	"payouts.manageDashboard": "Abrir el panel de Stripe",
 	"payouts.notConfigured": "Los pagos aún no están configurados en esta versión.",
-	"payouts.merchantNote": "Eres el comerciante responsable: gestionas los reembolsos y contracargos, y la comisión de plataforma se devuelve cuando reembolsas.",
+	"payouts.merchantNote": "El comerciante responsable somos nosotros: el cargo aparece a nuestro nombre en el extracto de quien compra, los reembolsos los emitimos nosotros según la política que fijes en cada evento, y un contracargo se debita de nuestra cuenta de Stripe, no de la tuya. La comisión de plataforma se te devuelve cuando se reembolsa un pedido.",
 	"payouts.redirecting": "Redirigiendo…",
 	"payouts.setupFailed": "No se pudo iniciar la configuración de pagos: {error}",
 	"eventEditor.chargeToggle": "Cobrar por este evento",

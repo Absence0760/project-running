@@ -4498,7 +4498,7 @@ export const messages = {
 	"payouts.statusRestricted": "Sua conta de pagamentos precisa de atenção antes de você poder receber",
 	"payouts.manageDashboard": "Abrir o painel do Stripe",
 	"payouts.notConfigured": "Os pagamentos ainda não estão configurados nesta versão.",
-	"payouts.merchantNote": "Você é o comerciante responsável: você cuida dos reembolsos e estornos, e a taxa de plataforma é devolvida quando você reembolsa.",
+	"payouts.merchantNote": "O comerciante responsável somos nós: a cobrança aparece com o nosso nome no extrato de quem compra, os reembolsos são emitidos por nós conforme a política que você define em cada evento, e um estorno é debitado da nossa conta Stripe, não da sua. A taxa de plataforma volta para você quando um pedido é reembolsado.",
 	"payouts.redirecting": "Redirecionando…",
 	"payouts.setupFailed": "Não foi possível iniciar a configuração de pagamentos: {error}",
 	"eventEditor.chargeToggle": "Cobrar por este evento",

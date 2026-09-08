@@ -4499,7 +4499,7 @@ export const messages = {
 	"payouts.statusRestricted": "Dein Auszahlungskonto benötigt Aufmerksamkeit, bevor du Zahlungen annehmen kannst",
 	"payouts.manageDashboard": "Stripe-Dashboard öffnen",
 	"payouts.notConfigured": "Zahlungen sind in diesem Build noch nicht konfiguriert.",
-	"payouts.merchantNote": "Du bist der Händler: Du verantwortest Rückerstattungen und Rückbuchungen, und die Plattformgebühr wird bei einer Rückerstattung zurückerstattet.",
+	"payouts.merchantNote": "Wir sind der Verkäufer im Rechtssinne: Die Zahlung erscheint auf dem Kontoauszug deiner Käufer unter unserem Namen, Rückerstattungen nehmen wir nach der Richtlinie vor, die du je Event festlegst, und eine Rückbuchung wird unserem Stripe-Konto belastet, nicht deinem. Die Plattformgebühr erhältst du zurück, wenn eine Bestellung erstattet wird.",
 	"payouts.redirecting": "Weiterleitung…",
 	"payouts.setupFailed": "Zahlungseinrichtung konnte nicht gestartet werden: {error}",
 	"eventEditor.chargeToggle": "Für dieses Event Geld verlangen",
