@@ -82,11 +82,12 @@ export function buildRunShareTitle(
 	if (custom) return `${custom} — ${SITE_NAME}`;
 	const km = formatKmStable(run.distance_m);
 	const date = formatDateStable(run.started_at);
-	const by = displayName ? ` by ${displayName}` : '';
+	const named = collapseAndClip(displayName, 60);
+	const by = named ? ` by ${named}` : '';
 	if (km && date) return `${km} run${by} on ${date} — ${SITE_NAME}`;
 	if (km) return `${km} run${by} — ${SITE_NAME}`;
 	if (date) return `Run${by} on ${date} — ${SITE_NAME}`;
-	return displayName ? `Run by ${displayName} — ${SITE_NAME}` : `Run — ${SITE_NAME}`;
+	return named ? `Run by ${named} — ${SITE_NAME}` : `Run — ${SITE_NAME}`;
 }
 
 export function buildRunShareDescription(
@@ -96,7 +97,8 @@ export function buildRunShareDescription(
 	if (!run) return 'View a public run on Threkir — map, splits, elevation, kudos.';
 	const km = formatKmStable(run.distance_m);
 	const date = formatDateStable(run.started_at);
-	const by = displayName ? ` by ${displayName}` : '';
+	const named = collapseAndClip(displayName, 60);
+	const by = named ? ` by ${named}` : '';
 	const bits: string[] = [];
 	if (km) bits.push(`${km}${by}`);
 	else if (by.trim()) bits.push(`Run${by}`);
@@ -187,8 +189,9 @@ export function buildRunJsonLd(
 }
 
 export function buildRouteShareTitle(route: ShareRouteMeta | null | undefined): string {
-	if (!route?.name) return `Route — ${SITE_NAME}`;
-	return `${route.name} — ${SITE_NAME}`;
+	const name = cleanShareTitle(route?.name);
+	if (!name) return `Route — ${SITE_NAME}`;
+	return `${name} — ${SITE_NAME}`;
 }
 
 export function buildRouteShareDescription(
@@ -254,7 +257,7 @@ export function buildRouteJsonLd(
 ): string {
 	const base = normaliseSiteUrl(opts.base);
 	const canonical = buildRouteShareCanonical(base, opts.id);
-	const name = (route?.name ?? '').trim() || 'Route';
+	const name = collapseAndClip(route?.name, 120) || 'Route';
 	const graph = {
 		'@context': 'https://schema.org',
 		'@type': 'WebPage',

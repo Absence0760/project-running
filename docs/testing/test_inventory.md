@@ -2307,3 +2307,45 @@ The archive-column allowlist. A run carrying `kind` — dropped by migration `20
 Run by this lane and passing: `apps/web/src/lib/{core,backup,training,social}/*.test.ts` under `tsx --test` (1425 tests, 0 failures), `npm run check` (2575 files, 0 errors, 5 pre-existing `state_referenced_locally` warnings in `PlanEditor.svelte`), `apps/web`'s `tsconfig_coverage.test.mjs` (3/3), and `npm run check:script-types`.
 
 NOT run by this lane, and not claimed: Playwright, any Flutter suite, the full web unit suite, and anything needing the local Supabase stack.
+||||||| c96cf78c4
+
+## #789 round 46 (2026-09-07)
+
+### `apps/web/src/lib/util/clip_text.test.ts` — 13 tests (6 rewritten, 2 added)
+
+The clipper's budget is grapheme clusters rather than UTF-16 code units, so the
+suite is now about two properties instead of one. The first is uniformity: 160
+of anything — ASCII, CJK, a ZWJ family, a regional-indicator flag, a skin-tone
+modifier, a base letter with its combining mark — fits a budget of 160, which
+under the code-unit budget held for the first two and for nothing else. The
+second is that the cut lands on a cluster boundary, swept over every budget
+from 1 to 20 against five multi-code-unit clusters. Six of the thirteen fail
+against the pre-change clipper. The last case deletes `Intl.Segmenter` and
+pins the documented degradation — the previous code-unit cut, which can leave
+half a flag — so the fallback is a stated behaviour rather than an assumption.
+`share_club_meta.test.ts` carries the surface half at 9 (1 added): the club
+head's UTF-8 round-trip, and a description cut mid-ZWJ-sequence keeping the
+cluster whole.
+
+### `apps/web/src/lib/training/plan_slug.test.ts` — 5 tests
+
+The plan export's filename, moved out of `/plans/[id]/+page.svelte` so a
+`tsx --test` suite can reach it at all — § 1398 shipped with nothing asserting
+it, which is § 1278's structural gap in its third instance. Two of the five
+fail against the pre-§ 1398 `toLowerCase` form: `İstanbul Marathon` reaching
+`istanbul-marathon` rather than `i-stanbul-marathon`, and a diacritic leaving
+its base letter rather than a hyphen. The other three pin the fallback (a name
+in a script the strip removes yields `plan`, not a row of hyphens) and the
+deliberate refusal to transliterate `ß` or `ø`.
+
+### `apps/web/src/lib/share/share_head_clipping.test.ts` — 11 tests
+
+The clipping half of the `<head>` census, sibling of `share_head_escaping.test.ts`:
+that one proves a hostile field cannot break out of the markup, this one proves an
+enormous one cannot get in. Every exported `buildShare*` entity builder is called
+with a 5,000-character field and every emitted value is checked for a surviving run
+longer than 200 identical characters — past the largest budget in the tree, so one
+check covers every field's own number. Six fields across three of the ten builders
+were failing it when it was written. The eleventh test is the staleness half: it
+scans the directory for `export function buildShare*` and fails in both directions,
+so a new entity builder cannot ship uncensused.
