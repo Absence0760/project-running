@@ -29,6 +29,9 @@ import {
 	parseJobKeys,
 	parseNeeds,
 	parseSteps,
+	PR_ADVISORY,
+	checkPrGates,
+	parseTriggers,
 	readWorkflows,
 	runBody,
 	checkStatedJobCount,
@@ -1020,7 +1023,7 @@ test('rules 2, 3 and 4 are not applied to a composite action', () => {
 test('RULE_SUBJECTS names every rule exactly once, with a reason', () => {
 	assert.deepEqual(
 		RULE_SUBJECTS.map((r) => r.rule),
-		[1, 2, 3, 4, 5],
+		[1, 2, 3, 4, 5, 6, 7],
 	);
 	for (const r of RULE_SUBJECTS) {
 		assert.ok(r.what.length > 10 && r.why.length > 10, `rule ${r.rule} states no reason`);
@@ -1116,4 +1119,95 @@ test('rule 6 refuses to report a verdict when ci.yml was not read', () => {
 test('the committed CLAUDE.md agrees with the committed ci.yml', () => {
 	const { errors } = checkStatedJobCount(readWorkflows(WORKFLOW_DIR), readFileSync(ORIENTATION_DOC, 'utf-8'));
 	assert.deepEqual(errors, []);
+});
+
+// ---------------------------------------------------------------------------
+// Rule 7: a PR-triggered workflow blocks a merge, or says why it does not.
+// ---------------------------------------------------------------------------
+
+const CI_CALLING = `name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  gitleaks:
+    uses: ./.github/workflows/gitleaks.yml
+  ci-gate:
+    needs: [gitleaks]
+`;
+
+test('parseTriggers reads all three spellings of an on: block', () => {
+	assert.deepEqual(parseTriggers('on: push\n'), ['push']);
+	assert.deepEqual(parseTriggers('on: [push, pull_request]\n'), ['push', 'pull_request']);
+	assert.deepEqual(
+		parseTriggers('name: x\non:\n  # a comment\n  push:\n    branches: [main]\n  pull_request:\n\njobs:\n  a:\n'),
+		['push', 'pull_request'],
+	);
+	// `pull_request_review` is not `pull_request`: a review-comment workflow
+	// asserts nothing about the diff and is not this rule's subject.
+	assert.deepEqual(parseTriggers('on:\n  pull_request_review:\n'), ['pull_request_review']);
+});
+
+test('a PR-triggered workflow nothing waits on fails, and names the two remedies', () => {
+	const files = [
+		{ name: 'ci.yml', text: CI_CALLING },
+		{ name: 'gitleaks.yml', text: 'on:\n  workflow_call:\n' },
+		{ name: 'scanner.yml', text: 'on:\n  pull_request:\n' },
+	];
+	const { errors } = checkPrGates(files, new Map());
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /^scanner\.yml runs on every pull request/);
+	assert.match(errors[0], /Either call it from ci\.yml/);
+	assert.match(errors[0], /or add it to PR_ADVISORY/);
+});
+
+test('a workflow called from ci.yml reaches the gate and needs no exemption', () => {
+	const files = [
+		{ name: 'ci.yml', text: CI_CALLING },
+		// Even carrying its own PR trigger, a called workflow's results fan into
+		// the calling job, which IS in the gate's needs.
+		{ name: 'gitleaks.yml', text: 'on:\n  workflow_call:\n  pull_request:\n' },
+	];
+	assert.deepEqual(checkPrGates(files, new Map()).errors, []);
+});
+
+test('an exemption fails once its workflow reaches the gate, and once it stops running on PRs', () => {
+	const advisory = new Map([['scanner.yml', 'x'.repeat(80)]]);
+	const reachable = [
+		{ name: 'ci.yml', text: CI_CALLING.replace('workflows/gitleaks.yml', 'workflows/scanner.yml') },
+		{ name: 'scanner.yml', text: 'on:\n  pull_request:\n' },
+	];
+	const { errors } = checkPrGates(reachable, advisory);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /^scanner\.yml is declared advisory/);
+
+	const dropped = [
+		{ name: 'ci.yml', text: CI_CALLING },
+		{ name: 'gitleaks.yml', text: 'on:\n  workflow_call:\n' },
+	];
+	const { errors: stale } = checkPrGates(dropped, advisory);
+	assert.equal(stale.length, 1);
+	assert.match(stale[0], /no longer runs on a pull request/);
+});
+
+test('an advisory reason too short to say why the fold is wrong fails', () => {
+	const files = [
+		{ name: 'ci.yml', text: CI_CALLING },
+		{ name: 'gitleaks.yml', text: 'on:\n  workflow_call:\n' },
+		{ name: 'scanner.yml', text: 'on:\n  pull_request:\n' },
+	];
+	const { errors } = checkPrGates(files, new Map([['scanner.yml', 'not got to it yet']]));
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /17-character reason/);
+});
+
+test('a trigger reader that stopped matching fails rather than reporting no gaps', () => {
+	const { errors } = checkPrGates([{ name: 'ci.yml', text: 'on:\n  push:\n' }]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /trigger reader has stopped matching/);
+});
+
+test('the committed workflows either reach the gate or are declared advisory', () => {
+	assert.deepEqual(checkPrGates(readWorkflows(WORKFLOW_DIR)).errors, []);
 });
