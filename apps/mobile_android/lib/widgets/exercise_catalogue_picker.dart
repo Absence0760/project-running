@@ -238,6 +238,19 @@ class _ExerciseCataloguePickerScreenState
       authorId: made.authorId,
       nameKey: made.nameKey,
     );
+    // A create that succeeded against a seeded global's name has replaced it
+    // for this reader: `dedupeShadowedExercises` resolves the pair to the
+    // custom and the built-in stops appearing anywhere, which nothing used to
+    // say (§ 1810 / § 1574). Judged on the key the SERVER stamped, never on a
+    // re-derivation of the display spelling — the two part in the window a
+    // regenerated fold table opens (§ 1176) and the index is the authority on
+    // what a shadow is. The banner is a root-overlay entry, so it outlives the
+    // pop below.
+    if (made.authorId != null &&
+        widget.catalogue
+            .any((e) => e.authorId == null && e.nameKey == made.nameKey)) {
+      showTopBanner(context, l10n.gymCatalogueShadowsBuiltIn);
+    }
     widget.onCreated?.call(entry);
     Navigator.of(context).pop(entry);
   }
