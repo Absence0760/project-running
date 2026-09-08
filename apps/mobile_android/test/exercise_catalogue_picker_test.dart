@@ -3,6 +3,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../lib/gym_prs.dart' show normaliseExerciseName;
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/exercise_catalogue_picker.dart';
 import '../lib/widgets/top_banner.dart' show kTopBannerMaxDuration;
@@ -55,8 +56,17 @@ GymCatalogueEntry _entry(
   String name,
   String category, {
   String? authorId,
+  String? nameKey,
 }) =>
-    (name: name, id: id, category: category, authorId: authorId);
+    (
+      name: name,
+      id: id,
+      category: category,
+      authorId: authorId,
+      // The server stamps the key from the name with the same fold, so a
+      // fixture that does not override it carries the key that row would have.
+      nameKey: nameKey ?? normaliseExerciseName(name),
+    );
 
 ExerciseRow _row(String id, String name, String category) => ExerciseRow(
       id: id,
@@ -86,6 +96,7 @@ Future<GymCatalogueEntry? Function()> _open(
   WidgetTester tester, {
   required List<GymCatalogueEntry> catalogue,
   ApiClient? api,
+  bool unavailable = false,
   void Function(GymCatalogueEntry)? onCreated,
 }) async {
   GymCatalogueEntry? picked;
@@ -102,6 +113,7 @@ Future<GymCatalogueEntry? Function()> _open(
                   builder: (_) => ExerciseCataloguePickerScreen(
                     catalogue: catalogue,
                     api: api,
+                    unavailable: unavailable,
                     onCreated: onCreated,
                   ),
                 ),
@@ -427,5 +439,52 @@ void main() {
     // pending at teardown.
     await tester.pump(kTopBannerMaxDuration);
     await tester.pump(const Duration(milliseconds: 400));
+  });
+
+  testWidgets(
+      'an unavailable catalogue says so and refuses to call any name free',
+      (tester) async {
+    // An empty list and an unknown one look identical to every test the picker
+    // runs, and only one of them supports the claim the create affordance makes.
+    // A failed read left the picker offering to create a name the catalogue
+    // already held — which mints a shadow against a seeded global the author's
+    // partial unique cannot see, or 23505s against the user's own custom.
+    await _open(
+      tester,
+      catalogue: const [],
+      api: _ScriptedApi(),
+      unavailable: true,
+    );
+    expect(
+      find.text(
+          "Couldn't load the exercise catalogue, so this list may be incomplete."),
+      findsOneWidget,
+    );
+    await _type(tester, 'Farmer Carry');
+    expect(find.text('Add “Farmer Carry” as a custom exercise'), findsNothing);
+    expect(find.text('No exercises match.'), findsNothing,
+        reason: '"nothing matches" is a claim about a catalogue we do not have');
+  });
+
+  testWidgets('an unavailable catalogue still shows the rows it does have',
+      (tester) async {
+    // The list is not deleted on a failed read: a stale entry still binds its
+    // id correctly, and dropping it would be a second untruth on top of the
+    // first. The notice runs alongside the results, not instead of them.
+    final picked = await _open(
+      tester,
+      catalogue: _catalogue,
+      api: _ScriptedApi(),
+      unavailable: true,
+    );
+    expect(
+      find.text(
+          "Couldn't load the exercise catalogue, so this list may be incomplete."),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Walking Lunge'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(picked()?.id, 'e3');
   });
 }

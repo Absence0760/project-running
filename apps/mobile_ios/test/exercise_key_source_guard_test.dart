@@ -21,7 +21,19 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'source_scan.dart';
 
-const _libRoot = 'lib';
+/// The trees this scan covers.
+///
+/// `lib/` alone stopped being the whole answer when the key derivation moved
+/// into `core_models` so `api_client` could reach it (decisions § 1515): the
+/// two packages hold the derivation itself and its one non-app caller, and a
+/// scan that cannot see them is a scan that stopped covering the file the rule
+/// is ABOUT. The paths are relative because `flutter test` runs from the app
+/// directory; `rootExists` fails loudly if one moves, which is § 510's rule.
+const List<String> _roots = <String>[
+  'lib',
+  '../../packages/core_models/lib',
+  '../../packages/api_client/lib',
+];
 
 /// A file that names an exercise anywhere in its CODE is banned from the
 /// runtime fold outright, rather than only where the receiver happens to name
@@ -48,10 +60,18 @@ final _runtimeFold = RegExp(r'\.to(?<case>Lower|Upper)Case\s*\(');
 
 /// Modules that serve every domain, so naming an exercise somewhere says
 /// nothing about what any one fold in them is folding. The file-level ban is
-/// waived and each fold is judged on its own receiver instead. Empty today —
-/// the list exists because the web half needs one and the two rules are meant
-/// to read the same; the staleness test below keeps a dead entry out.
-const List<String> _broadModules = <String>[];
+/// waived and each fold is judged on its own receiver instead.
+///
+/// `api_client.dart` is the archetype the web half's list was written for: one
+/// 6,600-line typed client covering every table, so the exercise reads in it
+/// say nothing about the people-search handle fold or the club-name emptiness
+/// test three thousand lines away. Its exercise-name sites are judged on their
+/// receivers like everyone else's — which is what caught `upsertGymRoutine`
+/// deciding blankness with `trim()` the moment the scan reached this tree
+/// (decisions § 1515).
+const List<String> _broadModules = <String>[
+  '../../packages/api_client/lib/src/api_client.dart',
+];
 
 /// Files that still fold an exercise name, with why the fix is not here. Empty
 /// today: every Dart site the round-39 audit named, and the two it missed, are
@@ -426,8 +446,10 @@ List<_Hit> blankSpellingTestHits(String path, String source) {
 
 List<_Hit> _scanTree(List<_Hit> Function(String, String) scan) {
   final out = <_Hit>[];
-  for (final f in dartFiles(_libRoot)) {
-    out.addAll(scan(f.path, f.readAsStringSync()));
+  for (final root in _roots) {
+    for (final f in dartFiles(root)) {
+      out.addAll(scan(f.path, f.readAsStringSync()));
+    }
   }
   return out;
 }
@@ -436,12 +458,20 @@ void main() {
   test('the guard scans a tree that is actually there', () {
     // §510: a guard whose root has moved reports nothing at all, which reads
     // as a clean sweep. Anchor on files the scan must always find.
-    expect(rootExists(_libRoot), isTrue);
-    final paths = dartFiles(_libRoot).map((f) => f.path).toList();
+    for (final root in _roots) {
+      expect(rootExists(root), isTrue, reason: '$root has moved');
+    }
+    final paths = [
+      for (final root in _roots) ...dartFiles(root).map((f) => f.path),
+    ];
     expect(paths.length, greaterThan(200),
-        reason: 'only ${paths.length} dart files under lib/ — has the tree moved?');
+        reason: 'only ${paths.length} dart files scanned — has the tree moved?');
     expect(paths, contains('lib/gym_prs.dart'));
     expect(paths, contains('lib/screens/gym_screen.dart'));
+    // The derivation itself and its one non-app caller. Both were outside this
+    // scan for as long as the relocation took to land.
+    expect(paths, contains('../../packages/core_models/lib/src/exercise_key.dart'));
+    expect(paths, contains('../../packages/api_client/lib/src/api_client.dart'));
   });
 
   test('no mobile surface folds an exercise name with the runtime case mapping', () {

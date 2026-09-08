@@ -13624,6 +13624,7 @@
   "gymCatalogueSearchPlaceholder": "Search exercises",
   "gymCatalogueCategoryLabel": "Category",
   "gymCatalogueEmpty": "No exercises match.",
+  "gymCatalogueUnavailable": "Couldn't load the exercise catalogue, so this list may be incomplete.",
   "gymCatalogueOtherCategory": "“{name}” is already in the catalogue, under {category}.",
   "@gymCatalogueOtherCategory": {
     "description": "Shown when the typed name matches a catalogue entry the category filter is hiding",

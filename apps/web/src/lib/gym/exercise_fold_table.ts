@@ -5,7 +5,7 @@
 // re-validates the three CHECKs that name it (decisions § 1175).
 //
 // Unicode SIMPLE lowercase mapping, the authority the exercise grouping key is
-// folded through on all three rails — here, `apps/mobile_android/lib/
+// folded through on all three rails — here, `packages/core_models/lib/src/
 // exercise_fold_table.dart`, and the `translate()` inside
 // `public.normalise_exercise_name`. Every entry is 1:1 and no value is itself
 // a key, so one pass in any order gives the same answer.

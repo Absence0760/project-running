@@ -2892,6 +2892,7 @@
   "gymCatalogueSearchPlaceholder": "Buscar ejercicios",
   "gymCatalogueCategoryLabel": "Categoría",
   "gymCatalogueEmpty": "Ningún ejercicio coincide.",
+  "gymCatalogueUnavailable": "No se pudo cargar el catálogo de ejercicios, por lo que esta lista puede estar incompleta.",
   "gymCatalogueOtherCategory": "«{name}» ya está en el catálogo, en {category}.",
   "gymCatalogueCustomBadge": "Personalizado",
   "gymCatalogueCreate": "Añadir «{name}» como ejercicio personalizado",

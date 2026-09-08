@@ -153,6 +153,34 @@ class _RejectingSyncApi extends ApiClient {
   }
 }
 
+/// Online api whose workout fetch succeeds and whose CATALOGUE read fails —
+/// the state the screen has to tell apart from an empty catalogue.
+class _CatalogueDownApi extends ApiClient {
+  @override
+  String? get userId => 'user-1';
+
+  @override
+  Future<List<({Map<String, dynamic> workout, List<Map<String, dynamic>> sets})>>
+      fetchGymWorkoutsWithSets({int limit = 50}) async => const [];
+
+  @override
+  Future<List<ExerciseRow>> fetchExerciseCatalogue() async =>
+      throw Exception('catalogue read failed');
+}
+
+/// The same api with a catalogue read that ANSWERS, and answers empty.
+class _EmptyCatalogueApi extends ApiClient {
+  @override
+  String? get userId => 'user-1';
+
+  @override
+  Future<List<({Map<String, dynamic> workout, List<Map<String, dynamic>> sets})>>
+      fetchGymWorkoutsWithSets({int limit = 50}) async => const [];
+
+  @override
+  Future<List<ExerciseRow>> fetchExerciseCatalogue() async => const [];
+}
+
 /// Real file I/O driven from mount has no completion hook to await, so poll
 /// the observable end-state rather than sleeping a fixed duration (same
 /// pattern as nutrition_screen_test).
@@ -414,6 +442,57 @@ void main() {
       ]);
       final out = gymExerciseSuggestions([a]);
       expect(out, ['Bench  Press', 'Squat']);
+    });
+  });
+
+  group('GymScreen widget — the catalogue third state', () {
+    /// Mount the screen against [api], open the composer, and report whether
+    /// the browse affordance is offered.
+    ///
+    /// The affordance is the observable half of the flag: the catalogue is
+    /// empty in both cases, and only the screen knows whether that is a fact
+    /// about the catalogue or about the read.
+    Future<bool> browseOffered(WidgetTester tester, ApiClient api) async {
+      final dir = Directory.systemTemp.createTempSync('gym_screen_cat_');
+      final store = LocalGymStore();
+      await store.init(overrideDirectory: dir);
+      try {
+        await tester.pumpWidget(MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: GymScreen(api: api, store: store),
+        ));
+        await _pumpUntil(
+          tester,
+          () => find.byIcon(Icons.add).evaluate().isNotEmpty,
+          describe: 'the gym screen to finish its mount refresh',
+        );
+        // The mount refresh writes the (empty) server list through the store
+        // from the fake zone, so the real file I/O has to land before the temp
+        // dir is deleted — and `debugWritesSettled` cannot drain a fake-zone
+        // chain link (§ 1093).
+        await pumpUntilStoreWritesSettle(tester);
+        await tester.tap(find.byIcon(Icons.add).first);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        return find.byIcon(Icons.menu_book_outlined).evaluate().isNotEmpty;
+      } finally {
+        dir.deleteSync(recursive: true);
+      }
+    }
+
+    testWidgets('a failed catalogue read leaves the composer able to browse',
+        (tester) async {
+      // The screen used to catch the fetch, debugPrint, and leave `_catalogue`
+      // at `const []` — the one state in which every typed name looks free.
+      expect(await browseOffered(tester, _CatalogueDownApi()), isTrue);
+    });
+
+    testWidgets('a catalogue that answered empty hides the browse affordance',
+        (tester) async {
+      // The other half of the pair: an empty catalogue is a FACT here, so
+      // there is nothing to browse and the affordance is honestly absent.
+      expect(await browseOffered(tester, _EmptyCatalogueApi()), isFalse);
     });
   });
 

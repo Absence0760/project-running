@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart' show ExerciseRow;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -47,6 +48,35 @@ Future<({LocalGymStore store, Directory dir, bool Function() persisted})>
   store.addListener(() => persisted = true);
   return (store: store, dir: dir, persisted: () => persisted);
 }
+
+/// An `ApiClient` whose create is scripted, so the composer's catalogue
+/// create-custom path runs without Supabase. Constructing the base class is
+/// safe as long as nothing reads `_client`, which overriding the one method it
+/// would call guarantees.
+class _ScriptedApi extends ApiClient {
+  _ScriptedApi(this.result);
+
+  final ExerciseRow result;
+
+  @override
+  Future<ExerciseRow?> createCustomExercise({
+    required String name,
+    String category = 'other',
+    String modality = 'weight_reps',
+  }) async =>
+      result;
+}
+
+ExerciseRow _row(String id, String name, String nameKey) => ExerciseRow(
+      id: id,
+      authorId: 'me',
+      name: name,
+      nameKey: nameKey,
+      category: 'chest',
+      modality: 'weight_reps',
+      lastModifiedAt: DateTime.utc(2026),
+      createdAt: DateTime.utc(2026),
+    );
 
 /// A store whose create always fails, to drive the composer's save-error path.
 class _ThrowingGymStore extends LocalGymStore {
@@ -262,7 +292,13 @@ void main() {
     final f = await _store('catalogue_');
     try {
       const catalogue = <GymCatalogueEntry>[
-        (name: 'Bench Press', id: 'cat-bench-1', category: 'chest', authorId: null),
+        (
+          name: 'Bench Press',
+          id: 'cat-bench-1',
+          category: 'chest',
+          authorId: null,
+          nameKey: 'bench press',
+        ),
       ];
       await tester.pumpWidget(MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -302,7 +338,13 @@ void main() {
     final f = await _store('catalogue_free_');
     try {
       const catalogue = <GymCatalogueEntry>[
-        (name: 'Bench Press', id: 'cat-bench-1', category: 'chest', authorId: null),
+        (
+          name: 'Bench Press',
+          id: 'cat-bench-1',
+          category: 'chest',
+          authorId: null,
+          nameKey: 'bench press',
+        ),
       ];
       await tester.pumpWidget(MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -343,8 +385,20 @@ void main() {
     final f = await _store('picker_');
     try {
       const catalogue = <GymCatalogueEntry>[
-        (name: 'Deadlift', id: 'cat-dead-1', category: 'legs', authorId: null),
-        (name: 'Bench Press', id: 'cat-bench-1', category: 'chest', authorId: null),
+        (
+          name: 'Deadlift',
+          id: 'cat-dead-1',
+          category: 'legs',
+          authorId: null,
+          nameKey: 'deadlift',
+        ),
+        (
+          name: 'Bench Press',
+          id: 'cat-bench-1',
+          category: 'chest',
+          authorId: null,
+          nameKey: 'bench press',
+        ),
       ];
       await tester.pumpWidget(MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -406,6 +460,187 @@ void main() {
       ));
       await tester.pump();
       expect(find.byIcon(Icons.menu_book_outlined), findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets(
+      'an unavailable catalogue keeps browse reachable and refuses the create',
+      (tester) async {
+    // A feature that silently vanishes on a transient error explains nothing,
+    // so the browse affordance stays reachable while the catalogue is unknown
+    // — and the picker behind it then refuses to call any name free.
+    final f = await _store('catalogue_unavailable_');
+    try {
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: GymComposeSheet(
+            store: f.store,
+            catalogueUnavailable: true,
+            api: _ScriptedApi(_row('mine-1', 'Farmer Carry', 'farmer carry')),
+          ),
+        ),
+      ));
+      await tester.pump();
+
+      expect(find.byIcon(Icons.menu_book_outlined), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.menu_book_outlined));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(
+        find.text(
+            "Couldn't load the exercise catalogue, so this list may be incomplete."),
+        findsOneWidget,
+      );
+      await tester.enterText(find.byType(TextField).first, 'Farmer Carry');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Add “Farmer Carry” as a custom exercise'), findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('a catalogue that lands after the sheet mounts still binds an id',
+      (tester) async {
+    // The host fills its catalogue from an async read, so the prop arrives
+    // late. Snapshotting it in `initState` bound every typed name to nothing
+    // whenever it landed after the sheet opened — the sheet has to track the
+    // prop, not a copy of what it was at mount.
+    final f = await _store('catalogue_late_');
+    try {
+      var catalogue = const <GymCatalogueEntry>[];
+      late StateSetter setHost;
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: StatefulBuilder(builder: (ctx, setState) {
+            setHost = setState;
+            return GymComposeSheet(store: f.store, catalogue: catalogue);
+          }),
+        ),
+      ));
+      await tester.pump();
+
+      final fields = find.byType(TextField);
+      await tester.enterText(fields.at(0), 'Bench day');
+      await tester.enterText(fields.at(1), 'Bench Press');
+      await tester.enterText(fields.at(2), '5');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      setHost(() => catalogue = const [
+            (
+              name: 'Bench Press',
+              id: 'cat-bench-1',
+              category: 'chest',
+              authorId: null,
+              nameKey: 'bench press',
+            ),
+          ]);
+      await tester.pump();
+
+      await tester.tap(find.text('Save workout'));
+      await _settleUntil(tester, f.persisted,
+          describe: "the composer's write to land on disk and notify");
+
+      expect(f.store.workouts.first.sets.first['exercise_id'], 'cat-bench-1');
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets(
+      'a created custom shadowing a seeded global leaves one row, and it is the custom',
+      (tester) async {
+    // The author's partial unique on `exercises.name_key` cannot see a row
+    // whose `author_id` is null, so creating a custom under a seeded global's
+    // name succeeds and a merge of the two holds BOTH: the browse list shows
+    // one exercise twice, and which id a logged set binds to follows from
+    // whichever the key map happened to hold last. The `id` test the merge used
+    // cannot see that at all — the two rows are two ids under one folded key.
+    final f = await _store('catalogue_shadow_');
+    try {
+      var catalogue = const <GymCatalogueEntry>[
+        (
+          name: 'Deadlift',
+          id: 'cat-dead-1',
+          category: 'legs',
+          authorId: null,
+          nameKey: 'deadlift',
+        ),
+      ];
+      late StateSetter setHost;
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: StatefulBuilder(builder: (ctx, setState) {
+            setHost = setState;
+            return GymComposeSheet(
+              store: f.store,
+              catalogue: catalogue,
+              api: _ScriptedApi(_row('mine-1', 'Bench Press', 'bench press')),
+            );
+          }),
+        ),
+      ));
+      await tester.pump();
+
+      await tester.tap(find.byIcon(Icons.menu_book_outlined));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, 'Bench Press');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add “Bench Press” as a custom exercise'));
+      await tester.pumpAndSettle();
+
+      // Only now does the catalogue read answer, carrying the global the
+      // client could not see when it created the custom.
+      setHost(() => catalogue = const [
+            (
+              name: 'Deadlift',
+              id: 'cat-dead-1',
+              category: 'legs',
+              authorId: null,
+              nameKey: 'deadlift',
+            ),
+            (
+              name: 'Bench Press',
+              id: 'cat-bench-1',
+              category: 'chest',
+              authorId: null,
+              nameKey: 'bench press',
+            ),
+          ]);
+      await tester.pump();
+
+      await tester.tap(find.byIcon(Icons.menu_book_outlined));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+            of: find.byType(ListTile), matching: find.text('Bench Press')),
+        findsOneWidget,
+      );
+      expect(find.text('Custom'), findsOneWidget);
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+
+      final fields = find.byType(TextField);
+      await tester.enterText(fields.at(0), 'Push day');
+      await tester.enterText(fields.at(2), '5');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      await tester.tap(find.text('Save workout'));
+      await _settleUntil(tester, f.persisted,
+          describe: "the composer's write to land on disk and notify");
+
+      expect(f.store.workouts.first.sets.first['exercise_id'], 'mine-1');
     } finally {
       f.dir.deleteSync(recursive: true);
     }

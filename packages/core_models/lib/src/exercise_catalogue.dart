@@ -42,10 +42,20 @@
 /// construction. It also keeps this package clear of a fourth copy of the
 /// 1,488-entry fold table, which `packages/` cannot reach at all.
 ///
+/// **Generic over the entry type, and that is the whole reason the rule has one
+/// home.** The read is not the only list a surface works from: a custom created
+/// in the picker can shadow a global the CLIENT's snapshot still carries,
+/// because the author's partial unique cannot see a row whose `author_id` is
+/// null — so the insert succeeds and a merge of the two holds both. The
+/// composer therefore reduces its own assembled list through this same
+/// function, where it used to de-duplicate by `id`, which cannot see a shadow
+/// at all. Web states the bound structurally as `E extends ShadowableExercise`;
+/// Dart has no structural typing over records and `ExerciseRow` is generated
+/// and so cannot be given an `implements` clause, so the two fields the rule
+/// reads are passed as accessors. Same rule, same shape, one implementation.
+///
 /// Pure — no Supabase, no Flutter.
 library;
-
-import 'generated/db_rows.dart';
 
 /// One row per stored `name_key`, the owner's custom winning over the seeded
 /// global it shadows. Input order is otherwise preserved, and the surviving row
@@ -59,13 +69,17 @@ import 'generated/db_rows.dart';
 /// different places in the list. After the dedupe no catalogue surface holds
 /// both, so the two can no longer be rendered as unrelated neighbours — and the
 /// two functions keep answering the different questions § 1334 says they must.
-List<ExerciseRow> dedupeShadowedExercises(List<ExerciseRow> entries) {
+List<E> dedupeShadowedExercises<E>(
+  Iterable<E> entries, {
+  required String Function(E) nameKey,
+  required String? Function(E) authorId,
+}) {
   final at = <String, int>{};
-  final out = <ExerciseRow>[];
+  final out = <E>[];
   for (final e in entries) {
-    final seen = at[e.nameKey];
+    final seen = at[nameKey(e)];
     if (seen == null) {
-      at[e.nameKey] = out.length;
+      at[nameKey(e)] = out.length;
       out.add(e);
       continue;
     }
@@ -73,7 +87,7 @@ List<ExerciseRow> dedupeShadowedExercises(List<ExerciseRow> entries) {
     // global-then-custom and custom-then-global. Both uniques forbid a second
     // row of the SAME shape, so the incumbent is replaced exactly when it is
     // the global and the newcomer is not.
-    if (out[seen].authorId == null && e.authorId != null) out[seen] = e;
+    if (authorId(out[seen]) == null && authorId(e) != null) out[seen] = e;
   }
   return out;
 }
