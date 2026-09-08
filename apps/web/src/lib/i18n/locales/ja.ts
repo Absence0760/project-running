@@ -4494,7 +4494,7 @@ export const messages = {
 	"payouts.statusRestricted": "支払いを受け取る前に、支払いアカウントの対応が必要です",
 	"payouts.manageDashboard": "Stripe ダッシュボードを開く",
 	"payouts.notConfigured": "このビルドではまだ支払いが設定されていません。",
-	"payouts.merchantNote": "あなたが販売者として記録されます。返金とチャージバックはあなたの責任で、返金時にはプラットフォーム手数料も返還されます。",
+	"payouts.merchantNote": "販売者として記録されるのは当社です。購入者の明細には当社名で表示され、返金はイベントごとにあなたが設定したポリシーに従って当社が行い、チャージバックはあなたではなく当社の Stripe アカウントから引き落とされます。注文が返金された場合、プラットフォーム手数料はあなたに返還されます。",
 	"payouts.redirecting": "リダイレクト中…",
 	"payouts.setupFailed": "支払い設定を開始できませんでした: {error}",
 	"eventEditor.chargeToggle": "このイベントを有料にする",
