@@ -9726,7 +9726,12 @@ export async function fetchExerciseSetHistory(name: string): Promise<GymSetWithD
 /// match is on the normalised name (same expression as normaliseExerciseName),
 /// so consumers can group the flat result by that key.
 export async function fetchExerciseSetHistoryBatch(names: string[]): Promise<GymSetWithDate[]> {
-	const wanted = names.map((n) => n.trim()).filter((n) => n.length > 0);
+	// The RPC folds each element and drops the ones that fold to empty, so this
+	// filter only decides which names are worth a round trip — and it has to
+	// agree with the server about which those are. A JS `trim()` does not: it
+	// leaves U+0085 standing (§ 1367). The names go over unfolded, because the
+	// server's fold is the one that matches.
+	const wanted = names.filter((n) => namesAnExercise(n));
 	if (!auth.user?.id || wanted.length === 0) return [];
 	const { data, error } = await supabase.rpc('gym_exercise_set_history_batch', {
 		p_names: wanted

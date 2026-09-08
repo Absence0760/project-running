@@ -1861,68 +1861,38 @@ function functionBody(source: string, name: string): string {
 	return source.slice(start, end);
 }
 
-test('no write in data.ts decides an exercise name is blank on the display spelling', () => {
-	// Reason: the three exercise writes are keyed on a column the SERVER
-	// derives — `exercises.name_key`, `gym_routine_exercises.exercise_key` and
-	// `gym_sets.exercise_key`, each trigger-stamped and each under a
-	// `length >= 1` CHECK — and the fold's whitespace class is not the set JS
-	// `trim()` strips. A name of one U+0085 trims non-empty and folds to
-	// nothing, so a spelling test lets through exactly the row the column
-	// refuses, as a 23514 the composer cannot act on (§ 1367).
+test('every exercise write and read decides blankness on the key the column is stamped from', () => {
+	// Reason: a scan is a NEGATIVE instrument — it sees a bad blankness test and
+	// cannot see a function that stopped testing blankness at all, nor one whose
+	// subject is an arrow parameter re-bound from a `.map`, which is what
+	// `fetchExerciseSetHistoryBatch`'s was. This is the positive half, and for
+	// those two shapes it is the only cover there is.
 	//
-	// `lib/gym/exercise_key_source_guard.test.ts` runs this scan over the tree
-	// and spares `lib/core/data.ts` by name — its own heuristic is file-scoped
-	// ("a file that names an exercise"), which a 12,000-line module holding
-	// club names, checkpoint names and meal-template names would drown. This
-	// is the narrower claim that file is exempt from: a blankness test whose
-	// RECEIVER names an exercise, anywhere in data.ts.
+	// The negative half is NOT here any more:
+	// `lib/gym/exercise_key_source_guard.test.ts` scans this file like any
+	// other — on a comparison's own receiver, and on the enclosing top-level
+	// declaration's name where the receiver says nothing — and since § 1508 it
+	// sees every shape the local scan this replaced was written for, measured
+	// case for case, plus the one that scan missed (§ 1509).
+	//
+	// The three writes are keyed on a column the SERVER derives —
+	// `exercises.name_key`, `gym_routine_exercises.exercise_key` and
+	// `gym_sets.exercise_key`, each trigger-stamped and each under a
+	// `length >= 1` CHECK — and the two reads match on `normalise_exercise_name`
+	// of what they send. The fold's whitespace class is not the set JS `trim()`
+	// strips, so a name of one U+0085 trims non-empty and folds to nothing: a
+	// spelling test lets through exactly the row the column refuses, as a 23514
+	// the composer cannot act on, and exactly the name the RPC cannot match
+	// (§ 1367).
 	const source = stripComments(read('src/lib/core/data.ts'));
-	const offenders = source
-		.split('\n')
-		.map((text, i) => ({ line: i + 1, text: text.trim() }))
-		.filter(({ text }) => /[Ee]xercise\w*(?:\.\w+)*\s*\.trim\(\)/.test(text))
-		.filter(({ text }) => /\.length\s*[<>=!]|[=!]==?\s*''|''\s*[=!]==?|!\w*[Ee]xercise/.test(text));
-	assert.deepEqual(
-		offenders,
-		[],
-		'Decide blankness with namesAnExercise from $lib/gym/gym_prs, never on the trimmed spelling:\n' +
-			offenders.map((h) => `  data.ts:${h.line}  ${h.text}`).join('\n'),
-	);
-});
-
-test('the blank-exercise scan sees the shape it bans, and spares the ones it must not', () => {
-	// The mutation test for the scan above: a guard nothing can trip is a guard
-	// that proves nothing. Each caught line is the exact shape one of the three
-	// writers carried before § 1367; each spared line is a shape that lives in
-	// `data.ts` today and must not start failing.
-	const scan = (text: string) =>
-		/[Ee]xercise\w*(?:\.\w+)*\s*\.trim\(\)/.test(text) &&
-		/\.length\s*[<>=!]|[=!]==?\s*''|''\s*[=!]==?|!\w*[Ee]xercise/.test(text);
-	for (const caught of [
-		"const exercises = input.exercises.filter((e) => e.exercise_name.trim().length > 0);",
-		".filter((r) => r.exercise_name.trim().length > 0);",
-		"if (ex.exercise_name.trim() === '') continue;",
-		"if (!exerciseName.trim()) return null;",
-	]) {
-		assert.ok(scan(caught), `missed: ${caught}`);
-	}
-	for (const spared of [
-		"exercise_name: s.exercise_name.trim(),",
-		".filter((s) => namesAnExercise(s.exercise_name))",
-		"const items = input.items.filter((it) => it.item_name.trim().length > 0);",
-		"if (!input.name.trim()) throw new Error('Name is required.');",
-		"if (patch.name !== undefined) row.name = patch.name.trim();",
-	]) {
-		assert.ok(!scan(spared), `false positive: ${spared}`);
-	}
-});
-
-test('the three exercise writes drop on the key the column is stamped from', () => {
-	// Reason: the negative scan above cannot see a writer that stopped testing
-	// blankness at all. `createCustomExercise` refuses, the other two drop, and
-	// all three decide it the same way.
-	const source = stripComments(read('src/lib/core/data.ts'));
-	for (const fn of ['createCustomExercise', 'replaceGymSets', 'createGymRoutine']) {
+	const fns = [
+		'createCustomExercise',
+		'replaceGymSets',
+		'createGymRoutine',
+		'fetchExerciseSetHistoryWithError',
+		'fetchExerciseSetHistoryBatch',
+	];
+	for (const fn of fns) {
 		assert.match(
 			functionBody(source, fn),
 			/namesAnExercise\(/,
