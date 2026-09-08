@@ -2,8 +2,12 @@ package internal
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -166,5 +170,148 @@ func TestAccountDeletionReceipt_NoPreferencesLink(t *testing.T) {
 	}
 	if sender.sent[0].msg.ListUnsubscribe != "" {
 		t.Error("deletion receipt must not carry a List-Unsubscribe header")
+	}
+}
+
+// ── keyed digest (decisions § 1600) ─────────────────────────────────────────
+
+const testAuditKey = "an-operator-secret-at-least-32-bytes-long"
+
+// With DELETION_AUDIT_KEY set the worker records the KEYED digest, which is not
+// the legacy one — that difference is the whole point: the legacy digest is a
+// bare hash of a guessable input, so a holder of a candidate address can
+// recompute it and ask the table whether that person deleted their account.
+func TestAccountDeletionReceipt_KeyedModeRecordsTheKeyedDigest(t *testing.T) {
+	be := &fakeBackend{}
+	sender := &fakeEmailSender{}
+	w := newEmailTestWorker(be, sender)
+	w.DeletionAuditKey = testAuditKey
+
+	if err := w.handleLifecycleEmail(context.Background(), deletionReceiptJob("gone@test.com", "en")); err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	want := receiptDigest("gone@test.com", testAuditKey)
+	legacy := hashEmailForReceipt("gone@test.com")
+	if want == legacy {
+		t.Fatalf("keyed and unkeyed digests must differ, both %q", want)
+	}
+	if len(be.recordedReceipts) != 1 || be.recordedReceipts[0] != want {
+		t.Errorf("expected the keyed digest %q recorded, got %v", want, be.recordedReceipts)
+	}
+}
+
+// An unset key changes nothing: the digest is byte-for-byte the legacy one, so
+// a deploy that provisions no secret behaves exactly as before.
+func TestAccountDeletionReceipt_UnkeyedModeIsTheLegacyDigest(t *testing.T) {
+	if got, want := receiptDigest("gone@test.com", ""), hashEmailForReceipt("gone@test.com"); got != want {
+		t.Fatalf("unkeyed digest %q != legacy %q", got, want)
+	}
+	be := &fakeBackend{}
+	w := newEmailTestWorker(be, &fakeEmailSender{})
+	if err := w.handleLifecycleEmail(context.Background(), deletionReceiptJob("gone@test.com", "en")); err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if len(be.recordedReceipts) != 1 || be.recordedReceipts[0] != hashEmailForReceipt("gone@test.com") {
+		t.Errorf("unkeyed worker must write the legacy digest, got %v", be.recordedReceipts)
+	}
+}
+
+// THE CHANGEOVER. Rows written before the key was provisioned carry the legacy
+// digest. A keyed build that looked only at its own digest would miss them and
+// re-send a receipt to everyone deleted inside the table's 30-day window.
+func TestAccountDeletionReceipt_KeyedWorkerHonoursALegacyRow(t *testing.T) {
+	legacy := hashEmailForReceipt("gone@test.com")
+	be := &fakeBackend{receiptSent: map[string]bool{legacy: true}}
+	sender := &fakeEmailSender{}
+	w := newEmailTestWorker(be, sender)
+	w.DeletionAuditKey = testAuditKey
+
+	if err := w.handleLifecycleEmail(context.Background(), deletionReceiptJob("gone@test.com", "en")); err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if len(sender.sent) != 0 {
+		t.Errorf("a legacy row must still dedup under a keyed worker; sent=%d", len(sender.sent))
+	}
+	if len(be.recordedReceipts) != 0 {
+		t.Errorf("nothing to record when the receipt already went out, got %v", be.recordedReceipts)
+	}
+}
+
+// The legacy probe costs a round trip and is only owed during the changeover,
+// so an UNKEYED worker must not make it: with no key the two digests are the
+// same value and a second lookup would ask the identical question twice.
+func TestAccountDeletionReceipt_UnkeyedWorkerProbesOnce(t *testing.T) {
+	be := &fakeBackend{}
+	w := newEmailTestWorker(be, &fakeEmailSender{})
+	if err := w.handleLifecycleEmail(context.Background(), deletionReceiptJob("gone@test.com", "en")); err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if len(be.receiptLookups) != 1 {
+		t.Errorf("want exactly one send-once lookup with no key set, got %v", be.receiptLookups)
+	}
+}
+
+// A keyed worker probes its own digest FIRST and the legacy one only on a miss,
+// so the ordinary steady-state path costs one lookup and the changeover two.
+func TestAccountDeletionReceipt_KeyedWorkerProbesKeyedThenLegacy(t *testing.T) {
+	be := &fakeBackend{}
+	w := newEmailTestWorker(be, &fakeEmailSender{})
+	w.DeletionAuditKey = testAuditKey
+	if err := w.handleLifecycleEmail(context.Background(), deletionReceiptJob("gone@test.com", "en")); err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	want := []string{receiptDigest("gone@test.com", testAuditKey), hashEmailForReceipt("gone@test.com")}
+	if len(be.receiptLookups) != 2 || be.receiptLookups[0] != want[0] || be.receiptLookups[1] != want[1] {
+		t.Errorf("want probes %v, got %v", want, be.receiptLookups)
+	}
+
+	be2 := &fakeBackend{receiptSent: map[string]bool{receiptDigest("gone@test.com", testAuditKey): true}}
+	w2 := newEmailTestWorker(be2, &fakeEmailSender{})
+	w2.DeletionAuditKey = testAuditKey
+	if err := w2.handleLifecycleEmail(context.Background(), deletionReceiptJob("gone@test.com", "en")); err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if len(be2.receiptLookups) != 1 {
+		t.Errorf("a hit on the keyed digest must not go on to probe the legacy one, got %v", be2.receiptLookups)
+	}
+}
+
+// The key is actually mixed in, and the input is domain-separated from the bare
+// address. DELETION_AUDIT_KEY also keys delete-account's user-id HMAC; without
+// the prefix the two record types would share one keyed function of their input.
+func TestAccountDeletionReceipt_DigestIsKeyedAndDomainSeparated(t *testing.T) {
+	a := receiptDigest("gone@test.com", testAuditKey)
+	b := receiptDigest("gone@test.com", "a-different-operator-secret-32-byte")
+	if a == b {
+		t.Errorf("two keys produced the same digest %q — the key is not mixed in", a)
+	}
+	if len(a) != 64 {
+		t.Errorf("want 64 hex chars like the legacy digest, got %d", len(a))
+	}
+	if !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(a) {
+		t.Errorf("digest %q is not lowercase hex", a)
+	}
+
+	bare := hmac.New(sha256.New, []byte(testAuditKey))
+	bare.Write([]byte("gone@test.com"))
+	if a == hex.EncodeToString(bare.Sum(nil)) {
+		t.Errorf("the digest is a plain HMAC of the address — the %q domain prefix is not applied", receiptDigestDomain)
+	}
+}
+
+// Normalisation is shared, so a differently cased or padded re-enqueue still
+// dedups under the keyed digest exactly as it does under the legacy one.
+func TestAccountDeletionReceipt_KeyedDigestNormalisesAddress(t *testing.T) {
+	hash := receiptDigest("gone@test.com", testAuditKey)
+	be := &fakeBackend{receiptSent: map[string]bool{hash: true}}
+	sender := &fakeEmailSender{}
+	w := newEmailTestWorker(be, sender)
+	w.DeletionAuditKey = testAuditKey
+
+	if err := w.handleLifecycleEmail(context.Background(), deletionReceiptJob("  GONE@Test.COM ", "en")); err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if len(sender.sent) != 0 {
+		t.Errorf("a differently-cased address must reach the same keyed digest, sent=%d", len(sender.sent))
 	}
 }
