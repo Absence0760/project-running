@@ -4,10 +4,13 @@ import { readFileSync } from 'node:fs';
 import {
 	MAX_HR_BPM_MAX,
 	MAX_HR_BPM_MIN,
+	RESTING_HR_BPM_MAX,
+	RESTING_HR_BPM_MIN,
 	TANAKA_AGE_MAX,
 	TANAKA_AGE_MIN,
 	defaultZoneCutoffs,
 	isUsableMaxHrBpm,
+	isUsableRestingHrBpm,
 	tanakaMaxHr,
 	zoneCutoffsFromMaxHr
 } from './hr_zones';
@@ -118,4 +121,50 @@ test('isUsableMaxHrBpm rejects the absent and unparseable inputs', () => {
 	assert.equal(isUsableMaxHrBpm(0), false);
 	assert.equal(isUsableMaxHrBpm(MAX_HR_BPM_MIN), true);
 	assert.equal(isUsableMaxHrBpm(MAX_HR_BPM_MAX), true);
+});
+
+// resting_hr_bpm carried the identical write-side gap max_hr_bpm had: a jsonb
+// key with no CHECK, an advisory min/max on both inputs that constraint
+// validation never reaches, and `parseInt(x, 10) || null` behind them — so a
+// typed 300 or 3 was stored and the TRIMP calibration quietly changed what it
+// did about it. Same three assertions as the max-HR pair above, one field over.
+test('both web resting_hr_bpm write paths gate on the shared predicate', () => {
+	const pages = [
+		'../../routes/settings/account/+page.svelte',
+		'../../routes/settings/preferences/+page.svelte'
+	];
+	for (const rel of pages) {
+		const src = readFileSync(new URL(rel, import.meta.url), 'utf8');
+		assert.match(src, /isUsableRestingHrBpm/, `${rel} no longer gates resting_hr_bpm`);
+		assert.doesNotMatch(
+			src,
+			/resting_hr_bpm\s*[:=][^;\n]*parseInt/,
+			`${rel} writes resting_hr_bpm from a raw parseInt again`
+		);
+		assert.doesNotMatch(
+			src,
+			/bind:value=\{restingHr\}[^>]*min="/,
+			`${rel} hardcodes a resting-HR bound`
+		);
+	}
+});
+
+test('isUsableRestingHrBpm rejects the absent and unparseable inputs', () => {
+	assert.equal(isUsableRestingHrBpm(null), false);
+	assert.equal(isUsableRestingHrBpm(undefined), false);
+	assert.equal(isUsableRestingHrBpm(Number.NaN), false);
+	assert.equal(isUsableRestingHrBpm(Number.POSITIVE_INFINITY), false);
+	assert.equal(isUsableRestingHrBpm(0), false);
+	assert.equal(isUsableRestingHrBpm(RESTING_HR_BPM_MIN), true);
+	assert.equal(isUsableRestingHrBpm(RESTING_HR_BPM_MAX), true);
+	assert.equal(isUsableRestingHrBpm(RESTING_HR_BPM_MIN - 1), false);
+	assert.equal(isUsableRestingHrBpm(RESTING_HR_BPM_MAX + 1), false);
+});
+
+// The range is the WIDER of the two the tree already shipped, so it cannot
+// refuse a figure the mobile picker was writing before it was named. Pinning
+// the containment rather than the literals keeps the reason legible if either
+// number ever moves.
+test('the named resting-HR range contains the advisory web pair', () => {
+	assert.ok(RESTING_HR_BPM_MIN <= 30 && RESTING_HR_BPM_MAX >= 120);
 });

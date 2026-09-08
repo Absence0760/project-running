@@ -60,7 +60,14 @@
 	import { numberInputValue } from '$lib/settings/number_input';
 	import type { PrefsBag } from '$lib/settings/settings';
 	import type { Updatable } from '$lib/core/database';
-	import { MAX_HR_BPM_MIN, MAX_HR_BPM_MAX, isUsableMaxHrBpm } from '$lib/training/hr_zones';
+	import {
+		MAX_HR_BPM_MIN,
+		MAX_HR_BPM_MAX,
+		isUsableMaxHrBpm,
+		RESTING_HR_BPM_MIN,
+		RESTING_HR_BPM_MAX,
+		isUsableRestingHrBpm
+	} from '$lib/training/hr_zones';
 	import {
 		MIN_CYCLE_LENGTH_DAYS,
 		MAX_CYCLE_LENGTH_DAYS,
@@ -91,6 +98,12 @@
 	const maxHrParsed = $derived(numberInputValue(maxHr));
 	const maxHrOutOfRange = $derived(maxHrParsed !== null && !isUsableMaxHrBpm(maxHrParsed));
 	const maxHrBounds = { min: MAX_HR_BPM_MIN, max: MAX_HR_BPM_MAX };
+	// Same shape for the sibling field, for the same reason (decisions § 1409).
+	const restingHrParsed = $derived(numberInputValue(restingHr));
+	const restingHrOutOfRange = $derived(
+		restingHrParsed !== null && !isUsableRestingHrBpm(restingHrParsed)
+	);
+	const restingHrBounds = { min: RESTING_HR_BPM_MIN, max: RESTING_HR_BPM_MAX };
 	// Cycle/pregnancy-aware training inputs (persona runner-woman, decisions
 	// §231). Art 9 reproductive-health data — persistence is gated on the
 	// SAME health-data consent as DOB below, AND the whole section is hidden
@@ -519,6 +532,10 @@
 			showToast(m('limits.maxHrOutOfRange', maxHrBounds), 'error');
 			return;
 		}
+		if (restingHrOutOfRange) {
+			showToast(m('limits.restingHrOutOfRange', restingHrBounds), 'error');
+			return;
+		}
 		saving = true;
 		saved = false;
 
@@ -605,8 +622,8 @@
 		// on withdrawal it is explicitly nulled so the stored value is cleared.
 		const prefs: PrefsBag = {};
 		prefs.date_of_birth = healthDataConsent && dateOfBirth ? dateOfBirth : null;
-		if (restingHr) prefs.resting_hr_bpm = parseInt(restingHr, 10) || null;
-		if (maxHr) prefs.max_hr_bpm = maxHrParsed;
+		prefs.resting_hr_bpm = restingHrParsed;
+		prefs.max_hr_bpm = maxHrParsed;
 		// Cycle/pregnancy inputs are Art 9 reproductive-health data — write
 		// them only when the flag is on AND consent is granted; on withdrawal
 		// (or flag off) they are explicitly nulled so nothing lingers.
@@ -1308,7 +1325,10 @@
 			</label>
 			<label>
 				<span class="label-text">{m('settingsAccount.restingHr')}</span>
-				<input type="number" bind:value={restingHr} placeholder={m('settingsAccount.restingHrPlaceholder')} min="30" max="120" />
+				<input type="number" bind:value={restingHr} placeholder={m('settingsAccount.restingHrPlaceholder')} min={RESTING_HR_BPM_MIN} max={RESTING_HR_BPM_MAX} aria-invalid={restingHrOutOfRange} data-testid="resting-hr" />
+				{#if restingHrOutOfRange}
+					<span class="field-error" data-testid="resting-hr-error">{m('limits.restingHrOutOfRange', restingHrBounds)}</span>
+				{/if}
 			</label>
 			<label>
 				<span class="label-text">{m('settingsAccount.maxHr')}</span>
@@ -1367,7 +1387,7 @@
 				{/if}
 			</div>
 		{/if}
-		<button class="btn btn-primary btn-save" onclick={handleSave} disabled={saving || maxHrOutOfRange}>
+		<button class="btn btn-primary btn-save" onclick={handleSave} disabled={saving || maxHrOutOfRange || restingHrOutOfRange}>
 			{saving ? m('settingsAccount.saving') : saved ? m('settingsAccount.savedDone') : m('settingsAccount.saveProfile')}
 		</button>
 	</section>

@@ -129,4 +129,83 @@ void main() {
       expect(r.ownerName, '');
     });
   });
+
+  group('a consent stamp the calendar cannot hold is withheld, never rolled',
+      () {
+    test('an impossible opt-in leaves the contact NOT SMS-reachable', () {
+      // `DateTime.parse` reads this as 2027-02-18 — a stamp that would have
+      // read as a real opt-in and armed the SMS escalation.
+      expect(DateTime.parse('2026-13-45T99:99:99Z'),
+          DateTime.utc(2027, 2, 18, 4, 40, 39));
+      final c = SafetyContact.fromJson({
+        'id': 'sc9',
+        'contact_email': 'partner@example.com',
+        'contact_phone': '+447700900123',
+        'confirmed_at': '2026-06-02T08:00:00.000Z',
+        'sms_opt_in_at': '2026-13-45T99:99:99Z',
+        'created_at': '2026-06-01T08:00:00.000Z',
+      });
+      expect(c.smsOptInAt, isNull);
+      expect(c.isSmsReachable, isFalse);
+    });
+
+    test('an impossible confirmation leaves the contact unconfirmed', () {
+      final c = SafetyContact.fromJson({
+        'id': 'sc10',
+        'contact_email': 'partner@example.com',
+        'confirmed_at': '2026-06-31T08:00:00Z',
+        'created_at': '2026-06-01T08:00:00.000Z',
+      });
+      expect(c.confirmedAt, isNull);
+      expect(c.isConfirmed, isFalse);
+    });
+
+    test('an impossible required stamp is refused rather than answered', () {
+      expect(
+        () => SafetyContact.fromJson({
+          'id': 'sc11',
+          'contact_email': 'partner@example.com',
+          'created_at': '2026-06-32',
+        }),
+        throwsA(isA<FormatException>()
+            .having((e) => e.message, 'message', contains('created_at'))),
+      );
+      expect(
+        () => PendingSafetyRequest.fromJson({
+          'id': 'req9',
+          'owner_name': 'Alex',
+          'created_at': '2026-06-32',
+        }),
+        throwsFormatException,
+      );
+    });
+
+    test('the mirror-image opt-in is withheld the same way', () {
+      final c = SafetyContactOf.fromJson({
+        'id': 'sco1',
+        'owner_id': 'u1',
+        'contact_phone': '+447700900123',
+        'sms_opt_in_at': '2026-06-31T08:00:00Z',
+        'created_at': '2026-06-01T08:00:00.000Z',
+      }, 'Alex');
+      expect(c.smsOptInAt, isNull);
+    });
+
+    test('an impossible event start is refused rather than moved a fortnight',
+        () {
+      expect(
+        () => PublicEventResult.fromRow({
+          'id': 'e1',
+          'club_id': 'c1',
+          'club_name': 'Harriers',
+          'club_slug': 'harriers',
+          'title': 'Tuesday tempo',
+          'category': 'run',
+          'starts_at': '2026-13-45T99:99:99Z',
+        }),
+        throwsA(isA<FormatException>()
+            .having((e) => e.message, 'message', contains('starts_at'))),
+      );
+    });
+  });
 }

@@ -826,231 +826,252 @@ private fun PreRunScreen(
         // and sign-out icon buttons live further down on the chord
         // curve (top=50.dp), so the centred pills here don't have
         // to dodge them at the narrow upper chord.
+        //
+        // Five facts compete for the one slot and WHICH of them wins is
+        // decided by `syncChipState`, not by the order of the branches below
+        // — a precedence expressed as source order can only be asserted by
+        // reading the source back, which is what three separate guard files
+        // were doing without any of them able to evaluate it.
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .padding(top = 30.dp, start = 16.dp, end = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            if (queueUnreadable && authed) {
-                // The queue read failed, so there is no count to state and
-                // "Sync ?" would be worse than the silence it replaces. What
-                // the runner needs is not the number — it is the one
-                // affordance that can recover the queue, which is exactly
-                // what the counted chip's `queuedCount > 0` gate withheld on
-                // the only condition that guarantees the count is wrong.
-                //
-                // It occupies the counted chip's own slot, so nothing else on
-                // this arc moves, and it states no figure it cannot support.
-                // NOT gated on `online`: the read is a local file open and
-                // the network is not a party to whether it succeeds, so
-                // disabling it offline would withhold the recovery path for a
-                // purely local fault. Still gated on `authed`, because
-                // `drainQueue` bails before reading anything without a
-                // session. The warning colour is not the only signal — the
-                // label differs from the counted one and the content
-                // description carries the whole sentence, which has no width
-                // limit where this chip has 100 dp (decisions § 1104).
-                val unreadableCd = stringResource(R.string.cd_sync_unreadable_retry)
-                CompactChip(
-                    onClick = onSync,
-                    enabled = !syncing,
-                    label = {
-                        if (syncing) {
-                            CircularProgressIndicator(
-                                strokeWidth = 1.5.dp,
-                                modifier = Modifier.size(12.dp),
-                                indicatorColor = DuskPalette.warning,
-                            )
-                        } else {
+            val syncSlot = syncChipState(
+                queueUnreadable = queueUnreadable,
+                rejectedCount = rejectedCount,
+                queuedCount = queuedCount,
+                syncFailed = syncFailed,
+                online = online,
+                authed = authed,
+            )
+            when (syncSlot) {
+                SyncChipState.Unreadable -> {
+                    // The queue read failed, so there is no count to state and
+                    // "Sync ?" would be worse than the silence it replaces. What
+                    // the runner needs is not the number — it is the one
+                    // affordance that can recover the queue, which is exactly
+                    // what the counted chip's `queuedCount > 0` gate withheld on
+                    // the only condition that guarantees the count is wrong.
+                    //
+                    // It occupies the counted chip's own slot, so nothing else on
+                    // this arc moves, and it states no figure it cannot support.
+                    // NOT gated on `online`: the read is a local file open and
+                    // the network is not a party to whether it succeeds, so
+                    // disabling it offline would withhold the recovery path for a
+                    // purely local fault. Still gated on `authed`, because
+                    // `drainQueue` bails before reading anything without a
+                    // session. The warning colour is not the only signal — the
+                    // label differs from the counted one and the content
+                    // description carries the whole sentence, which has no width
+                    // limit where this chip has 100 dp (decisions § 1104).
+                    val unreadableCd = stringResource(R.string.cd_sync_unreadable_retry)
+                    CompactChip(
+                        onClick = onSync,
+                        enabled = !syncing,
+                        label = {
+                            if (syncing) {
+                                CircularProgressIndicator(
+                                    strokeWidth = 1.5.dp,
+                                    modifier = Modifier.size(12.dp),
+                                    indicatorColor = DuskPalette.warning,
+                                )
+                            } else {
+                                Text(
+                                    stringResource(R.string.sync_retry),
+                                    style = MaterialTheme.typography.caption3,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                )
+                            }
+                        },
+                        colors = ChipDefaults.secondaryChipColors(
+                            backgroundColor = Color.White.copy(alpha = 0.15f),
+                            contentColor = DuskPalette.warning,
+                        ),
+                        modifier = Modifier
+                            .widthIn(max = 100.dp)
+                            .semantics { contentDescription = unreadableCd },
+                    )
+                }
+                SyncChipState.Rejected -> {
+                    // The server has permanently refused these entries — a
+                    // 400/404/409/422 that no retry moves. They stay queued by
+                    // design (§ 17: dropping one silently loses a run), so the
+                    // counted chip's own claim is the one thing this state makes
+                    // false: it offers a Sync that reports success on every tap
+                    // while the count it states never falls. It therefore yields
+                    // the slot, exactly as it does to the unreadable chip
+                    // (decisions § 1104), and for the same reason — the figure is
+                    // right and the sentence around it is not.
+                    //
+                    // Yielding costs the manual Sync of any run queued behind the
+                    // stuck ones, and that is the intended order: the entry that
+                    // cannot move is what the runner has to clear first, and once
+                    // they have, the counted chip is back with the rest.
+                    //
+                    // Destructive, so the estate's two-press confirm guards it
+                    // (decisions § 1253) — the first tap arms and relabels, the
+                    // second discards, and the arm lapses on its own so a watch
+                    // put down does not come back one tap from destroying a run.
+                    // The label carries the count in both states because the
+                    // runner is agreeing to a number, and `discard_stake` renders
+                    // only while armed so the arc states no stake for a run
+                    // nobody is discarding. It takes the count too: the caption is
+                    // a predicate about the runs, so French, Spanish and Portuguese
+                    // inflect it, and the single-run callers that already used the
+                    // key were reading a sentence about one run to someone
+                    // discarding several (decisions § 1389).
+                    var discardArmedAtMs by remember { mutableStateOf<Long?>(null) }
+                    LaunchedEffect(discardArmedAtMs) {
+                        val armedAt = discardArmedAtMs ?: return@LaunchedEffect
+                        delay(CONFIRM_WINDOW_MS)
+                        if (discardArmedAtMs == armedAt) discardArmedAtMs = null
+                    }
+                    // A drain that lands between the arm and the confirm changes
+                    // what the second tap would destroy. Disarm rather than let it
+                    // commit to a set the runner never saw.
+                    LaunchedEffect(rejectedCount) { discardArmedAtMs = null }
+                    val armed = discardArmedAtMs != null
+                    val rejectedCd = if (armed) {
+                        pluralStringResource(
+                            R.plurals.cd_sync_rejected_confirm, rejectedCount, rejectedCount
+                        )
+                    } else {
+                        pluralStringResource(R.plurals.cd_sync_rejected, rejectedCount, rejectedCount)
+                    }
+                    CompactChip(
+                        onClick = {
+                            val now = System.currentTimeMillis()
+                            when (confirmPress(discardArmedAtMs, now)) {
+                                ConfirmPress.Armed -> discardArmedAtMs = now
+                                ConfirmPress.Confirmed -> {
+                                    discardArmedAtMs = null
+                                    onDiscardRejected()
+                                }
+                            }
+                        },
+                        label = {
                             Text(
-                                stringResource(R.string.sync_retry),
+                                if (armed) {
+                                    stringResource(R.string.sync_rejected_discard, rejectedCount)
+                                } else {
+                                    pluralStringResource(
+                                        R.plurals.sync_rejected, rejectedCount, rejectedCount
+                                    )
+                                },
                                 style = MaterialTheme.typography.caption3,
                                 maxLines = 1,
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                             )
-                        }
-                    },
-                    colors = ChipDefaults.secondaryChipColors(
-                        backgroundColor = Color.White.copy(alpha = 0.15f),
-                        contentColor = DuskPalette.warning,
-                    ),
-                    modifier = Modifier
-                        .widthIn(max = 100.dp)
-                        .semantics { contentDescription = unreadableCd },
-                )
-            } else if (rejectedCount > 0 && authed) {
-                // The server has permanently refused these entries — a
-                // 400/404/409/422 that no retry moves. They stay queued by
-                // design (§ 17: dropping one silently loses a run), so the
-                // counted chip's own claim is the one thing this state makes
-                // false: it offers a Sync that reports success on every tap
-                // while the count it states never falls. It therefore yields
-                // the slot, exactly as it does to the unreadable chip
-                // (decisions § 1104), and for the same reason — the figure is
-                // right and the sentence around it is not.
-                //
-                // Yielding costs the manual Sync of any run queued behind the
-                // stuck ones, and that is the intended order: the entry that
-                // cannot move is what the runner has to clear first, and once
-                // they have, the counted chip is back with the rest.
-                //
-                // Destructive, so the estate's two-press confirm guards it
-                // (decisions § 1253) — the first tap arms and relabels, the
-                // second discards, and the arm lapses on its own so a watch
-                // put down does not come back one tap from destroying a run.
-                // The label carries the count in both states because the
-                // runner is agreeing to a number, and `discard_stake` renders
-                // only while armed so the arc states no stake for a run
-                // nobody is discarding. It takes the count too: the caption is
-                // a predicate about the runs, so French, Spanish and Portuguese
-                // inflect it, and the single-run callers that already used the
-                // key were reading a sentence about one run to someone
-                // discarding several (decisions § 1389).
-                var discardArmedAtMs by remember { mutableStateOf<Long?>(null) }
-                LaunchedEffect(discardArmedAtMs) {
-                    val armedAt = discardArmedAtMs ?: return@LaunchedEffect
-                    delay(CONFIRM_WINDOW_MS)
-                    if (discardArmedAtMs == armedAt) discardArmedAtMs = null
-                }
-                // A drain that lands between the arm and the confirm changes
-                // what the second tap would destroy. Disarm rather than let it
-                // commit to a set the runner never saw.
-                LaunchedEffect(rejectedCount) { discardArmedAtMs = null }
-                val armed = discardArmedAtMs != null
-                val rejectedCd = if (armed) {
-                    pluralStringResource(
-                        R.plurals.cd_sync_rejected_confirm, rejectedCount, rejectedCount
+                        },
+                        colors = ChipDefaults.secondaryChipColors(
+                            backgroundColor = Color.White.copy(alpha = 0.15f),
+                            contentColor = DuskPalette.warning,
+                        ),
+                        modifier = Modifier
+                            .widthIn(max = 100.dp)
+                            .semantics { contentDescription = rejectedCd },
                     )
-                } else {
-                    pluralStringResource(R.plurals.cd_sync_rejected, rejectedCount, rejectedCount)
-                }
-                CompactChip(
-                    onClick = {
-                        val now = System.currentTimeMillis()
-                        when (confirmPress(discardArmedAtMs, now)) {
-                            ConfirmPress.Armed -> discardArmedAtMs = now
-                            ConfirmPress.Confirmed -> {
-                                discardArmedAtMs = null
-                                onDiscardRejected()
-                            }
-                        }
-                    },
-                    label = {
+                    if (armed) {
                         Text(
-                            if (armed) {
-                                stringResource(R.string.sync_rejected_discard, rejectedCount)
-                            } else {
-                                pluralStringResource(
-                                    R.plurals.sync_rejected, rejectedCount, rejectedCount
-                                )
-                            },
-                            style = MaterialTheme.typography.caption3,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            pluralStringResource(R.plurals.discard_stake, rejectedCount),
+                            style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
+                            color = DuskPalette.warning,
+                            textAlign = TextAlign.Center,
                         )
-                    },
-                    colors = ChipDefaults.secondaryChipColors(
-                        backgroundColor = Color.White.copy(alpha = 0.15f),
-                        contentColor = DuskPalette.warning,
-                    ),
-                    modifier = Modifier
-                        .widthIn(max = 100.dp)
-                        .semantics { contentDescription = rejectedCd },
-                )
-                if (armed) {
+                    }
+                }
+                SyncChipState.Queued, SyncChipState.RetryQueued -> {
+                    // Tappable so the runner can force a retry — the queue
+                    // also drains automatically on every connectivity edge
+                    // and on app cold-start, but if the user just got home
+                    // and wants their run synced *now* (e.g., to check it
+                    // on the phone), waiting for a network event is the
+                    // wrong feel. While the drain is in flight we replace
+                    // the label with a small spinner; offline / unauthed
+                    // keep the chip disabled because retrying is guaranteed
+                    // to fail until the network or session comes back —
+                    // CompactChip dims it visually so the user can tell.
+                    //
+                    // Visual styling matches the Activity / Route / Pace
+                    // chips at the bottom arc: same `translucentChip`
+                    // colours (white-alpha-0.15 + parchment) and `caption3`
+                    // typography so the four chips read as one family.
+                    //
+                    // …and it is also where a TRANSIENT failure gets said. A 5xx
+                    // or a dead socket left this arc silent: the runner tapped
+                    // Sync, the chip spun, the count stayed, and `drainBackoff`
+                    // was armed behind it — so the one screen a runner is on for
+                    // every drain but the first named no reason at all
+                    // (decisions § 1390). It is the SAME chip rather than a fourth
+                    // branch because Sync is still the useful affordance during a
+                    // transient: a branch that took the slot would remove the
+                    // retry to describe why the retry was needed. And it is a
+                    // label change, not only a colour: the 100 dp label states the
+                    // action, the warning colour marks it, and the content
+                    // description carries the sentence neither can hold — the same
+                    // three-signal shape § 1104 settled for the unreadable chip.
+                    //
+                    // Which of the two this is, `syncChipState` has already
+                    // decided — including the `online` conjunction behind it,
+                    // because offline the chip is already disabled and a dimmed
+                    // control reading "Retry" invites a tap that cannot fire.
+                    val syncFailedNow = syncSlot == SyncChipState.RetryQueued
+                    val syncCd = if (syncFailedNow) {
+                        pluralStringResource(R.plurals.cd_sync_failed_retry, queuedCount, queuedCount)
+                    } else {
+                        pluralStringResource(R.plurals.cd_sync_queued, queuedCount, queuedCount)
+                    }
+                    CompactChip(
+                        onClick = onSync,
+                        enabled = online && authed && !syncing,
+                        label = {
+                            if (syncing) {
+                                CircularProgressIndicator(
+                                    strokeWidth = 1.5.dp,
+                                    modifier = Modifier.size(12.dp),
+                                    indicatorColor = if (syncFailedNow) {
+                                        DuskPalette.warning
+                                    } else {
+                                        DuskPalette.parchment
+                                    },
+                                )
+                            } else {
+                                Text(
+                                    stringResource(
+                                        if (syncFailedNow) R.string.sync_retry_count
+                                        else R.string.sync_count,
+                                        queuedCount,
+                                    ),
+                                    style = MaterialTheme.typography.caption3,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                )
+                            }
+                        },
+                        colors = ChipDefaults.secondaryChipColors(
+                            backgroundColor = Color.White.copy(alpha = 0.15f),
+                            contentColor = if (syncFailedNow) {
+                                DuskPalette.warning
+                            } else {
+                                DuskPalette.parchment
+                            },
+                        ),
+                        modifier = Modifier
+                            .widthIn(max = 100.dp)
+                            .semantics { contentDescription = syncCd },
+                    )
+                }
+                SyncChipState.Offline -> {
                     Text(
-                        pluralStringResource(R.plurals.discard_stake, rejectedCount),
+                        stringResource(R.string.offline),
                         style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                         color = DuskPalette.warning,
-                        textAlign = TextAlign.Center,
                     )
                 }
-            } else if (queuedCount > 0) {
-                // Tappable so the runner can force a retry — the queue
-                // also drains automatically on every connectivity edge
-                // and on app cold-start, but if the user just got home
-                // and wants their run synced *now* (e.g., to check it
-                // on the phone), waiting for a network event is the
-                // wrong feel. While the drain is in flight we replace
-                // the label with a small spinner; offline / unauthed
-                // keep the chip disabled because retrying is guaranteed
-                // to fail until the network or session comes back —
-                // CompactChip dims it visually so the user can tell.
-                //
-                // Visual styling matches the Activity / Route / Pace
-                // chips at the bottom arc: same `translucentChip`
-                // colours (white-alpha-0.15 + parchment) and `caption3`
-                // typography so the four chips read as one family.
-                //
-                // …and it is also where a TRANSIENT failure gets said. A 5xx
-                // or a dead socket left this arc silent: the runner tapped
-                // Sync, the chip spun, the count stayed, and `drainBackoff`
-                // was armed behind it — so the one screen a runner is on for
-                // every drain but the first named no reason at all
-                // (decisions § 1390). It is the SAME chip rather than a fourth
-                // branch because Sync is still the useful affordance during a
-                // transient: a branch that took the slot would remove the
-                // retry to describe why the retry was needed. And it is a
-                // label change, not only a colour: the 100 dp label states the
-                // action, the warning colour marks it, and the content
-                // description carries the sentence neither can hold — the same
-                // three-signal shape § 1104 settled for the unreadable chip.
-                //
-                // Gated on `online` because offline the chip is already
-                // disabled, and a dimmed control reading "Retry" invites a tap
-                // that cannot fire.
-                val syncFailedNow = syncFailed && online && authed
-                val syncCd = if (syncFailedNow) {
-                    pluralStringResource(R.plurals.cd_sync_failed_retry, queuedCount, queuedCount)
-                } else {
-                    pluralStringResource(R.plurals.cd_sync_queued, queuedCount, queuedCount)
-                }
-                CompactChip(
-                    onClick = onSync,
-                    enabled = online && authed && !syncing,
-                    label = {
-                        if (syncing) {
-                            CircularProgressIndicator(
-                                strokeWidth = 1.5.dp,
-                                modifier = Modifier.size(12.dp),
-                                indicatorColor = if (syncFailedNow) {
-                                    DuskPalette.warning
-                                } else {
-                                    DuskPalette.parchment
-                                },
-                            )
-                        } else {
-                            Text(
-                                stringResource(
-                                    if (syncFailedNow) R.string.sync_retry_count
-                                    else R.string.sync_count,
-                                    queuedCount,
-                                ),
-                                style = MaterialTheme.typography.caption3,
-                                maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            )
-                        }
-                    },
-                    colors = ChipDefaults.secondaryChipColors(
-                        backgroundColor = Color.White.copy(alpha = 0.15f),
-                        contentColor = if (syncFailedNow) {
-                            DuskPalette.warning
-                        } else {
-                            DuskPalette.parchment
-                        },
-                    ),
-                    modifier = Modifier
-                        .widthIn(max = 100.dp)
-                        .semantics { contentDescription = syncCd },
-                )
-            } else if (!online && authed) {
-                Text(
-                    stringResource(R.string.offline),
-                    style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
-                    color = DuskPalette.warning,
-                )
+                SyncChipState.Silent -> Unit
             }
             if (!authed) {
                 // NOT `offline`. A runner who has never signed in on the wrist

@@ -39,14 +39,14 @@ class PreRunSyncFailureTest {
         return vm.substring(start, end)
     }
 
-    /// The counted-chip arm of the top-arc chain, on its own: from its own
-    /// `else if` to the next arm. Read branch-scoped so a match from the
+    /// The counted-chip arm of the top-arc `when`, on its own: from its own
+    /// label to the next one. Read branch-scoped so a match from the
     /// unreadable or rejected chip above cannot satisfy an assertion about
     /// this one.
     private fun countedBranch(): String {
-        val start = ui.indexOf("} else if (queuedCount > 0) {")
+        val start = ui.indexOf("SyncChipState.Queued, SyncChipState.RetryQueued -> {")
         assertTrue("the counted `Sync N` arm is gone or renamed", start >= 0)
-        val end = ui.indexOf("} else if (!online && authed) {", start)
+        val end = ui.indexOf("\n                SyncChipState.", start + 1)
         assertTrue("could not find the end of the counted arm", end > start)
         val body = ui.substring(start, end)
         assertTrue(
@@ -97,10 +97,12 @@ class PreRunSyncFailureTest {
     fun `the failure is said on the Sync chip and does not take its slot`() {
         val body = countedBranch()
         assertTrue(
-            "the counted arm must read the transient verdict — a fifth arm of the chain " +
-                "would take the slot from the retry in order to explain why a retry is " +
-                "needed, and Sync is still the useful affordance during a transient",
-            body.contains("syncFailed"),
+            "the counted arm must read the transient verdict — a slot of its own would " +
+                "take the arc from the retry in order to explain why a retry is " +
+                "needed, and Sync is still the useful affordance during a transient. " +
+                "`syncChipState` folds the two into one arm for that reason; " +
+                "`SyncChipStateTest` evaluates which of them a given state is",
+            body.contains("syncSlot == SyncChipState.RetryQueued"),
         )
         assertTrue(
             "…and the chip must still fire the drain in that state",
@@ -152,9 +154,11 @@ class PreRunSyncFailureTest {
         // tap that cannot fire — and the network coming back re-raises the
         // label on its own, because the flag survives until a pass clears it.
         assertTrue(
-            "the failed label must be conjoined with `online`, or it renders on the " +
-                "disabled chip",
-            Regex("""syncFailed && online""").containsMatchIn(body),
+            "the failed label must come off the resolved slot, which is where the " +
+                "`online` conjunction now lives — deciding it again here would be a " +
+                "second copy of the rule and only one of them is under test",
+            Regex("""syncFailedNow = syncSlot == SyncChipState\.RetryQueued""")
+                .containsMatchIn(body),
         )
         assertTrue(
             "the chip must still be gated on the network and the session — this one " +

@@ -35,6 +35,10 @@
 	let suggestions = $state<string[]>([]);
 	let hasWeightedRecords = $state(false);
 	let catalogue = $state<Exercise[]>([]);
+	// Starts true because "not yet loaded" and "failed to load" are the same
+	// state to every consumer: the catalogue is not known, so nothing may claim
+	// a name is free. Cleared only by a read that answered.
+	let catalogueUnavailable = $state(true);
 	// Session-plan count gates the Sessions link. Session plans are authored
 	// independently of gym workouts (a yoga user may have plans but no logged
 	// workouts), so this self-hides on its own data presence, not workouts.length.
@@ -70,13 +74,18 @@
 			suggestions = names;
 			hasWeightedRecords = weighted;
 			sessionPlanCount = plans.length;
-			catalogue = cat;
+			// A failed catalogue read keeps whatever was last known rather than
+			// replacing it with `[]` — a stale entry still binds its id correctly,
+			// and deleting the list would be a second untruth on top of the first.
+			if (cat.error === null) catalogue = cat.catalogue;
+			catalogueUnavailable = cat.error !== null;
 			resumable = await findResumable(w.workouts).catch(() => null);
 		} catch (e) {
 			// fetchSessionPlans rethrows rather than returning an error field,
 			// so a rejection used to escape the Promise.all and leave `loading`
 			// true forever — the retry banner below was unreachable.
 			loadError = e instanceof Error ? e.message : String(e);
+			catalogueUnavailable = true;
 		} finally {
 			loading = false;
 		}
@@ -317,7 +326,13 @@
 />
 
 <Modal open={showCreate} title={t('gym.editor.newTitle')} onclose={() => (showCreate = false)}>
-	<GymEditor {suggestions} {catalogue} oncreated={onCreated} oncancel={() => (showCreate = false)} />
+	<GymEditor
+		{suggestions}
+		{catalogue}
+		{catalogueUnavailable}
+		oncreated={onCreated}
+		oncancel={() => (showCreate = false)}
+	/>
 </Modal>
 
 <style>

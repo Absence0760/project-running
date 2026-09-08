@@ -53,6 +53,35 @@ void main() {
           throwsFormatException);
     });
 
+    test('an impossible start throws instead of landing on a rolled-over day',
+        () {
+      // `DateTime.parse` answers this with 2027-02-18T04:40:39Z — a run filed
+      // ten months from the day the watch recorded it, and nothing downstream
+      // can tell that from a real start. Quarantining the entry is the same
+      // treatment a blank id gets above (decisions § 1430).
+      expect(DateTime.parse('2026-13-45T99:99:99Z'),
+          DateTime.utc(2027, 2, 18, 4, 40, 39));
+      expect(
+          () => runFromWatchPayload(
+              _basePayload()..['started_at'] = '2026-13-45T99:99:99Z'),
+          throwsFormatException);
+      expect(
+          () => runFromWatchPayload(
+              _basePayload()..['started_at'] = '2026-06-32'),
+          throwsFormatException);
+    });
+
+    test('an impossible point timestamp is no timestamp, not a wrong one', () {
+      final raw = _basePayload()
+        ..['track'] = [
+          {'lat': 37.0, 'lng': -122.0, 'ts': '2026-04-32T07:30:05Z'},
+        ];
+      final run = runFromWatchPayload(raw);
+      expect(run.track.single.timestamp, isNull);
+      expect(run.track.single.lat, 37.0,
+          reason: 'an unreadable stamp must not discard the fix itself');
+    });
+
     test('decodes track waypoints with optional ele + ts', () {
       final raw = _basePayload()
         ..['track'] = [

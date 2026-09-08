@@ -1,3 +1,4 @@
+import 'iso_parse.dart';
 import 'metadata_keys.dart';
 import 'run.dart';
 import 'run_source.dart';
@@ -158,11 +159,42 @@ class RunSummary {
         'synced': synced,
       };
 
+  /// A field the index cannot be read without, as its own named refusal.
+  ///
+  /// The alternative is the bare cast this replaces, whose `TypeError` names
+  /// the Dart types and neither the column nor the row — so the store's
+  /// recovery logged `type 'Null' is not a subtype of type 'String'` about a
+  /// file with thousands of rows in it.
+  static T _required<T>(Map<String, dynamic> j, String field) {
+    final v = j[field];
+    if (v is! T) throw FormatException('index row: $field is not usable', v);
+    return v;
+  }
+
+  /// Rebuild a summary from one row of the on-disk index.
+  ///
+  /// Unlike [fromRun], which reads a jsonb bag another client may have
+  /// written and therefore tolerates a wrong type per field, this reads a file
+  /// [toIndexJson] wrote in this same build: a field it cannot read means the
+  /// index is CORRUPT, not that a writer disagreed. So every unreadable field
+  /// throws, and the throw is the point — `LocalRunStore._readIndex` catches
+  /// it, discards the index, and rebuilds from the per-run files, which is
+  /// lossless. Skipping the row instead would drop a run that is still on
+  /// disk and then persist that omission on the next index write, and
+  /// defaulting the field would persist the wrong value; both defeat the
+  /// recovery this reaches (decisions § 1431).
+  ///
+  /// `started_at` is why this matters and not merely why it is tidy: it read
+  /// through `DateTime.parse`, which ROLLS an impossible instant through the
+  /// calendar rather than refusing it, so a corrupt date never threw, never
+  /// reached the rebuild, sorted the run list by a day the runner never ran
+  /// and was written back on the next flush.
   factory RunSummary.fromIndexJson(Map<String, dynamic> j) => RunSummary(
-        id: j['id'] as String,
-        startedAt: DateTime.parse(j['started_at'] as String),
-        duration: Duration(microseconds: (j['duration_us'] as num).toInt()),
-        distanceMetres: (j['distance_m'] as num).toDouble(),
+        id: _required<String>(j, 'id'),
+        startedAt: parseIsoStrictRequired(j['started_at'], 'started_at'),
+        duration: Duration(
+            microseconds: _required<num>(j, 'duration_us').toInt()),
+        distanceMetres: _required<num>(j, 'distance_m').toDouble(),
         source: _sourceFromName(j['source'] as String?),
         activityType: j['activity_type'] as String?,
         externalId: j['external_id'] as String?,

@@ -383,15 +383,17 @@ class ScreenWiringTest {
                 .containsMatchIn(src),
         )
         assertTrue(
-            "the unreadable branch must render before the counted one — the " +
-                "count it would show is the stale figure the read failed on.",
-            src.indexOf("if (queueUnreadable && authed) {") in 0 until src.indexOf("} else if (queuedCount > 0) {"),
+            "the arc must resolve its slot through `syncChipState`, which is where " +
+                "the claim that the unreadable chip outranks the counted one now " +
+                "lives — and where `SyncChipStateTest` can evaluate it rather than " +
+                "read it off the order of two source lines.",
+            Regex("""val syncSlot = syncChipState\(""").containsMatchIn(src),
         )
         assertTrue(
             "the unreadable chip must call onSync — a chip that states the " +
                 "problem and does not offer the retry is the silence it replaced.",
             Regex(
-                """if \(queueUnreadable && authed\) \{.{0,2000}?onClick = onSync""",
+                """SyncChipState\.Unreadable -> \{.{0,2000}?onClick = onSync""",
                 RegexOption.DOT_MATCHES_ALL,
             ).containsMatchIn(src),
         )
@@ -403,12 +405,12 @@ class ScreenWiringTest {
         // recover it on `online` withholds the recovery path for a purely
         // local fault. The COUNTED chip stays gated — that one uploads.
         val src = readRunWatchApp()
-        // Ends at the NEXT arm of the chain, whichever it is, rather than at
+        // Ends at the NEXT arm of the `when`, whichever it is, rather than at
         // the counted one by name: a third arm landed between them (§ 1347) and
         // the extraction silently widened to span it, so an assertion about
         // "the unreadable chip" could be satisfied by the rejected chip's body.
         val branch = Regex(
-            """if \(queueUnreadable && authed\) \{(.*?)\n            \} else if \(""",
+            """SyncChipState\.Unreadable -> \{(.*?)\n                SyncChipState\.""",
             RegexOption.DOT_MATCHES_ALL,
         ).find(src)
         assertTrue("no unreadable-queue branch parsed — the checks below read nothing", branch != null)
@@ -521,8 +523,12 @@ class ScreenWiringTest {
             !branch.contains("R.string.offline"),
         )
         assertTrue(
-            "the network branch must still render R.string.offline",
-            src.contains("!online && authed"),
+            "the network branch must still render R.string.offline — the condition " +
+                "behind it moved into `syncChipState`, the arm did not",
+            Regex(
+                """SyncChipState\.Offline -> \{.{0,300}?R\.string\.offline""",
+                RegexOption.DOT_MATCHES_ALL,
+            ).containsMatchIn(src),
         )
         assertTrue(
             "values/strings.xml must carry the English copy for not_signed_in",

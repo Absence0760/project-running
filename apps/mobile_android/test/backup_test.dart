@@ -504,6 +504,46 @@ void main() {
       expect(runStore.runs.single.id, 'r-after-empty');
       expect(result.warnings.any((w) => w.contains('missing id')), isTrue);
     });
+
+    // `DateTime.parse` reads an impossible start as a real one — 2026-13-45
+    // is 2027-02-18 — so the archive used to restore the run onto a day the
+    // runner never ran, with nothing to tell the reader apart from a real
+    // start. Refusing puts it in the same per-row warning the other
+    // unreadable rows above take (decisions § 1430).
+    test('a run row with an impossible start is warned about, not misfiled',
+        () async {
+      expect(DateTime.parse('2026-13-45T99:99:99Z'),
+          DateTime.utc(2027, 2, 18, 4, 40, 39));
+      final bytes = buildBackupZip(runs: [
+        runRow(id: 'r-before-bad-start'),
+        <String, dynamic>{
+          'id': 'r-rolled',
+          'started_at': '2026-13-45T99:99:99Z',
+          'duration_s': 1800,
+          'distance_m': 5000,
+        },
+        runRow(id: 'r-after-bad-start'),
+      ]);
+
+      final result = await restoreFromBytes(bytes);
+
+      expect(result.runsImported, 2);
+      expect(runStore.runs.map((r) => r.id),
+          isNot(contains('r-rolled')));
+      expect(result.warnings.any((w) => w.contains('r-rolled')), isTrue);
+    });
+
+    test('an impossible created_at leaves the run readable without one',
+        () async {
+      final bytes = buildBackupZip(runs: [
+        runRow(id: 'r-bad-created')..['created_at'] = '2026-06-32T08:00:00Z',
+      ]);
+
+      final result = await restoreFromBytes(bytes);
+
+      expect(result.runsImported, 1);
+      expect(runStore.runs.single.createdAt, isNull);
+    });
   });
 
   group('offline restore — routes', () {

@@ -104,6 +104,18 @@ void main() {
     expect(xml, contains('<desc>Services: water &amp; ice</desc>'));
   });
 
+  // Mirror of the web suite's own case: the apostrophe is the one reserved
+  // character with two legal spellings, and the two halves have to emit the
+  // same bytes (decisions § 1450).
+  test('toRouteGpxWithMarkers — apostrophe is the numeric &#39;, not &apos;', () {
+    final xml = toRouteGpxWithMarkers("O'Brien's Loop", coords3, elevs3, [
+      _marker(label: "Ranger's hut"),
+    ]);
+    expect(xml.contains('&apos;'), isFalse);
+    expect(xml, contains('<name>O&#39;Brien&#39;s Loop</name>'));
+    expect(xml, contains('<name>Ranger&#39;s hut</name>'));
+  });
+
   test('toRouteGpxWithMarkers — empty marker list still emits the line + zero wpt', () {
     final xml = toRouteGpxWithMarkers('Loop', coords3, elevs3, []);
     expect('<wpt '.allMatches(xml).length, 0);

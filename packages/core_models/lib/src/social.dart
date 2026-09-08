@@ -11,6 +11,7 @@
 /// the same Supabase queries.
 
 import 'generated/db_rows.dart';
+import 'iso_parse.dart';
 
 /// Compact public-facing user view used everywhere a profile is
 /// referenced from another row — feed avatar, kudos giver pills,
@@ -282,7 +283,7 @@ class PublicEventResult {
       title: row['title'] as String,
       category: row['category'] as String,
       discipline: row['discipline'] as String?,
-      startsAt: DateTime.parse(row['starts_at'] as String),
+      startsAt: parseIsoStrictRequired(row['starts_at'], 'starts_at'),
       timezone: row['timezone'] as String?,
       durationMin: (row['duration_min'] as num?)?.toInt(),
       recurrenceFreq: row['recurrence_freq'] as String?,
@@ -458,13 +459,9 @@ class SafetyContact {
         contactEmail: json['contact_email'] as String,
         contactPhone: json['contact_phone'] as String?,
         contactUserId: json['contact_user_id'] as String?,
-        confirmedAt: json['confirmed_at'] == null
-            ? null
-            : DateTime.parse(json['confirmed_at'] as String),
-        smsOptInAt: json['sms_opt_in_at'] == null
-            ? null
-            : DateTime.parse(json['sms_opt_in_at'] as String),
-        createdAt: DateTime.parse(json['created_at'] as String),
+        confirmedAt: parseIsoStrictValue(json['confirmed_at']),
+        smsOptInAt: parseIsoStrictValue(json['sms_opt_in_at']),
+        createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
       );
 }
 
@@ -496,7 +493,7 @@ class PendingSafetyRequest {
         id: json['id'] as String,
         ownerName: (json['owner_name'] as String?) ?? '',
         hasPhone: json['has_phone'] == true,
-        createdAt: DateTime.parse(json['created_at'] as String),
+        createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
       );
 }
 
@@ -539,10 +536,8 @@ class SafetyContactOf {
         ownerId: json['owner_id'] as String,
         ownerName: ownerName,
         hasPhone: json['contact_phone'] != null,
-        smsOptInAt: json['sms_opt_in_at'] == null
-            ? null
-            : DateTime.parse(json['sms_opt_in_at'] as String),
-        createdAt: DateTime.parse(json['created_at'] as String),
+        smsOptInAt: parseIsoStrictValue(json['sms_opt_in_at']),
+        createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
       );
 }
 

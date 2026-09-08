@@ -9,6 +9,7 @@
 
 import type { Component } from 'svelte';
 import { CATEGORIES } from './categories';
+import { compareOrdinal } from '../util/ordinal_compare';
 
 export type GuideFrontmatter = {
 	title: string;
@@ -116,7 +117,7 @@ function sameLanguageEntry(
 	const base = baseLanguage(locale);
 	return entries
 		.filter((e) => e.slug === slug && baseLanguage(e.locale) === base)
-		.sort((a, b) => a.locale.localeCompare(b.locale))[0];
+		.sort((a, b) => compareOrdinal(a.locale, b.locale))[0];
 }
 
 /// Resolve a guide by slug for the active locale: the exact locale, then any

@@ -225,6 +225,22 @@ export function parseRunSource(raw: string | null | undefined): RunSource {
 	}
 }
 
+/// Defensive narrow on read, mirroring `parseRunSource`. A jsonb column holds
+/// any JSON value, so the generated row types `metadata` as `Json` — which
+/// admits a string, a number, a boolean and an array as well as an object.
+/// `Run.metadata` promises `JsonObject | null`, and every consumer indexes it
+/// by key, so the four non-object cases have to be answered here rather than
+/// asserted away at each read.
+///
+/// A non-object reads as `null`, not `{}`: the column is nullable and "nothing
+/// usable is stored" is a state the type already has, whereas `{}` would claim
+/// an empty bag was written. Callers already treat null as "no metadata".
+export function parseRunMetadata(raw: unknown): JsonObject | null {
+	return typeof raw === 'object' && raw !== null && !Array.isArray(raw)
+		? (raw as JsonObject)
+		: null;
+}
+
 // Promoted out of `runs.metadata` into a real `runs.activity_type` column by
 // migration 20261207_001 (CHECK in ('run','walk','hike','cycle','stroller')).
 // The CHECK ↔ this union lockstep is enforced by check_constraint_unions.mjs.

@@ -46,6 +46,12 @@
 		/// that matches a catalogue entry by normalised key binds its
 		/// exercise_id onto the logged sets. Free text still logs with no id.
 		catalogue?: Exercise[];
+		/// The catalogue read failed, or has not answered yet. `catalogue` is then
+		/// whatever was last known rather than a statement about what exists, so
+		/// the picker must not offer to create a name it cannot prove is free —
+		/// and the browse affordance stays reachable, because a feature that
+		/// silently vanishes on a transient error explains nothing.
+		catalogueUnavailable?: boolean;
 		oncreated?: () => void;
 		onupdated?: () => void;
 		oncancel: () => void;
@@ -57,6 +63,7 @@
 		seed: seedWorkout = null,
 		suggestions = [],
 		catalogue = [],
+		catalogueUnavailable = false,
 		oncreated,
 		onupdated,
 		oncancel
@@ -315,7 +322,7 @@
 					bind:value={exercises[ei].name}
 					placeholder={t('gym.editor.exercisePlaceholder')}
 				/>
-				{#if catalogue.length > 0}
+				{#if entries.length > 0 || catalogueUnavailable}
 					<button
 						type="button"
 						class="icon-btn browse"
@@ -459,7 +466,12 @@
 	onclose={closePicker}
 	data-testid="catalogue-modal"
 >
-	<ExerciseCataloguePicker catalogue={entries} onpick={onPick} oncreated={onCreated} />
+	<ExerciseCataloguePicker
+		catalogue={entries}
+		unavailable={catalogueUnavailable}
+		onpick={onPick}
+		oncreated={onCreated}
+	/>
 </Modal>
 
 <style>

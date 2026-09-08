@@ -2127,6 +2127,7 @@
   "prefsSyncedSuffix": "{base} · sincronizado con tus otros dispositivos",
   "prefsClear": "Borrar",
   "prefsCancel": "Cancelar",
+  "prefsValueOutOfRange": "Introduce un valor entre {min} y {max}.",
   "prefsSave": "Guardar",
   "prefsSplitInterval": "Intervalo de parciales",
   "prefsSplitIntervalDefault": "Predeterminado",

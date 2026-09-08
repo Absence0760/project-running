@@ -1776,28 +1776,6 @@ jobs:
           key: gradle-watch-wear-${{ hashFiles('apps/watch_wear/android/**/*.gradle*', 'apps/watch_wear/android/gradle/wrapper/gradle-wrapper.properties') }}
       - working-directory: apps/watch_wear/android
         run: ./gradlew assembleDebug testDebugUnitTest --no-daemon
-      # A Gradle project whose committed unit tests NOTHING runs is declared
-      # here, `<path>=<reason>`, one per line — and echoed, so the gap is in
-      # every run's log instead of in a document. `scripts/check_gradle_test_
-      # coverage.mjs` in the `workflow-lint` job walks the tree for Gradle
-      # projects holding a `src/test` source set and fails the PR on one that
-      # is neither run nor named here, on an entry that has outlived its
-      # project or its tests, and on one bought with a placeholder reason. It
-      # also fails when an invocation that DOES exist stops handing Gradle a
-      # test task — deleting `testDebugUnitTest` from the line above would
-      # otherwise stop 767 assertions with every check still green
-      # (decisions § 1393).
-      - name: Gradle unit tests nothing runs
-        env:
-          GRADLE_UNTESTED: |
-            apps/mobile_android/android=the Flutter Gradle host. build-mobile-android COMPILES it on every PR (flutter build apk --release configures and assembles the whole host, plugin subprojects included), so an AGP / KGP / plugin break is covered - but assembleRelease has no dependency on a test task, and this project ships no gradlew wrapper, so running its 32 @Test methods needs a wrapper committed plus the pinned Flutter SDK and melos bootstrap that only build-mobile-android sets up. Until that trade is taken, HealthRoutePermissionBridgeTest, WearAuthBridgeArgsTest and WearRoutesBridgeArgsTest are executed by nothing (decisions § 1393).
-        shell: bash
-        run: |
-          set -euo pipefail
-          while IFS= read -r line; do
-            [ -z "$line" ] && continue
-            echo "::warning::${line%%=*} holds unit tests that no job runs: ${line#*=}"
-          done <<< "$GRADLE_UNTESTED"
 
   build-firmware:
     needs: changes
@@ -2334,6 +2312,30 @@ jobs:
       # doesn't compromise the release path.
       - working-directory: apps/mobile_android
         run: flutter build apk --release --no-tree-shake-icons --target-platform android-arm64
+      # The Gradle host's own JUnit suite. `assembleRelease` has no dependency
+      # on a `test*UnitTest` task, so these 32 assertions across
+      # HealthRoutePermissionBridgeTest, WearAuthBridgeArgsTest and
+      # WearRoutesBridgeArgsTest were committed and executed by nothing until
+      # this line (decisions § 1393, § 1439). It goes HERE rather than in a job
+      # of its own because everything it needs — the pinned Flutter SDK, the
+      # bootstrapped plugin subprojects, the warm Gradle cache — is already paid
+      # for above; a second job would pay for all of it again to run 32 pure-JVM
+      # assertions. It must stay AFTER the build for a second reason:
+      # settings.gradle.kts require()s `flutter.sdk` out of a local.properties
+      # that no checkout carries and only the Flutter tool writes, so Gradle
+      # cannot configure this project until `flutter build` has run once.
+      # The task is `:app:`-scoped and must stay that way. An unqualified
+      # `testDebugUnitTest` at the root runs the test task of EVERY subproject,
+      # and the Flutter plugins are subprojects here: `geolocator_android`
+      # ships its own `MethodCallHandlerImplTest`, three of whose cases fail on
+      # a stock checkout, so the unqualified form failed on a third party's
+      # tests rather than on ours. `apps/watch_wear/android` needs no such
+      # qualifier because it has no plugin subprojects.
+      # `scripts/check_gradle_test_coverage.mjs` in `workflow-lint` reads the
+      # task word, so deleting it fails the PR rather than silently stopping the
+      # suite.
+      - working-directory: apps/mobile_android/android
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
 
   twin-parity:
     needs: changes

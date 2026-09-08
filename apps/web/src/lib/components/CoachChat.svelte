@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { activeFormatLocale } from '$lib/format/time';
+	import { compareOrdinal } from '$lib/util/ordinal_compare';
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { renderCoachMarkdown } from '$lib/coach/markdown';
 	import { supabase } from '$lib/core/supabase';
@@ -189,7 +190,7 @@
 				title: titleFromMessage(g.firstUser),
 				message_count: g.count,
 			}))
-			.sort((a, b) => b.archived_at.localeCompare(a.archived_at));
+			.sort((a, b) => compareOrdinal(b.archived_at, a.archived_at));
 	}
 
 	function titleFromMessage(content: string | null): string {

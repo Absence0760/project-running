@@ -6,6 +6,8 @@
 // Do not hand-edit. To add a column, add it to the SQL
 // migration, rerun the generator, and commit both files.
 
+import '../iso_parse.dart';
+
 double? _toDoubleOrNull(Object? value) {
   final num? n =
       value is num ? value : (value is String ? num.tryParse(value) : null);
@@ -60,7 +62,7 @@ class AchievementRow {
     sourceKind: json['source_kind'] as String,
     sourceId: json['source_id'] as String?,
     valueNum: _toDoubleOrNull(json['value_num']),
-    earnedAt: DateTime.parse(json['earned_at'] as String),
+    earnedAt: parseIsoStrictRequired(json['earned_at'], 'earned_at'),
     isPublic: (json['is_public'] as bool?) ?? false,
   );
 
@@ -104,9 +106,9 @@ class BodyMetricRow {
   factory BodyMetricRow.fromJson(Map<String, dynamic> json) => BodyMetricRow(
     id: json['id'] as String,
     userId: json['user_id'] as String,
-    recordedAt: DateTime.parse(json['recorded_at'] as String),
+    recordedAt: parseIsoStrictRequired(json['recorded_at'], 'recorded_at'),
     weightKg: _toDouble(json['weight_kg']),
-    createdAt: DateTime.parse(json['created_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -151,7 +153,7 @@ class ChallengeBadgeRow {
     challengeId: json['challenge_id'] as String,
     metric: json['metric'] as String,
     finalValue: _toDouble(json['final_value']),
-    awardedAt: DateTime.parse(json['awarded_at'] as String),
+    awardedAt: parseIsoStrictRequired(json['awarded_at'], 'awarded_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -192,8 +194,8 @@ class ChallengeParticipantRow {
     challengeId: json['challenge_id'] as String,
     userId: json['user_id'] as String,
     teamClubId: json['team_club_id'] as String?,
-    joinedAt: DateTime.parse(json['joined_at'] as String),
-    completedAt: json['completed_at'] == null ? null : DateTime.parse(json['completed_at'] as String),
+    joinedAt: parseIsoStrictRequired(json['joined_at'], 'joined_at'),
+    completedAt: parseIsoStrictValue(json['completed_at']),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -266,10 +268,10 @@ class ChallengeRow {
     scope: json['scope'] as String,
     goalValue: _toDoubleOrNull(json['goal_value']),
     activityType: json['activity_type'] as String?,
-    startsAt: DateTime.parse(json['starts_at'] as String),
-    endsAt: DateTime.parse(json['ends_at'] as String),
+    startsAt: parseIsoStrictRequired(json['starts_at'], 'starts_at'),
+    endsAt: parseIsoStrictRequired(json['ends_at'], 'ends_at'),
     isPublic: (json['is_public'] as bool?) ?? false,
-    createdAt: DateTime.parse(json['created_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
     participantCount: (json['participant_count'] as num).toInt(),
   );
 
@@ -348,19 +350,19 @@ class CheckpointCrossingRow {
   factory CheckpointCrossingRow.fromJson(Map<String, dynamic> json) => CheckpointCrossingRow(
     id: json['id'] as String,
     eventId: json['event_id'] as String,
-    instanceStart: DateTime.parse(json['instance_start'] as String),
+    instanceStart: parseIsoStrictRequired(json['instance_start'], 'instance_start'),
     userId: json['user_id'] as String?,
     bib: json['bib'] as String?,
     runnerName: json['runner_name'] as String?,
-    inTime: json['in_time'] == null ? null : DateTime.parse(json['in_time'] as String),
-    outTime: json['out_time'] == null ? null : DateTime.parse(json['out_time'] as String),
+    inTime: parseIsoStrictValue(json['in_time']),
+    outTime: parseIsoStrictValue(json['out_time']),
     bodyWeightKg: _toDoubleOrNull(json['body_weight_kg']),
     bodyWeightPct: _toDoubleOrNull(json['body_weight_pct']),
     medicalHold: (json['medical_hold'] as bool?) ?? false,
     medicalNote: json['medical_note'] as String?,
     recordedBy: json['recorded_by'] as String?,
-    recordedAt: DateTime.parse(json['recorded_at'] as String),
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    recordedAt: parseIsoStrictRequired(json['recorded_at'], 'recorded_at'),
+    updatedAt: parseIsoStrictRequired(json['updated_at'], 'updated_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -413,9 +415,9 @@ class ClubMemberRow {
     clubId: json['club_id'] as String,
     userId: json['user_id'] as String,
     role: json['role'] as String,
-    joinedAt: json['joined_at'] == null ? null : DateTime.parse(json['joined_at'] as String),
+    joinedAt: parseIsoStrictValue(json['joined_at']),
     status: json['status'] as String,
-    activityWaiverAckAt: json['activity_waiver_ack_at'] == null ? null : DateTime.parse(json['activity_waiver_ack_at'] as String),
+    activityWaiverAckAt: parseIsoStrictValue(json['activity_waiver_ack_at']),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -469,7 +471,7 @@ class ClubPhotoRow {
     thumb512Path: json['thumb_512_path'] as String?,
     caption: json['caption'] as String?,
     positionIdx: (json['position_idx'] as num).toInt(),
-    createdAt: DateTime.parse(json['created_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -523,8 +525,8 @@ class ClubPostRow {
     eventId: json['event_id'] as String?,
     authorId: json['author_id'] as String,
     body: json['body'] as String,
-    createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
-    eventInstanceStart: json['event_instance_start'] == null ? null : DateTime.parse(json['event_instance_start'] as String),
+    createdAt: parseIsoStrictValue(json['created_at']),
+    eventInstanceStart: parseIsoStrictValue(json['event_instance_start']),
     parentPostId: json['parent_post_id'] as String?,
   );
 
@@ -621,8 +623,8 @@ class ClubRow {
     avatarUrl: json['avatar_url'] as String?,
     locationLabel: json['location_label'] as String?,
     isPublic: json['is_public'] as bool?,
-    createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
-    updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
+    createdAt: parseIsoStrictValue(json['created_at']),
+    updatedAt: parseIsoStrictValue(json['updated_at']),
     joinPolicy: json['join_policy'] as String,
     inviteToken: json['invite_token'] as String?,
     locationPoint: json['location_point'],
@@ -704,9 +706,9 @@ class CoachAthleteRow {
     status: json['status'] as String,
     inviteToken: json['invite_token'] as String,
     note: json['note'] as String?,
-    createdAt: DateTime.parse(json['created_at'] as String),
-    acceptedAt: json['accepted_at'] == null ? null : DateTime.parse(json['accepted_at'] as String),
-    endedAt: json['ended_at'] == null ? null : DateTime.parse(json['ended_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
+    acceptedAt: parseIsoStrictValue(json['accepted_at']),
+    endedAt: parseIsoStrictValue(json['ended_at']),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -761,8 +763,8 @@ class CoachMessageRow {
     planId: json['plan_id'] as String?,
     role: json['role'] as String,
     content: json['content'] as String,
-    createdAt: DateTime.parse(json['created_at'] as String),
-    archivedAt: json['archived_at'] == null ? null : DateTime.parse(json['archived_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
+    archivedAt: parseIsoStrictValue(json['archived_at']),
     reaction: json['reaction'] as String?,
   );
 
@@ -824,9 +826,9 @@ class DeviceTokenRow {
     token: json['token'] as String,
     appVersion: json['app_version'] as String?,
     locale: json['locale'] as String?,
-    lastSeenAt: DateTime.parse(json['last_seen_at'] as String),
-    createdAt: DateTime.parse(json['created_at'] as String),
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    lastSeenAt: parseIsoStrictRequired(json['last_seen_at'], 'last_seen_at'),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
+    updatedAt: parseIsoStrictRequired(json['updated_at'], 'updated_at'),
     isNotificationsEnabled: (json['is_notifications_enabled'] as bool?) ?? false,
   );
 
@@ -921,9 +923,9 @@ class DonationRow {
     platformFeeCents: (json['platform_fee_cents'] as num).toInt(),
     status: json['status'] as String,
     isAnonymous: (json['is_anonymous'] as bool?) ?? false,
-    createdAt: DateTime.parse(json['created_at'] as String),
-    paidAt: json['paid_at'] == null ? null : DateTime.parse(json['paid_at'] as String),
-    refundedAt: json['refunded_at'] == null ? null : DateTime.parse(json['refunded_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
+    paidAt: parseIsoStrictValue(json['paid_at']),
+    refundedAt: parseIsoStrictValue(json['refunded_at']),
     clientRequestId: json['client_request_id'] as String?,
     refundedCents: (json['refunded_cents'] as num).toInt(),
   );
@@ -984,8 +986,8 @@ class EventAttendeeRow {
     eventId: json['event_id'] as String,
     userId: json['user_id'] as String,
     status: json['status'] as String,
-    joinedAt: json['joined_at'] == null ? null : DateTime.parse(json['joined_at'] as String),
-    instanceStart: DateTime.parse(json['instance_start'] as String),
+    joinedAt: parseIsoStrictValue(json['joined_at']),
+    instanceStart: parseIsoStrictRequired(json['instance_start'], 'instance_start'),
     orderId: json['order_id'] as String?,
     attendance: json['attendance'] as String?,
   );
@@ -1057,8 +1059,8 @@ class EventCheckpointRow {
     cutoffClock: json['cutoff_clock'] as String?,
     requiresWeighIn: (json['requires_weigh_in'] as bool?) ?? false,
     createdBy: json['created_by'] as String?,
-    createdAt: DateTime.parse(json['created_at'] as String),
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
+    updatedAt: parseIsoStrictRequired(json['updated_at'], 'updated_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1137,7 +1139,7 @@ class EventOrderRow {
   factory EventOrderRow.fromJson(Map<String, dynamic> json) => EventOrderRow(
     id: json['id'] as String,
     eventId: json['event_id'] as String,
-    instanceStart: DateTime.parse(json['instance_start'] as String),
+    instanceStart: parseIsoStrictRequired(json['instance_start'], 'instance_start'),
     buyerUserId: json['buyer_user_id'] as String,
     hostUserId: json['host_user_id'] as String,
     stripeCheckoutSessionId: json['stripe_checkout_session_id'] as String?,
@@ -1146,11 +1148,11 @@ class EventOrderRow {
     currency: json['currency'] as String,
     platformFeeCents: (json['platform_fee_cents'] as num).toInt(),
     status: json['status'] as String,
-    createdAt: DateTime.parse(json['created_at'] as String),
-    paidAt: json['paid_at'] == null ? null : DateTime.parse(json['paid_at'] as String),
-    refundedAt: json['refunded_at'] == null ? null : DateTime.parse(json['refunded_at'] as String),
-    reservedUntil: json['reserved_until'] == null ? null : DateTime.parse(json['reserved_until'] as String),
-    refundInitiatedAt: json['refund_initiated_at'] == null ? null : DateTime.parse(json['refund_initiated_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
+    paidAt: parseIsoStrictValue(json['paid_at']),
+    refundedAt: parseIsoStrictValue(json['refunded_at']),
+    reservedUntil: parseIsoStrictValue(json['reserved_until']),
+    refundInitiatedAt: parseIsoStrictValue(json['refund_initiated_at']),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1214,15 +1216,15 @@ class EventPricingRow {
 
   factory EventPricingRow.fromJson(Map<String, dynamic> json) => EventPricingRow(
     eventId: json['event_id'] as String,
-    instanceStart: json['instance_start'] == null ? null : DateTime.parse(json['instance_start'] as String),
+    instanceStart: parseIsoStrictValue(json['instance_start']),
     priceCents: (json['price_cents'] as num).toInt(),
     currency: json['currency'] as String,
     modality: json['modality'] as String,
     platformFeeBps: (json['platform_fee_bps'] as num).toInt(),
     refundPolicy: json['refund_policy'] as String,
     salesCloseOffsetMinutes: (json['sales_close_offset_minutes'] as num).toInt(),
-    createdAt: DateTime.parse(json['created_at'] as String),
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
+    updatedAt: parseIsoStrictRequired(json['updated_at'], 'updated_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1304,7 +1306,7 @@ class EventResultRow {
 
   factory EventResultRow.fromJson(Map<String, dynamic> json) => EventResultRow(
     eventId: json['event_id'] as String,
-    instanceStart: DateTime.parse(json['instance_start'] as String),
+    instanceStart: parseIsoStrictRequired(json['instance_start'], 'instance_start'),
     userId: json['user_id'] as String?,
     runId: json['run_id'] as String?,
     durationS: (json['duration_s'] as num).toInt(),
@@ -1313,11 +1315,11 @@ class EventResultRow {
     finisherStatus: json['finisher_status'] as String,
     ageGradePct: _toDoubleOrNull(json['age_grade_pct']),
     note: json['note'] as String?,
-    createdAt: DateTime.parse(json['created_at'] as String),
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
+    updatedAt: parseIsoStrictRequired(json['updated_at'], 'updated_at'),
     organiserApproved: (json['organiser_approved'] as bool?) ?? false,
     organiserApprovedBy: json['organiser_approved_by'] as String?,
-    organiserApprovedAt: json['organiser_approved_at'] == null ? null : DateTime.parse(json['organiser_approved_at'] as String),
+    organiserApprovedAt: parseIsoStrictValue(json['organiser_approved_at']),
     id: json['id'] as String,
     bib: json['bib'] as String?,
     finisherName: json['finisher_name'] as String?,
@@ -1440,7 +1442,7 @@ class EventRow {
     clubId: json['club_id'] as String,
     title: json['title'] as String,
     description: json['description'] as String?,
-    startsAt: DateTime.parse(json['starts_at'] as String),
+    startsAt: parseIsoStrictRequired(json['starts_at'], 'starts_at'),
     durationMin: (json['duration_min'] as num?)?.toInt(),
     meetLat: _toDoubleOrNull(json['meet_lat']),
     meetLng: _toDoubleOrNull(json['meet_lng']),
@@ -1449,11 +1451,11 @@ class EventRow {
     distanceM: _toDoubleOrNull(json['distance_m']),
     paceTargetSec: (json['pace_target_sec'] as num?)?.toInt(),
     capacity: (json['capacity'] as num?)?.toInt(),
-    createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
-    updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
+    createdAt: parseIsoStrictValue(json['created_at']),
+    updatedAt: parseIsoStrictValue(json['updated_at']),
     recurrenceFreq: json['recurrence_freq'] as String?,
     recurrenceByday: json['recurrence_byday'] == null ? null : (json['recurrence_byday'] as List<dynamic>).cast<String>(),
-    recurrenceUntil: json['recurrence_until'] == null ? null : DateTime.parse(json['recurrence_until'] as String),
+    recurrenceUntil: parseIsoStrictValue(json['recurrence_until']),
     recurrenceCount: (json['recurrence_count'] as num?)?.toInt(),
     authorId: json['author_id'] as String,
     category: json['category'] as String,
@@ -1540,8 +1542,8 @@ class ExerciseRow {
     category: json['category'] as String,
     modality: json['modality'] as String,
     externalId: json['external_id'] as String?,
-    lastModifiedAt: DateTime.parse(json['last_modified_at'] as String),
-    createdAt: DateTime.parse(json['created_at'] as String),
+    lastModifiedAt: parseIsoStrictRequired(json['last_modified_at'], 'last_modified_at'),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1608,7 +1610,7 @@ class FitnessSnapshotRow {
   factory FitnessSnapshotRow.fromJson(Map<String, dynamic> json) => FitnessSnapshotRow(
     id: json['id'] as String,
     userId: json['user_id'] as String,
-    computedAt: DateTime.parse(json['computed_at'] as String),
+    computedAt: parseIsoStrictRequired(json['computed_at'], 'computed_at'),
     vdot: _toDoubleOrNull(json['vdot']),
     vo2Max: _toDoubleOrNull(json['vo2_max']),
     acuteLoad: _toDoubleOrNull(json['acute_load']),
@@ -1617,8 +1619,8 @@ class FitnessSnapshotRow {
     qualifyingRunCount: (json['qualifying_run_count'] as num).toInt(),
     source: json['source'] as String,
     notes: json['notes'] as String?,
-    createdAt: DateTime.parse(json['created_at'] as String),
-    snapshotDay: json['snapshot_day'] == null ? null : DateTime.parse(json['snapshot_day'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
+    snapshotDay: parseIsoStrictValue(json['snapshot_day']),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1712,9 +1714,9 @@ class FoodLogRow {
     fatG: _toDoubleOrNull(json['fat_g']),
     isPublic: (json['is_public'] as bool?) ?? false,
     externalId: json['external_id'] as String?,
-    lastModifiedAt: DateTime.parse(json['last_modified_at'] as String),
-    createdAt: DateTime.parse(json['created_at'] as String),
-    startedAt: DateTime.parse(json['started_at'] as String),
+    lastModifiedAt: parseIsoStrictRequired(json['last_modified_at'], 'last_modified_at'),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
+    startedAt: parseIsoStrictRequired(json['started_at'], 'started_at'),
     fiberG: _toDoubleOrNull(json['fiber_g']),
     sugarG: _toDoubleOrNull(json['sugar_g']),
     sodiumMg: _toDoubleOrNull(json['sodium_mg']),
@@ -1808,8 +1810,8 @@ class FundraiserRow {
     currency: json['currency'] as String,
     platformFeeBps: (json['platform_fee_bps'] as num).toInt(),
     status: json['status'] as String,
-    createdAt: DateTime.parse(json['created_at'] as String),
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
+    updatedAt: parseIsoStrictRequired(json['updated_at'], 'updated_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1885,12 +1887,12 @@ class GearRow {
     name: json['name'] as String,
     brand: json['brand'] as String?,
     model: json['model'] as String?,
-    purchasedAt: json['purchased_at'] == null ? null : DateTime.parse(json['purchased_at'] as String),
-    retiredAt: json['retired_at'] == null ? null : DateTime.parse(json['retired_at'] as String),
+    purchasedAt: parseIsoStrictValue(json['purchased_at']),
+    retiredAt: parseIsoStrictValue(json['retired_at']),
     targetDistanceM: (json['target_distance_m'] as num?)?.toInt(),
     notes: json['notes'] as String?,
-    createdAt: DateTime.parse(json['created_at'] as String),
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
+    updatedAt: parseIsoStrictRequired(json['updated_at'], 'updated_at'),
     isDefault: (json['is_default'] as bool?) ?? false,
   );
 
@@ -1932,7 +1934,7 @@ class GearRotationMemberRow {
   factory GearRotationMemberRow.fromJson(Map<String, dynamic> json) => GearRotationMemberRow(
     rotationId: json['rotation_id'] as String,
     gearId: json['gear_id'] as String,
-    createdAt: DateTime.parse(json['created_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1970,8 +1972,8 @@ class GearRotationRow {
     id: json['id'] as String,
     ownerId: json['owner_id'] as String,
     name: json['name'] as String,
-    createdAt: DateTime.parse(json['created_at'] as String),
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
+    updatedAt: parseIsoStrictRequired(json['updated_at'], 'updated_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -2020,11 +2022,11 @@ class GearWearLogRow {
     id: json['id'] as String,
     gearId: json['gear_id'] as String,
     ownerId: json['owner_id'] as String,
-    loggedOn: DateTime.parse(json['logged_on'] as String),
+    loggedOn: parseIsoStrictRequired(json['logged_on'], 'logged_on'),
     area: json['area'] as String?,
     note: json['note'] as String,
-    createdAt: DateTime.parse(json['created_at'] as String),
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
+    updatedAt: parseIsoStrictRequired(json['updated_at'], 'updated_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -2075,8 +2077,8 @@ class GlobalSegmentEffortRow {
     runId: json['run_id'] as String,
     userId: json['user_id'] as String,
     timeSeconds: _toDouble(json['time_seconds']),
-    startedAt: DateTime.parse(json['started_at'] as String),
-    createdAt: DateTime.parse(json['created_at'] as String),
+    startedAt: parseIsoStrictRequired(json['started_at'], 'started_at'),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -2147,7 +2149,7 @@ class GlobalSegmentRow {
     countryCode: json['country_code'] as String?,
     createdBy: json['created_by'] as String?,
     isActive: (json['is_active'] as bool?) ?? false,
-    createdAt: DateTime.parse(json['created_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -2368,8 +2370,8 @@ class GymRoutineRow {
     periodisation: json['periodisation'] as String,
     exerciseCount: (json['exercise_count'] as num).toInt(),
     externalId: json['external_id'] as String?,
-    lastModifiedAt: DateTime.parse(json['last_modified_at'] as String),
-    createdAt: DateTime.parse(json['created_at'] as String),
+    lastModifiedAt: parseIsoStrictRequired(json['last_modified_at'], 'last_modified_at'),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
     clubId: json['club_id'] as String?,
     isPublicTemplate: (json['is_public_template'] as bool?) ?? false,
   );
@@ -2512,13 +2514,13 @@ class GymWorkoutRow {
     id: json['id'] as String,
     userId: json['user_id'] as String,
     title: json['title'] as String?,
-    startedAt: DateTime.parse(json['started_at'] as String),
+    startedAt: parseIsoStrictRequired(json['started_at'], 'started_at'),
     durationS: (json['duration_s'] as num?)?.toInt(),
     notes: json['notes'] as String?,
     isPublic: (json['is_public'] as bool?) ?? false,
     externalId: json['external_id'] as String?,
-    lastModifiedAt: DateTime.parse(json['last_modified_at'] as String),
-    createdAt: DateTime.parse(json['created_at'] as String),
+    lastModifiedAt: parseIsoStrictRequired(json['last_modified_at'], 'last_modified_at'),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
     setCount: (json['set_count'] as num).toInt(),
     volumeKg: _toDouble(json['volume_kg']),
     metadata: json['metadata'],
@@ -2588,9 +2590,9 @@ class InstructorPayoutAccountRow {
     detailsSubmitted: (json['details_submitted'] as bool?) ?? false,
     country: json['country'] as String?,
     defaultCurrency: json['default_currency'] as String?,
-    onboardedAt: json['onboarded_at'] == null ? null : DateTime.parse(json['onboarded_at'] as String),
-    createdAt: DateTime.parse(json['created_at'] as String),
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    onboardedAt: parseIsoStrictValue(json['onboarded_at']),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
+    updatedAt: parseIsoStrictRequired(json['updated_at'], 'updated_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -2662,16 +2664,16 @@ class IntegrationRow {
     id: json['id'] as String,
     userId: json['user_id'] as String,
     provider: json['provider'] as String,
-    tokenExpiry: json['token_expiry'] == null ? null : DateTime.parse(json['token_expiry'] as String),
+    tokenExpiry: parseIsoStrictValue(json['token_expiry']),
     externalId: json['external_id'] as String?,
     scope: json['scope'] as String?,
-    lastSyncAt: json['last_sync_at'] == null ? null : DateTime.parse(json['last_sync_at'] as String),
+    lastSyncAt: parseIsoStrictValue(json['last_sync_at']),
     syncCursor: json['sync_cursor'] as String?,
-    createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
-    updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
+    createdAt: parseIsoStrictValue(json['created_at']),
+    updatedAt: parseIsoStrictValue(json['updated_at']),
     accessTokenSecretId: json['access_token_secret_id'] as String?,
     refreshTokenSecretId: json['refresh_token_secret_id'] as String?,
-    disconnectedAt: json['disconnected_at'] == null ? null : DateTime.parse(json['disconnected_at'] as String),
+    disconnectedAt: parseIsoStrictValue(json['disconnected_at']),
     disconnectedReason: json['disconnected_reason'] as String?,
   );
 
@@ -2799,8 +2801,8 @@ class MealTemplateRow {
     mealSlot: json['meal_slot'] as String?,
     itemCount: (json['item_count'] as num).toInt(),
     externalId: json['external_id'] as String?,
-    lastModifiedAt: DateTime.parse(json['last_modified_at'] as String),
-    createdAt: DateTime.parse(json['created_at'] as String),
+    lastModifiedAt: parseIsoStrictRequired(json['last_modified_at'], 'last_modified_at'),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -2837,10 +2839,10 @@ class MonthlyFundingRow {
   });
 
   factory MonthlyFundingRow.fromJson(Map<String, dynamic> json) => MonthlyFundingRow(
-    month: DateTime.parse(json['month'] as String),
+    month: parseIsoStrictRequired(json['month'], 'month'),
     amountReceived: _toDouble(json['amount_received']),
     donorCount: (json['donor_count'] as num).toInt(),
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    updatedAt: parseIsoStrictRequired(json['updated_at'], 'updated_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -2924,19 +2926,19 @@ class NotificationRow {
     kind: json['kind'] as String,
     runId: json['run_id'] as String?,
     commentId: json['comment_id'] as String?,
-    readAt: json['read_at'] == null ? null : DateTime.parse(json['read_at'] as String),
-    createdAt: DateTime.parse(json['created_at'] as String),
+    readAt: parseIsoStrictValue(json['read_at']),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
     eventId: json['event_id'] as String?,
     planId: json['plan_id'] as String?,
     clubId: json['club_id'] as String?,
-    emailSentAt: json['email_sent_at'] == null ? null : DateTime.parse(json['email_sent_at'] as String),
-    eventInstanceStart: json['event_instance_start'] == null ? null : DateTime.parse(json['event_instance_start'] as String),
+    emailSentAt: parseIsoStrictValue(json['email_sent_at']),
+    eventInstanceStart: parseIsoStrictValue(json['event_instance_start']),
     activityKind: json['activity_kind'] as String?,
     activityId: json['activity_id'] as String?,
-    webPushSentAt: json['web_push_sent_at'] == null ? null : DateTime.parse(json['web_push_sent_at'] as String),
+    webPushSentAt: parseIsoStrictValue(json['web_push_sent_at']),
     achievementId: json['achievement_id'] as String?,
     challengeId: json['challenge_id'] as String?,
-    nativePushSentAt: json['native_push_sent_at'] == null ? null : DateTime.parse(json['native_push_sent_at'] as String),
+    nativePushSentAt: parseIsoStrictValue(json['native_push_sent_at']),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -2994,8 +2996,8 @@ class PersonalRecordRow {
     distance: json['distance'] as String,
     bestTimeS: (json['best_time_s'] as num).toInt(),
     runId: json['run_id'] as String?,
-    achievedAt: DateTime.parse(json['achieved_at'] as String),
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    achievedAt: parseIsoStrictRequired(json['achieved_at'], 'achieved_at'),
+    updatedAt: parseIsoStrictRequired(json['updated_at'], 'updated_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -3120,7 +3122,7 @@ class PlanWorkoutRow {
   factory PlanWorkoutRow.fromJson(Map<String, dynamic> json) => PlanWorkoutRow(
     id: json['id'] as String,
     weekId: json['week_id'] as String,
-    scheduledDate: DateTime.parse(json['scheduled_date'] as String),
+    scheduledDate: parseIsoStrictRequired(json['scheduled_date'], 'scheduled_date'),
     kind: json['kind'] as String,
     targetDistanceM: _toDoubleOrNull(json['target_distance_m']),
     targetDurationSeconds: (json['target_duration_seconds'] as num?)?.toInt(),
@@ -3129,13 +3131,13 @@ class PlanWorkoutRow {
     structure: json['structure'],
     notes: json['notes'] as String?,
     completedRunId: json['completed_run_id'] as String?,
-    completedAt: json['completed_at'] == null ? null : DateTime.parse(json['completed_at'] as String),
+    completedAt: parseIsoStrictValue(json['completed_at']),
     paceZone: json['pace_zone'] as String?,
     targetPaceEndSecPerKm: (json['target_pace_end_sec_per_km'] as num?)?.toInt(),
     manuallyCompleted: (json['manually_completed'] as bool?) ?? false,
     updatedBy: json['updated_by'] as String?,
-    updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
-    skippedAt: json['skipped_at'] == null ? null : DateTime.parse(json['skipped_at'] as String),
+    updatedAt: parseIsoStrictValue(json['updated_at']),
+    skippedAt: parseIsoStrictValue(json['skipped_at']),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -3216,7 +3218,7 @@ class RaceListingRow {
     provider: json['provider'] as String,
     providerRaceId: json['provider_race_id'] as String?,
     name: json['name'] as String,
-    raceDate: DateTime.parse(json['race_date'] as String),
+    raceDate: parseIsoStrictRequired(json['race_date'], 'race_date'),
     distanceM: (json['distance_m'] as num?)?.toInt(),
     locationLabel: json['location_label'] as String?,
     locationPoint: json['location_point'],
@@ -3224,8 +3226,8 @@ class RaceListingRow {
     resultsUrl: json['results_url'] as String?,
     submittedBy: json['submitted_by'] as String?,
     isVerified: (json['is_verified'] as bool?) ?? false,
-    createdAt: DateTime.parse(json['created_at'] as String),
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
+    updatedAt: parseIsoStrictRequired(json['updated_at'], 'updated_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -3291,9 +3293,9 @@ class RacePingRow {
   factory RacePingRow.fromJson(Map<String, dynamic> json) => RacePingRow(
     id: json['id'],
     eventId: json['event_id'] as String,
-    instanceStart: DateTime.parse(json['instance_start'] as String),
+    instanceStart: parseIsoStrictRequired(json['instance_start'], 'instance_start'),
     userId: json['user_id'] as String,
-    at: DateTime.parse(json['at'] as String),
+    at: parseIsoStrictRequired(json['at'], 'at'),
     lat: _toDouble(json['lat']),
     lng: _toDouble(json['lng']),
     distanceM: _toDoubleOrNull(json['distance_m']),
@@ -3355,13 +3357,13 @@ class RaceSessionRow {
 
   factory RaceSessionRow.fromJson(Map<String, dynamic> json) => RaceSessionRow(
     eventId: json['event_id'] as String,
-    instanceStart: DateTime.parse(json['instance_start'] as String),
+    instanceStart: parseIsoStrictRequired(json['instance_start'], 'instance_start'),
     status: json['status'] as String,
-    startedAt: json['started_at'] == null ? null : DateTime.parse(json['started_at'] as String),
+    startedAt: parseIsoStrictValue(json['started_at']),
     startedBy: json['started_by'] as String?,
-    finishedAt: json['finished_at'] == null ? null : DateTime.parse(json['finished_at'] as String),
-    createdAt: DateTime.parse(json['created_at'] as String),
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    finishedAt: parseIsoStrictValue(json['finished_at']),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
+    updatedAt: parseIsoStrictRequired(json['updated_at'], 'updated_at'),
     isAutoApprove: (json['is_auto_approve'] as bool?) ?? false,
   );
 
@@ -3488,8 +3490,8 @@ class RecipeRow {
     mealSlot: json['meal_slot'] as String?,
     ingredientCount: (json['ingredient_count'] as num).toInt(),
     externalId: json['external_id'] as String?,
-    lastModifiedAt: DateTime.parse(json['last_modified_at'] as String),
-    createdAt: DateTime.parse(json['created_at'] as String),
+    lastModifiedAt: parseIsoStrictRequired(json['last_modified_at'], 'last_modified_at'),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -3554,7 +3556,7 @@ class RouteConditionRow {
     lat: _toDoubleOrNull(json['lat']),
     lng: _toDoubleOrNull(json['lng']),
     positionM: _toDoubleOrNull(json['position_m']),
-    createdAt: DateTime.parse(json['created_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -3623,8 +3625,8 @@ class RouteMarkerRow {
     lng: _toDouble(json['lng']),
     positionM: _toDoubleOrNull(json['position_m']),
     meta: json['meta'],
-    createdAt: DateTime.parse(json['created_at'] as String),
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
+    updatedAt: parseIsoStrictRequired(json['updated_at'], 'updated_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -3683,7 +3685,7 @@ class RoutePhotoRow {
     thumb512Path: json['thumb_512_path'] as String?,
     caption: json['caption'] as String?,
     positionIdx: (json['position_idx'] as num).toInt(),
-    createdAt: DateTime.parse(json['created_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -3734,8 +3736,8 @@ class RouteReviewRow {
     userId: json['user_id'] as String,
     rating: (json['rating'] as num).toInt(),
     comment: json['comment'] as String?,
-    createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
-    updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
+    createdAt: parseIsoStrictValue(json['created_at']),
+    updatedAt: parseIsoStrictValue(json['updated_at']),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -3834,11 +3836,11 @@ class RouteRow {
     surface: json['surface'] as String?,
     isPublic: json['is_public'] as bool?,
     slug: json['slug'] as String?,
-    createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
-    updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
+    createdAt: parseIsoStrictValue(json['created_at']),
+    updatedAt: parseIsoStrictValue(json['updated_at']),
     startPoint: json['start_point'],
     tags: (json['tags'] as List<dynamic>).cast<String>(),
-    featuredAt: json['featured_at'] == null ? null : DateTime.parse(json['featured_at'] as String),
+    featuredAt: parseIsoStrictValue(json['featured_at']),
     runCount: (json['run_count'] as num).toInt(),
     clubId: json['club_id'] as String?,
     isStarred: (json['is_starred'] as bool?) ?? false,
@@ -3911,8 +3913,8 @@ class RunCommentRow {
     authorId: json['author_id'] as String,
     parentCommentId: json['parent_comment_id'] as String?,
     body: json['body'] as String,
-    createdAt: DateTime.parse(json['created_at'] as String),
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
+    updatedAt: parseIsoStrictRequired(json['updated_at'], 'updated_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -3947,7 +3949,7 @@ class RunGearRow {
   factory RunGearRow.fromJson(Map<String, dynamic> json) => RunGearRow(
     runId: json['run_id'] as String,
     gearId: json['gear_id'] as String,
-    createdAt: DateTime.parse(json['created_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -3978,7 +3980,7 @@ class RunKudosRow {
   factory RunKudosRow.fromJson(Map<String, dynamic> json) => RunKudosRow(
     userId: json['user_id'] as String,
     runId: json['run_id'] as String,
-    givenAt: DateTime.parse(json['given_at'] as String),
+    givenAt: parseIsoStrictRequired(json['given_at'], 'given_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -4035,12 +4037,12 @@ class RunMatchedTrackRow {
     status: json['status'] as String,
     matchedTrackUrl: json['matched_track_url'] as String?,
     attempts: (json['attempts'] as num).toInt(),
-    matchedAt: json['matched_at'] == null ? null : DateTime.parse(json['matched_at'] as String),
+    matchedAt: parseIsoStrictValue(json['matched_at']),
     algorithm: json['algorithm'] as String?,
     algorithmVersion: json['algorithm_version'] as String?,
     errorMessage: json['error_message'] as String?,
-    createdAt: DateTime.parse(json['created_at'] as String),
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
+    updatedAt: parseIsoStrictRequired(json['updated_at'], 'updated_at'),
     sourceTrackUrl: json['source_track_url'] as String?,
   );
 
@@ -4105,10 +4107,10 @@ class RunPhotoRow {
     storagePath: json['storage_path'] as String,
     caption: json['caption'] as String?,
     positionIdx: (json['position_idx'] as num).toInt(),
-    createdAt: DateTime.parse(json['created_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
     thumb512Path: json['thumb_512_path'] as String?,
     eventId: json['event_id'] as String?,
-    eventInstanceStart: json['event_instance_start'] == null ? null : DateTime.parse(json['event_instance_start'] as String),
+    eventInstanceStart: parseIsoStrictValue(json['event_instance_start']),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -4209,15 +4211,15 @@ class RunRow {
   factory RunRow.fromJson(Map<String, dynamic> json) => RunRow(
     id: json['id'] as String,
     userId: json['user_id'] as String,
-    startedAt: DateTime.parse(json['started_at'] as String),
+    startedAt: parseIsoStrictRequired(json['started_at'], 'started_at'),
     durationS: (json['duration_s'] as num).toInt(),
     distanceM: _toDouble(json['distance_m']),
     routeId: json['route_id'] as String?,
     source: json['source'] as String,
     externalId: json['external_id'] as String?,
     metadata: json['metadata'],
-    createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
-    updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
+    createdAt: parseIsoStrictValue(json['created_at']),
+    updatedAt: parseIsoStrictValue(json['updated_at']),
     trackUrl: json['track_url'] as String?,
     isPublic: json['is_public'] as bool?,
     eventId: json['event_id'] as String?,
@@ -4230,7 +4232,7 @@ class RunRow {
     fastest10kS: (json['fastest_10k_s'] as num?)?.toInt(),
     fastestHalfMarathonS: (json['fastest_half_marathon_s'] as num?)?.toInt(),
     fastestMarathonS: (json['fastest_marathon_s'] as num?)?.toInt(),
-    concludedAt: json['concluded_at'] == null ? null : DateTime.parse(json['concluded_at'] as String),
+    concludedAt: parseIsoStrictValue(json['concluded_at']),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -4305,12 +4307,12 @@ class SafetyContactRow {
     ownerId: json['owner_id'] as String,
     contactUserId: json['contact_user_id'] as String?,
     contactEmail: json['contact_email'] as String,
-    confirmedAt: json['confirmed_at'] == null ? null : DateTime.parse(json['confirmed_at'] as String),
+    confirmedAt: parseIsoStrictValue(json['confirmed_at']),
     confirmToken: json['confirm_token'] as String,
-    createdAt: DateTime.parse(json['created_at'] as String),
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
+    updatedAt: parseIsoStrictRequired(json['updated_at'], 'updated_at'),
     contactPhone: json['contact_phone'] as String?,
-    smsOptInAt: json['sms_opt_in_at'] == null ? null : DateTime.parse(json['sms_opt_in_at'] as String),
+    smsOptInAt: parseIsoStrictValue(json['sms_opt_in_at']),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -4348,7 +4350,7 @@ class SavedRouteRow {
   factory SavedRouteRow.fromJson(Map<String, dynamic> json) => SavedRouteRow(
     userId: json['user_id'] as String,
     routeId: json['route_id'] as String,
-    savedAt: DateTime.parse(json['saved_at'] as String),
+    savedAt: parseIsoStrictRequired(json['saved_at'], 'saved_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -4394,8 +4396,8 @@ class SegmentEffortRow {
     runId: json['run_id'] as String,
     userId: json['user_id'] as String,
     timeSeconds: _toDouble(json['time_seconds']),
-    startedAt: DateTime.parse(json['started_at'] as String),
-    createdAt: DateTime.parse(json['created_at'] as String),
+    startedAt: parseIsoStrictRequired(json['started_at'], 'started_at'),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -4449,7 +4451,7 @@ class SegmentRow {
     startDistanceM: _toDouble(json['start_distance_m']),
     endDistanceM: _toDouble(json['end_distance_m']),
     lengthM: _toDoubleOrNull(json['length_m']),
-    createdAt: DateTime.parse(json['created_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
     authorId: json['author_id'] as String?,
   );
 
@@ -4620,8 +4622,8 @@ class SessionPlanRow {
     equipment: json['equipment'] as String?,
     estDurationMin: (json['est_duration_min'] as num?)?.toInt(),
     isPublic: (json['is_public'] as bool?) ?? false,
-    createdAt: DateTime.parse(json['created_at'] as String),
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    createdAt: parseIsoStrictRequired(json['created_at'], 'created_at'),
+    updatedAt: parseIsoStrictRequired(json['updated_at'], 'updated_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -4720,15 +4722,15 @@ class TrainingPlanRow {
     goalEvent: json['goal_event'] as String,
     goalDistanceM: _toDouble(json['goal_distance_m']),
     goalTimeSeconds: (json['goal_time_seconds'] as num?)?.toInt(),
-    startDate: DateTime.parse(json['start_date'] as String),
-    endDate: DateTime.parse(json['end_date'] as String),
+    startDate: parseIsoStrictRequired(json['start_date'], 'start_date'),
+    endDate: parseIsoStrictRequired(json['end_date'], 'end_date'),
     daysPerWeek: (json['days_per_week'] as num).toInt(),
     vdot: _toDoubleOrNull(json['vdot']),
     current5kSeconds: (json['current_5k_seconds'] as num?)?.toInt(),
     status: json['status'] as String,
     notes: json['notes'] as String?,
-    createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
-    updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
+    createdAt: parseIsoStrictValue(json['created_at']),
+    updatedAt: parseIsoStrictValue(json['updated_at']),
     source: json['source'] as String,
     rules: json['rules'],
     isTemplate: (json['is_template'] as bool?) ?? false,
@@ -4784,7 +4786,7 @@ class UserCoachUsageRow {
 
   factory UserCoachUsageRow.fromJson(Map<String, dynamic> json) => UserCoachUsageRow(
     userId: json['user_id'] as String,
-    usageDate: DateTime.parse(json['usage_date'] as String),
+    usageDate: parseIsoStrictRequired(json['usage_date'], 'usage_date'),
     messageCount: (json['message_count'] as num).toInt(),
   );
 
@@ -4831,8 +4833,8 @@ class UserDeviceSettingRow {
     platform: json['platform'] as String,
     label: json['label'] as String?,
     prefs: json['prefs'],
-    lastSeenAt: DateTime.parse(json['last_seen_at'] as String),
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    lastSeenAt: parseIsoStrictRequired(json['last_seen_at'], 'last_seen_at'),
+    updatedAt: parseIsoStrictRequired(json['updated_at'], 'updated_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -4867,7 +4869,7 @@ class UserFollowRow {
   factory UserFollowRow.fromJson(Map<String, dynamic> json) => UserFollowRow(
     followerId: json['follower_id'] as String,
     followeeId: json['followee_id'] as String,
-    followedAt: DateTime.parse(json['followed_at'] as String),
+    followedAt: parseIsoStrictRequired(json['followed_at'], 'followed_at'),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -4956,16 +4958,16 @@ class UserProfileRow {
     parkrunNumber: json['parkrun_number'] as String?,
     preferredUnit: json['preferred_unit'] as String?,
     subscriptionTier: json['subscription_tier'] as String?,
-    subscriptionAt: json['subscription_at'] == null ? null : DateTime.parse(json['subscription_at'] as String),
-    createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
-    billingIssueAt: json['billing_issue_at'] == null ? null : DateTime.parse(json['billing_issue_at'] as String),
+    subscriptionAt: parseIsoStrictValue(json['subscription_at']),
+    createdAt: parseIsoStrictValue(json['created_at']),
+    billingIssueAt: parseIsoStrictValue(json['billing_issue_at']),
     gender: json['gender'] as String?,
-    dateOfBirth: json['date_of_birth'] == null ? null : DateTime.parse(json['date_of_birth'] as String),
-    coachConsentAt: json['coach_consent_at'] == null ? null : DateTime.parse(json['coach_consent_at'] as String),
-    healthDataConsentAt: json['health_data_consent_at'] == null ? null : DateTime.parse(json['health_data_consent_at'] as String),
-    ageConfirmedAt: json['age_confirmed_at'] == null ? null : DateTime.parse(json['age_confirmed_at'] as String),
-    termsAcceptedAt: json['terms_accepted_at'] == null ? null : DateTime.parse(json['terms_accepted_at'] as String),
-    onboardedAt: json['onboarded_at'] == null ? null : DateTime.parse(json['onboarded_at'] as String),
+    dateOfBirth: parseIsoStrictValue(json['date_of_birth']),
+    coachConsentAt: parseIsoStrictValue(json['coach_consent_at']),
+    healthDataConsentAt: parseIsoStrictValue(json['health_data_consent_at']),
+    ageConfirmedAt: parseIsoStrictValue(json['age_confirmed_at']),
+    termsAcceptedAt: parseIsoStrictValue(json['terms_accepted_at']),
+    onboardedAt: parseIsoStrictValue(json['onboarded_at']),
     heightCm: _toDoubleOrNull(json['height_cm']),
     shadowHidden: (json['shadow_hidden'] as bool?) ?? false,
     tierUpdatedEventTs: (json['tier_updated_event_ts'] as num?)?.toInt(),
@@ -5025,7 +5027,7 @@ class UserSettingRow {
   factory UserSettingRow.fromJson(Map<String, dynamic> json) => UserSettingRow(
     userId: json['user_id'] as String,
     prefs: json['prefs'],
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    updatedAt: parseIsoStrictRequired(json['updated_at'], 'updated_at'),
     discoverableArea: json['discoverable_area'],
     discoverableAreaLabel: json['discoverable_area_label'] as String?,
   );

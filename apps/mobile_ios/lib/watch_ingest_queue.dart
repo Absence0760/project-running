@@ -277,7 +277,7 @@ cm.Run runFromWatchPayload(Map<String, dynamic> raw) {
     // for the life of the install, inflating pendingCount with a phantom run.
     throw const FormatException('watch payload has no id');
   }
-  final startedAt = DateTime.parse(raw['started_at'] as String);
+  final startedAt = cm.parseIsoStrictRequired(raw['started_at'], 'started_at');
   final durationS = (raw['duration_s'] as num).toInt();
   final distanceM = (raw['distance_m'] as num).toDouble();
   final source = raw['source'] as String? ?? 'watch';
@@ -302,9 +302,7 @@ cm.Run runFromWatchPayload(Map<String, dynamic> raw) {
           lat: (p['lat'] as num).toDouble(),
           lng: (p['lng'] as num).toDouble(),
           elevationMetres: (p['ele'] as num?)?.toDouble(),
-          timestamp: (p['ts'] as String?) != null
-              ? DateTime.tryParse(p['ts'] as String)
-              : null,
+          timestamp: cm.parseIsoStrictValue(p['ts']),
           // Per-point heart rate: both Apple Watch (HKLiveWorkoutBuilder)
           // and Wear OS (Health Services) ship a `bpm` field per
           // sample. `Waypoint.bpm` is `int?` so floor any decimal that

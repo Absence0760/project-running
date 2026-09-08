@@ -12,6 +12,12 @@
 /// the bag as `run_goals` (array) with a new registered key.
 
 import type { Run } from '../types';
+
+/// What a goal is evaluated over: when the run happened, how far, how long,
+/// and whether it was a bike ride (excluded from the pace targets). A
+/// structural bound rather than `Run` for the reason `plan_ramp`'s
+/// `RunForVolume` is one — the dashboard's read is ten columns, and demanding
+/// the whole row would make the caller assert one it never fetched.
 import { paceMinutesSeconds } from '../format/pace_format';
 
 export type GoalPeriod = 'week' | 'month';
@@ -190,7 +196,7 @@ export function formatPaceSecPerKm(secPerKm: number): string {
 /// completion flag.
 export function evaluateGoal(
 	goal: RunGoal,
-	runs: Run[],
+	runs: readonly Pick<Run, 'started_at' | 'distance_m' | 'duration_s' | 'activity_type'>[],
 	now: Date,
 	weekStartDay: 'monday' | 'sunday' = 'monday',
 ): GoalProgress {

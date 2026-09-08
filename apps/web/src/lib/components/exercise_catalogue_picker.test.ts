@@ -221,3 +221,49 @@ test('the input array is not reordered in place', () => {
 		['e1', 'e2', 'e3'],
 	);
 });
+
+test('an unavailable catalogue offers no create, whatever the query says', () => {
+	// The whole point of the third state: `canCreate` is a claim about what the
+	// catalogue does NOT hold, and a list that failed to load supports no such
+	// claim. Against the same catalogue and the same query, the only difference
+	// is whether the read answered.
+	const known = cataloguePickerView(CATALOGUE, { query: 'Front Squat', category: 'all' });
+	assert.equal(known.canCreate, true);
+	assert.equal(known.unavailable, false);
+
+	const unknown = cataloguePickerView(CATALOGUE, {
+		query: 'Front Squat',
+		category: 'all',
+		unavailable: true,
+	});
+	assert.equal(unknown.canCreate, false, 'a name cannot be proved free against a list that failed');
+	assert.equal(unknown.unavailable, true);
+});
+
+test('an unavailable catalogue still lists what it has', () => {
+	// A stale entry binds its id correctly, so hiding the rows would be a second
+	// untruth on top of the first — the notice is what carries the caveat.
+	const view = cataloguePickerView(CATALOGUE, {
+		query: 'squat',
+		category: 'all',
+		unavailable: true,
+	});
+	assert.deepEqual(
+		view.matches.map((e) => e.id),
+		['e2'],
+	);
+});
+
+test('an unavailable catalogue reports itself even on a blank query', () => {
+	// The blank-query branch returns early, so it needs the flag explicitly or
+	// the notice disappears the moment the search box is cleared.
+	const view = cataloguePickerView(CATALOGUE, { query: '', category: 'all', unavailable: true });
+	assert.equal(view.unavailable, true);
+	assert.equal(view.canCreate, false);
+});
+
+test('an absent unavailable flag reads as available', () => {
+	const view = cataloguePickerView(CATALOGUE, { query: 'Front Squat', category: 'all' });
+	assert.equal(view.unavailable, false);
+	assert.equal(view.canCreate, true);
+});

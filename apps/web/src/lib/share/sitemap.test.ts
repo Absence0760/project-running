@@ -9,26 +9,26 @@ import {
 	learnEntries,
 	normaliseBase,
 	priorityForRunCount,
-	xmlEscape,
 } from './sitemap';
+import { escapeHtml } from '../util/html_escape';
 import { buildClubShareCanonical } from './share_club_meta';
 import { buildEventShareCanonical } from './share_event_meta';
 import { buildRaceShareCanonical } from './share_race_meta';
 import { buildRouteShareCanonical, buildRunShareCanonical } from './share_meta';
 
-// ---------------- xmlEscape ----------------
+// ---------------- escapeHtml ----------------
 
-test('xmlEscape — escapes the five reserved characters', () => {
-	assert.equal(xmlEscape(`a<b>c&d"e'f`), 'a&lt;b&gt;c&amp;d&quot;e&apos;f');
+test('escapeHtml — escapes the five reserved characters', () => {
+	assert.equal(escapeHtml(`a<b>c&d"e'f`), 'a&lt;b&gt;c&amp;d&quot;e&#39;f');
 });
 
-test('xmlEscape — passes through plain text + uuids untouched', () => {
+test('escapeHtml — passes through plain text + uuids untouched', () => {
 	assert.equal(
-		xmlEscape('550e8400-e29b-41d4-a716-446655440000'),
+		escapeHtml('550e8400-e29b-41d4-a716-446655440000'),
 		'550e8400-e29b-41d4-a716-446655440000',
 	);
 	assert.equal(
-		xmlEscape('https://threkir.com/share/run/abc'),
+		escapeHtml('https://threkir.com/share/run/abc'),
 		'https://threkir.com/share/run/abc',
 	);
 });

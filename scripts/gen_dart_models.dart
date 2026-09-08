@@ -528,6 +528,8 @@ String _emit(Map<String, Map<String, _Column>> schema, Set<String> enums) {
     ..writeln('// Do not hand-edit. To add a column, add it to the SQL')
     ..writeln('// migration, rerun the generator, and commit both files.')
     ..writeln()
+    ..writeln("import '../iso_parse.dart';")
+    ..writeln()
     ..writeln(_doubleHelpers);
 
   final tableOrder = _tables.toList()..sort();
@@ -641,9 +643,18 @@ String _fromJsonExpr(_Column c, Set<String> enums) {
           ? '$key as bool?'
           : '($key as bool?) ?? false';
     case 'DateTime':
+      // Never `DateTime.parse`: it rolls an impossible component through the
+      // calendar rather than refusing it, so an unusable column yields a
+      // confident WRONG instant no caller can tell from a real one. The strict
+      // reader refuses instead (decisions § 1344 / § 1377). A nullable column
+      // degrades to `null` — the same shape `_toDoubleOrNull` takes, and an
+      // answer the field can already hold — while a required one throws, as
+      // the cast it replaces already did; there is no DateTime analogue of
+      // `double.nan` to stand for "no answer", and a sentinel instant would be
+      // exactly the plausible-looking lie § 985 rejected for numbers.
       return c.nullable
-          ? '$key == null ? null : DateTime.parse($key as String)'
-          : 'DateTime.parse($key as String)';
+          ? 'parseIsoStrictValue($key)'
+          : "parseIsoStrictRequired($key, '${c.name}')";
     case 'Map<String, dynamic>':
       return '$key as Map<String, dynamic>$nullCast';
     case 'dynamic':

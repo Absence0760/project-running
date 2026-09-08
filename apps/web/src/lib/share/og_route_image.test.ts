@@ -4,8 +4,8 @@ import {
 	buildMetaLine,
 	buildRouteOgSvg,
 	truncate,
-	xmlEscape,
 } from './og_route_image';
+import { escapeHtml } from '../util/html_escape';
 
 const sampleTrack = [
 	{ lat: 51.5, lng: -0.1 },
@@ -93,6 +93,6 @@ test('truncate — uses an ellipsis when over the cap', () => {
 	assert.equal(truncate(s, 10), 'this stri…');
 });
 
-test('xmlEscape — escapes the five reserved characters', () => {
-	assert.equal(xmlEscape(`a<b>&c"d'e`), 'a&lt;b&gt;&amp;c&quot;d&apos;e');
+test('escapeHtml — escapes the five reserved characters', () => {
+	assert.equal(escapeHtml(`a<b>&c"d'e`), 'a&lt;b&gt;&amp;c&quot;d&#39;e');
 });

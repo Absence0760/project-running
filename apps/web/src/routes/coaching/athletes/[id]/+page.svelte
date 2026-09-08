@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { compareOrdinal } from '$lib/util/ordinal_compare';
 	import { page } from '$app/stores';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import {
@@ -165,7 +166,7 @@
 		if (!overview) return [] as PlanWorkout[];
 		const sorted = [...overview.workouts]
 			.filter((w) => w.kind !== 'rest')
-			.sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date));
+			.sort((a, b) => compareOrdinal(a.scheduled_date, b.scheduled_date));
 		const today = new Date();
 		const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 		const idx = sorted.findIndex((w) => w.scheduled_date >= todayISO);

@@ -775,7 +775,8 @@ class BackupService {
           try {
             final run = cm.Run(
               id: newId,
-              startedAt: DateTime.parse(r['started_at'] as String),
+              startedAt:
+                  cm.parseIsoStrictRequired(r['started_at'], 'started_at'),
               duration: Duration(seconds: (r['duration_s'] as num).toInt()),
               distanceMetres: (r['distance_m'] as num).toDouble(),
               track: track,
@@ -796,9 +797,7 @@ class BackupService {
                 m['activity_type'] ??= 'run';
                 return m;
               }(),
-              createdAt: r['created_at'] != null
-                  ? DateTime.tryParse(r['created_at'] as String)
-                  : null,
+              createdAt: cm.parseIsoStrictValue(r['created_at']),
             );
             await runStore.save(run);
             result.runsImported++;
@@ -865,9 +864,7 @@ class BackupService {
               isStarred: r['is_starred'] == true,
               description: r['description'] as String?,
               clubId: r['club_id'] as String?,
-              createdAt: r['created_at'] != null
-                  ? DateTime.tryParse(r['created_at'] as String)
-                  : null,
+              createdAt: cm.parseIsoStrictValue(r['created_at']),
             );
             await routeStore.save(route);
             result.routesImported++;
@@ -919,9 +916,7 @@ class BackupService {
               lat: (w['lat'] as num).toDouble(),
               lng: (w['lng'] as num).toDouble(),
               elevationMetres: (w['ele'] as num?)?.toDouble(),
-              timestamp: w['ts'] is String
-                  ? DateTime.tryParse(w['ts'] as String)
-                  : null,
+              timestamp: cm.parseIsoStrictValue(w['ts']),
             ),
       ];
     } catch (e) {

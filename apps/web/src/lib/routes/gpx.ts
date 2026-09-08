@@ -1,6 +1,9 @@
 /**
  * Generate a GPX XML string from route coordinates and metadata.
  */
+
+import { escapeHtml } from '../util/html_escape';
+
 export function toGpx(
 	name: string,
 	coordinates: [number, number][],
@@ -21,11 +24,11 @@ export function toGpx(
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
   <metadata>
-    <name>${escapeXml(name)}</name>
+    <name>${escapeHtml(name)}</name>
     <time>${now}</time>
   </metadata>
   <trk>
-    <name>${escapeXml(name)}</name>
+    <name>${escapeHtml(name)}</name>
     <trkseg>
 ${trackpoints}
     </trkseg>
@@ -60,11 +63,11 @@ export function toRunGpx(
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
   <metadata>
-    <name>${escapeXml(name)}</name>
+    <name>${escapeHtml(name)}</name>
     <time>${startedAtIso}</time>
   </metadata>
   <trk>
-    <name>${escapeXml(name)}</name>
+    <name>${escapeHtml(name)}</name>
     <trkseg>
 ${trackpoints}
     </trkseg>
@@ -100,9 +103,9 @@ export function toKml(
 	return `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
-    <name>${escapeXml(name)}</name>
+    <name>${escapeHtml(name)}</name>
     <Placemark>
-      <name>${escapeXml(name)}</name>
+      <name>${escapeHtml(name)}</name>
       <Style>
         <LineStyle>
           <color>ffff0000</color>
@@ -118,13 +121,4 @@ export function toKml(
     </Placemark>
   </Document>
 </kml>`;
-}
-
-function escapeXml(str: string): string {
-	return str
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/"/g, '&quot;')
-		.replace(/'/g, '&apos;');
 }

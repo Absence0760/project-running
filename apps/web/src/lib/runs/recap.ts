@@ -12,6 +12,27 @@ import type { Run } from '../types';
 import { computeRunStreaks } from './streaks';
 import { storedElevationGainM } from './key_stats';
 
+/// What the recap aggregator reads off a run. A structural bound rather than
+/// `Run`, matching `plan_ramp`'s `RunForVolume` and `consistency`'s
+/// `ConsistencyActivity`: the recap read is nine columns, and declaring the
+/// whole row made the fetch assert a shape it had not selected (§ 1330).
+///
+/// The Dart half takes `List<Run>` and cannot express this — Dart has no
+/// structural typing — but reads the same eight fields, so the pair's
+/// BEHAVIOUR is unchanged and only the TS declaration narrows. Same
+/// idiomatic-shape carve-out `password_change` records for its union-vs-class.
+export type RunForRecap = Pick<
+	Run,
+	| 'id'
+	| 'started_at'
+	| 'distance_m'
+	| 'duration_s'
+	| 'elevation_gain_m'
+	| 'activity_type'
+	| 'route_id'
+	| 'metadata'
+>;
+
 export interface RecapMonthBucket {
 	/** 1-based month (1=Jan … 12=Dec). */
 	month: number;
@@ -233,12 +254,12 @@ function currentAnchor(periodEnd: Date, now: Date): Date {
  * even though it crossed into the next year).
  */
 export function buildYearInRunningRecap(
-	runs: Run[],
+	runs: readonly RunForRecap[],
 	year: number,
 	extras: RecapExtras = {},
 	now: Date = new Date(),
 ): YearInRunningRecap {
-	const inYear: Run[] = [];
+	const inYear: RunForRecap[] = [];
 	for (const r of runs) {
 		const d = new Date(r.started_at);
 		if (isWithinYear(d, year)) inYear.push(r);
@@ -407,7 +428,7 @@ export function buildYearInRunningRecap(
  * internally, and the streak still anchors at the end of the month.
  */
 export function buildMonthInRunningRecap(
-	runs: Run[],
+	runs: readonly RunForRecap[],
 	year: number,
 	month: number,
 	extras: RecapExtras = {},
@@ -421,7 +442,7 @@ export function buildMonthInRunningRecap(
 		runCount: 0,
 	};
 
-	const inMonth: Run[] = [];
+	const inMonth: RunForRecap[] = [];
 	for (const r of runs) {
 		const d = new Date(r.started_at);
 		if (d.getFullYear() === year && d.getMonth() + 1 === month) inMonth.push(r);

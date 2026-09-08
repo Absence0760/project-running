@@ -1,13 +1,12 @@
 <script lang="ts">
 	import { predictRaceLadder, type EffortForPrediction } from '$lib/training/race_predictor';
-	import { qualifyingRuns } from '$lib/training/fitness';
+	import { qualifyingRuns, type RunForFitness } from '$lib/training/fitness';
 	import { fmtSplitTime } from '$lib/runs/race_day';
 	import { fmtKm, fmtPace } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
-	import type { Run } from '$lib/types';
 
 	interface Props {
-		runs: Run[];
+		runs: readonly RunForFitness[];
 	}
 	let { runs }: Props = $props();
 

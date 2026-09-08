@@ -20,6 +20,24 @@
 
 import type { Run } from '../types';
 
+/// The nine columns a recap run carries — the same set `core/data`'s
+/// `RECAP_RUN_COLUMNS` names and `RecapRun` is `Pick`ed from. Restated here
+/// rather than imported because `core/data` imports THIS module, so the
+/// dependency cannot run the other way; the two are structurally identical and
+/// `recap_window.test.ts` pins that a `RecapRun` flows through unchanged.
+export type RecapWindowRun = Pick<
+	Run,
+	| 'id'
+	| 'started_at'
+	| 'distance_m'
+	| 'duration_s'
+	| 'elevation_gain_m'
+	| 'activity_type'
+	| 'route_id'
+	| 'source'
+	| 'metadata'
+>;
+
 export interface RecapWindow {
 	/** Inclusive lower bound on `started_at`, as an ISO instant. */
 	fromIso: string;
@@ -58,20 +76,18 @@ export function isInRecapWindow(startedAt: string, win: RecapWindow): boolean {
  * future reader who forgets that gets an obviously-empty run rather than a
  * quietly wrong total.
  */
-function streakOnlyRun(startedAt: string): Run {
+function streakOnlyRun(startedAt: string): RecapWindowRun {
 	return {
 		id: `streak:${startedAt}`,
-		user_id: '',
 		started_at: startedAt,
 		distance_m: 0,
 		duration_s: 0,
 		elevation_gain_m: 0,
 		route_id: null,
-		track_url: null,
 		source: 'app',
 		activity_type: 'run',
 		metadata: null,
-	} as unknown as Run;
+	};
 }
 
 /**
@@ -85,10 +101,10 @@ function streakOnlyRun(startedAt: string): Run {
  * identical to the one built from the full rows.
  */
 export function mergeRecapRuns(
-	windowed: Run[],
+	windowed: readonly RecapWindowRun[],
 	allStartedAt: readonly string[],
 	win: RecapWindow,
-): Run[] {
+): RecapWindowRun[] {
 	const out = [...windowed];
 	for (const startedAt of allStartedAt) {
 		if (!isInRecapWindow(startedAt, win)) out.push(streakOnlyRun(startedAt));
