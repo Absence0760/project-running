@@ -15,8 +15,12 @@ import {
   EXPECTED_SURVIVORS,
   FILTERED_RPC_ARGUMENTS,
   STAMPED_VALUE_ASSERTIONS,
+  UNOBSERVED_RPC_WRITES,
   assertionDescriptions,
+  assertionReads,
   assignedColumns,
+  bareWriterCall,
+  byFunctionName,
   conditionallyStampedColumns,
   descriptionOf,
   droppedSignatures,
@@ -46,6 +50,8 @@ import {
   splitArgs,
   statementEnd,
   statementStart,
+  statementsIn,
+  writingFunctions,
   throwsPinsItsError,
   verdictFor,
 } from './check_pgtap_refusal_assertions.mjs';
@@ -1255,6 +1261,126 @@ test('every pgtap positive handing a value to a filtering RPC is registered', ()
 			`FILTERED_RPC_ARGUMENTS entry ${entry.file} / "${entry.description}" is stale`,
 		);
 	}
+});
+
+// ── ...and a positive whose whole SQL is one call to a writing function ──────
+
+test('writingFunctions reads what a body writes, including what it computes', () => {
+	const write = (/** @type {string} */ body) =>
+		`create function f() returns void language plpgsql as $$\nbegin\n${body}\nend;\n$$;`;
+	const only = (/** @type {string} */ body) =>
+		writingFunctions([{ name: '001.sql', text: write(body) }]).get('f/0')?.tables ?? [];
+	// A function that plants no parameter still writes a row, which is what this
+	// population is about — writerFunctions would not see this one at all.
+	assert.deepEqual(only('  insert into audit_log (at) values (now());'), ['audit_log']);
+	assert.deepEqual(only('  update t set seen_at = now() where id = 1;'), ['t']);
+	assert.deepEqual(only('  update t x set seen_at = now() where x.id = 1;'), ['t']);
+	assert.deepEqual(only('  delete from t where id = 1;'), ['t']);
+	// The identifier after UPDATE in an upsert's conflict arm is the SET clause,
+	// not a table called `set`.
+	assert.deepEqual(
+		only("  insert into t (id) values (1) on conflict (id) do update set seen_at = now();"),
+		['t'],
+	);
+	// A write named only in a comment or a message is not a write.
+	assert.deepEqual(only("  raise notice 'would insert into t (id)';"), []);
+	assert.deepEqual(only('  -- insert into t (id) values (1);\n  perform 1;'), []);
+});
+
+test('statementsIn splits on the semicolons that are code', () => {
+	assert.deepEqual(statementsIn('  select f(1) ;  '), ['select f(1)']);
+	assert.deepEqual(statementsIn('set local role x; select f(1)'), ['set local role x', 'select f(1)']);
+	// A semicolon inside a literal is payload — reading it as a statement break
+	// would make a one-statement assertion look like two and drop it from the
+	// population without saying so.
+	assert.deepEqual(statementsIn("select f('a; b')"), ["select f('a; b')"]);
+});
+
+test('bareWriterCall selects only an assertion whose whole SQL is that call', () => {
+	const byName = byFunctionName(
+		new Map([
+			['f/2', { name: 'f', params: ['p_a', 'p_b'], tables: ['t'] }],
+			['g/1', { name: 'g', params: ['p_a'], tables: ['u'] }],
+		]),
+	);
+	assert.equal(bareWriterCall('select f(1, 2)', byName)?.name, 'f');
+	assert.equal(bareWriterCall('  select * from f(1, 2)  ', byName)?.name, 'f');
+	// A call that is one statement among several is not what this scan is about:
+	// the assertion around it is claiming something about the sequence.
+	assert.equal(bareWriterCall('select f(1, 2); select 1', byName), null);
+	// Nor is a statement that merely mentions the function.
+	assert.equal(bareWriterCall('insert into t (a) values (f(1, 2))', byName), null);
+	assert.equal(bareWriterCall('select h(1)', byName), null);
+	// An overload the arity cannot separate resolves to none, so the guard asks
+	// about a write set no call site may have reached.
+	const two = byFunctionName(
+		new Map([
+			['k/2', { name: 'k', params: ['p_a', 'p_b'], tables: ['t'] }],
+			['k/3', { name: 'k', params: ['p_a', 'p_b', 'p_c'], tables: ['u'] }],
+		]),
+	);
+	assert.equal(bareWriterCall('select k(1)', two), null);
+	assert.equal(bareWriterCall('select k(1, 2)', two)?.tables[0], 't');
+});
+
+test('assertionReads keeps the offset, so an assertion cannot be its own witness', () => {
+	const text = "select lives_ok($$ select f(1) $$, 'writes');\nselect is((select count(*) from t), 1, 'reads');";
+	const reads = assertionReads(text);
+	const witness = reads.filter((r) => r.relations.has('t'));
+	assert.equal(witness.length, 1);
+	assert.notEqual(witness[0].offset, text.indexOf('lives_ok'));
+});
+
+test('every bare writer call in the suite is observed or registered', () => {
+	// 510 again: the population has to be non-empty or a broken parse reads as a
+	// clean suite.
+	const writing = byFunctionName(writingFunctions(readMigrations()));
+	const registry = new Map(UNOBSERVED_RPC_WRITES.map((e) => [`${e.file}\u0000${e.description}`, e]));
+	/** @type {Set<string>} */
+	const matched = new Set();
+	/** @type {string[]} */
+	const offenders = [];
+	let population = 0;
+	for (const file of readdirSync(TESTS_DIR).filter((f) => f.endsWith('.sql'))) {
+		const text = readFileSync(join(TESTS_DIR, file), 'utf8');
+		/** @type {{ offset: number, relations: Set<string> }[] | null} */
+		let reads = null;
+		for (const call of findCalls(text, 'lives_ok')) {
+			const sql = literalOf(call.argv[0]);
+			if (sql === null) continue;
+			const written = bareWriterCall(sql, writing);
+			if (written === null) continue;
+			population += 1;
+			reads ??= assertionReads(text);
+			if (
+				reads.some((r) => r.offset !== call.offset && written.tables.some((t) => r.relations.has(t)))
+			) {
+				continue;
+			}
+			const description = call.argv[1] === undefined ? '' : (descriptionOf(call.argv[1]) ?? '');
+			const key = `${file}\u0000${description}`;
+			const entry = registry.get(key);
+			if (entry === undefined) {
+				offenders.push(`${file}:${call.line}`);
+				continue;
+			}
+			matched.add(key);
+			assert.deepEqual(entry.tables, written.tables, `${entry.file} names a stale write set`);
+			assert.ok(entry.reason.length > 40, `${entry.file} entry needs a real reason`);
+			if (entry.readBack === undefined) continue;
+			assert.ok(
+				assertionDescriptions(text).has(entry.readBack),
+				`${entry.file} names a read-back no assertion carries: "${entry.readBack}"`,
+			);
+		}
+	}
+	assert.ok(population >= 40, `only ${population} bare writer calls found`);
+	assert.deepEqual(offenders, []);
+	assert.deepEqual(
+		UNOBSERVED_RPC_WRITES.filter((e) => !matched.has(`${e.file}\u0000${e.description}`)),
+		[],
+		'a registry entry that no longer names an unobserved call excuses nothing',
+	);
 });
 
 test('the money path and the two ping positives are read back, not excused by prose', () => {

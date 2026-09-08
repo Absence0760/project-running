@@ -1718,9 +1718,10 @@ export function writerFunctions(migrations) {
  * `parameterLandings` applies to a column list and a values list of different
  * lengths. An exact arity match outranks a wider signature reached on defaults,
  * which is Postgres's own preference.
- * @param {WriterFunction[]} candidates
+ * @template {{ params: string[] }} T
+ * @param {T[]} candidates
  * @param {string[]} args
- * @returns {WriterFunction | null}
+ * @returns {T | null}
  */
 export function resolveOverload(candidates, args) {
   const named = args.flatMap((a) => {
@@ -1831,6 +1832,173 @@ export const FILTERED_RPC_ARGUMENTS = [
       'refused by the first one\'s open job. `p_user_id` reaches `jobs.payload` only inside a ' +
       '`jsonb_build_object`, so the payload was never this assertion\'s claim, and the ' +
       '`data_export_jobs` row it IS about is read back by the assertions around it.',
+  },
+];
+
+// ── ...and a positive whose whole SQL is one call to a writing function ──────
+//
+// The three scans above all ask the same question about a VALUE: is the thing
+// this assertion supplied the thing that reached the table. None of them asks
+// the question one step before it — whether anything reached the table at all.
+//
+// A `lives_ok` whose entire SQL is `select <fn>(…)` measures exactly one thing:
+// that no error was raised. A function that authorised the caller and then
+// wrote nothing satisfies it, and so does one whose write was silently
+// swallowed by an `on conflict do nothing` or an early `return`. That is
+// decisions 741's inversion in its positive form — the assertion passes on the
+// absence of the thing it exists to prove — and `checkpoint_crossings_test`'s
+// organiser-write assertion was that shape until it was repaired by hand rather
+// than by a guard.
+//
+// The discriminator available to a static scan is whether the SUITE ever looks:
+// some assertion in the same file must READ one of the tables the function
+// writes. That is weaker than pinning the row to this call — a read before the
+// write counts — and deliberately so, because the alternative is a vocabulary
+// of reader RPCs, which is a guard keyed on spelling. What it does catch is the
+// file that calls a writer and never observes the write at all, which is the
+// only shape from which nothing can be concluded.
+
+/**
+ * @typedef {{ name: string, params: string[], tables: string[] }} WritingFunction
+ */
+
+const FUNCTION_WRITE =
+  /\binsert\s+into\s+(?:only\s+)?(?:public\.)?([a-z_][a-z0-9_]*)|\bdelete\s+from\s+(?:only\s+)?(?:public\.)?([a-z_][a-z0-9_]*)|\bupdate\s+(?:only\s+)?(?:public\.)?([a-z_][a-z0-9_]*)(?:\s+(?!set\b)[a-z0-9_]+)?\s+set\b/gi;
+
+/**
+ * Every function the migrations leave behind that writes a table, keyed by
+ * `<name>/<arity>` and carrying the tables it writes.
+ *
+ * Wider than `writerFunctions`, which is about where a PARAMETER lands: a
+ * function that computes everything it stores writes a row all the same, and it
+ * is the row's existence this population is about. The UPDATE arm reads the
+ * identifier before the SET clause rather than the one after the keyword, so an
+ * `on conflict do update set` does not register a table called `set`, and a
+ * write named inside a `raise` message is payload rather than a write.
+ * @param {{ name: string, text: string }[]} migrations
+ * @returns {Map<string, WritingFunction>}
+ */
+export function writingFunctions(migrations) {
+  /** @type {Map<string, WritingFunction>} */
+  const out = new Map();
+  for (const { text } of migrations) {
+    for (const { name, arity } of droppedSignatures(text)) out.delete(signatureKey(name, arity));
+    for (const fn of functionBodies(text).values()) {
+      const key = signatureKey(fn.name, fn.params.length);
+      const { text: body, code } = blockSource(fn.body);
+      const tables = [
+        ...new Set(
+          [...body.matchAll(FUNCTION_WRITE)]
+            .filter((m) => code[m.index] === 1)
+            .map((m) => m[1] ?? m[2] ?? m[3]),
+        ),
+      ].sort();
+      if (tables.length === 0) {
+        out.delete(key);
+        continue;
+      }
+      out.set(key, { name: fn.name, params: fn.params, tables });
+    }
+  }
+  return out;
+}
+
+/**
+ * Group a signature-keyed map by function name, so a call site can be resolved
+ * against every live overload of the name it wrote.
+ * @template {{ name: string }} T
+ * @param {Map<string, T>} functions
+ * @returns {Map<string, T[]>}
+ */
+export function byFunctionName(functions) {
+  /** @type {Map<string, T[]>} */
+  const out = new Map();
+  for (const fn of functions.values()) {
+    const seen = out.get(fn.name);
+    if (seen === undefined) out.set(fn.name, [fn]);
+    else seen.push(fn);
+  }
+  return out;
+}
+
+/**
+ * The statements [sql] holds, split on the semicolons that are code rather than
+ * string payload.
+ * @param {string} sql
+ * @returns {string[]}
+ */
+export function statementsIn(sql) {
+  const mask = codeMask(sql);
+  /** @type {string[]} */
+  const out = [];
+  let last = 0;
+  for (let i = 0; i < sql.length; i += 1) {
+    if (mask[i] !== 1 || sql[i] !== ';') continue;
+    out.push(sql.slice(last, i));
+    last = i + 1;
+  }
+  out.push(sql.slice(last));
+  return out.map((x) => x.trim()).filter((x) => x !== '');
+}
+
+/**
+ * The writing function [sql] is one bare call to, or null when it is anything
+ * else — several statements, a statement that is not a call, or a call whose
+ * overload the arity and the named arguments cannot separate.
+ * @param {string} sql
+ * @param {Map<string, WritingFunction[]>} byName
+ * @returns {WritingFunction | null}
+ */
+export function bareWriterCall(sql, byName) {
+  const statements = statementsIn(sql);
+  if (statements.length !== 1) return null;
+  const call = /^select\s+(?:\*\s+from\s+)?(?:public\.)?([a-z0-9_]+)\s*\(/i.exec(statements[0]);
+  if (call === null) return null;
+  const candidates = byName.get(call[1].toLowerCase());
+  if (candidates === undefined) return null;
+  const open = call[0].length;
+  const close = closingParen(statements[0], open);
+  if (close === null) return null;
+  const inner = statements[0].slice(open, close);
+  return resolveOverload(candidates, inner.trim() === '' ? [] : splitArgs(inner));
+}
+
+/**
+ * Every relation the file's pgtap assertions read, with the offset of the
+ * assertion that reads it — so one assertion cannot be its own witness.
+ * @param {string} text
+ * @returns {{ offset: number, relations: Set<string> }[]}
+ */
+export function assertionReads(text) {
+  /** @type {{ offset: number, relations: Set<string> }[]} */
+  const out = [];
+  for (const name of PGTAP_ASSERTIONS) {
+    for (const call of findCalls(text, name)) {
+      out.push({ offset: call.offset, relations: relationsIn(call.argv.join(',')) });
+    }
+  }
+  return out;
+}
+
+/**
+ * Positive assertions whose whole SQL is one call to a writing function and
+ * whose file never reads the table it writes, with what does observe the write
+ * instead. Same discipline as the registries above: `tables` is matched exactly
+ * so an entry cannot outlive the write set it was written about, and a
+ * `readBack` must still name an assertion in the same file.
+ * @type {{ file: string, description: string, tables: string[], readBack?: string, reason: string }[]}
+ */
+export const UNOBSERVED_RPC_WRITES = [
+  {
+    file: 'integration_tokens_caller_guard_test.sql',
+    description: "service_role can rotate any user's tokens (token-refresh path)",
+    tables: ['integrations'],
+    readBack: 'the rotated access token is what a later read returns',
+    reason:
+      'The rotation is observed through `get_integration_tokens`, the paired reader RPC, rather ' +
+      'than off the row: what `integrations` stores is the encrypted secret, and reading the ' +
+      'ciphertext back would say the column changed rather than that the token did. The named ' +
+      'read-back asserts the decrypted value the next reader gets.',
   },
 ];
 
@@ -2003,6 +2171,7 @@ function main() {
   const stamped = stampedColumns(migrations);
   const conditional = conditionallyStampedColumns(migrations);
   const writers = writerFunctions(migrations);
+  const writing = byFunctionName(writingFunctions(migrations));
   const registered = new Set(STAMPED_VALUE_ASSERTIONS.map((e) => `${e.file}\u0000${e.description}`));
   const conditionallyRegistered = new Map(
     CONDITIONALLY_STAMPED_ASSERTIONS.map((e) => [`${e.file}\u0000${e.description}`, e]),
@@ -2010,17 +2179,24 @@ function main() {
   const filteredRegistered = new Map(
     FILTERED_RPC_ARGUMENTS.map((e) => [`${e.file}\u0000${e.description}`, e]),
   );
+  const unobservedRegistered = new Map(
+    UNOBSERVED_RPC_WRITES.map((e) => [`${e.file}\u0000${e.description}`, e]),
+  );
   /** @type {Set<string>} */
   const matched = new Set();
   /** @type {Set<string>} */
   const conditionallyMatched = new Set();
   /** @type {Set<string>} */
   const filteredMatched = new Set();
+  /** @type {Set<string>} */
+  const unobservedMatched = new Set();
 
   for (const file of files) {
     const text = readFileSync(join(TESTS_DIR, file), 'utf8');
     /** @type {Set<string> | null} */
     let descriptions = null;
+    /** @type {{ offset: number, relations: Set<string> }[] | null} */
+    let reads = null;
     for (const call of findCalls(text, 'throws_ok')) {
       if (throwsPinsItsError(call.argv)) continue;
       failures.push(
@@ -2093,6 +2269,47 @@ function main() {
         }
       }
 
+      const written = bareWriterCall(sql, writing);
+      if (written !== null) {
+        reads ??= assertionReads(text);
+        const observed = reads.some(
+          (r) => r.offset !== call.offset && written.tables.some((t) => r.relations.has(t)),
+        );
+        if (!observed) {
+          const entry = unobservedRegistered.get(key);
+          if (entry === undefined) {
+            failures.push(
+              `${file}:${call.line}  "${description}" is one bare call to ${written.name}, and no ` +
+                `assertion in this file reads ${written.tables.join(
+                  ' / ',
+                )} — so it measures only that no error was raised, and a ${written.name} that ` +
+                `authorised the caller and wrote nothing at all passes it just as well ` +
+                `(decisions 1540). Read the row back, or register the assertion in ` +
+                `UNOBSERVED_RPC_WRITES naming what observes the write instead.`,
+            );
+          } else {
+            unobservedMatched.add(key);
+            if (entry.tables.join('\u0000') !== written.tables.join('\u0000')) {
+              failures.push(
+                `UNOBSERVED_RPC_WRITES entry ${file} / "${description}" names ${entry.tables.join(
+                  ', ',
+                )} but ${written.name} now writes ${written.tables.join(
+                  ', ',
+                )}. The reason was written about the old set — re-read it against the new one.`,
+              );
+            }
+            if (entry.readBack !== undefined) {
+              descriptions ??= assertionDescriptions(text);
+              if (!descriptions.has(entry.readBack)) {
+                failures.push(
+                  `UNOBSERVED_RPC_WRITES entry ${file} / "${description}" names the read-back "${entry.readBack}", and no assertion in that file carries that description any more. The read-back is what makes the entry's reason true, so restore it or replace the entry's justification.`,
+                );
+              }
+            }
+          }
+        }
+      }
+
       const branchWrites = stampedValueWrites(sql, conditional);
       if (branchWrites.length === 0) continue;
       const columns = [...new Set(branchWrites.map((w) => `${w.table}.${w.column}`))].sort();
@@ -2150,15 +2367,24 @@ function main() {
     );
   }
 
+  for (const entry of UNOBSERVED_RPC_WRITES) {
+    const key = `${entry.file}\u0000${entry.description}`;
+    if (unobservedMatched.has(key)) continue;
+    failures.push(
+      `UNOBSERVED_RPC_WRITES entry ${entry.file} / "${entry.description}" is stale: no unobserved bare writer call is there any more. It was rewritten, renamed or deleted, or the file now reads the table — remove the entry so the next one cannot hide behind it.`,
+    );
+  }
+
   if (process.argv.includes('--static-only')) {
     report(
       failures,
       `${files.length} test files scanned for unpinned negatives, for positives emptied by one of ` +
         `the ${stampedPairCount(stamped)} unconditionally stamped columns, and for the ` +
         `${CONDITIONALLY_STAMPED_ASSERTIONS.length} positives supplying one of the ` +
-        `${stampedPairCount(conditional)} conditionally stamped ones, and for the ` +
+        `${stampedPairCount(conditional)} conditionally stamped ones, for the ` +
         `${FILTERED_RPC_ARGUMENTS.length} handing one to a function that does not plant it ` +
-        `verbatim`,
+        `verbatim, and for the ${UNOBSERVED_RPC_WRITES.length} whose whole SQL is one call to ` +
+        `one of the ${writingFunctions(migrations).size} functions that write a table`,
     );
     return;
   }
