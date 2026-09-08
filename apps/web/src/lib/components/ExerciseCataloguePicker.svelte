@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Exercise, ExerciseCategory } from '$lib/types';
 	import { createCustomExercise } from '$lib/core/data';
-	import { cataloguePickerView } from './exercise_catalogue_picker';
+	import { cataloguePickerView, shadowsSeededGlobal } from './exercise_catalogue_picker';
 	import { dedupeShadowedExercises } from '$lib/gym/exercise_catalogue';
 	import { namesAnExercise } from '$lib/gym/gym_prs';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -93,6 +93,12 @@
 			showToast(t('gym.catalogue.createFailed'));
 			return;
 		}
+		// A create that succeeded against a seeded global's name has replaced it
+		// for this reader: the read resolves the pair to the custom and the
+		// built-in stops appearing anywhere. Said here because it is the only
+		// moment it can be — `onpick` closes the modal, so the created row is
+		// never rendered (§ 1574).
+		if (shadowsSeededGlobal(catalogue, made)) showToast(t('gym.catalogue.shadowsBuiltIn'));
 		created = [...created, made];
 		oncreated?.(made);
 		onpick(made);

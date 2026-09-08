@@ -1,7 +1,11 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
-import { cataloguePickerView, type CatalogueEntry } from './exercise_catalogue_picker';
+import {
+	cataloguePickerView,
+	shadowsSeededGlobal,
+	type CatalogueEntry,
+} from './exercise_catalogue_picker';
 
 // The behavioural pin § 1278 said the tree had nowhere to put. Every case
 // below was mutation-tested against the code it describes: reverting the fold
@@ -394,4 +398,57 @@ test('the tracking pin fails against each snapshot form it replaced', () => {
 		assert.notEqual(broken, PICKER, `${label}: the anchor moved — re-anchor this guard`);
 		assert.equal(tracksTheProp(broken), false, `${label} must fail the tracking pin`);
 	}
+});
+
+test('a created custom carrying a seeded global key is reported as a shadow', () => {
+	const global = { name_key: 'bench press', author_id: null };
+	const mine = { name_key: 'bench press', author_id: 'me' };
+	assert.equal(shadowsSeededGlobal([global], mine), true);
+});
+
+test('a created custom under a free name shadows nothing', () => {
+	assert.equal(
+		shadowsSeededGlobal(
+			[{ name_key: 'bench press', author_id: null }],
+			{ name_key: 'farmer carry', author_id: 'me' },
+		),
+		false,
+	);
+});
+
+test('a custom sitting beside another custom of the same key is not a shadow', () => {
+	// Only the GLOBAL disappears from the reader's list. Two customs under one
+	// key cannot both exist — the author's partial unique forbids it — but a
+	// list carrying someone else's row must not be read as a built-in.
+	assert.equal(
+		shadowsSeededGlobal(
+			[{ name_key: 'bench press', author_id: 'someone' }],
+			{ name_key: 'bench press', author_id: 'me' },
+		),
+		false,
+	);
+});
+
+test('a seeded global is never reported as shadowing anything', () => {
+	// The insert RLS forbids it, and reporting it would tell a reader their own
+	// row replaced a built-in when nothing of theirs was created at all.
+	assert.equal(
+		shadowsSeededGlobal(
+			[{ name_key: 'bench press', author_id: null }],
+			{ name_key: 'bench press', author_id: null },
+		),
+		false,
+	);
+});
+
+test('the shadow test reads the stored key, not the display spelling', () => {
+	// The two part in the window a regenerated fold table opens (§ 1176), and
+	// the index is the authority on what a shadow is.
+	assert.equal(
+		shadowsSeededGlobal(
+			[{ name_key: 'bench press', author_id: null }],
+			{ name_key: 'Bench Press', author_id: 'me' },
+		),
+		false,
+	);
 });
