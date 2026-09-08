@@ -32,6 +32,7 @@ import {
 	WEAR_COVERAGE,
 	check,
 	credentialSites,
+	phoneAppBundleIdentifier,
 	debugFencedLines,
 	xcodeBuildConfigurations,
 	watchBundleIdentifiers,
@@ -1264,4 +1265,61 @@ test('xcodeBuildConfigurations names each configuration from its own block', () 
 		0,
 		'a configuration parsed with no name would be exempt from the Release rule',
 	);
+});
+
+// --- claim (10): the companion NAMING rule ---------------------------------
+
+test('claim (10) refuses a watch bundle id that is not the phone id plus a suffix', () => {
+	// The precondition of § 1256's five Mac steps that Linux can decide. A
+	// rename on either side breaks the pairing months before anyone runs them,
+	// and the symptom on the day is "the watch app does not install".
+	const { errors } = runMutated((dir) => {
+		edit(dir, PBX, (s) => s.replaceAll('com.threkir.app.watchapp', 'com.threkir.watchapp'));
+	});
+	assert.ok(
+		matched(errors, /is not `com\.threkir\.app` plus a suffix/).length >= 1,
+		errors.join('\n'),
+	);
+});
+
+test('claim (10) refuses a companion id naming something other than the phone app', () => {
+	// One field further along than the missing embed, and the same silence:
+	// it installs, it launches, and WCSession reaches no counterpart.
+	const { errors } = runMutated((dir) => {
+		// Drop WKWatchOnly at the same time, or the mutual-exclusivity rule
+		// fires first and this one is never reached.
+		edit(dir, PLIST, (s) =>
+			s.replace(
+				'\t<key>WKWatchOnly</key>\n\t<true/>\n',
+				'\t<key>WKCompanionAppBundleIdentifier</key>\n\t<string>com.threkir.other</string>\n',
+			),
+		);
+	});
+	assert.equal(
+		matched(errors, /names `com\.threkir\.other` as its companion/).length,
+		1,
+		errors.join('\n'),
+	);
+});
+
+test('claim (10) accepts a companion id that does name the phone app', () => {
+	// The direction that keeps the rule from being "never declare a companion".
+	// The embed rule still fires (nothing embeds), so what is asserted here is
+	// only that the NAMING rule stays quiet.
+	const { errors } = runMutated((dir) => {
+		edit(dir, PLIST, (s) =>
+			s.replace(
+				'\t<key>WKWatchOnly</key>\n\t<true/>\n',
+				'\t<key>WKCompanionAppBundleIdentifier</key>\n\t<string>com.threkir.app</string>\n',
+			),
+		);
+	});
+	assert.equal(matched(errors, /as its companion/).length, 0, errors.join('\n'));
+	assert.equal(matched(errors, /plus a suffix/).length, 0, errors.join('\n'));
+});
+
+test('phoneAppBundleIdentifier takes the app, not its test bundle', () => {
+	const phone = readFileSync(PHONE_PBXPROJ_ABS, 'utf8');
+	assert.equal(phoneAppBundleIdentifier(phone), 'com.threkir.app');
+	assert.equal(phoneAppBundleIdentifier('nothing here'), null);
 });

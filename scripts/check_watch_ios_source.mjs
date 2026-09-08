@@ -101,7 +101,13 @@
 //       because `Runner.xcodeproj` embeds nothing. So the plist follows the
 //       build: the moment the embed lands, the guard says so, and a
 //       companion named while nothing embeds fails the same way
-//       (decisions § 1349).
+//       (decisions § 1349). And the one PRECONDITION of that integration
+//       Linux can decide is held too: watchOS pairs a watch app to its
+//       companion by bundle id and requires the watch's to be the phone's
+//       plus a suffix, so a rename on either side breaks the pairing the
+//       five Mac steps exist to make — months before anyone runs them, and
+//       surfacing on the day as "the watch app does not install" rather
+//       than as anything naming a bundle id (decisions § 1597).
 //
 //  (12) The heart-rate coverage figures agree with Wear OS's. `avg_bpm` is
 //       SUPPRESSED below a coverage threshold and coverage itself is advanced
@@ -650,6 +656,26 @@ export function watchBundleIdentifiers(pbxproj) {
 			),
 		),
 	].filter((id) => !id.endsWith('.tests'));
+}
+
+/**
+ * The iOS app's own bundle identifier, out of the phone project.
+ *
+ * The shortest non-test id, because every OTHER bundle in an app project is
+ * the app's plus a suffix — a test bundle, an extension, a watch app. Reading
+ * it as "the shortest" rather than by target name means a renamed target does
+ * not silently make this return the test bundle.
+ * @param {string} pbxproj
+ * @returns {string | null}
+ */
+export function phoneAppBundleIdentifier(pbxproj) {
+	const ids = [
+		...new Set(
+			[...pbxproj.matchAll(/PRODUCT_BUNDLE_IDENTIFIER\s*=\s*"?([\w.-]+)"?\s*;/g)].map((m) => m[1]),
+		),
+	].filter((id) => !/tests?$/i.test(id));
+	if (ids.length === 0) return null;
+	return ids.sort((a, b) => a.length - b.length || a.localeCompare(b))[0];
 }
 
 export const WEAR_COVERAGE = join(
@@ -1692,6 +1718,47 @@ export function check(
 					const embedded = markers.filter((m) => phone.includes(m));
 					const watchOnly = plist.get('WKWatchOnly') === true;
 					const companion = plist.has('WKCompanionAppBundleIdentifier');
+
+					// The one precondition of § 1256's remedy that Linux CAN
+					// decide, and the one nothing checked. watchOS pairs a watch
+					// app to its companion by bundle id, and Apple requires the
+					// watch's to be the phone's plus a suffix — so a rename on
+					// either side breaks the pairing the five Mac steps are for,
+					// months before anyone runs them, and the failure would
+					// surface as "the watch app does not install" rather than as
+					// anything naming a bundle id. Held now, while both ids are
+					// still only written down, so the day the embed lands the
+					// remedy has something true to build on.
+					const phoneId = phoneAppBundleIdentifier(phone);
+					const watchIds = watchBundleIdentifiers(read(PBXPROJ));
+					if (phoneId === null || watchIds.length === 0) {
+						errors.push(
+							`Could not read a bundle identifier out of ${phoneId === null ? PHONE_PBXPROJ : PBXPROJ} ` +
+								"— the companion-naming half of claim (10) would pass vacuously.",
+						);
+					} else {
+						for (const id of watchIds) {
+							if (id.startsWith(`${phoneId}.`)) continue;
+							errors.push(
+								`The watch bundle id \`${id}\` is not \`${phoneId}\` plus a suffix. ` +
+									'watchOS pairs a watch app to its iOS companion by bundle id and ' +
+									"requires exactly that shape, so as written the two cannot be paired " +
+									'at all — which is the build integration § 1256 owes, failing before ' +
+									'it starts. Rename one, or if the phone app itself was renamed, ' +
+									'rename the watch to follow it.',
+							);
+						}
+						const named = plist.get('WKCompanionAppBundleIdentifier');
+						if (typeof named === 'string' && named !== phoneId) {
+							errors.push(
+								`${WATCH_PLIST} names \`${named}\` as its companion, but the phone app ` +
+									`in ${PHONE_PBXPROJ} is \`${phoneId}\`. A companion id that names ` +
+									'something else pairs the watch app to nothing: it installs, it ' +
+									'launches, and `WCSession` never reaches a counterpart — the same ' +
+									'silent outcome as the missing embed, one field further along.',
+							);
+						}
+					}
 					if (embedded.length > 0 && watchOnly) {
 						errors.push(
 							`${PHONE_PBXPROJ} now bundles the watch app (it names ` +
