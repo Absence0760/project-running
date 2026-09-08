@@ -1549,39 +1549,45 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         val result = drainQueueLoop(
             snapshot = snapshot,
             push = { run -> pushRun(run) },
+            // Deliberately NOT wrapped: the loop catches, and catching here
+            // instead discarded the only account of why the session could not
+            // be renewed. A spent refresh token and a socket that died between
+            // the 401 and the refresh both arrived as a bare `false`, and the
+            // one diagnostic a wrist ever produces was the one thing thrown
+            // away.
             refresh = {
-                try {
-                    val refreshed = supabase.refreshAccessToken()
-                    val cached = sessionStore.current()
-                    if (cached != null) {
-                        sessionStore.save(
-                            cached.copy(
-                                accessToken = refreshed.accessToken,
-                                refreshToken = refreshed.refreshToken,
-                                expiresAtMs = refreshed.expiresAtMs,
-                            )
+                val refreshed = supabase.refreshAccessToken()
+                val cached = sessionStore.current()
+                if (cached != null) {
+                    sessionStore.save(
+                        cached.copy(
+                            accessToken = refreshed.accessToken,
+                            refreshToken = refreshed.refreshToken,
+                            expiresAtMs = refreshed.expiresAtMs,
                         )
-                    }
-                    true
-                } catch (_: Throwable) {
-                    false
+                    )
                 }
+                true
             },
             onSuccessfulDrain = OnSuccessfulDrain { id -> dropQueuedRun(id, snapshot) },
+            // Every failure the pass meets, with its throwable, because this is
+            // the only place the raw text survives now that the wrist states a
+            // catalogued fault instead (decisions § 1490). Reported per failure
+            // rather than once at the end: a pass that refuses four runs and
+            // then drains a fifth clears the banner and still has four things a
+            // bug report needs.
+            //
+            // A required parameter rather than a list on the result the caller
+            // reads back, because nothing held the caller to reading it: the
+            // whole diagnostic could be dropped and every test still passed.
+            report = DrainFailureReport { failure ->
+                Log.e(TAG, "drain failed for ${failure.runId} (${failure.fault})", failure.error)
+            },
         )
         if (result.anyTransientFailure) {
             drainBackoff.onFailure()
         } else {
             drainBackoff.onSuccess()
-        }
-        // Every failure the pass met, with its throwable, because this is the
-        // only place the raw text survives now that the wrist states a
-        // catalogued fault instead (decisions § 1490). Logged per failure
-        // rather than once at the end: a pass that refuses four runs and then
-        // drains a fifth clears the banner and still has four things a bug
-        // report needs.
-        for (failure in result.failures) {
-            Log.e(TAG, "drain failed for ${failure.runId} (${failure.fault})", failure.error)
         }
         // `syncFault` keeps its clear-on-success semantics — a trailing
         // success clearing the banner is a stated decision, pinned twice in
