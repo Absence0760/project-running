@@ -8,6 +8,7 @@
 import type { SharedRecap } from './share_recap_lookup';
 import { recapPeriodLabel } from './recap_period_label';
 import { normaliseSiteUrl } from './share_meta';
+import { collapseAndClip } from '../util/clip_text';
 import { escapeHtml } from '../util/html_escape';
 
 /// Absolute URL of a frozen recap's public share page. Note the path shape:
@@ -54,7 +55,7 @@ export function buildShareRecapMeta(input: ShareRecapMetaInput): ShareRecapMeta 
 	let description = 'A year-in-running recap on Threkir.';
 	if (recap) {
 		const period = recapPeriodLabel(recap.periodKind, recap.periodKey);
-		const name = recap.displayName?.trim();
+		const name = collapseAndClip(recap.displayName, 60);
 		title = name
 			? `${name}'s ${period} in running — Threkir`
 			: `${period} in running — Threkir`;
