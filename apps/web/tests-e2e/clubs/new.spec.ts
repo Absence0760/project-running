@@ -69,6 +69,11 @@ test.describe('/clubs/new', () => {
 
 	test.afterEach(async () => {
 		await cleanupPlantedClubs();
+		// Playwright abandons a timed-out test rather than unwinding it, so the
+		// cap test below cannot undo its own plant from the test body: a timeout
+		// between the plant and an in-body `finally` leaves USER_A's counter at
+		// the cap for the rest of the clock hour. decisions § 1554 / § 1606.
+		await resetRateLimit(USER_A.id, 'create_club');
 	});
 
 	test('renders page chrome (kicker, h1, tagline, back link to /social?tab=clubs)', async ({
@@ -323,23 +328,17 @@ test.describe('/clubs/new', () => {
 			count: 5,
 		});
 
-		try {
-			await page.goto('/clubs/new');
-			await page.locator('input[type="text"]').first().fill(uniqueName('e2e-cap'));
-			await page.getByRole('button', { name: 'Create club' }).click();
+		await page.goto('/clubs/new');
+		await page.locator('input[type="text"]').first().fill(uniqueName('e2e-cap'));
+		await page.getByRole('button', { name: 'Create club' }).click();
 
-			const errorToast = page.locator('.toast-error');
-			await expect(errorToast).toBeVisible({ timeout: 10_000 });
-			await expect(errorToast).toHaveText(/creating clubs too quickly/i);
-			// Negative pin: the old fallback wording must not appear.
-			await expect(page.getByText('Failed to create club')).toHaveCount(0);
-		} finally {
-			await admin
-				.from('rate_limits')
-				.delete()
-				.eq('user_id', USER_A.id)
-				.eq('bucket', 'create_club');
-		}
+		const errorToast = page.locator('.toast-error');
+		await expect(errorToast).toBeVisible({ timeout: 10_000 });
+		await expect(errorToast).toHaveText(/creating clubs too quickly/i);
+		// Negative pin: the old fallback wording must not appear.
+		await expect(page.getByText('Failed to create club')).toHaveCount(0);
+		// The plant is undone in test.afterEach, not here: a timeout in this
+		// body skips a `finally` and leaves the counter at the cap.
 	});
 
 	test('Cancel button returns to /social?tab=clubs without planting a row', async ({
