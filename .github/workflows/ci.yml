@@ -1789,6 +1789,23 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+      # `gradle-wrapper.jar` is a BINARY this repo commits and then executes,
+      # which is what Scorecard's Binary-Artifacts check reads it as. Gradle's
+      # design leaves no way round committing it — a checkout has to be able to
+      # build without a Gradle already installed — so the answer is to verify it
+      # rather than to remove it: this checks both jars' SHA-256 against the
+      # published Gradle distributions before any `./gradlew` here runs one.
+      #
+      # It scans the whole tree, so the two wrappers (mobile_android and
+      # watch_wear) are covered by this one step in whichever job runs first.
+      # `min-wrapper-count` is what stops that from going vacuous: a moved or
+      # deleted wrapper makes the check pass by finding nothing, and this fails
+      # instead, which is the same reason the guards in this file assert their
+      # own derivations found something.
+      - name: Validate the committed Gradle wrappers
+        uses: gradle/actions/wrapper-validation@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          min-wrapper-count: 2
       - name: Cache Gradle
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
