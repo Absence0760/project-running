@@ -1,12 +1,18 @@
 # Toolchain versions for asdf / mise / rtx.
 #
-# Run `asdf install` (or `mise install`) in this directory to materialise
-# everything listed below. The format is `<plugin> <version>` per line.
+# This is a pin REGISTRY, not an install manifest. `asdf install` here
+# materialises exactly ONE toolchain — Node — because that is the only one in
+# this list with no manager of its own: the Flutter SDK comes from flutter.dev,
+# Rust from rustup, Go from the distro, Terraform from tfenv, Deno from its own
+# installer, and having asdf put a second copy of any of them on the machine is
+# not what anyone wants. The other six lines are therefore COMMENTED on purpose
+# (decisions § 1536); what a contributor installs from is the Prerequisites
+# table in docs/architecture/monorepo.md, which is read against these same pins.
 #
-# Every version here is CHECKED against the pin the repo itself enforces, by
-# scripts/check_toolchain_pins.mjs — including the commented lines, because a
-# commented pin is a claim the next reader will uncomment (decisions § 911).
-# The sources of truth are:
+# The format is `<plugin> <version>` per line. Every version here is CHECKED
+# against the pin the repo itself enforces, by scripts/check_toolchain_pins.mjs
+# — including the commented lines, because a commented pin is a claim the next
+# reader will uncomment (decisions § 911). The sources of truth are:
 #
 #   nodejs    — every workflow's `actions/setup-node` step (exact, not a major:
 #               CI names the patch since decisions § 1214, so a bare major here

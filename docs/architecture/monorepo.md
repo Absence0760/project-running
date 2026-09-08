@@ -10,12 +10,30 @@ A step-by-step guide to bootstrapping the monorepo from scratch, understanding t
 
 | Tool | Version | Install |
 |---|---|---|
-| Flutter | 3.19+ | `flutter.dev/docs/get-started/install` |
-| Dart | 3.3+ | Bundled with Flutter |
-| Melos | 7.x | `dart pub global activate melos` |
-| Node.js | 20 LTS | `nodejs.org` |
+| Flutter | 3.47.0 | `flutter.dev/docs/get-started/install` |
+| Dart | bundled with Flutter | — |
+| Melos | 7.8.2 | `dart pub global activate melos 7.8.2` |
+| Node.js | 24.20.0 | `nodejs.org`, or `asdf install` — see below |
 | Xcode | 15+ | Mac App Store (macOS only) |
 | Android Studio | Hedgehog+ | `developer.android.com/studio` |
+
+The first three are **exact versions, not floors**, and
+`scripts/check_toolchain_pins.mjs` reads this table against the places the repo
+pins them — `env.FLUTTER_VERSION` in every workflow, `pubspec.lock`, and every
+`actions/setup-node` step. It said 3.19+, 7.x and Node 20 LTS against a CI
+running 3.47.0, 7.8.2 and 24.20.0 until [§ 1536](decisions.md); a prerequisite
+table is a pin like any other and was simply the one nothing compared. Xcode and
+Android Studio carry no in-repo pin, so nothing checks them and they stay floors.
+
+**`.tool-versions` is a pin REGISTRY, not an install manifest.** Six of its
+seven lines are commented on purpose: Flutter, Rust, Go, Terraform, Deno and
+Python are each installed by their own manager (the Flutter SDK from
+flutter.dev, `rustup`, the distro's Go, `tfenv`, Deno's installer), and having
+`asdf install` materialise a second copy of any of them is not what anyone
+wants. `nodejs` is the one active line because Node is the one toolchain here
+with no other manager. Every line is checked against the repo's own pin whether
+commented or not ([§ 911](decisions.md)) — a commented pin is a claim the next
+reader will uncomment.
 
 ---
 
@@ -403,9 +421,9 @@ Full pipeline defined in `.github/workflows/ci.yml`, which is the full list. The
 | `build-web` | ubuntu-latest | `npm run build --workspace=apps/web` — SvelteKit compile check, no deploy |
 | `env-isolation` | ubuntu-latest | the dev-env guard's suite (`env_isolation.test.mjs`), the release-build env guard's suite (`check_production_env.test.mjs`), and a scan of every committed `.env.example` / `.env.development` for a live Stripe / Anthropic / Supabase value. Install-free, stdlib only. Was `env-isolation.yml`, a workflow of its own on a path filter and therefore in no `needs:` of the gate ([§ 862](decisions.md)) |
 | `parity-matrix` | ubuntu-latest | `dart run scripts/check_parity_matrix.dart` (table structure + legal symbols) and `node scripts/check_parity_ios_column.mjs` (the iOS column matches the one rule the doc states for it, decisions § 739) — keeps `docs/product/parity.md` honest. Ungated: a parity.md edit is a docs-only diff, so a guard for it in a `code`-gated job would never run |
-| `build-watch-wear` | ubuntu-latest | `./gradlew assembleDebug testDebugUnitTest` in `apps/watch_wear/android` — the Compose-for-Wear smoke build AND the 767 `@Test` methods it carries, which hang on that second task word alone. Also declares `GRADLE_UNTESTED` and echoes it, so a Gradle project whose committed tests nothing runs is a `::warning::` in every run's log; `scripts/check_gradle_test_coverage.mjs` in `workflow-lint` fails the PR on one that is neither run nor declared ([§ 1393](decisions.md)) |
+| `build-watch-wear` | ubuntu-latest | `./gradlew assembleDebug testDebugUnitTest` in `apps/watch_wear/android` — the Compose-for-Wear smoke build AND the 802 `@Test` methods it carries, which hang on that second task word alone. `scripts/check_gradle_test_coverage.mjs` in `workflow-lint` reads the task list handed to Gradle, so deleting the word fails the PR ([§ 1393](decisions.md)). **No workflow declares `GRADLE_UNTESTED` any more** — [§ 1439](decisions.md) wired up the last excused project and deleted both the value and the step that echoed it, and the guard treats an absent declaration as the empty list it is meant to end at ([§ 1500](decisions.md)). Should one ever come back, it is a `<path>=<count>=<reason>` value that a `run:` step in the declaring job must print, which the guard now requires rather than assumes ([§ 1533](decisions.md)) |
 | `build-firmware` | ubuntu-latest | `cargo build` + clippy + host tests of `apps/custom_watch` (Rust + Embassy, `thumbv7em-none-eabihf`); build + `clippy -D warnings` run over three feature sets — default, `ble` (`--no-default-features`), and the sim set — so the off-by-default builds can't rot |
-| `build-mobile-android` | ubuntu-latest | `flutter build apk --release --no-tree-shake-icons --target-platform android-arm64` in `apps/mobile_android` — a toolchain smoke test, not a shipped artifact (the AAB is built on tag by `release-android.yml`). It configures and assembles the whole `android/` Gradle host, so an AGP / KGP / plugin-subproject break surfaces here rather than at a release tag; it does NOT run that project's JUnit tests, which `assembleRelease` has no dependency on ([§ 1393](decisions.md)) |
+| `build-mobile-android` | ubuntu-latest | `flutter build apk --release --no-tree-shake-icons --target-platform android-arm64` in `apps/mobile_android` — a toolchain smoke test, not a shipped artifact (the AAB is built on tag by `release-android.yml`). It configures and assembles the whole `android/` Gradle host, so an AGP / KGP / plugin-subproject break surfaces here rather than at a release tag; then a second step runs `./gradlew :app:testDebugUnitTest` in the same directory, which is where that project's 32 `@Test` methods execute — `assembleRelease` has no dependency on a test task, so until [§ 1439](decisions.md) committed the wrapper and added that step they ran nowhere. The `:app:` qualifier is load-bearing: unqualified, the task runs every subproject's, and the Flutter plugins are subprojects here |
 | `twin-parity` | ubuntu-latest | `diff -rq apps/mobile_android/lib apps/mobile_ios/lib` + `test/` |
 | `schema-codegen-drift` | ubuntu-latest | re-run `gen_dart_models.dart` (regenerates `db_rows.dart` + `DbRows.kt`), fail if working tree dirty |
 | `api-client-integration` | ubuntu-latest | `packages/api_client` integration suite against local Supabase |

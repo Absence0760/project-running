@@ -37,15 +37,22 @@
 //      Gradle in the directory that holds the tests. This is the check that
 //      survives the one-word deletion above.
 //   3. A project whose tests nothing runs is DECLARED in `GRADLE_UNTESTED` with
-//      a size and a reason, the value is echoed by the job itself so the gap is
-//      in every run's log rather than in a document, and the entry is
-//      re-measured here: it must name a project this tree still holds, that
-//      project must still hold tests, its stated count must equal how many test
-//      sources that project actually holds, and it may not swallow every
-//      project at once. The count shares `parseUnbuilt` with CodeQL's own
-//      exclusion list, which is the same declaration answering the same
-//      question — how much does this excuse hide — and one parser is what keeps
-//      the two from drifting into two formats (decisions § 1500).
+//      a size and a reason, and the entry is re-measured here: it must name a
+//      project this tree still holds, that project must still hold tests, its
+//      stated count must equal how many test sources that project actually
+//      holds, and it may not swallow every project at once. The count shares
+//      `parseUnbuilt` with CodeQL's own exclusion list, which is the same
+//      declaration answering the same question — how much does this excuse
+//      hide — and one parser is what keeps the two from drifting into two
+//      formats (decisions § 1500).
+//
+//      The declaration is only half of it. What puts the gap in front of a
+//      reader is the step that ECHOES the value, so a `run:` script that can
+//      see the variable has to read it — a declaration nobody prints is the
+//      note in a document this rail was written to replace, and it would have
+//      read as fully declared (decisions § 1533). Scoped the way GitHub scopes
+//      an `env:`: a step-level declaration must be read by that step's own
+//      script, a job-level one by some step of that job.
 //   4. A job caching `~/.gradle` names every project it invokes in its cache
 //      KEY. One `GRADLE_USER_HOME` serves every project a job builds while the
 //      key hashes named files, so a job that invokes two projects and hashes
@@ -69,6 +76,7 @@ import {
 	MIN_REASON_CHARS,
 	blockScalar,
 	parseUnbuilt,
+	runScripts,
 	walkSurfaces,
 } from './check_codeql_coverage.mjs';
 
@@ -86,6 +94,65 @@ export const WORKFLOW_DIR = join('.github', 'workflows');
 /// last excused project and deleted the entry — so this rail currently guards
 /// an empty list, which is the state it is meant to end in.
 export const UNTESTED_KEY = 'GRADLE_UNTESTED';
+
+/// A shell or expression READ of an env var, as opposed to a mention of its
+/// name. `$KEY`, `${KEY}` and `${{ env.KEY }}` are the three forms a step can
+/// reach the value through; the bare word is what a comment saying the value
+/// used to be echoed here looks like, and crediting that would make the check
+/// keyed on spelling rather than on behaviour.
+/** @param {string} key @returns {RegExp} */
+export const envRead = (key) => new RegExp(`\\$\\{?\\{?\\s*(?:env\\.)?${key}\\b`);
+
+/**
+ * Every `run:` script in a step, block scalar or one-liner.
+ *
+ * `runScripts` reads the `run: |` form alone, which is what the CodeQL guard's
+ * subject is always written as. An echo loop need not be, and a reader that saw
+ * only the block form would report a one-line `run: echo "$KEY"` as no read at
+ * all — failing correct code, which is the other way a guard goes wrong.
+ *
+ * @param {string} stepBody
+ * @returns {string[]}
+ */
+export function runBodies(stepBody) {
+	const out = runScripts(stepBody);
+	for (const m of stepBody.matchAll(/^\s*(?:-\s+)?run:[ \t]+(?![|>][-+]?\s*$)(\S.*)$/gm))
+		out.push(m[1]);
+	return out;
+}
+
+/**
+ * The `run:` scripts that can see a `<KEY>: |` declaration, scoped as GitHub
+ * scopes an `env:` mapping: a step's own env reaches that step alone, a job's
+ * reaches every step of that job, and anything above reaches the file.
+ *
+ * @param {string} text one workflow
+ * @param {string} key
+ * @returns {{ scope: 'step' | 'job' | 'workflow', owner: string, scripts: string[] } | null}
+ */
+export function declarationScope(text, key) {
+	const lines = text.split('\n');
+	const at = lines.findIndex((l) => new RegExp(`^\\s*${key}:\\s*\\|\\s*$`).test(l));
+	if (at < 0) return null;
+
+	const steps = parseSteps(text);
+	for (const step of steps) {
+		const span = step.body.split('\n').length;
+		if (at + 1 < step.line || at + 1 >= step.line + span) continue;
+		return { scope: 'step', owner: step.name ?? `step at line ${step.line}`, scripts: runBodies(step.body) };
+	}
+
+	for (let i = at; i >= 0; i--) {
+		const job = /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(lines[i]);
+		if (!job) continue;
+		return {
+			scope: 'job',
+			owner: job[1],
+			scripts: steps.filter((s) => s.job === job[1]).flatMap((s) => runBodies(s.body)),
+		};
+	}
+	return { scope: 'workflow', owner: 'the workflow', scripts: steps.flatMap((s) => runBodies(s.body)) };
+}
 
 /**
  * The floor under the WALK, not under the workflows. A walk that stopped
@@ -298,6 +365,16 @@ export function check(opts = {}) {
 		const raw = blockScalar(wf.text, UNTESTED_KEY);
 		if (raw === null) continue;
 		declaringFiles.push(wf.name);
+		const scope = declarationScope(wf.text, UNTESTED_KEY);
+		if (scope && !scope.scripts.some((script) => envRead(UNTESTED_KEY).test(script))) {
+			errors.push(
+				`\`${UNTESTED_KEY}\` is declared in ${wf.name} and no \`run:\` script that can see ` +
+					`it reads it (${scope.scope} scope: ${scope.owner}, ${scope.scripts.length} ` +
+					`script(s)). The declaration is what this guard reads; the echo is what a reader ` +
+					`of the run gets, and without it the gap is a value in a YAML file — the note in ` +
+					`a document the rail replaced. Print it, one \`::warning::\` per line.`,
+			);
+		}
 		const { entries, malformed } = parseUnbuilt(raw);
 		declared = declared.concat(entries);
 		for (const line of malformed) {
