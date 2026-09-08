@@ -49,6 +49,14 @@ const NAMES_AN_EXERCISE = /exercise/i;
 /// what spares `slugify`'s `name.toLowerCase()` and the runner-handle
 /// comparisons while still firing the moment one of them folds an
 /// `exercise_name`.
+///
+/// A waiver of the FILE-level shapes only, in both scans that consult it. The
+/// receiver rules — [NAMES_AN_EXERCISE] on a fold's own receiver,
+/// [NAMES_A_SPELLING] on a comparison's operands — still run over every listed
+/// module, so nothing here is un-scanned. `rawNameComparisonHits` used to skip
+/// the whole file instead, which spared a scan that never had a file-level rule
+/// to waive: a raw `patch.exercise_name !== other.exercise_name` inside
+/// `data.ts` was judged by nothing at all (§ 1509).
 const BROAD_MODULES = ['lib/core/data.ts'];
 
 /// Files that still fold an exercise name, with why the fix is not in this
@@ -241,7 +249,6 @@ function isLiteral(operand: string): boolean {
 export function rawNameComparisonHits(path: string, source: string): Hit[] {
 	const code = stripComments(source);
 	const scan = blankQuoted(code);
-	if (BROAD_MODULES.includes(path)) return [];
 	const out: Hit[] = [];
 	for (const m of scan.matchAll(COMPARISON)) {
 		const at = m.index ?? 0;
@@ -565,6 +572,15 @@ test('the raw-comparison scan sees the shapes it bans, and spares the ones it mu
 			'lib/components/Composer.svelte',
 			"const name = s.exercise_name ?? '';\n\t\tif (last.name === name) last.sets.push(row);",
 		],
+		[
+			// This scan has no file-level rule, so a broad module has nothing to
+			// waive: the operands say "exercise" or they do not, wherever the
+			// file sits. It read as spared for the fold scan's reason and was
+			// spared by neither (§ 1509).
+			'a broad module, whose operands still name a spelling',
+			'lib/core/data.ts',
+			'if (patch.exercise_name !== other.exercise_name) fields.name = x;',
+		],
 	];
 	for (const [label, path, source] of caught) {
 		assert.equal(rawNameComparisonHits(path, source).length, 1, `missed: ${label}`);
@@ -591,11 +607,6 @@ test('the raw-comparison scan sees the shapes it bans, and spares the ones it mu
 			'// never last.name === s.exercise_name',
 		],
 		['a string mentioning it', 'lib/gym/t.ts', "const doc = 'last.name === s.exercise_name';"],
-		[
-			'the broad module, judged by the fold scan instead',
-			'lib/core/data.ts',
-			'if (patch.exercise_name !== other.exercise_name) fields.name = x;',
-		],
 		[
 			'a helper call, which is not a comparison at all',
 			'lib/gym/s.ts',
