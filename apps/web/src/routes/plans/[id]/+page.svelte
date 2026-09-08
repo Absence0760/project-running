@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { activeFormatLocale } from '$lib/format/time';
-	import { fold } from '$lib/segments/catalogue_browse';
 	import { onMount, tick } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { page } from '$app/stores';
@@ -59,6 +58,7 @@
 		planWorkoutProgress
 	} from '$lib/training/plan_progress';
 	import { planToMarkdown, planToJson, type ExportPlan } from '$lib/training/plan_serialize';
+	import { planSlug } from '$lib/training/plan_slug';
 	import { workoutKindLabel, planPhaseLabel } from '$lib/training/workout_labels';
 	import { fmtKm, fmtPace } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
@@ -147,23 +147,6 @@
 		};
 	}
 
-	/// The exported file's name, derived from the plan's.
-	///
-	/// Folded through `catalogue_browse`'s generated table rather than
-	/// `toLowerCase`, for the reason `clubSlug` folds: JS lower-cases U+0130 to
-	/// `i` plus a combining dot, which the strip below then turns into a
-	/// SEPARATOR — so a plan named `İstanbul Marathon` downloaded as
-	/// `i-stanbul-marathon.md`. The fold also leaves the base letter where a
-	/// diacritic was, so `Zürich Build` reaches `zurich-build` instead of
-	/// `z-rich-build` (decisions § 1251, § 1398).
-	function planSlug(): string {
-		return (
-			fold(plan?.name ?? 'plan')
-				.replace(/[^a-z0-9]+/g, '-')
-				.replace(/^-|-$/g, '') || 'plan'
-		);
-	}
-
 	function downloadFile(content: string, filename: string, type: string): void {
 		const blob = new Blob([content], { type });
 		const url = URL.createObjectURL(blob);
@@ -183,18 +166,18 @@
 		} catch {
 			// Clipboard blocked (insecure context / permission) — fall back
 			// to a download so the export is never a dead end.
-			downloadFile(planToMarkdown(e), `${planSlug()}.md`, 'text/markdown');
+			downloadFile(planToMarkdown(e), `${planSlug(plan?.name)}.md`, 'text/markdown');
 		}
 	}
 
 	function downloadMarkdown(): void {
 		const e = buildExport();
-		if (e) downloadFile(planToMarkdown(e), `${planSlug()}.md`, 'text/markdown');
+		if (e) downloadFile(planToMarkdown(e), `${planSlug(plan?.name)}.md`, 'text/markdown');
 	}
 
 	function downloadJson(): void {
 		const e = buildExport();
-		if (e) downloadFile(planToJson(e), `${planSlug()}.json`, 'application/json');
+		if (e) downloadFile(planToJson(e), `${planSlug(plan?.name)}.json`, 'application/json');
 	}
 
 	// Export menu keyboard support (ARIA menu pattern over a native <details>).
