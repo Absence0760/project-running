@@ -2314,3 +2314,15 @@ fail against the pre-§ 1398 `toLowerCase` form: `İstanbul Marathon` reaching
 its base letter rather than a hyphen. The other three pin the fallback (a name
 in a script the strip removes yields `plan`, not a row of hyphens) and the
 deliberate refusal to transliterate `ß` or `ø`.
+
+### `apps/web/src/lib/share/share_head_clipping.test.ts` — 11 tests
+
+The clipping half of the `<head>` census, sibling of `share_head_escaping.test.ts`:
+that one proves a hostile field cannot break out of the markup, this one proves an
+enormous one cannot get in. Every exported `buildShare*` entity builder is called
+with a 5,000-character field and every emitted value is checked for a surviving run
+longer than 200 identical characters — past the largest budget in the tree, so one
+check covers every field's own number. Six fields across three of the ten builders
+were failing it when it was written. The eleventh test is the staleness half: it
+scans the directory for `export function buildShare*` and fails in both directions,
+so a new entity builder cannot ship uncensused.

@@ -510,3 +510,14 @@ and a base letter with its combining mark now survive whole or are dropped
 whole. **Never pass a `.slice()` result into a meta tag**; the budget is a
 ceiling on characters, not on bytes or on pixels, and no consumer's own
 truncation is being predicted here.
+
+`share/share_head_clipping.test.ts` is the census half, and the sibling of
+`share_head_escaping.test.ts`: that one proves a hostile field cannot break out
+of the markup, this one proves an enormous one cannot get in at all. It calls
+every exported `buildShare*` entity builder with a 5,000-character field and
+fails when a run of more than 200 identical characters survives into any
+emitted value — 200 being past the largest budget in the tree, so the check
+holds whatever a given field's own number is. It scans the directory for the
+builders rather than listing them, so a new entity fails the suite until it is
+censused. Three of the ten builders were failing it when it was written
+([§ 1531](../architecture/decisions.md)).
