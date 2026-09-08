@@ -29,7 +29,6 @@ import {
 	parseJobKeys,
 	parseNeeds,
 	parseSteps,
-	PR_ADVISORY,
 	checkPrGates,
 	parseTriggers,
 	readWorkflows,

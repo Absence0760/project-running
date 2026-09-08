@@ -183,8 +183,9 @@ function markersFor(budget: Budget): string[] {
 function beforeEachBodies(source: string): string[] {
 	const out: string[] = [];
 	const hook = /\btest\s*\.\s*beforeEach\s*\(/g;
-	let match: RegExpExecArray | null;
-	while ((match = hook.exec(source))) {
+	// The match itself is never read — `hook.lastIndex` is what the scan walks
+	// from — so nothing binds it.
+	while (hook.exec(source) !== null) {
 		let depth = 1;
 		let i = hook.lastIndex;
 		while (i < source.length && depth > 0) {
