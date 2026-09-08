@@ -2236,9 +2236,9 @@ The one-test file is deliberate: the comment-delimiter REGISTER is the single th
 
 ## #789 round 44 (2026-09-07)
 
-### `apps/web/src/lib/gym/exercise_catalogue.test.ts` — 8 tests
+### `apps/web/src/lib/gym/exercise_catalogue.test.ts` — 11 tests
 
-The paged catalogue read and the shadow resolution behind the picker: an explicit-range walk (a short page is not proof of exhaustion), a failed read reported as `{ catalogue, error }` rather than as an empty catalogue, and the two partial uniques resolved at the read with the owner's row winning. The picker's third state — create fails closed while the catalogue is unknown — is pinned in `exercise_catalogue_picker.test.ts`.
+The paged catalogue read and the shadow resolution behind the picker: an explicit-range walk (a short page is not proof of exhaustion), a failed read reported as `{ catalogue, error }` rather than as an empty catalogue, and the two partial uniques resolved at the read with the owner's row winning. Three more cases arrived with the key: the two MERGE shapes the picker and the editor apply the rule to — a custom created against a stale snapshot, and a row present in both the fetched list and the created one — and the stored-`name_key` case, which the web half could not express while it re-derived the key from the display spelling. The picker's third state — create fails closed while the catalogue is unknown — is pinned in `exercise_catalogue_picker.test.ts`.
 
 ### `apps/web/src/lib/util/ordinal_compare.test.ts` — 4 tests
 
