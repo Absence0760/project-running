@@ -575,6 +575,87 @@ test('an earlier return inside a branch makes what follows it skippable', () => 
 	});
 });
 
+test('a block form that closes with a bare end closes the frame it opened', () => {
+	// An EXPRESSION `case` closes with a bare `end`, not `end case`, so the frame
+	// it opened used to stay on the stack and the enclosing `end if` popped IT
+	// instead — leaving the `if` open, and everything after it reading as
+	// unconditional when it is not (decisions 1538).
+	const exprCase =
+		'begin\n  if new.a is null then\n    new.b := case when new.x > 0 then 1 else 2 end;\n  end if;\n  new.c := 3;\n  return new;\nend;';
+	assert.deepEqual(assignedUnder(exprCase, 'insert'), {
+		unconditional: ['c'],
+		conditional: ['b'],
+	});
+
+	// The unsafe direction the same mis-nesting takes under a `tg_op` split: the
+	// else arm's assignment is attributed to the operation the THEN arm names,
+	// and the other operation is left reporting nothing at all.
+	const split =
+		"begin\n  if tg_op = 'INSERT' then\n    new.a := case when new.x is null then 0 else new.x end;\n  else\n    new.b := 1;\n  end if;\n  return new;\nend;";
+	assert.deepEqual(assignedUnder(split, 'insert'), { unconditional: ['a'], conditional: [] });
+	assert.deepEqual(assignedUnder(split, 'update'), { unconditional: ['b'], conditional: [] });
+
+	// A plpgsql BLOCK closes with a bare `end` too, and unlike a `case` it is not
+	// a branch: what it assigns carries out of it, so the sibling assignment
+	// after it is inside the `if` and the one after the `if` is not.
+	const nested =
+		'begin\n  if new.a is null then\n    begin\n      new.b := 1;\n    end;\n    new.c := 2;\n  end if;\n  new.d := 3;\n  return new;\nend;';
+	assert.deepEqual(assignedUnder(nested, 'insert'), {
+		unconditional: ['d'],
+		conditional: ['b', 'c'],
+	});
+
+	// An exception handler is a second way out of the block, and the guard cannot
+	// read what it leaves assigned, so the block stops carrying its must-set.
+	const handled =
+		'begin\n  begin\n    new.b := 1;\n  exception when others then null;\n  end;\n  return new;\nend;';
+	assert.deepEqual(assignedUnder(handled, 'insert'), {
+		unconditional: [],
+		conditional: ['b'],
+	});
+});
+
+test('a case arm that assigns nothing is a path through the case', () => {
+	// `when` separates a `case`'s arms the way `elsif` separates an `if`'s. Read
+	// as one region, the empty arm inherits the previous arm's assignment and the
+	// closing `else` then makes the whole thing look exhaustive.
+	const gap =
+		"begin\n  case new.kind\n    when 'a' then new.x := 1;\n    when 'b' then null;\n    else new.x := 2;\n  end case;\n  return new;\nend;";
+	assert.deepEqual(assignedUnder(gap, 'insert'), { unconditional: [], conditional: ['x'] });
+
+	// Every arm assigning it, with an `else` to make the arms exhaustive, is the
+	// case that IS unconditional — so the fix above is not a blanket downgrade.
+	const covered =
+		"begin\n  case new.kind\n    when 'a' then new.x := 1;\n    else new.x := 2;\n  end case;\n  new.y := 3;\n  return new;\nend;";
+	assert.deepEqual(assignedUnder(covered, 'insert'), {
+		unconditional: ['x', 'y'],
+		conditional: [],
+	});
+
+	// The region before the first `when` is the selector expression, not an arm.
+	// Counting it as a path makes every `case` unconditional in nothing.
+	const noElse =
+		"begin\n  case new.kind\n    when 'a' then new.x := 1;\n  end case;\n  return new;\nend;";
+	assert.deepEqual(assignedUnder(noElse, 'insert'), { unconditional: [], conditional: ['x'] });
+});
+
+test('a block keyword inside a string is payload, not structure', () => {
+	// `raise exception 'no end if here'` used to close the enclosing `if`, which
+	// promoted every assignment after the message to unconditional. A bare `end`
+	// closing a frame makes this far likelier than it was: an error string
+	// containing the word "end" is ordinary.
+	const message =
+		"begin\n  if new.a is null then\n    raise exception 'no end if here';\n    new.b := 1;\n  end if;\n  return new;\nend;";
+	assert.deepEqual(assignedUnder(message, 'insert'), { unconditional: [], conditional: ['b'] });
+
+	// But the `tg_op` comparison is read out of the same text, so a string is
+	// masked for the token walk and kept verbatim for the condition.
+	const tgOp =
+		"begin\n  if tg_op = 'INSERT' then\n    new.a := 1;\n  end if;\n  return new;\nend;";
+	assert.deepEqual(assignedUnder(tgOp, 'insert'), { unconditional: ['a'], conditional: [] });
+	assert.deepEqual(assignedUnder(tgOp, 'update'), { unconditional: [], conditional: [] });
+});
+
 test('stampedColumns replays the migrations rather than reading the last one', () => {
 	/** @param {string} name @param {string} col */
 	const stamp = (name, col) =>

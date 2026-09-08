@@ -1143,6 +1143,40 @@ export function tgOpCondition(cond) {
 }
 
 /**
+ * A function body prepared for the block walk below: comments blanked in place
+ * and a byte map of which offsets are code rather than string payload.
+ *
+ * Blanking rather than deleting keeps every offset, so a condition sliced out
+ * of the result still lines up with the token that opened it. The map is what
+ * stops a keyword inside a `raise` message from opening or closing a block, and
+ * it matters far more once a bare `end` closes one: an error string containing
+ * the word "end" is ordinary, one containing "end if" is not. The string itself
+ * is kept verbatim rather than blanked, because `tg_op = 'INSERT'` is read out
+ * of this same text.
+ * @param {string} body
+ * @returns {{ text: string, code: Uint8Array }}
+ */
+export function blockSource(body) {
+  const code = new Uint8Array(body.length);
+  let text = '';
+  let i = 0;
+  while (i < body.length) {
+    const skip = skipToken(body, i);
+    if (skip === null) {
+      code[i] = 1;
+      text += body[i];
+      i += 1;
+      continue;
+    }
+    const comment =
+      (body[i] === '-' && body[i + 1] === '-') || (body[i] === '/' && body[i + 1] === '*');
+    for (let j = i; j < skip; j += 1) text += comment && body[j] !== '\n' ? ' ' : body[j];
+    i = skip;
+  }
+  return { text: text.toLowerCase(), code };
+}
+
+/**
  * The columns a trigger function assigns, split by the operation that reaches
  * the assignment and by whether a row can be stored that the assignment did not
  * touch.
@@ -1163,6 +1197,17 @@ export function tgOpCondition(cond) {
  * operation rather than describing the row, so an assignment under it is
  * unconditional for the operation it names and absent for the other — which is
  * why the result is split by operation (decisions 1485).
+ *
+ * Every block form plpgsql can nest is opened and closed here, because the walk
+ * is only as good as its nesting. `if` / `case` / `loop` close with the keyword
+ * that names them, but a plpgsql BLOCK and an EXPRESSION `case when … then …
+ * end` both close with a BARE `end` — so a body carrying either one used to
+ * leave a frame open and hand the next `end if` the wrong frame, which reads
+ * everything after it as conditional and, under a `tg_op` split, unwinds onto
+ * the wrong operation set (decisions 1538). A `case`'s own arms are separated
+ * by `when` for the same reason an `if`'s are by `elsif`: without that, an arm
+ * that assigns nothing inherits the previous arm's must-set, and a `case` with
+ * an `else` then reports a column only some arms assign as unconditional.
  * @param {string} body
  * @returns {Record<TriggerOp, { unconditional: string[], conditional: string[] }>}
  */
@@ -1171,7 +1216,7 @@ export function assignedColumns(body) {
   // before the bare `if` inside it, and a whole `if ... end if` written on one
   // line has to close before the next assignment is judged. `elsif` carries no
   // word boundary before its `if`, so it never opens a second block.
-  const clean = body.replace(/--[^\n]*/g, '').toLowerCase();
+  const { text: clean, code } = blockSource(body);
   /** @param {Record<TriggerOp, Set<string>>} m */
   const clone = (m) => ({ insert: new Set(m.insert), update: new Set(m.update) });
   /** @type {Record<TriggerOp, Set<string>>} */
@@ -1179,11 +1224,13 @@ export function assignedColumns(body) {
   /** @type {{ ops: Set<TriggerOp>, must: Record<TriggerOp, Set<string>> }[]} */
   const exits = [];
   /** @type {{
+   *   kind: 'if' | 'case' | 'loop' | 'block',
    *   entry: Record<TriggerOp, Set<string>>,
    *   entryOps: Set<TriggerOp>,
    *   outerReturned: boolean,
    *   decided: { taken: Set<TriggerOp>, skipped: Set<TriggerOp> } | null,
    *   hasElse: boolean,
+   *   handled: boolean,
    *   branches: { ops: Set<TriggerOp>, must: Record<TriggerOp, Set<string>> | null }[],
    * }[]} */
   const stack = [];
@@ -1191,8 +1238,9 @@ export function assignedColumns(body) {
   let ops = new Set(TRIGGER_OPS);
   let returned = false;
   const tokens =
-    /\bend\s+if\b|\bend\s+case\b|\bend\s+loop\b|\bcase\b|\bloop\b|\belsif\b|\belse\b|\bif\b|\breturn\b|\bnew\.([a-z0-9_]+)\s*:=/g;
+    /\bend\s+if\b|\bend\s+case\b|\bend\s+loop\b|\bexception\s+when\b|\bcase\b|\bloop\b|\bbegin\b|\belsif\b|\belse\b|\bwhen\b|\bif\b|\bend\b|\breturn\b|\bnew\.([a-z0-9_]+)\s*:=/g;
   for (const m of clean.matchAll(tokens)) {
+    if (code[m.index] !== 1) continue;
     if (m[1] !== undefined) {
       if (returned) continue;
       for (const op of ops) {
@@ -1207,16 +1255,39 @@ export function assignedColumns(body) {
       returned = true;
       continue;
     }
+    if (token === 'begin') {
+      // A block is not a branch: it always runs when it is reached, so what it
+      // assigns carries out of it. Popping it on the bare `end` is what stops
+      // that `end` from closing the `if` the block sits inside.
+      stack.push({
+        kind: 'block',
+        entry: clone(must),
+        entryOps: ops,
+        outerReturned: returned,
+        decided: null,
+        hasElse: false,
+        handled: false,
+        branches: [],
+      });
+      continue;
+    }
+    if (token.startsWith('exception')) {
+      const open = stack[stack.length - 1];
+      if (open !== undefined && open.kind === 'block') open.handled = true;
+      continue;
+    }
     if (token === 'if' || token === 'case' || token === 'loop') {
       const then = token === 'if' ? /\bthen\b/.exec(clean.slice(m.index)) : null;
       const decided =
         then === null ? null : tgOpCondition(clean.slice(m.index + 2, m.index + then.index));
       stack.push({
+        kind: token === 'if' ? 'if' : token === 'case' ? 'case' : 'loop',
         entry: clone(must),
         entryOps: ops,
         outerReturned: returned,
         decided,
         hasElse: false,
+        handled: false,
         branches: [],
       });
       if (decided !== null) ops = new Set([...ops].filter((o) => decided.taken.has(o)));
@@ -1224,18 +1295,28 @@ export function assignedColumns(body) {
       returned = false;
       continue;
     }
-    if (token === 'else' || token === 'elsif') {
+    if (token === 'else' || token === 'elsif' || token === 'when') {
       const frame = stack[stack.length - 1];
       if (frame === undefined) continue;
-      frame.branches.push({ ops, must: returned ? null : clone(must) });
+      // `when` separates the arms of a `case`, and nothing else here: `exit
+      // when` inside a loop and the arms of an exception handler are not
+      // branches of the frame they sit in, and reading them as such would
+      // reset a must-set that is still accumulating.
+      if (token === 'when' && frame.kind !== 'case') continue;
+      // The region before a `case`'s first `when` is its selector expression,
+      // not an arm, so it is not a path through the frame.
+      if (token !== 'when' || frame.branches.length > 0) {
+        frame.branches.push({ ops, must: returned ? null : clone(must) });
+      }
       if (token === 'else' && frame.decided !== null) {
         const { skipped } = frame.decided;
         ops = new Set([...frame.entryOps].filter((o) => skipped.has(o)));
         frame.hasElse = true;
       } else {
-        // An `elsif` chain is not exhaustive without a final `else`, and the
-        // guard cannot read which operations it admits, so the whole frame
-        // falls back to the join every undecided condition gets.
+        // An `elsif` chain — or a run of `case` arms — is not exhaustive
+        // without a final `else`, and the guard cannot read which operations it
+        // admits, so the whole frame falls back to the join every undecided
+        // condition gets.
         ops = frame.entryOps;
         frame.decided = null;
         frame.hasElse = token === 'else';
@@ -1246,6 +1327,17 @@ export function assignedColumns(body) {
     }
     const frame = stack.pop();
     if (frame === undefined) continue;
+    if (frame.kind === 'block') {
+      // An exception handler is a second path out of the block, and the guard
+      // cannot read what it leaves assigned, so a handled block falls back to
+      // the entry state the way an `if` without an `else` does.
+      if (frame.handled) {
+        must = clone(frame.entry);
+        returned = frame.outerReturned;
+      }
+      ops = frame.entryOps;
+      continue;
+    }
     frame.branches.push({ ops, must: returned ? null : clone(must) });
     const joined = clone(frame.entry);
     for (const op of TRIGGER_OPS) {
