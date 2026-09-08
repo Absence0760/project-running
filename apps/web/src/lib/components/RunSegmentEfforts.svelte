@@ -15,21 +15,13 @@
 	import { rankPillClass, rankPillText } from '$lib/segments/effort_rank';
 	import { distanceInPreferred } from '$lib/format/units.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { haversineMetres } from '$lib/runs/run_stats';
 	import type { TrackPoint } from '$lib/types';
 
 	function trackLengthM(pts: TrackPoint[]): number {
 		let total = 0;
 		for (let i = 1; i < pts.length; i++) {
-			const a = pts[i - 1];
-			const b = pts[i];
-			const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-			const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-			const lat1 = (a.lat * Math.PI) / 180;
-			const lat2 = (b.lat * Math.PI) / 180;
-			const h =
-				Math.sin(dLat / 2) ** 2 +
-				Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-			total += 2 * 6_371_000 * Math.asin(Math.min(1, Math.sqrt(h)));
+			total += haversineMetres(pts[i - 1].lat, pts[i - 1].lng, pts[i].lat, pts[i].lng);
 		}
 		return total;
 	}

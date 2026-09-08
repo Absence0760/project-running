@@ -28,8 +28,13 @@
 // exists to show the divergence from — an independent oracle is the one place
 // a second copy is the point rather than the defect.
 //
-// The table is the residue, not a blessing. Every entry but the canonical is
-// owed the same move, and each states what is stopping it.
+// The table is one row long now: the canonical, and nothing else. The nine
+// that remained when it was written have all moved onto it (§ 1523),
+// so the table has stopped being a residue and become an assertion — the
+// first test fails the moment a second module computes an arc, and a row
+// added to admit one has to say why it cannot import the canonical instead.
+// A one-row table is the healthy state of this guard, not a reason to delete
+// it.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -51,19 +56,7 @@ const GREAT_CIRCLE_SOURCES: { file: string; arcs: number; reason: string }[] = [
 		file: 'src/lib/runs/run_stats.ts',
 		arcs: 1,
 		reason:
-			'THE canonical. Exported as `haversineMetres`, clamps `a` into [0, 1] before the arc, and is what `run_stats.dart` computes point for point — so it is the one form both platforms already agree on. Fifteen Dart modules import it; the web modules that do not yet are below.',
-	},
-	{
-		file: 'src/lib/components/RouteBuilder.svelte',
-		arcs: 1,
-		reason:
-			'Web-only, and already imports the shared distance through `routing_quality.haversineM` under an alias while keeping a private copy beside it. Removing the copy is a components-tree change.',
-	},
-	{
-		file: 'src/lib/components/RunSegmentEfforts.svelte',
-		arcs: 1,
-		reason:
-			'Web-only, and the arc is INLINE in the effort loop rather than in a named function — invisible to `check_shared_reimplementations.mjs`, which does not extract anonymous bodies. A components-tree change.',
+			'THE canonical. Exported as `haversineMetres`, clamps `a` into [0, 1] before the arc, and is what `run_stats.dart` computes point for point — so it is the one form both platforms already agree on. Every other module in this tree that needs a great-circle distance imports it.',
 	},
 ];
 
