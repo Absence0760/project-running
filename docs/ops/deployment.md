@@ -292,6 +292,18 @@ row from any of them is read rather than waited for. The root `CLAUDE.md` says
 the same about `pr-title-lint.yml`'s `lint title` in the words a contributor
 meets it in, and rule 8 pins that sentence too.
 
+There is a third option for `lint title` and it is deliberately not taken:
+adding it to the required-status-check set is a repo setting, and it is cheap
+(the job is ~20 s and depends on nothing). It stays out because the required set
+being **exactly one context** is a property worth more than this check --
+`ci.yml` is the one place a job's red is guaranteed to block, and every other
+guard in this repo has been folded into it rather than added beside it
+([§ 1149](../architecture/decisions.md), [§ 1264](../architecture/decisions.md)).
+A second context would make "what blocks a merge" a question with two answers,
+one of them invisible to every guard in the tree. A bad PR title is caught by a
+red row and fixed with a retitle; that is the trade
+([§ 1585](../architecture/decisions.md)).
+
 
 ### CodeQL is the exception, and it is a repo setting
 
