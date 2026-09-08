@@ -1608,13 +1608,13 @@ export const REGISTRY = [
 				],
 			},
 			{
-				label: 'mobile (apps/mobile_android/lib/gym_prs.dart)',
+				label: 'mobile (packages/core_models/lib/src/exercise_key.dart)',
 				sites: (ctx) => [
 					{
 						key: 'post-fold (after the table)',
 						where: 'kExerciseCasePostFold',
 						values: parseCaseFoldPair(
-							ctx.read('apps/mobile_android/lib/gym_prs.dart'),
+							ctx.read('packages/core_models/lib/src/exercise_key.dart'),
 							'kExerciseCasePostFold = [',
 						),
 					},
@@ -1661,13 +1661,13 @@ export const REGISTRY = [
 				],
 			},
 			{
-				label: 'mobile (apps/mobile_android/lib/gym_prs.dart)',
+				label: 'mobile (packages/core_models/lib/src/exercise_key.dart)',
 				sites: (ctx) => [
 					{
 						key: 'whitespace',
 						where: 'kExerciseWhitespace',
 						values: parseWhitespaceClass(
-							ctx.read('apps/mobile_android/lib/gym_prs.dart'),
+							ctx.read('packages/core_models/lib/src/exercise_key.dart'),
 							'kExerciseWhitespace =',
 						),
 					},
@@ -1835,7 +1835,7 @@ function splitColumns(literal) {
 // must not drift is the three rails from EACH OTHER, which is this.
 
 export const WEB_FOLD_TABLE = 'apps/web/src/lib/gym/exercise_fold_table.ts';
-export const MOBILE_FOLD_TABLE = 'apps/mobile_android/lib/exercise_fold_table.dart';
+export const MOBILE_FOLD_TABLE = 'packages/core_models/lib/src/exercise_fold_table.dart';
 
 /** Below this a parse has read a fragment of the table, not the table. */
 export const FOLD_TABLE_MIN = 1000;

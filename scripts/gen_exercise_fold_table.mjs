@@ -2,13 +2,17 @@
 // Generates the frozen case-fold table the exercise grouping key is lower-cased
 // through, from the Unicode data the running Node carries.
 //
-//   node scripts/gen_exercise_fold_table.mjs          # rewrite the two client tables
+//   node scripts/gen_exercise_fold_table.mjs          # rewrite both client tables
 //   node scripts/gen_exercise_fold_table.mjs --sql    # print the SQL literals a migration pastes
 //
 // Output (committed, never hand-edit — re-run this instead):
 //   apps/web/src/lib/gym/exercise_fold_table.ts
-//   apps/mobile_android/lib/exercise_fold_table.dart
-//   apps/mobile_ios/lib/exercise_fold_table.dart      (the twin, decisions § 39)
+//   packages/core_models/lib/src/exercise_fold_table.dart
+//
+// There is ONE Dart copy, not a twinned pair: the table moved into
+// `core_models` with the derivation that reads it (decisions § 1515), and that
+// package is shared rather than mirrored, so the iOS app consumes it through
+// the same dependency the Android app does.
 //
 // Why a table at all. `normaliseExerciseName` is derived on three rails and the
 // answer is PERSISTED as `gym_sets.exercise_key`, `gym_routine_exercises.
@@ -46,8 +50,7 @@ import { fileURLToPath } from 'node:url';
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 export const WEB_OUTPUT_PATH = 'apps/web/src/lib/gym/exercise_fold_table.ts';
-export const MOBILE_OUTPUT_PATH = 'apps/mobile_android/lib/exercise_fold_table.dart';
-export const IOS_OUTPUT_PATH = 'apps/mobile_ios/lib/exercise_fold_table.dart';
+export const MOBILE_OUTPUT_PATH = 'packages/core_models/lib/src/exercise_fold_table.dart';
 
 /**
  * The one code point whose UNCONDITIONAL full lowercase mapping is longer than
@@ -178,7 +181,7 @@ export function renderTs(entries, unicodeVersion) {
 // re-validates the three CHECKs that name it (decisions § 1175).
 //
 // Unicode SIMPLE lowercase mapping, the authority the exercise grouping key is
-// folded through on all three rails — here, \`apps/mobile_android/lib/
+// folded through on all three rails — here, \`packages/core_models/lib/src/
 // exercise_fold_table.dart\`, and the \`translate()\` inside
 // \`public.normalise_exercise_name\`. Every entry is 1:1 and no value is itself
 // a key, so one pass in any order gives the same answer.
@@ -226,6 +229,10 @@ export function renderDart(entries, unicodeVersion) {
 // exercise_fold_table.ts\`, and the \`translate()\` inside
 // \`public.normalise_exercise_name\`. Every entry is 1:1 and no value is itself
 // a key, so one pass in any order gives the same answer.
+//
+// This is the ONE Dart copy: it lives in \`core_models\` because \`api_client\`
+// derives the key too, and that package is shared rather than mirrored, so the
+// iOS app consumes it through the same dependency the Android app does.
 //
 // Dart's own \`toLowerCase()\` is not this table and must not be reached for:
 // it is simple case mapping from an older Unicode revision, measured to leave
@@ -290,10 +297,9 @@ function main() {
 	const dart = renderDart(entries, unicodeVersion);
 	writeFileSync(join(REPO_ROOT, WEB_OUTPUT_PATH), renderTs(entries, unicodeVersion), 'utf8');
 	writeFileSync(join(REPO_ROOT, MOBILE_OUTPUT_PATH), dart, 'utf8');
-	writeFileSync(join(REPO_ROOT, IOS_OUTPUT_PATH), dart, 'utf8');
 	console.log(
 		`${entries.length} folded code points (${entries.filter((e) => e.cp > 0xffff).length} non-BMP), Unicode ${unicodeVersion}\n` +
-			`  ${WEB_OUTPUT_PATH}\n  ${MOBILE_OUTPUT_PATH}\n  ${IOS_OUTPUT_PATH}\n` +
+			`  ${WEB_OUTPUT_PATH}\n  ${MOBILE_OUTPUT_PATH}\n` +
 			`  --sql prints the literals for the migration that moves the SQL rail with them`,
 	);
 }

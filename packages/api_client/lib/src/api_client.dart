@@ -6124,17 +6124,19 @@ class ApiClient {
   /// always owned by the signed-in user. Returns null when signed out or on
   /// conflict/error (e.g. a duplicate name_key in the user's own customs).
   ///
-  /// The blank test is `trim()` because in Dart that IS the rule, not because
-  /// blankness is Dart's idea of whitespace. The rule is `namesAnExercise` —
-  /// `normaliseExerciseName(name) != ''` — which this package cannot call, and
-  /// does not need to: the case fold maps code points to code points and never
-  /// deletes one, so a name folds to the empty key exactly when every code
-  /// point of it is in `kExerciseWhitespace`, and that class is Unicode
-  /// `White_Space` plus U+FEFF, which is `trim()`'s set verbatim.
-  /// `exercise_blank_name_guard_test.dart` measures the identity in both
-  /// directions over every assignable code point, so widening the class fails
-  /// there rather than letting a name that folds to `''` reach the server and
-  /// come back as a 23514 this method reports as an unexplained null.
+  /// Blankness is decided on the KEY, by `namesAnExercise` — the same call web
+  /// makes. The display spelling is trimmed because a stored display string
+  /// should not carry leading or trailing space, but that trim is not the rule:
+  /// `name_key` is stamped from `name` by trigger and carries a
+  /// `length(...) between 1 and 120` CHECK, and the fold's whitespace class is
+  /// spelled out by code point precisely because the three runtimes that
+  /// persist this key disagree past ASCII (decisions § 790).
+  ///
+  /// It used to be `trimmed.isEmpty`, which answered identically — Dart's
+  /// `trim()` strips `kExerciseWhitespace` verbatim — but stated the rule by a
+  /// coincidence of the runtime rather than by the class, in a package that
+  /// could not reach the class at all. Moving the derivation into `core_models`
+  /// is what closed that (decisions § 1515).
   Future<ExerciseRow?> createCustomExercise({
     required String name,
     String category = 'other',
@@ -6143,7 +6145,7 @@ class ApiClient {
     final uid = _client.auth.currentUser?.id;
     if (uid == null) return null;
     final trimmed = name.trim();
-    if (trimmed.isEmpty) return null;
+    if (!namesAnExercise(trimmed)) return null;
     try {
       final row = await _client
           .from(ExerciseRow.table)
@@ -6591,8 +6593,12 @@ class ApiClient {
   }) async {
     final uid = _client.auth.currentUser?.id;
     if (uid == null) throw Exception('Not authenticated');
+    // Blankness on the KEY, not on the display spelling: `exercise_key` is
+    // stamped from this name and carries a `length(...) between 1 and 120`
+    // CHECK, so a name that folds to the empty key is a 23514 the caller
+    // cannot act on (decisions § 1367).
     final kept = exercises
-        .where((e) => e.exerciseName.trim().isNotEmpty)
+        .where((e) => namesAnExercise(e.exerciseName))
         .toList(growable: false);
     final row = await _client
         .from(GymRoutineRow.table)

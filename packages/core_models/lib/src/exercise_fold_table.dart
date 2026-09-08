@@ -10,6 +10,10 @@
 // `public.normalise_exercise_name`. Every entry is 1:1 and no value is itself
 // a key, so one pass in any order gives the same answer.
 //
+// This is the ONE Dart copy: it lives in `core_models` because `api_client`
+// derives the key too, and that package is shared rather than mirrored, so the
+// iOS app consumes it through the same dependency the Android app does.
+//
 // Dart's own `toLowerCase()` is not this table and must not be reached for:
 // it is simple case mapping from an older Unicode revision, measured to leave
 // 465 of these code points alone (decisions § 1175).
