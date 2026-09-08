@@ -319,17 +319,6 @@ void main() {
     });
   });
 
-  group('haversineM', () {
-    test('zero distance for identical points', () {
-      expect(haversineM(0, 0, 0, 0), closeTo(0, 1e-9));
-    });
-    test('matches a known city pair to within 1 km', () {
-      // London (-0.1278, 51.5074) ↔ Paris (2.3522, 48.8566) ~344 km.
-      final d = haversineM(-0.1278, 51.5074, 2.3522, 48.8566);
-      expect(d, closeTo(344000, 1000));
-    });
-  });
-
   group('bboxRadius', () {
     test('returns half-diagonal for a square bbox around the centroid', () {
       // 1-degree square at the equator → each corner is 0.5° from the

@@ -1,4 +1,3 @@
-import 'dart:math';
 
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +5,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'package:core_models/core_models.dart' show ActivityType;
+
+import '../run_stats.dart' show haversineMetres;
 
 /// Pace colour ramp — slow → fast, 6 buckets. Designed to read clearly
 /// on top of the dark map style and to map "hotter colour = faster" in
@@ -94,20 +95,9 @@ double? _segmentSpeedMps(Waypoint a, Waypoint b) {
   if (ta == null || tb == null) return null;
   final dtSec = tb.difference(ta).inMilliseconds / 1000.0;
   if (dtSec <= 0) return null;
-  final d = _haversineMetres(a, b);
+  final d = haversineMetres(a.lat, a.lng, b.lat, b.lng);
   if (d <= 0) return null;
   return d / dtSec;
-}
-
-double _haversineMetres(Waypoint a, Waypoint b) {
-  const r = 6371000.0;
-  final lat1 = a.lat * pi / 180;
-  final lat2 = b.lat * pi / 180;
-  final dLat = (b.lat - a.lat) * pi / 180;
-  final dLng = (b.lng - a.lng) * pi / 180;
-  final h = sin(dLat / 2) * sin(dLat / 2) +
-      cos(lat1) * cos(lat2) * sin(dLng / 2) * sin(dLng / 2);
-  return 2 * r * asin(sqrt(h));
 }
 
 /// Build the list of [Polyline]s that make up the pace-coloured, age-faded

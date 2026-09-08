@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+import 'run_stats.dart' as run_stats;
 
 /// Pure race auto-match scoring. Twin of
 /// `apps/web/src/lib/integrations/race_match.ts` — keep in lockstep
@@ -101,19 +101,11 @@ bool isRaceMatchCandidate(RunMatchInput run, ListingMatchInput listing) {
   return raceMatchScore(run, listing) >= raceMatchThreshold;
 }
 
-/// Great-circle distance in metres between two points (haversine). Exposed so
-/// a caller can compute distance_m_away when the RPC didn't.
-double haversineMetres(LatLng a, LatLng b) {
-  const r = 6371000.0;
-  double toRad(double d) => d * math.pi / 180;
-  final dLat = toRad(b.lat - a.lat);
-  final dLng = toRad(b.lng - a.lng);
-  final lat1 = toRad(a.lat);
-  final lat2 = toRad(b.lat);
-  final h = math.pow(math.sin(dLat / 2), 2) +
-      math.cos(lat1) * math.cos(lat2) * math.pow(math.sin(dLng / 2), 2);
-  return 2 * r * math.asin(math.min(1, math.sqrt(h)));
-}
+/// Great-circle distance in metres between two points. The object-shaped door
+/// onto the shared `haversineMetres`, not a second formula. Exposed so a
+/// caller can compute distance_m_away when the RPC didn't.
+double haversineMetres(LatLng a, LatLng b) =>
+    run_stats.haversineMetres(a.lat, a.lng, b.lat, b.lng);
 
 bool _sameCalendarDay(String a, String b) => _dayKey(a) == _dayKey(b);
 

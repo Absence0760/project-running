@@ -22,6 +22,7 @@
 	import { payloadSha256Hex } from '$lib/util/payload_hash';
 	import { formatDistance, getUnit } from '$lib/format/units.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
+	import { haversineMetres } from '$lib/runs/run_stats';
 	import { searchPlaces } from '$lib/routes/geocoding';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { watchMapResize } from '$lib/routes/map_resize';
@@ -1065,15 +1066,12 @@
 		});
 	}
 
+	/// The `[lng, lat]` door onto the shared `haversineMetres`, beside
+	/// `routingHaversineM`'s `{lng, lat}` one. Two shapes, one formula — the
+	/// private copy that used to sit here measured the same rendered polyline
+	/// by a different arc than the imported helper measured its waypoints.
 	function haversine(a: [number, number], b: [number, number]): number {
-		const R = 6371000;
-		const toRad = (d: number) => (d * Math.PI) / 180;
-		const dLat = toRad(b[1] - a[1]);
-		const dLng = toRad(b[0] - a[0]);
-		const sinLat = Math.sin(dLat / 2);
-		const sinLng = Math.sin(dLng / 2);
-		const h = sinLat * sinLat + Math.cos(toRad(a[1])) * Math.cos(toRad(b[1])) * sinLng * sinLng;
-		return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+		return haversineMetres(a[1], a[0], b[1], b[0]);
 	}
 
 	// --- Public API ---

@@ -7,6 +7,8 @@
 // the race's band. This is an INFORM-tier suggestion — nothing writes without
 // the user confirming.
 
+import { haversineMetres as sharedHaversineMetres } from '../runs/run_stats';
+
 export type RaceDistanceBand = '5k' | '10k' | 'half' | 'marathon' | 'ultra';
 
 /// Confidence at or above which a candidate is worth offering.
@@ -85,21 +87,15 @@ export function isRaceMatchCandidate(run: RunMatchInput, listing: ListingMatchIn
 	return raceMatchScore(run, listing) >= RACE_MATCH_THRESHOLD;
 }
 
-/// Great-circle distance in metres between two lat/lng points (haversine).
-/// Exposed so a caller can compute distance_m_away when the RPC didn't.
+/// Great-circle distance in metres between two lat/lng points. The
+/// object-shaped door onto the shared `haversineMetres`, not a second
+/// formula. Exposed so a caller can compute distance_m_away when the RPC
+/// didn't.
 export function haversineMetres(
 	a: { lat: number; lng: number },
 	b: { lat: number; lng: number }
 ): number {
-	const R = 6371000;
-	const toRad = (d: number) => (d * Math.PI) / 180;
-	const dLat = toRad(b.lat - a.lat);
-	const dLng = toRad(b.lng - a.lng);
-	const lat1 = toRad(a.lat);
-	const lat2 = toRad(b.lat);
-	const h =
-		Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-	return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+	return sharedHaversineMetres(a.lat, a.lng, b.lat, b.lng);
 }
 
 function sameCalendarDay(a: string, b: string): boolean {

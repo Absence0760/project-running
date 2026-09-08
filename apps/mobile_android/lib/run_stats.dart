@@ -69,6 +69,19 @@ Duration movingTimeOf(
   return Duration(milliseconds: movingMs);
 }
 
+/// Relative slack on the window comparison. `cum` is an accumulated sum of
+/// hundreds of great-circle legs, so a track that IS exactly the window
+/// measures a hair either side of it and the strict `<` decided whether a
+/// nominally-10.00 km effort produced a best at all on the last bit. Scaled by
+/// the window rather than absolute, because the drift grows with the sum:
+/// measured, an evenly-spaced 10 km track of 1 000 legs sums to
+/// 9 999.999 999 999 900 m, and the largest relative drift over 20 000 legs of
+/// a marathon window is 9.2e-14. 1e-9 of the marathon window is 42 um — four
+/// orders of magnitude above that and far below any GPS fix. Web's
+/// `WINDOW_TOLERANCE_RATIO` in `integrations/garmin-fit.ts` and the Deno
+/// importer's own copy carry the same number.
+const double windowToleranceRatio = 1e-9;
+
 /// Fastest continuous `windowMetres` covered anywhere in the track.
 ///
 /// This is what users expect "Fastest 5k" to mean — the quickest rolling
@@ -102,15 +115,16 @@ Duration? fastestWindowOf(List<Waypoint> track, double windowMetres) {
           track[i].lng,
         );
   }
-  if (cum[n - 1] < windowMetres) return null;
+  final covers = windowMetres * (1 - windowToleranceRatio);
+  if (cum[n - 1] < covers) return null;
 
   Duration? best;
   var i = 0;
   for (var j = 1; j < n; j++) {
-    while (i + 1 < j && cum[j] - cum[i + 1] >= windowMetres) {
+    while (i + 1 < j && cum[j] - cum[i + 1] >= covers) {
       i++;
     }
-    if (cum[j] - cum[i] < windowMetres) continue;
+    if (cum[j] - cum[i] < covers) continue;
 
     final ti = track[i].timestamp;
     final tj = track[j].timestamp;

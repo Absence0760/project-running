@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/run_stats.dart';
@@ -387,6 +389,52 @@ void main() {
     test('zero (or negative) elapsed returns null', () {
       expect(averagePaceSecPerKm(2000, 0), isNull);
       expect(averagePaceSecPerKm(2000, -1), isNull);
+    });
+  });
+
+  group('fastestWindowOf boundary', () {
+    const mPerDeg = 6371000 * pi / 180;
+
+    List<Waypoint> evenEquatorTrack(int legs, double stepM, int stepS) => [
+          for (var i = 0; i <= legs; i++)
+            Waypoint(
+              lat: 0,
+              lng: i * stepM / mPerDeg,
+              timestamp: DateTime.utc(2026, 1, 1, 9, 0, i * stepS),
+            ),
+        ];
+
+    test('a track that measures exactly the window still yields a best', () {
+      // Fifty 100 m legs at the equator IS a 5 km run at 5:00/km, and the
+      // accumulated haversine sum of it lands a hair under 5 000 m. Compared
+      // strictly, that decided there was no 5 km effort in a 5 km run on the
+      // last bit of a float. [windowToleranceRatio] scales with the window
+      // because the drift does. Web's twin case is in
+      // `integrations/embedded_best_efforts.test.ts`.
+      final track = evenEquatorTrack(50, 100, 30);
+      var cum = 0.0;
+      for (var i = 1; i < track.length; i++) {
+        cum += haversineMetres(
+          track[i - 1].lat,
+          track[i - 1].lng,
+          track[i].lat,
+          track[i].lng,
+        );
+      }
+      expect(cum, lessThan(5000),
+          reason: 'fixture must land short of the window, measured $cum');
+      expect(5000 - cum, lessThan(1e-9),
+          reason: 'and only just, measured ${5000 - cum}');
+      expect(fastestWindowOf(track, 5000)?.inSeconds, 1500);
+    });
+
+    test('the tolerance is relative, so it never admits a real shortfall', () {
+      // A millimetre short is a real shortfall at every distance the app
+      // measures: the ratio of the marathon window is 42 um, twenty times
+      // less than a millimetre, so the answer stays null.
+      expect(windowToleranceRatio * 42195, lessThan(0.001));
+      expect(fastestWindowOf(evenEquatorTrack(50, 100 - 0.001 / 50, 30), 5000),
+          isNull);
     });
   });
 

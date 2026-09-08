@@ -2315,7 +2315,6 @@ The archive-column allowlist. A run carrying `kind` — dropped by migration `20
 Run by this lane and passing: `apps/web/src/lib/{core,backup,training,social}/*.test.ts` under `tsx --test` (1425 tests, 0 failures), `npm run check` (2575 files, 0 errors, 5 pre-existing `state_referenced_locally` warnings in `PlanEditor.svelte`), `apps/web`'s `tsconfig_coverage.test.mjs` (3/3), and `npm run check:script-types`.
 
 NOT run by this lane, and not claimed: Playwright, any Flutter suite, the full web unit suite, and anything needing the local Supabase stack.
-||||||| c96cf78c4
 
 ## #789 round 46 (2026-09-07)
 
@@ -2357,3 +2356,17 @@ check covers every field's own number. Six fields across three of the ten builde
 were failing it when it was written. The eleventh test is the staleness half: it
 scans the directory for `export function buildShare*` and fails in both directions,
 so a new entity builder cannot ship uncensused.
+
+## #789 round 46 (2026-09-07)
+
+### `apps/mobile_android/test/great_circle_sources_test.dart` — 4 tests
+
+The Dart mirror of `routes/great_circle_sources.test.ts`, and the reason that class of divergence survived: the web tree has been guarded since § 1470 while the phone had none, so `route_snap.dart` importing the clamped helper and `route_snap.ts` computing its own unclamped arc read as healthy from either side alone. Measured on the round-46 base, `apps/mobile_android/lib` carried **fourteen arcs across thirteen files** — two `atan2`, twelve `asin`, six of them `min(1, …)`-clamped, one clamped through a variable and five clamped at nothing — so seven answered NaN where `a` rounds past 1 and seven answered half a circumference.
+
+Anchored on the arc of a square root, as the web guard is, so a bearing's own `atan2(y, x)` is excluded by construction rather than by exclusion. Both tables are one row long now: the canonical, and a row added to admit a second copy has to say why it cannot import `run_stats`. The fourth test proves the matcher still fires against a moved root or a broken regex (§ 510).
+
+### `embedded_best_efforts.test.ts` +2 · `run_stats_test.dart` +2 · `strava-import/index.test.ts` +3
+
+The embedded best-effort window boundary, on all three rails that compute it. Fifty 100 m legs at the equator IS a 5 km run at 5:00/km, and the accumulated haversine sum measures **4999.999 999 999 998 2 m** — 1.819e-12 m short — so a strict `<` reported no 5 km effort in a 5 km run. Each rail now pins the boundary case and the shortfall case (a millimetre short is twenty times the widest slack `WINDOW_TOLERANCE_RATIO` ever grants, so it still answers null). All three mutation-tested: reverting the tolerance fails the boundary test on each.
+
+The Deno rail carries one more. Its own arc was the unclamped `atan2`, which sums the SAME fifty legs to 5000.000 000 000 001 8 m — so before this the importer wrote a `fastest_5k_s` for a track the phone found no best in, on one ULP. `embeddedHaversineM` is exported and pinned to that exact sum rather than to a tolerance, because a tolerance is precisely what cannot see a one-ULP divergence. Its value is registered as a third rail in `check_shared_constants.mjs`, whose new `parseNamedNumber` reads a literal by VALUE — `parseNamedInt` reads `1e-9` as `1` and would have certified three different numbers as one.

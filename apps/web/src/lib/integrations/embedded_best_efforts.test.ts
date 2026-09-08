@@ -9,7 +9,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import type { TrackPoint } from '../types';
-import { EMBEDDED_BEST_DISTANCES, computeEmbeddedBests, fastestWindowSeconds } from './garmin-fit';
+import {
+	EMBEDDED_BEST_DISTANCES,
+	WINDOW_TOLERANCE_RATIO,
+	computeEmbeddedBests,
+	fastestWindowSeconds,
+} from './garmin-fit';
+import { haversineMetres } from '../runs/run_stats';
 
 const M_PER_DEG = 6371000 * (Math.PI / 180);
 
@@ -84,4 +90,32 @@ test('computeEmbeddedBests — a track with no timestamps writes nothing (no fak
 
 test('fastestWindowSeconds — null when the track is shorter than the window', () => {
 	assert.equal(fastestWindowSeconds(evenTrack(10, 100, 30), 5000), null);
+});
+
+test('fastestWindowSeconds — a track that measures exactly the window still yields a best', () => {
+	// Fifty 100 m legs at the equator IS a 5 km run at 5:00/km, and the
+	// accumulated haversine sum of it measures 4999.999 999 999 998 2 m —
+	// 1.819e-12 m short. Compared strictly, that decided there was no 5 km
+	// effort in a 5 km run on the last bit of a float. `WINDOW_TOLERANCE_RATIO`
+	// scales with the window because the drift does; the fixture is the suite's
+	// own `evenTrack`, so the case is the ordinary one rather than a contrivance.
+	const track = evenTrack(50, 100, 30);
+	let cum = 0;
+	for (let i = 1; i < track.length; i++) {
+		cum += haversineMetres(track[i - 1].lat, track[i - 1].lng, track[i].lat, track[i].lng);
+	}
+	assert.ok(cum < 5000, `fixture must land short of the window, measured ${cum}`);
+	assert.ok(5000 - cum < 1e-9, `and only just, measured ${5000 - cum}`);
+	assert.equal(fastestWindowSeconds(track, 5000), 1500);
+	assert.equal(computeEmbeddedBests(track).fastest_5k_s, 1500);
+});
+
+test('fastestWindowSeconds — the tolerance is relative, so it never admits a real shortfall', () => {
+	// A millimetre short of the window is a real shortfall at every distance
+	// the app measures: `WINDOW_TOLERANCE_RATIO` of the marathon window is
+	// 42 µm, so a millimetre is more than twenty times the widest slack the
+	// constant ever grants and the answer stays null.
+	assert.ok(WINDOW_TOLERANCE_RATIO * 42195 < 0.001);
+	const short = evenTrack(50, 100 - 0.001 / 50, 30);
+	assert.equal(fastestWindowSeconds(short, 5000), null);
 });

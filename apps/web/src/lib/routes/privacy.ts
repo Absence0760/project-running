@@ -5,6 +5,8 @@
 //
 // Pure functions. Unit-testable. No Svelte / Supabase dependencies.
 
+import { haversineMetres } from '../runs/run_stats';
+
 /// Declared as an ALIAS, not an interface, and that is load-bearing rather
 /// than stylistic: TypeScript gives an object type an implicit index signature
 /// only when it is an alias — an interface stays open to declaration merging
@@ -57,20 +59,4 @@ export function clipPointsToZones<T extends LatLng>(points: T[], zones: PrivacyZ
 	while (end > start && isInAnyZone(points[end], zones)) end--;
 
 	return points.slice(start, end + 1);
-}
-
-/// Great-circle distance between two lat/lng points, in metres.
-function haversineMetres(lat1: number, lng1: number, lat2: number, lng2: number): number {
-	const r = 6371000;
-	const dLat = ((lat2 - lat1) * Math.PI) / 180;
-	const dLng = ((lng2 - lng1) * Math.PI) / 180;
-	const sinLat = Math.sin(dLat / 2);
-	const sinLng = Math.sin(dLng / 2);
-	const a =
-		sinLat * sinLat +
-		Math.cos((lat1 * Math.PI) / 180) *
-			Math.cos((lat2 * Math.PI) / 180) *
-			sinLng *
-			sinLng;
-	return r * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }

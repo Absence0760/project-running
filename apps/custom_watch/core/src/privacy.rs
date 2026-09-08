@@ -11,8 +11,14 @@
 //! empty, so a caller renders no polyline at all rather than a lone point that
 //! gives the location away.
 //!
-//! Great-circle distance uses the same haversine (`atan2` form) the web/Dart
-//! twins use, so a watch clips a track identically to the phone and server.
+//! Great-circle distance uses `watch_core`'s one canonical haversine, so a
+//! watch clips a track identically to the phone and server. Its `atan2` spelling
+//! is no longer the twins' — § 1523 moved every web and Dart copy onto the
+//! clamped `asin` form of `run_stats` — and that difference is deliberate and
+//! recorded on [`haversine_metres`]: both forms are the same quantity in exact
+//! arithmetic, the clamp is what closed the NaN, and adopting the `asin`
+//! spelling here would move two pinned `course` projection figures by one ULP
+//! to buy nothing.
 //! Pure logic, no peripherals, no allocator.
 
 use heapless::Vec;

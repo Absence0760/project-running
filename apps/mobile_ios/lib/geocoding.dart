@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
+
+import 'run_stats.dart' show haversineMetres;
 
 /// MapTiler geocoding helper — mirrors the web's `handleSearch` in
 /// `apps/web/src/lib/components/RouteBuilder.svelte`. Returns up to
@@ -245,18 +246,6 @@ class GeocodedPlace {
   });
 }
 
-double haversineM(double lng1, double lat1, double lng2, double lat2) {
-  const r = 6371000.0;
-  double toRad(double d) => d * 3.141592653589793 / 180;
-  final dLat = toRad(lat2 - lat1);
-  final dLng = toRad(lng2 - lng1);
-  final sinLat = sin(dLat / 2);
-  final sinLng = sin(dLng / 2);
-  final h = sinLat * sinLat +
-      cos(toRad(lat1)) * cos(toRad(lat2)) * sinLng * sinLng;
-  return r * 2 * atan2(sqrt(h), sqrt(1 - h));
-}
-
 /// Max distance from the bbox centroid to one of its four corners.
 /// Mirrors web `bboxRadius`. For a country bbox this is hundreds of
 /// km; for a street address it collapses to a few hundred metres.
@@ -273,7 +262,7 @@ double bboxRadius(List<double> bbox, double centerLng, double centerLat) {
   ];
   var maxD = 0.0;
   for (final c in corners) {
-    final d = haversineM(centerLng, centerLat, c[0], c[1]);
+    final d = haversineMetres(centerLat, centerLng, c[1], c[0]);
     if (d > maxD) maxD = d;
   }
   return maxD;

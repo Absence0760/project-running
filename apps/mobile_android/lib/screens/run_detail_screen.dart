@@ -2956,7 +2956,7 @@ class _ElevationChartState extends State<_ElevationChart> {
     // Compute cumulative distance to this point.
     double cumDist = 0;
     for (var i = 1; i <= idx; i++) {
-      cumDist += _haversine(
+      cumDist += haversineMetres(
         widget.track[i - 1].lat,
         widget.track[i - 1].lng,
         widget.track[i].lat,
@@ -2974,7 +2974,7 @@ class _ElevationChartState extends State<_ElevationChart> {
       if (a.timestamp != null && b.timestamp != null) {
         double segDist = 0;
         for (var i = windowStart + 1; i <= windowEnd; i++) {
-          segDist += _haversine(
+          segDist += haversineMetres(
             widget.track[i - 1].lat, widget.track[i - 1].lng,
             widget.track[i].lat, widget.track[i].lng,
           );
@@ -3020,18 +3020,6 @@ class _ElevationChartState extends State<_ElevationChart> {
         ],
       ),
     );
-  }
-
-  static double _haversine(double lat1, double lng1, double lat2, double lng2) {
-    const r = 6371000.0;
-    final dLat = (lat2 - lat1) * math.pi / 180;
-    final dLng = (lng2 - lng1) * math.pi / 180;
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(lat1 * math.pi / 180) *
-            math.cos(lat2 * math.pi / 180) *
-            math.sin(dLng / 2) *
-            math.sin(dLng / 2);
-    return 2 * r * math.asin(math.sqrt(a));
   }
 }
 
@@ -3114,7 +3102,7 @@ class _ElevationPacePainter extends CustomPainter {
         continue;
       }
       final dt = b.timestamp!.difference(a.timestamp!).inMilliseconds / 1000.0;
-      final dist = _haversine(a.lat, a.lng, b.lat, b.lng);
+      final dist = haversineMetres(a.lat, a.lng, b.lat, b.lng);
       if (dt <= 0 || dist < 1) {
         paces.add(null);
       } else {
@@ -3235,18 +3223,6 @@ class _ElevationPacePainter extends CustomPainter {
           ..style = PaintingStyle.stroke,
       );
     }
-  }
-
-  static double _haversine(double lat1, double lng1, double lat2, double lng2) {
-    const r = 6371000.0;
-    final dLat = (lat2 - lat1) * math.pi / 180;
-    final dLng = (lng2 - lng1) * math.pi / 180;
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(lat1 * math.pi / 180) *
-            math.cos(lat2 * math.pi / 180) *
-            math.sin(dLng / 2) *
-            math.sin(dLng / 2);
-    return 2 * r * math.asin(math.sqrt(a));
   }
 
   @override

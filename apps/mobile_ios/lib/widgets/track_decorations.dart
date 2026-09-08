@@ -2,6 +2,8 @@ import 'dart:math';
 
 import 'package:latlong2/latlong.dart';
 
+import '../run_stats.dart' show haversineMetres;
+
 /// A km / mile boundary along a recorded track. The map renders a small
 /// circular pin with [label] inside (1, 2, 3 …).
 class DistanceMarker {
@@ -21,16 +23,9 @@ class TrackChevron {
 
 const double _metresPerMile = 1609.344;
 
-double _haversineMetres(LatLng a, LatLng b) {
-  const r = 6371000.0;
-  final lat1 = a.latitude * pi / 180;
-  final lat2 = b.latitude * pi / 180;
-  final dLat = (b.latitude - a.latitude) * pi / 180;
-  final dLng = (b.longitude - a.longitude) * pi / 180;
-  final h = sin(dLat / 2) * sin(dLat / 2) +
-      cos(lat1) * cos(lat2) * sin(dLng / 2) * sin(dLng / 2);
-  return 2 * r * asin(sqrt(h));
-}
+/// The `LatLng` door onto the shared `haversineMetres`, not a second formula.
+double _haversineMetres(LatLng a, LatLng b) =>
+    haversineMetres(a.latitude, a.longitude, b.latitude, b.longitude);
 
 /// Walk the polyline and emit a [DistanceMarker] at every kilometre (or
 /// mile when [useMiles] is true) boundary. Mirrors `computeDistanceMarkers`

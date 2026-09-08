@@ -170,6 +170,17 @@ function pointMs(p: TrackPoint): number | null {
 	return Number.isFinite(ms) ? ms : null;
 }
 
+/// Relative slack on the window comparison. `cum` is an accumulated sum of
+/// hundreds of great-circle legs, so a track that IS exactly the window
+/// measures a hair either side of it and the strict `<` decided whether a
+/// nominally-10.00 km effort produced a best at all on the last bit. Scaled by
+/// the window rather than absolute, because the drift grows with the sum:
+/// measured, an evenly-spaced 10 km track of 1 000 legs sums to
+/// 9 999.999 999 999 900 m, and the largest relative drift over 20 000 legs of
+/// a marathon window is 9.2e-14. 1e-9 of the marathon window is 42 µm — four
+/// orders of magnitude above that and far below any GPS fix.
+export const WINDOW_TOLERANCE_RATIO = 1e-9;
+
 /// Fastest continuous `windowMetres` (whole seconds) anywhere in the track,
 /// or null when the track has < 2 points, is shorter than the window, or has
 /// no timestamped window. Sliding-window with linear interpolation at the
@@ -186,13 +197,14 @@ export function fastestWindowSeconds(
 		cum[i] = cum[i - 1] +
 			haversineMetres(track[i - 1].lat, track[i - 1].lng, track[i].lat, track[i].lng);
 	}
-	if (cum[n - 1] < windowMetres) return null;
+	const covers = windowMetres * (1 - WINDOW_TOLERANCE_RATIO);
+	if (cum[n - 1] < covers) return null;
 
 	let best: number | null = null;
 	let i = 0;
 	for (let j = 1; j < n; j++) {
-		while (i + 1 < j && cum[j] - cum[i + 1] >= windowMetres) i++;
-		if (cum[j] - cum[i] < windowMetres) continue;
+		while (i + 1 < j && cum[j] - cum[i + 1] >= covers) i++;
+		if (cum[j] - cum[i] < covers) continue;
 
 		const ti = pointMs(track[i]);
 		const tj = pointMs(track[j]);
