@@ -92,10 +92,13 @@ test('the payouts page renders the note rather than an inline literal', () => {
 	assert.match(page, /m\('payouts\.merchantNote'\)/);
 });
 
-for (const loc of SUPPORTED_LOCALES) {
-	test(`${loc}: payouts.merchantNote is present and non-empty`, async () => {
+test('every locale carries the note', async () => {
+	for (const loc of SUPPORTED_LOCALES) {
 		const dict = (await CATALOGUE_LOADERS[loc]()) as Record<string, string>;
 		const note = dict['payouts.merchantNote'];
-		assert.ok(note !== undefined && note.trim().length > 0);
-	});
-}
+		assert.ok(
+			note !== undefined && note.trim().length > 0,
+			`${loc} has no payouts.merchantNote — the host would read the English one, or nothing`,
+		);
+	}
+});
