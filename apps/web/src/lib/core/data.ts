@@ -1903,6 +1903,31 @@ export async function setRouteClubId(routeId: string, clubId: string | null): Pr
 	if (error) throw error;
 }
 
+/// The viewer the READ is authorised as, rather than the one the reactive
+/// store has got round to.
+///
+/// A page awaits `auth.ready()` before its mount-time fetch, but that gate
+/// resolves on its own timeout when the initial session check is WEDGED
+/// (`stores/auth_ready.ts`), so the fetch can still run with `auth.user`
+/// null. supabase-js has the persisted token by then regardless, so PostgREST
+/// answers as the owner while the caller believes it is anon — which is how
+/// `fetchRouteById` handed an owner their own route privacy-clipped, with
+/// nothing re-fetching when the store caught up. `getSession()` awaits the
+/// client's own initialisation and reads the same persisted session the
+/// request carried, so it cannot disagree with what PostgREST saw.
+///
+/// The store is the fallback for a THROWN session read only, and it can only
+/// ever name the viewer themselves — never another account — so a stale
+/// answer can widen nothing it would not already have widened.
+async function currentViewerId(): Promise<string | null> {
+	try {
+		const { data } = await supabase.auth.getSession();
+		return data.session?.user?.id ?? null;
+	} catch {
+		return auth.user?.id ?? null;
+	}
+}
+
 /// Read a route by id. The OWNER gets the full `routes` row directly.
 /// Anon, non-owner, and non-owner club-member callers all get a
 /// privacy-clipped route: the polyline is routed through
@@ -1919,7 +1944,7 @@ export async function setRouteClubId(routeId: string, clubId: string | null): Pr
 /// route was deleted" apart from "we could not reach the server" and
 /// offer a retry instead of a headstone.
 export async function fetchRouteById(id: string): Promise<Route | null> {
-	const viewerId = auth.user?.id ?? null;
+	const viewerId = await currentViewerId();
 	const ownerRead = await supabase
 		.from('routes')
 		.select('*')
