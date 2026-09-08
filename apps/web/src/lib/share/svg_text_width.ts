@@ -63,7 +63,13 @@
 
 /// Headroom over the measured table for a face this code cannot see.
 /// The largest cross-host disagreement measured is 11.2 %; this is 25 %.
-const HOST_FACE_MARGIN = 1.25;
+///
+/// Exported for the render test, which grades the TABLE against the ink and
+/// has to divide this back out: the margin is declared headroom, not drift,
+/// and folding it into that ceiling made the ceiling a claim about both at
+/// once — passing on one host's Latin face and failing on a slightly narrower
+/// one, with nothing about the table having changed.
+export const HOST_FACE_MARGIN = 1.25;
 
 /// Advance widths in em for U+0020..U+007E, in code-point order.
 const ASCII_ADVANCE_EM = [
