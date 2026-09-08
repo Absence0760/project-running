@@ -5,9 +5,12 @@
 // job compiles it — `test-watch-ios`, on a macOS runner — and every other
 // claim about it rests on reading. `apps/watch_ios/scripts/check_xcstrings_parity.sh`
 // already holds the String Catalog against its two locale-declaration sites
-// (decisions § 761 / § 850). This guard holds the seven *other* things about
-// the tier that a bare `node` on Linux can honestly measure, each of which
-// fails in a way no Swift test and no `xcodebuild` run would report:
+// (decisions § 761 / § 850). This guard holds the *other* things about the
+// tier that a bare `node` on Linux can honestly measure, each of which fails
+// in a way no Swift test and no `xcodebuild` run would report. They are
+// numbered below and the run prints one `ok:` line per claim, so the count
+// lives in the output rather than in a sentence that goes stale — it said
+// "seven" while there were thirteen:
 //
 //   (1) Every string literal handed to a localizing SwiftUI / Foundation API
 //       has a String Catalog entry. A literal with no entry is NOT a build
@@ -124,6 +127,21 @@
 //       `HealthKitFailureTests.swift` would leave the `test-watch-ios` job
 //       green having never run the accumulator that decides whether a shipped
 //       run keeps its `avg_bpm` (decisions § 1350).
+//
+//  (14) The password grant and the seed credential are compiled OUT of a
+//       Release build, and Release still means Release. `SupabaseService.swift`
+//       holds GoTrue's password grant and a caller handing it
+//       `runner@test.com` / `testtest`, which is fine for exactly one reason:
+//       the whole file is `#if DEBUG`-fenced and this project defines DEBUG on
+//       the Debug configuration alone. Nothing held either half. Deleting the
+//       one `#if DEBUG` line, or adding DEBUG to the Release configuration,
+//       each ship a hardcoded credential and a second unguarded route to a
+//       session — and the compiler is happy, the Swift suite is green, and
+//       `env-isolation`'s scan of this same file looks for LIVE key shapes,
+//       which a seed password is not. The sites are DERIVED from the shape of
+//       a credential (a literal handed to a `password:` label, or the grant
+//       itself), so one appearing tomorrow in a different file is covered
+//       without a list to extend (decisions § 1596).
 //
 // WHAT THIS GUARD DOES NOT PROVE. It parses text. It does not compile Swift,
 // does not run it, and cannot see anything a type-checker would: claim (1)
@@ -733,6 +751,122 @@ export function buildSettingsBlocks(src) {
 					break;
 				}
 			}
+		}
+	}
+	return out;
+}
+
+/**
+ * Every `XCBuildConfiguration` in a pbxproj, as `{ name, settings }`.
+ *
+ * [buildSettingsBlocks] answers "what settings exist", which is all claim (10)
+ * needs. Claim (14) asks a question the body alone cannot answer — WHICH
+ * configuration a setting is on — because `DEBUG` in the Debug configuration
+ * is the whole point of the fence and `DEBUG` in the Release one dissolves it.
+ * Xcode serialises the pair in a fixed order (`isa`, then `buildSettings`,
+ * then `name`), so the name is read forward from the block rather than from
+ * the object's trailing comment, which is cosmetic and can be stale.
+ * @param {string} src
+ * @returns {{ name: string, settings: string }[]}
+ */
+export function xcodeBuildConfigurations(src) {
+	/** @type {{ name: string, settings: string }[]} */
+	const out = [];
+	const re = /isa\s*=\s*XCBuildConfiguration\s*;/g;
+	let m;
+	while ((m = re.exec(src)) !== null) {
+		const settingsAt = src.indexOf('buildSettings', m.index);
+		if (settingsAt === -1) continue;
+		const open = src.indexOf('{', settingsAt);
+		if (open === -1) continue;
+		let depth = 0;
+		let end = -1;
+		for (let i = open; i < src.length; i += 1) {
+			if (src[i] === '{') depth += 1;
+			else if (src[i] === '}') {
+				depth -= 1;
+				if (depth === 0) {
+					end = i;
+					break;
+				}
+			}
+		}
+		if (end === -1) continue;
+		const name = /\bname\s*=\s*([A-Za-z0-9_"'.-]+)\s*;/.exec(src.slice(end, end + 400));
+		out.push({
+			name: name === null ? '' : name[1].replace(/["']/g, ''),
+			settings: src.slice(open, end + 1),
+		});
+	}
+	return out;
+}
+
+/**
+ * For each line of [src], whether it sits inside a `#if DEBUG` branch.
+ *
+ * A DEBUG-fenced file is not a file that happens to begin with `#if DEBUG` —
+ * the fence can be anywhere, can nest, and an `#else` arm of one is the arm
+ * that DOES ship. So the answer is per line and the walk keeps a stack, with
+ * `#elseif` replacing the current arm's verdict and `#else` inverting it to
+ * false (the negation of a DEBUG-only branch is a branch that ships).
+ *
+ * `#if !DEBUG` reads as unfenced, which is the direction that matters: it is
+ * the arm compiled into Release.
+ * @param {string} src
+ * @returns {boolean[]}
+ */
+export function debugFencedLines(src) {
+	const lines = src.split('\n');
+	const fenced = new Array(lines.length).fill(false);
+	/** @type {boolean[]} */
+	const stack = [];
+	/** @param {string} cond */
+	const isDebug = (cond) => /\bDEBUG\b/.test(cond) && !/!\s*DEBUG\b/.test(cond);
+	for (let i = 0; i < lines.length; i += 1) {
+		const t = lines[i].trim();
+		if (/^#if\b/.test(t)) {
+			stack.push(isDebug(t));
+			continue;
+		}
+		if (/^#elseif\b/.test(t)) {
+			if (stack.length > 0) stack[stack.length - 1] = isDebug(t);
+			continue;
+		}
+		if (/^#else\b/.test(t)) {
+			if (stack.length > 0) stack[stack.length - 1] = false;
+			continue;
+		}
+		if (/^#endif\b/.test(t)) {
+			stack.pop();
+			continue;
+		}
+		fenced[i] = stack.some(Boolean);
+	}
+	return fenced;
+}
+
+/**
+ * Line numbers (1-based) in [src] that hand a STRING LITERAL to a `password:`
+ * label, or call GoTrue's password grant.
+ *
+ * Keyed on the shape of a credential rather than on the seed account's
+ * spelling: `runner@test.com` / `testtest` is one hardcoded pair and the guard
+ * is about the class. `password: String` in a signature has no literal after
+ * the colon and is not a site; `"password": password` in a body dictionary has
+ * no literal either.
+ * @param {string} src
+ * @returns {{ line: number, what: string }[]}
+ */
+export function credentialSites(src) {
+	/** @type {{ line: number, what: string }[]} */
+	const out = [];
+	const lines = src.split('\n');
+	for (let i = 0; i < lines.length; i += 1) {
+		if (/\bpassword\s*:\s*"/.test(lines[i])) {
+			out.push({ line: i + 1, what: 'a hardcoded password literal' });
+		}
+		if (/grant_type=password/.test(lines[i])) {
+			out.push({ line: i + 1, what: "GoTrue's password grant" });
 		}
 	}
 	return out;
@@ -1761,6 +1895,92 @@ export function check(
 		}
 		if (agreed === COVERAGE_RAILS.length) {
 			ok.push(`${agreed} heart-rate coverage figures agree with Wear OS's`);
+		}
+	}
+
+	// (14) The password grant and the seed credential are compiled out of
+	//      Release, and Release still means Release.
+	//
+	//      `SupabaseService.swift` holds a GoTrue password grant and a caller
+	//      that hands it `runner@test.com` / `testtest`. That is fine, and it
+	//      is fine for exactly one reason: the whole file is inside `#if DEBUG`
+	//      and this project defines `DEBUG` on the Debug configuration alone,
+	//      so a Release build compiles none of it. Nothing held either half.
+	//      Deleting one line — the `#if DEBUG` — ships a hardcoded credential
+	//      and a second, wholly unguarded route to a session, and the compiler
+	//      is happy, the Swift suite is green, and `env-isolation`'s scan of
+	//      this same file looks for LIVE key shapes and would not see a seed
+	//      password. Adding `DEBUG` to the Release configuration does the same
+	//      thing from the other end and leaves the fence in place to read as
+	//      protection.
+	//
+	//      So both halves, and the sites are DERIVED: any Swift line in the
+	//      tree passing a literal to a `password:` label, or naming the
+	//      password grant, must be DEBUG-fenced — a new one tomorrow in a
+	//      different file is covered without anyone extending a list.
+	{
+		const before = errors.length;
+		let sites = 0;
+		for (const dir of SWIFT_DIRS) {
+			for (const name of readdirSync(join(watchRoot, dir)).sort()) {
+				if (!name.endsWith('.swift')) continue;
+				const rel = join(dir, name);
+				const raw = read(rel);
+				const fenced = debugFencedLines(raw);
+				for (const site of credentialSites(raw)) {
+					sites += 1;
+					if (fenced[site.line - 1]) continue;
+					errors.push(
+						`${rel}:${site.line} carries ${site.what} outside \`#if DEBUG\`, so it ` +
+							'compiles into the shipped watch app. A watch that can mint its own ' +
+							'session from a credential in its own binary is a second, unguarded ' +
+							'path to an account, and the account this one names is the seed user. ' +
+							'Fence it, or take it out.',
+					);
+				}
+			}
+		}
+		if (sites === 0) {
+			errors.push(
+				'No password-grant or password-literal site found anywhere in the watch tree, ' +
+					"so claim (14)'s first half read nothing. Either the DEBUG direct-to-Supabase " +
+					'path is gone — in which case delete this half — or `credentialSites` has ' +
+					'stopped recognising it.',
+			);
+		}
+
+		const configs = xcodeBuildConfigurations(read(PBXPROJ));
+		if (configs.length === 0) {
+			errors.push(
+				`Parsed no XCBuildConfiguration out of ${PBXPROJ} — claim (14)'s second half ` +
+					'would pass vacuously, and the fence above is only worth what this half is.',
+			);
+		} else {
+			const defines = (/** @type {{ name: string, settings: string }} */ c) =>
+				/SWIFT_ACTIVE_COMPILATION_CONDITIONS\s*=\s*[^;]*\bDEBUG\b/.test(c.settings);
+			for (const c of configs) {
+				if (c.name === 'Debug' || !defines(c)) continue;
+				errors.push(
+					`${PBXPROJ} puts DEBUG in SWIFT_ACTIVE_COMPILATION_CONDITIONS on the ` +
+						`\`${c.name}\` configuration. Every \`#if DEBUG\` in the tree then compiles ` +
+						'into that build — including the password grant and the seed credential in ' +
+						`${DIRECT_SITE}, which are fenced on the understanding that DEBUG means ` +
+						'Debug.',
+				);
+			}
+			if (!configs.some((c) => c.name === 'Debug' && defines(c))) {
+				errors.push(
+					`No \`Debug\` configuration in ${PBXPROJ} defines DEBUG. Either the condition ` +
+						'moved (in which case this claim is reading the wrong setting and proves ' +
+						'nothing) or the watch-sim-alone dev path no longer compiles for anyone.',
+				);
+			}
+		}
+		if (errors.length === before) {
+			ok.push(
+				`all ${sites} password-grant / credential site(s) are DEBUG-fenced, and DEBUG is ` +
+					`defined on the Debug configuration alone (${configs.length} configurations read)`,
+			);
 		}
 	}
 

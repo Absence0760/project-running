@@ -1,7 +1,7 @@
 // Unit tests for scripts/check_watch_ios_source.mjs.
 //
-// That guard makes ten claims about a tier this repo compiles in exactly one
-// job, on a runner nobody here has. Every failure it exists to catch is silent
+// That guard makes a numbered set of claims about a tier this repo compiles in
+// exactly one job, on a runner nobody here has. Every failure it exists to catch is silent
 // on the platform: a localization key with no catalog entry renders English and
 // throws nothing, an entitlement nothing claims builds and links fine and is
 // refused months later by App Review, and two copies of one formatter drifting
@@ -31,6 +31,9 @@ import {
 	UNGUARDED_DESTRUCTIVE,
 	WEAR_COVERAGE,
 	check,
+	credentialSites,
+	debugFencedLines,
+	xcodeBuildConfigurations,
 	watchBundleIdentifiers,
 	kotlinNumericConstant,
 	swiftNumericConstant,
@@ -1165,5 +1168,100 @@ test('claim (13) fails when an unbuilt exemption names a file that is gone', () 
 	assert.ok(
 		errors.some((e) => e.includes('ActiveRunComplication.swift is gone')),
 		errors.join('\n'),
+	);
+});
+
+// --- claim (14): the DEBUG fence, and what it rests on -----------------------
+
+test('claim (14) refuses the password grant once the DEBUG fence is removed', () => {
+	// One line. The compiler is happy, the Swift suite is green, and the
+	// shipped watch app gains a hardcoded credential and a second route to a
+	// session.
+	const { errors } = runMutated((dir) => {
+		edit(dir, DIRECT, (s) => s.replace('#if DEBUG\n', ''));
+	});
+	assert.equal(matched(errors, /outside `#if DEBUG`/).length, 2, errors.join('\n'));
+	assert.ok(
+		matched(errors, /hardcoded password literal/).length === 1,
+		'the seed credential must be named separately from the grant',
+	);
+});
+
+test('claim (14) refuses a credential moved into an unfenced file', () => {
+	// The list-free half: a NEW site in a file the guard was never told about.
+	const { errors } = runMutated((dir) => {
+		edit(dir, ARMED, (s) => `${s}\nfunc devSignIn() async { await sneak(password: "hunter2") }\n`);
+	});
+	assert.equal(matched(errors, /hardcoded password literal/).length, 1, errors.join('\n'));
+});
+
+test('claim (14) refuses DEBUG defined on the Release configuration', () => {
+	// The other end of the same hole: the fence stays, and stops fencing.
+	const { errors } = runMutated((dir) => {
+		edit(dir, PBX, (s) =>
+			s.replace(
+				'MTL_ENABLE_DEBUG_INFO = NO;',
+				'MTL_ENABLE_DEBUG_INFO = NO;\n\t\t\t\tSWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";',
+			),
+		);
+	});
+	assert.equal(
+		matched(errors, /puts DEBUG in SWIFT_ACTIVE_COMPILATION_CONDITIONS on the `Release`/).length,
+		1,
+		errors.join('\n'),
+	);
+});
+
+test('claim (14) reports rather than passes when it can read no site', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, DIRECT, (s) =>
+			s
+				.replace('grant_type=password', 'grant_type=magic')
+				.replace('password: "testtest"', 'password: seedPassword'),
+		);
+	});
+	assert.equal(matched(errors, /claim \(14\)'s first half read nothing/).length, 1, errors.join('\n'));
+});
+
+test('claim (14) reports rather than passes when Debug stops defining DEBUG', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, PBX, (s) => s.replace('SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";', ''));
+	});
+	assert.equal(matched(errors, /No `Debug` configuration/).length, 1, errors.join('\n'));
+});
+
+test('a re-spelled fence is still a fence', () => {
+	// The direction that matters as much as the refusals: the rule is about
+	// where a line COMPILES, not about the file opening with a particular
+	// string. A nested fence, and a fence that is not the first line, both
+	// still fence.
+	const nested = debugFencedLines(
+		['#if os(watchOS)', '#if DEBUG', 'let a = 1', '#endif', 'let b = 2', '#endif'].join('\n'),
+	);
+	assert.deepEqual(nested, [false, false, true, false, false, false]);
+	const elseArm = debugFencedLines(['#if DEBUG', 'let a = 1', '#else', 'let b = 2', '#endif'].join('\n'));
+	assert.deepEqual(elseArm, [false, true, false, false, false]);
+	// `#if !DEBUG` is the arm that ships, so it must read as unfenced or the
+	// rule would exempt the one branch it exists to police.
+	const negated = debugFencedLines(['#if !DEBUG', 'let a = 1', '#endif'].join('\n'));
+	assert.deepEqual(negated, [false, false, false]);
+});
+
+test('credentialSites reads a literal, not a parameter or a dictionary key', () => {
+	assert.deepEqual(credentialSites('func signIn(email: String, password: String) {}'), []);
+	assert.deepEqual(credentialSites('let body = ["email": email, "password": password]'), []);
+	assert.equal(credentialSites('try await x.signIn(email: e, password: "testtest")').length, 1);
+	assert.equal(credentialSites('let u = URL(string: "\\(base)/auth/v1/token?grant_type=password")').length, 1);
+});
+
+test('xcodeBuildConfigurations names each configuration from its own block', () => {
+	const configs = xcodeBuildConfigurations(readFileSync(join(WATCH_IOS, PBX), 'utf8'));
+	assert.ok(configs.length >= 4, `only ${configs.length} configurations parsed`);
+	assert.ok(configs.some((c) => c.name === 'Debug'));
+	assert.ok(configs.some((c) => c.name === 'Release'));
+	assert.equal(
+		configs.filter((c) => c.name === '').length,
+		0,
+		'a configuration parsed with no name would be exempt from the Release rule',
 	);
 });
