@@ -24,6 +24,9 @@
  * across a corner carries half that corner's angle and none of its
  * position.
  */
+
+import { haversineMetres } from '../runs/run_stats';
+
 export interface TurnCueWaypoint {
 	lat: number;
 	lng: number;
@@ -97,7 +100,12 @@ export function generateTurnCues(
 	];
 	let cum = 0;
 	for (let i = 1; i < waypoints.length; i++) {
-		cum += haversineM(waypoints[i - 1], waypoints[i]);
+		cum += haversineMetres(
+			waypoints[i - 1].lat,
+			waypoints[i - 1].lng,
+			waypoints[i].lat,
+			waypoints[i].lng,
+		);
 		if (cum - pts[pts.length - 1].cumM < MIN_LEG_M) continue;
 		pts.push({ wp: waypoints[i], cumM: cum });
 	}
@@ -187,18 +195,4 @@ function bearingDeg(a: TurnCueWaypoint, b: TurnCueWaypoint): number {
 		Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
 	const brng = Math.atan2(y, x) / deg;
 	return (brng + 360) % 360;
-}
-
-function haversineM(a: TurnCueWaypoint, b: TurnCueWaypoint): number {
-	const r = 6_371_000;
-	const deg = Math.PI / 180;
-	const dLat = (b.lat - a.lat) * deg;
-	const dLng = (b.lng - a.lng) * deg;
-	const h =
-		Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-		Math.cos(a.lat * deg) *
-			Math.cos(b.lat * deg) *
-			Math.sin(dLng / 2) *
-			Math.sin(dLng / 2);
-	return r * 2 * Math.asin(Math.min(1, Math.sqrt(h)));
 }

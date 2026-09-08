@@ -65,7 +65,8 @@ const KNOWN_EXCEPTIONS = new Map<string, string>([
 	[
 		'src/lib/runs/weigh_in_flag.ts',
 		'the stems differ, not just the prefix: PUBLIC_WEIGH_IN_ENABLED against ' +
-			'WEIGH_IN_GATE. Both headers now say so outright (decisions § 1354).',
+			'WEIGH_IN_GATE. Both headers say so outright, and both directions of that ' +
+			'are measured below rather than asserted here (decisions § 1354, § 1534).',
 	],
 ]);
 
@@ -107,6 +108,24 @@ test('every deploy gate either follows the dropped-prefix convention or is a dec
 				`${gate.web} reads ${web} and ${gate.dart} reads ${dart}, which now DO satisfy ` +
 					`the convention — delete the KNOWN_EXCEPTIONS entry, which is cover for ` +
 					`nothing and hides the next one.`,
+			);
+			// The reason above says "both headers now say so outright", which is a
+			// claim about the CONTENT of two files that this guard read for the key
+			// and not for the claim — the § 1354 defect exactly, one layer up. So
+			// each side must NAME the other's key, checked in both directions,
+			// which is the only form of the exception a reader acts on. The Dart
+			// mirror has measured it since decisions § 1497; until this landed,
+			// deleting the sentence from the web header failed the Dart guard and
+			// not the web one (decisions § 1534).
+			assert.ok(
+				read(gate.web).includes(dart!),
+				`${gate.web} is a declared exception but never names ${dart}, so a reader of ` +
+					`the web gate cannot learn which key the phone reads and is still closed.`,
+			);
+			assert.ok(
+				read(gate.dart).includes(web!),
+				`${gate.dart} is a declared exception but never names ${web}, so a reader of ` +
+					`the mobile gate cannot learn which key the web half reads.`,
 			);
 			continue;
 		}

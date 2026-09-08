@@ -4499,7 +4499,7 @@ export const messages = {
 	"payouts.statusRestricted": "Votre compte de paiement nécessite une action avant de pouvoir encaisser",
 	"payouts.manageDashboard": "Ouvrir le tableau de bord Stripe",
 	"payouts.notConfigured": "Les paiements ne sont pas encore configurés sur cette version.",
-	"payouts.merchantNote": "Vous êtes le commerçant officiel : vous gérez les remboursements et les rétrofacturations, et la commission de plateforme est restituée lors d’un remboursement.",
+	"payouts.merchantNote": "C’est nous le commerçant officiel : le débit apparaît à notre nom sur le relevé de votre acheteur, les remboursements sont émis par nous selon la politique que vous définissez pour chaque événement, et une rétrofacturation est prélevée sur notre compte Stripe, pas sur le vôtre. La commission de plateforme vous est restituée lorsqu’une commande est remboursée.",
 	"payouts.redirecting": "Redirection…",
 	"payouts.setupFailed": "Impossible de démarrer la configuration des paiements : {error}",
 	"eventEditor.chargeToggle": "Faire payer cet événement",

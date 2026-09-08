@@ -10331,6 +10331,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get gymCatalogueEmpty => 'Ningún ejercicio coincide.';
 
   @override
+  String get gymCatalogueUnavailable =>
+      'No se pudo cargar el catálogo de ejercicios, por lo que esta lista puede estar incompleta.';
+
+  @override
   String gymCatalogueOtherCategory(String name, String category) {
     return '«$name» ya está en el catálogo, en $category.';
   }

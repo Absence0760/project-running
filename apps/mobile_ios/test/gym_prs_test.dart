@@ -1,7 +1,8 @@
+import 'package:core_models/core_models.dart'
+    show kExerciseFoldKeys, kExerciseFoldUnicodeVersion, kExerciseFoldValues;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/catalogue_browse.dart';
-import '../lib/exercise_fold_table.dart';
 import '../lib/gym_prs.dart';
 
 GymSetLike _set(String name, num? reps, num? weightKg) =>

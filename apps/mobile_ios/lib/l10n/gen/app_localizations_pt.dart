@@ -10333,6 +10333,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gymCatalogueEmpty => 'Nenhum exercício corresponde.';
 
   @override
+  String get gymCatalogueUnavailable =>
+      'Não foi possível carregar o catálogo de exercícios, pelo que esta lista pode estar incompleta.';
+
+  @override
   String gymCatalogueOtherCategory(String name, String category) {
     return '“$name” já está no catálogo, em $category.';
   }
@@ -24364,6 +24368,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get gymCatalogueEmpty => 'Nenhum exercício corresponde.';
+
+  @override
+  String get gymCatalogueUnavailable =>
+      'Não foi possível carregar o catálogo de exercícios, então esta lista pode estar incompleta.';
 
   @override
   String gymCatalogueOtherCategory(String name, String category) {

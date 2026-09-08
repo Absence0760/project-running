@@ -2,6 +2,7 @@ package com.runapp.watchwear
 
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -227,6 +228,70 @@ class ViewModelStreamResilienceTest {
                 "disagrees with the drain about whether the queue is readable " +
                 "is worse than either answer: $branch",
             branch.contains("queueUnreadable = true"),
+        )
+    }
+
+    @Test
+    fun `the drain hands every failure to something that logs the throwable`() {
+        // The classified fault the wrist states is pinned by `SyncFaultTest`
+        // and by the compiler. The RAW throwable was pinned by nothing: it is
+        // the only diagnostic a watch ever produces now that the runner is
+        // shown a catalogued sentence instead (§ 1490), and the sink it goes
+        // to is the last place it exists.
+        //
+        // `drainQueueLoop` takes the sink as a REQUIRED argument, so a drain
+        // that reports nowhere does not compile. What is left to check is the
+        // half a signature cannot carry: that the sink the view model hands
+        // over actually logs, and logs the throwable rather than the six-member
+        // enum beside it.
+        val call = Regex("""drainQueueLoop\(([\s\S]*?)\n        \)""").find(src)
+        assertTrue(
+            "no `drainQueueLoop(…)` call parsed out of RunViewModel — the checks " +
+                "below would read nothing",
+            call != null,
+        )
+        val args = call!!.groupValues[1]
+        val sink = Regex("""report = DrainFailureReport \{([\s\S]*?)\n            \},""")
+            .find(args)
+        assertTrue(
+            "the drain's `report` sink is gone or reshaped — every failure's " +
+                "throwable is then discarded and the classified fault is all that " +
+                "survives the pass: $args",
+            sink != null,
+        )
+        val body = sink!!.groupValues[1]
+        assertTrue(
+            "the sink must log at ERROR — a sink that receives and drops is the " +
+                "state the required argument exists to rule out: $body",
+            body.contains("Log.e("),
+        )
+        assertTrue(
+            "the sink must log the THROWABLE. The fault is one of six words; the " +
+                "stack trace is the bug report: $body",
+            body.contains("failure.error"),
+        )
+    }
+
+    @Test
+    fun `the refresh the drain passes does not swallow its own failure`() {
+        // A 401 the refresh cannot repair is the one drain fault whose remedy
+        // is an action on the wrist, and it was also the one with no diagnostic
+        // at all: the lambda caught its own error and returned a bare `false`,
+        // so a spent refresh token and a dead socket left the same empty log.
+        val call = Regex("""drainQueueLoop\(([\s\S]*?)\n        \)""").find(src)
+        assertTrue("no `drainQueueLoop(…)` call parsed out of RunViewModel", call != null)
+        val refresh = Regex("""refresh = \{([\s\S]*?)\n            \},""")
+            .find(call!!.groupValues[1])
+        assertTrue(
+            "the drain passes no `refresh = { … }` lambda — the checks below read " +
+                "nothing",
+            refresh != null,
+        )
+        assertFalse(
+            "the refresh lambda must let its failure out. Catching here returns a " +
+                "`false` that carries no throwable, and `DrainFailureReport` then " +
+                "has nothing to log: ${refresh!!.groupValues[1]}",
+            refresh.groupValues[1].contains("catch"),
         )
     }
 

@@ -21,6 +21,8 @@ export 'src/atomic_io.dart';
 export 'src/distance_unit.dart';
 export 'src/store_write_chain.dart';
 export 'src/exercise_catalogue.dart';
+export 'src/exercise_fold_table.dart';
+export 'src/exercise_key.dart';
 export 'src/food.dart';
 export 'src/gear.dart';
 export 'src/generated/db_rows.dart';

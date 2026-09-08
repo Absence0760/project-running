@@ -219,7 +219,7 @@ jobs:
       - name: Toolchain pin drift (Flutter + melos + Rust + Node + action SHAs + .tool-versions)
         run: |
           if ! node scripts/check_toolchain_pins.mjs; then
-            echo "::error::A toolchain this build installs is unpinned or two call sites disagree — a floating Flutter SDK, a melos version that does not match pubspec.lock, an unpinned defmt-print or a stale cache key for it, a firmware rust-toolchain.toml channel that is not an exact version, an actions/setup-node step naming no node-version or naming a different one than the rest, a .tool-versions line (commented or not) disagreeing with the pin this repo enforces, or a third-party action on a mutable tag instead of a commit SHA. Nothing here is about workflow syntax or the CI diagnoses; those are other checks in this job."
+            echo "::error::A toolchain this build installs is unpinned or two call sites disagree — a floating Flutter SDK, a melos version that does not match pubspec.lock, an unpinned defmt-print or a stale cache key for it, a firmware rust-toolchain.toml channel that is not an exact version, an actions/setup-node step naming no node-version or naming a different one than the rest, a .tool-versions line (commented or not) disagreeing with the pin this repo enforces, a Prerequisites row in docs/architecture/monorepo.md telling a contributor to install a version CI never runs, or a third-party action on a mutable tag instead of a commit SHA. Nothing here is about workflow syntax or the CI diagnoses; those are other checks in this job."
             echo "The failing line above names the file, the line and the value to pin. decisions § 595 is why the Flutter version is declared once per workflow file rather than inherited from 'channel: stable'; § 911 is why .tool-versions is read against those pins, commented lines included."
             exit 1
           fi
@@ -237,7 +237,7 @@ jobs:
       - name: CI failure diagnoses name what actually failed
         run: |
           if ! node scripts/check_ci_diagnostics.mjs; then
-            echo "::error::A CI failure would go unattributed or unseen — an '::error::' printed under a bare 'if: failure()', a check step in a job that bundles several guards saying nothing of its own, or a job the 'CI gate' aggregator does not wait for. Nothing here is about workflow syntax or the toolchain pins; those are other checks in this job."
+            echo "::error::A CI failure would go unattributed or unseen — an '::error::' printed under a bare 'if: failure()', a check step in a job that bundles several guards saying nothing of its own, a job the 'CI gate' aggregator does not wait for, or a whole workflow that runs on every pull request while nothing waits on it and is not declared advisory. Nothing here is about workflow syntax or the toolchain pins; those are other checks in this job."
             echo "The failing line above names the file, the line and the shape to use. decisions § 764 is why the bundled jobs are derived from the guards they run rather than listed."
             exit 1
           fi
@@ -1173,13 +1173,23 @@ jobs:
     #   check_test_inventory_counts.mjs — a per-file test count stated in
     #     docs/testing/test_inventory.md is re-derived from the suite it
     #     describes, so the inventory cannot claim coverage the tree does not
-    #     have. Reads docs AND the suites, like the guard above it.
+    #     have. Reads docs AND the suites, like the guard above it. It also
+    #     reads the suites the census does NOT name: 493 of the 553 mobile
+    #     suites carry no heading, so instead of demanding a row for each, no
+    #     test file may declare ZERO — a suite counting nothing reads exactly
+    #     like one that passes and moves no number (decisions § 1535).
+    #   check_retention_cron_register.mjs — docs/compliance/retention.md's
+    #     auto-deletion table is re-derived from every cron.schedule /
+    #     cron.unschedule in apps/backend/supabase/migrations, so a job that is
+    #     scheduled, unscheduled or rescheduled cannot land without the
+    #     register moving with it (decisions § 1507). Reads docs AND
+    #     migrations, like the two guards above it.
     #
-    # Seven unrelated registries under one job name, so the name cannot say
+    # Eight unrelated registries under one job name, so the name cannot say
     # which drifted and every step says it for itself — the rule
     # scripts/check_ci_diagnostics.mjs derives for any job running more than
-    # one guard (decisions § 764). Bundled rather than split into seven
-    # jobs deliberately: seven runners and seven checkout+setup pairs to save
+    # one guard (decisions § 764). Bundled rather than split into eight
+    # jobs deliberately: eight runners and eight checkout+setup pairs to save
     # nothing a per-step diagnosis does not already say, and each split job
     # would need its own line in the CI gate's `needs:` list, where an
     # omission makes a failure invisible rather than merely unlabelled.
@@ -1295,13 +1305,25 @@ jobs:
       - name: test_inventory.md counts match the suites they describe
         run: |
           if ! node scripts/check_test_inventory_counts.mjs; then
-            echo "::error::A per-file test count stated in docs/testing/test_inventory.md is not the count that file's suite actually declares. Nothing here is about relative doc links, the parity registries, the doc checkboxes or the watch counts — those are the other guards in this job."
-            echo "The failing line above names the entry, the number it states and the number re-derived from the suite. The suite declares the number; the inventory restates it, so fix the inventory. Reproduce with: node scripts/check_test_inventory_counts.mjs."
+            echo "::error::Either a per-file test count stated in docs/testing/test_inventory.md is not the count that file's suite actually declares, or a file named as a test suite declares no test at all. Nothing here is about relative doc links, the parity registries, the doc checkboxes or the watch counts — those are the other guards in this job."
+            echo "The failing line above names the entry, the number it states and the number re-derived from the suite. The suite declares the number; the inventory restates it, so fix the inventory. A suite counting zero is the other claim: it has either stopped running anything, or it declares tests through a wrapper the counters do not know, which is a wrong number wherever the census states one. Reproduce with: node scripts/check_test_inventory_counts.mjs."
             exit 1
           fi
           if ! node --test scripts/check_test_inventory_counts.test.mjs; then
             echo "::error::The test-inventory-count guard's own unit tests failed. The inventory itself agrees with the suites — the check above just passed — so this is a defect in scripts/check_test_inventory_counts.mjs, not count drift."
             echo "Reproduce with: node --test scripts/check_test_inventory_counts.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
+      - name: retention.md's cron table matches the migrations that schedule those jobs
+        run: |
+          if ! node scripts/check_retention_cron_register.mjs; then
+            echo "::error::docs/compliance/retention.md's auto-deletion table disagrees with the cron.schedule / cron.unschedule set in apps/backend/supabase/migrations. Nothing here is about relative doc links, the test-inventory counts, the parity registries, the doc checkboxes or the watch counts — those are the other guards in this job."
+            echo "The failing line above names the job and the disagreement. The migrations are the fact; the register is the transcription, and it is the document a regulator is answered from. Reproduce with: node scripts/check_retention_cron_register.mjs."
+            exit 1
+          fi
+          if ! node --test scripts/check_retention_cron_register.test.mjs; then
+            echo "::error::The retention-register guard's own unit tests failed. The register itself agrees with the migrations — the check above just passed — so this is a defect in scripts/check_retention_cron_register.mjs, not register drift."
+            echo "Reproduce with: node --test scripts/check_retention_cron_register.test.mjs (stdlib only, no install needed)."
             exit 1
           fi
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.21.0

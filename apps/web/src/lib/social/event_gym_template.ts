@@ -13,10 +13,16 @@
 
 import type { SessionStep } from './session_steps';
 
-export interface EventGymTemplate {
+/**
+ * An alias rather than an interface, and that is load-bearing: only an alias
+ * of an object type gets TypeScript's implicit index signature, so an
+ * interface is refused as the `Json` this jsonb column takes however
+ * JSON-shaped it is. The Dart twin has no such distinction.
+ */
+export type EventGymTemplate = {
 	discipline: string | null;
 	duration_min: number | null;
-}
+};
 
 /** The minimal GymEditor seed the seam produces from a template. */
 export interface GymWorkoutDraft {

@@ -7,6 +7,7 @@ import {
 	ACTION_DIR,
 	GO_MODS,
 	LOCKFILE,
+	PREREQ_DOC,
 	RUST_TOOLCHAIN,
 	SETUP_NODE_USES,
 	TOOL_VERSIONS,
@@ -18,6 +19,7 @@ import {
 	checkFlutter,
 	checkMelos,
 	checkNode,
+	checkPrerequisites,
 	checkRustToolchain,
 	checkToolVersions,
 	EXACT_NODE,
@@ -27,6 +29,8 @@ import {
 	parseDenoSteps,
 	parseLockedVersion,
 	parseMelosActivations,
+	parsePrerequisites,
+	prereqNames,
 	parseGoDirective,
 	parseNodeSteps,
 	parseRustChannel,
@@ -916,4 +920,93 @@ test('parseUsesStepVersions is what both rails read through', () => {
 		'        with:\n          flutter-version: 3.47.0\n';
 	assert.deepEqual(parseUsesStepVersions(text, SETUP_NODE_USES, 'node-version'), []);
 	assert.deepEqual(parseWorkflow(text).steps, [{ line: 4, version: '3.47.0' }]);
+});
+
+// ---------------------------------------------------------------------------
+// The Prerequisites table (decisions § 1536).
+// ---------------------------------------------------------------------------
+
+const PREREQ_DOC_TEXT = readFileSync(PREREQ_DOC, 'utf-8');
+
+/** @param {Record<string, string>} rows */
+function prereqDoc(rows) {
+	return [
+		'## Prerequisites',
+		'',
+		'| Tool | Version | Install |',
+		'|---|---|---|',
+		...Object.entries(rows).map(([k, v]) => `| ${k} | ${v} | somewhere |`),
+		'',
+		'## Initial setup',
+		'',
+		'| Flutter | 9.9.9 | a table in another section is not this one |',
+	].join('\n');
+}
+
+const PINS = new Map([
+	['flutter', { version: '3.47.0', source: 'env.FLUTTER_VERSION' }],
+	['melos', { version: '7.8.2', source: 'pubspec.lock' }],
+	['nodejs', { version: '24.20.0', source: 'setup-node' }],
+]);
+
+test('parsePrerequisites reads the table under its own heading and stops at the next', () => {
+	const rows = parsePrerequisites(prereqDoc({ Flutter: '3.47.0', 'Node.js': '24.20.0' }));
+	assert.deepEqual([...rows.keys()], ['Tool', 'Flutter', 'Node.js']);
+	assert.equal(rows.get('Flutter')?.version, '3.47.0');
+});
+
+test('a prerequisite row stating a floor rather than the pin fails', () => {
+	const { errors } = checkPrerequisites(
+		prereqDoc({ Flutter: '3.19+', Melos: '7.x', 'Node.js': '20 LTS' }),
+		PINS,
+	);
+	assert.equal(errors.length, 3);
+	assert.match(errors[0], /install Flutter `3\.19\+` where this repo pins 3\.47\.0/);
+	assert.match(errors[2], /install Node\.js `20 LTS` where this repo pins 24\.20\.0/);
+});
+
+test('a version cell names the pin as a whole token, not as a substring', () => {
+	assert.equal(prereqNames('3.47.0', '3.47.0'), true);
+	assert.equal(prereqNames('3.47.0 (exact)', '3.47.0'), true);
+	// The failures that matter: a prefix and an extension of the same digits.
+	assert.equal(prereqNames('3.4', '3.47.0'), false);
+	assert.equal(prereqNames('3.47.0.1', '3.47.0'), false);
+	assert.equal(prereqNames('13.47.0', '3.47.0'), false);
+	// The version is data read out of a pin file, so the whole-token rule must
+	// not be expressed as a pattern built from it. Escaping only `.` left every
+	// other metacharacter live: a pin of `3.4+` matched the cell `3.444`, and a
+	// pin carrying an unbalanced bracket threw a SyntaxError out of a guard.
+	assert.equal(prereqNames('3.444', '3.4+'), false);
+	assert.equal(prereqNames('3.4+', '3.4+'), true);
+	assert.equal(prereqNames('x', '1.2('), false);
+	assert.equal(prereqNames('anything', ''), false);
+});
+
+test('a row the table has lost fails rather than going unchecked', () => {
+	const { errors } = checkPrerequisites(prereqDoc({ Flutter: '3.47.0', Melos: '7.8.2' }), PINS);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /has no `Node\.js` row/);
+});
+
+test('a table the reader can no longer find fails rather than reporting no drift', () => {
+	const { errors } = checkPrerequisites('## Prerequisites\n\nProse, no table.\n', PINS);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /no readable Prerequisites table/);
+});
+
+test('the shipped Prerequisites table states the versions the repo pins', () => {
+	assert.deepEqual(
+		checkAll(
+			readdirSync(WORKFLOW_DIR)
+				.filter((f) => f.endsWith('.yml'))
+				.map((name) => ({ name, text: readFileSync(join(WORKFLOW_DIR, name), 'utf-8') })),
+			readFileSync(LOCKFILE, 'utf-8'),
+			[],
+			readFileSync(RUST_TOOLCHAIN, 'utf-8'),
+			readFileSync(TOOL_VERSIONS, 'utf-8'),
+			GO_MODS.map((path) => ({ path, text: readFileSync(join(WORKFLOW_DIR, '..', '..', path), 'utf-8') })),
+			PREREQ_DOC_TEXT,
+		).prereq.errors,
+		[],
+	);
 });

@@ -5,8 +5,9 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/// Source-level guard over the one thing the PreRun top arc could not say: the
-/// last drain pass stopped on a TRANSIENT failure (decisions § 1390).
+/// Source-level guard over the two things the PreRun top arc could not say:
+/// that the last drain pass stopped (decisions § 1390), and that what stopped
+/// it was a session no retry can renew (decisions § 1544).
 ///
 /// `syncFault` renders on `PostRunScreen` alone, and `startNextRun` clears it —
 /// so on the screen a runner is on for every drain but the first, a 5xx or a
@@ -57,22 +58,40 @@ class PreRunSyncFailureTest {
         return body
     }
 
+    /// The sign-in arm of the same `when`, extracted the same way, so a match
+    /// from the arms above or below cannot satisfy an assertion about it.
+    private fun signInBranch(): String {
+        val start = ui.indexOf("SyncChipState.SignInRequired -> {")
+        assertTrue("the sign-in arm is gone or renamed", start >= 0)
+        val end = ui.indexOf("\n                SyncChipState.", start + 1)
+        assertTrue("could not find the end of the sign-in arm", end > start)
+        val body = ui.substring(start, end)
+        assertTrue(
+            "the extracted arm renders no chip at all — the extraction is wrong, and " +
+                "every assertion below would pass vacuously",
+            body.contains("CompactChip("),
+        )
+        return body
+    }
+
     @Test
     fun `the drain records a transient failure as a standing fact, not as the banner`() {
         // `lastFault` is about the PASS — a trailing success clears it, and so
-        // does `startNextRun`. `anyTransientFailure` is about the QUEUE, which
-        // is the lifetime this surface needs. The same split § 1347 drew for
-        // the permanently-rejected ids.
+        // does `startNextRun`. `blockedBy` is about the QUEUE, which is the
+        // lifetime this surface needs. The same split § 1347 drew for the
+        // permanently-rejected ids.
         val drain = vmBody("private suspend fun drainQueueLocked(")
         assertTrue(
             "the drain must publish the pass's own transient verdict — deriving it " +
                 "from `lastFault` would raise the notice for a permanent rejection too, " +
                 "and clear it on any trailing success",
-            Regex("""syncFailed = result\.anyTransientFailure""").containsMatchIn(drain),
+            Regex("""syncBlockedBy = result\.blockedBy""").containsMatchIn(drain),
         )
         assertTrue(
-            "RunUiState must carry it, or nothing composable can read it",
-            Regex("""val syncFailed: Boolean""").containsMatchIn(vm),
+            "RunUiState must carry it as a FAULT, or the arc cannot tell a 5xx the " +
+                "runner retries from a session the server will not renew — the two " +
+                "were one boolean, and the chip offered a retry for both",
+            Regex("""val syncBlockedBy: SyncFault\?""").containsMatchIn(vm),
         )
     }
 
@@ -89,7 +108,7 @@ class PreRunSyncFailureTest {
             "`startNextRun` must NOT reset the transient-failure notice: PreRun is the " +
                 "screen the runner reaches through it, and clearing it here is exactly " +
                 "how the arc went silent for every drain but the first",
-            next.contains("syncFailed"),
+            next.contains("syncBlockedBy"),
         )
     }
 
@@ -164,6 +183,41 @@ class PreRunSyncFailureTest {
             "the chip must still be gated on the network and the session — this one " +
                 "uploads, unlike the unreadable chip's local file read",
             body.contains("enabled = online && authed && !syncing"),
+        )
+    }
+
+    @Test
+    fun `the one fault a retry cannot clear offers the sign-in instead`() {
+        val body = signInBranch()
+        // The defect in one arm. `classifyDrainError` reads a 401 as
+        // `RetryAfterRefresh`, so a refresh the server refuses ends the pass
+        // on `SignInRequired` — and the counted chip then read "Retry N",
+        // enabled, firing, re-running the same drain and failing the same
+        // refresh on every tap.
+        assertTrue(
+            "the sign-in arm must route to the sign-in screen — firing the drain here " +
+                "is the tap that can never succeed",
+            body.contains("onClick = onSignIn"),
+        )
+        assertFalse("…and must not fire the drain", body.contains("onClick = onSync"))
+        assertTrue(
+            "the label must be the sign-in one. Colour alone is not a signal — the rule " +
+                "this arc already follows for the unreadable chip (§ 1104)",
+            body.contains("R.string.sign_in"),
+        )
+        assertFalse(
+            "…and must not be a counted label, which is the sentence being corrected",
+            body.contains("R.string.sync_count") || body.contains("R.string.sync_retry_count"),
+        )
+        assertTrue(
+            "the 100 dp label cannot hold the reason and the warning colour announces " +
+                "nothing, so the content description is the only place the sentence and " +
+                "the count can both live",
+            body.contains("R.plurals.cd_sync_sign_in_required"),
+        )
+        assertTrue(
+            "values/strings.xml must declare cd_sync_sign_in_required",
+            strings.contains("name=\"cd_sync_sign_in_required\""),
         )
     }
 }

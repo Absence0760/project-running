@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'run_stats.dart' show haversineMetres;
+
 /// Pure geometric turn-cue generator for a planned polyline. Dart twin of
 /// `apps/web/src/lib/routes/turn_cues.ts` — keep the two in lockstep
 /// (algorithm, edge cases, test counts).
@@ -94,7 +96,12 @@ List<TurnCue> generateTurnCues(
   final ptsCum = <double>[0];
   var cum = 0.0;
   for (var i = 1; i < waypoints.length; i++) {
-    cum += _haversineM(waypoints[i - 1], waypoints[i]);
+    cum += haversineMetres(
+      waypoints[i - 1].lat,
+      waypoints[i - 1].lng,
+      waypoints[i].lat,
+      waypoints[i].lng,
+    );
     if (cum - ptsCum.last < _minLegM) continue;
     ptsWp.add(waypoints[i]);
     ptsCum.add(cum);
@@ -186,14 +193,4 @@ double _bearingDeg(TurnCueWaypoint a, TurnCueWaypoint b) {
   final x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLng);
   final brng = atan2(y, x) / deg;
   return (brng + 360) % 360;
-}
-
-double _haversineM(TurnCueWaypoint a, TurnCueWaypoint b) {
-  const r = 6371000.0;
-  const deg = pi / 180;
-  final dLat = (b.lat - a.lat) * deg;
-  final dLng = (b.lng - a.lng) * deg;
-  final h = sin(dLat / 2) * sin(dLat / 2) +
-      cos(a.lat * deg) * cos(b.lat * deg) * sin(dLng / 2) * sin(dLng / 2);
-  return r * 2 * asin(min(1, sqrt(h)));
 }

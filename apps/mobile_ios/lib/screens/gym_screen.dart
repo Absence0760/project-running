@@ -163,6 +163,18 @@ class _GymScreenState extends State<GymScreen> {
   // back to history-only suggestions and logs free-text, exactly as before.
   List<GymCatalogueEntry> _catalogue = const [];
 
+  // Whether [_catalogue] is known to be the whole catalogue. Starts true
+  // because "not yet read" and "the read failed" are the same state to every
+  // consumer: the catalogue is not known, so nothing downstream may claim a
+  // typed name is free. Cleared only by a read that answered.
+  //
+  // An empty catalogue is otherwise the state in which every name looks free —
+  // the picker's exact-match test finds nothing and offers to create a name the
+  // catalogue already holds, which mints a shadow against a seeded global the
+  // author's partial unique cannot see, or 23505s against the user's own custom
+  // after the affordance said the name was free.
+  bool _catalogueUnavailable = true;
+
   // Routines (gym_programming.md P1) are a parallel planning surface owned by
   // this screen — the same "each surface owns its store" precedent the gym /
   // food stores follow (decisions §122). Lazily init'd; re-hydrates from disk.
@@ -220,15 +232,26 @@ class _GymScreenState extends State<GymScreen> {
       if (widget.store.hasPending) {
         await widget.store.syncWithServer(api);
       }
-      // Best-effort catalogue fetch — a failure leaves the prior list / empty,
-      // never blocks the workout list.
+      // Best-effort catalogue fetch (L4): a failure must not take the workout
+      // list down with it. It keeps whatever was last known rather than
+      // replacing it with `[]` — a stale entry still binds its id correctly, and
+      // deleting the list would be a second untruth on top of the first — and
+      // reports itself through [_catalogueUnavailable] rather than silently.
       try {
         final cat = await api.fetchExerciseCatalogue();
         _catalogue = [
           for (final e in cat)
-            (name: e.name, id: e.id, category: e.category, authorId: e.authorId),
+            (
+              name: e.name,
+              id: e.id,
+              category: e.category,
+              authorId: e.authorId,
+              nameKey: e.nameKey,
+            ),
         ];
+        _catalogueUnavailable = false;
       } catch (e) {
+        _catalogueUnavailable = true;
         debugPrint('gym_screen: catalogue fetch failed: $e');
       }
       _isOnline = true;
@@ -253,6 +276,7 @@ class _GymScreenState extends State<GymScreen> {
       store: widget.store,
       suggestions: gymExerciseSuggestions(widget.store.workouts),
       catalogue: _catalogue,
+      catalogueUnavailable: _catalogueUnavailable,
       api: widget.api,
     );
     if (saved == true) await _maybeSync();

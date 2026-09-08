@@ -12,6 +12,7 @@
 
 import type { TrackPoint } from '../types';
 import { unwrapLonDeg } from '../routes/geo';
+import { haversineMetres } from '../runs/run_stats';
 
 export interface SegmentSlice {
 	start_distance_m: number;
@@ -430,19 +431,4 @@ export function crownLabel(
 	if (subject != null && ageFilter == null) return `Fastest ${subject}`;
 	if (subject == null && ageFilter != null) return `Fastest ${ageFilter}`;
 	return `Fastest ${subject} ${ageFilter}`;
-}
-
-function haversineMetres(lat1: number, lng1: number, lat2: number, lng2: number): number {
-	const r = 6371000;
-	const dLat = ((lat2 - lat1) * Math.PI) / 180;
-	const dLng = ((lng2 - lng1) * Math.PI) / 180;
-	const sinLat = Math.sin(dLat / 2);
-	const sinLng = Math.sin(dLng / 2);
-	const a =
-		sinLat * sinLat +
-		Math.cos((lat1 * Math.PI) / 180) *
-			Math.cos((lat2 * Math.PI) / 180) *
-			sinLng *
-			sinLng;
-	return 2 * r * Math.asin(Math.min(1, Math.sqrt(a)));
 }

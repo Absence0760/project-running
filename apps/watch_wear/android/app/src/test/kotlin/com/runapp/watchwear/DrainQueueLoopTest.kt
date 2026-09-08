@@ -19,6 +19,16 @@ import org.junit.Test
 /// branches reach `drainQueueLoop`'s switch arms.
 class DrainQueueLoopTest {
 
+    /// Every failure the loop reported this test, in the order it reported
+    /// them. Fresh per test method — JUnit builds a new instance for each.
+    ///
+    /// The sink is a REQUIRED argument of `drainQueueLoop`, so no call below
+    /// can be written without one. That is the point of it: the previous
+    /// shape returned the failures on the result and nothing held the
+    /// production caller to reading them, so the wrist's only diagnostic
+    /// could be refactored away with this whole file still green.
+    private val reported = mutableListOf<DrainFailure>()
+
     private fun run(id: String) = QueuedRun(
         id = id,
         startedAtIso = "2026-01-01T00:00:00Z",
@@ -36,6 +46,7 @@ class DrainQueueLoopTest {
             push = PushQueuedRun { /* unreachable */ },
             refresh = RefreshAuthForDrain { error("unreachable") },
             onSuccessfulDrain = OnSuccessfulDrain { /* unreachable */ },
+            report = DrainFailureReport { reported += it },
             classify = { error("unreachable") },
         )
         assertEquals(emptyList<String>(), result.drainedIds)
@@ -50,6 +61,7 @@ class DrainQueueLoopTest {
             push = PushQueuedRun { /* succeed */ },
             refresh = RefreshAuthForDrain { error("unreachable") },
             onSuccessfulDrain = OnSuccessfulDrain { id -> removed += id },
+            report = DrainFailureReport { reported += it },
             classify = { error("unreachable") },
         )
         assertEquals(listOf("a", "b", "c"), result.drainedIds)
@@ -70,6 +82,7 @@ class DrainQueueLoopTest {
             },
             refresh = RefreshAuthForDrain { true },
             onSuccessfulDrain = OnSuccessfulDrain { },
+            report = DrainFailureReport { reported += it },
             classify = { error("no errors thrown") },
         )
         assertEquals(3, pushCalls)
@@ -95,6 +108,7 @@ class DrainQueueLoopTest {
             },
             refresh = RefreshAuthForDrain { error("unreachable") },
             onSuccessfulDrain = OnSuccessfulDrain { id -> removed += id },
+            report = DrainFailureReport { reported += it },
             classify = ::classifyDrainError,
         )
         assertEquals(listOf("conflict", "clean"), pushedIds)
@@ -116,6 +130,7 @@ class DrainQueueLoopTest {
             },
             refresh = RefreshAuthForDrain { error("unreachable") },
             onSuccessfulDrain = OnSuccessfulDrain { id -> removed += id },
+            report = DrainFailureReport { reported += it },
             classify = ::classifyDrainError,
         )
         // 400 is permanent → SKIP, not remove. Only the clean run drains.
@@ -135,6 +150,7 @@ class DrainQueueLoopTest {
             push = PushQueuedRun { throw HttpException(400, "bad request") },
             refresh = RefreshAuthForDrain { error("unreachable") },
             onSuccessfulDrain = OnSuccessfulDrain { },
+            report = DrainFailureReport { reported += it },
             classify = ::classifyDrainError,
         )
         assertEquals(emptyList<String>(), result.drainedIds)
@@ -143,8 +159,8 @@ class DrainQueueLoopTest {
         // told a catalogued sentence; the raw text a bug report needs rides
         // `failures` and reaches `Log.e`, never the display (decisions § 1490).
         assertEquals(SyncFault.Refused, result.lastFault)
-        assertEquals(listOf("malformed"), result.failures.map { it.runId })
-        assertEquals("bad request", result.failures.single().error.message)
+        assertEquals(listOf("malformed"), reported.map { it.runId })
+        assertEquals("bad request", reported.single().error.message)
     }
 
     // ─────────────────── StopAndRetryLater (5xx) ───────────────────
@@ -161,6 +177,7 @@ class DrainQueueLoopTest {
             },
             refresh = RefreshAuthForDrain { error("unreachable") },
             onSuccessfulDrain = OnSuccessfulDrain { },
+            report = DrainFailureReport { reported += it },
             classify = ::classifyDrainError,
         )
         // Loop must stop on 5xx — run 'c' never attempted.
@@ -170,7 +187,7 @@ class DrainQueueLoopTest {
         // 5xx arms backoff so the next drain trigger waits.
         assertTrue(result.anyTransientFailure)
         assertEquals(SyncFault.ServerBusy, result.lastFault)
-        assertEquals("upstream timeout", result.failures.single().error.message)
+        assertEquals("upstream timeout", reported.single().error.message)
     }
 
     @Test fun `network timeout (non-http) also breaks the loop`() = runBlocking {
@@ -185,6 +202,7 @@ class DrainQueueLoopTest {
             },
             refresh = RefreshAuthForDrain { error("unreachable") },
             onSuccessfulDrain = OnSuccessfulDrain { },
+            report = DrainFailureReport { reported += it },
             classify = ::classifyDrainError,
         )
         assertEquals(listOf("a", "net-drop"), pushedIds)
@@ -210,6 +228,7 @@ class DrainQueueLoopTest {
                 true
             },
             onSuccessfulDrain = OnSuccessfulDrain { id -> removed += id },
+            report = DrainFailureReport { reported += it },
             classify = ::classifyDrainError,
         )
         // Initial push + one retry after refresh.
@@ -234,6 +253,7 @@ class DrainQueueLoopTest {
             },
             refresh = RefreshAuthForDrain { false },
             onSuccessfulDrain = OnSuccessfulDrain { id -> removed += id },
+            report = DrainFailureReport { reported += it },
             classify = ::classifyDrainError,
         )
         // Push fires once; refresh fails → no retry; 'b' never attempted.
@@ -246,7 +266,7 @@ class DrainQueueLoopTest {
         // an action on the wrist, so it is its own member rather than a
         // generic failure.
         assertEquals(SyncFault.SignInRequired, result.lastFault)
-        assertEquals("JWT expired", result.failures.single().error.message)
+        assertEquals("JWT expired", reported.single().error.message)
     }
 
     @Test fun `401 with refresh-throws stops + arms backoff`() = runBlocking {
@@ -257,6 +277,7 @@ class DrainQueueLoopTest {
             push = PushQueuedRun { throw HttpException(401, "JWT expired") },
             refresh = RefreshAuthForDrain { throw RuntimeException("refresh socket reset") },
             onSuccessfulDrain = OnSuccessfulDrain { },
+            report = DrainFailureReport { reported += it },
             classify = ::classifyDrainError,
         )
         assertEquals(emptyList<String>(), result.drainedIds)
@@ -266,7 +287,7 @@ class DrainQueueLoopTest {
         // the refresh's own failure. Only one of them can be the banner.
         assertEquals(
             listOf("JWT expired", "refresh socket reset"),
-            result.failures.map { it.error.message },
+            reported.map { it.error.message },
         )
     }
 
@@ -286,6 +307,7 @@ class DrainQueueLoopTest {
                 true
             },
             onSuccessfulDrain = OnSuccessfulDrain { },
+            report = DrainFailureReport { reported += it },
             classify = ::classifyDrainError,
         )
         // Initial push + retry; both 401.
@@ -319,6 +341,7 @@ class DrainQueueLoopTest {
                 true
             },
             onSuccessfulDrain = OnSuccessfulDrain { id -> removed += id },
+            report = DrainFailureReport { reported += it },
             classify = ::classifyDrainError,
         )
         assertEquals(listOf("a", "b", "c"), removed)
@@ -337,6 +360,7 @@ class DrainQueueLoopTest {
             },
             refresh = RefreshAuthForDrain { error("unreachable") },
             onSuccessfulDrain = OnSuccessfulDrain { id -> removed += id },
+            report = DrainFailureReport { reported += it },
             classify = ::classifyDrainError,
         )
         // Skipped run stays in the queue; clean ones drain.
@@ -359,6 +383,7 @@ class DrainQueueLoopTest {
             },
             refresh = RefreshAuthForDrain { error("unreachable") },
             onSuccessfulDrain = OnSuccessfulDrain { id -> removed += id },
+            report = DrainFailureReport { reported += it },
             classify = ::classifyDrainError,
         )
         // 'c' is never attempted — loop broke on 'down'.
@@ -366,7 +391,7 @@ class DrainQueueLoopTest {
         assertEquals(listOf("a"), removed)
         assertTrue(result.anyTransientFailure)
         assertEquals(SyncFault.ServerBusy, result.lastFault)
-        assertEquals("bad gateway", result.failures.single().error.message)
+        assertEquals("bad gateway", reported.single().error.message)
     }
 
     @Test fun `pure-skip queue does NOT arm backoff`() = runBlocking {
@@ -379,6 +404,7 @@ class DrainQueueLoopTest {
             push = PushQueuedRun { throw HttpException(400, "validation failed") },
             refresh = RefreshAuthForDrain { error("unreachable") },
             onSuccessfulDrain = OnSuccessfulDrain { },
+            report = DrainFailureReport { reported += it },
             classify = ::classifyDrainError,
         )
         assertEquals(emptyList<String>(), result.drainedIds)
@@ -387,7 +413,7 @@ class DrainQueueLoopTest {
         assertEquals(SyncFault.Refused, result.lastFault)
         // Three refusals, three log lines. The banner can only say one thing;
         // the diagnostic must not lose the other two.
-        assertEquals(listOf("a", "b", "c"), result.failures.map { it.runId })
+        assertEquals(listOf("a", "b", "c"), reported.map { it.runId })
     }
 
     // ─────────────────── Side-effect ordering ───────────────────
@@ -399,6 +425,7 @@ class DrainQueueLoopTest {
             push = PushQueuedRun { order += "push" },
             refresh = RefreshAuthForDrain { error("unreachable") },
             onSuccessfulDrain = OnSuccessfulDrain { order += "remove" },
+            report = DrainFailureReport { reported += it },
             classify = ::classifyDrainError,
         )
         // Removing from the queue BEFORE the push would lose the run
@@ -413,6 +440,7 @@ class DrainQueueLoopTest {
             push = PushQueuedRun { throw HttpException(503, "down") },
             refresh = RefreshAuthForDrain { error("unreachable") },
             onSuccessfulDrain = OnSuccessfulDrain { id -> removed += id },
+            report = DrainFailureReport { reported += it },
             classify = ::classifyDrainError,
         )
         // Removing a run that failed to upload would lose data —
@@ -435,6 +463,7 @@ class DrainQueueLoopTest {
             },
             refresh = RefreshAuthForDrain { error("unreachable") },
             onSuccessfulDrain = OnSuccessfulDrain { },
+            report = DrainFailureReport { reported += it },
             classify = ::classifyDrainError,
         )
         assertEquals(listOf("malformed"), result.rejectedIds)
@@ -442,7 +471,7 @@ class DrainQueueLoopTest {
         // The stated decision, unchanged.
         assertNull(result.lastFault)
         // …and the refusal is still in the log even though the banner cleared.
-        assertEquals(listOf("malformed"), result.failures.map { it.runId })
+        assertEquals(listOf("malformed"), reported.map { it.runId })
         assertFalse(result.anyTransientFailure)
     }
 
@@ -459,10 +488,98 @@ class DrainQueueLoopTest {
             },
             refresh = RefreshAuthForDrain { error("unreachable") },
             onSuccessfulDrain = OnSuccessfulDrain { error("nothing drains") },
+            report = DrainFailureReport { reported += it },
             classify = ::classifyDrainError,
         )
         assertEquals(listOf("a", "b", "c", "d"), result.rejectedIds)
         assertEquals(emptyList<String>(), result.drainedIds)
+    }
+
+    @Test fun `the pass names what stopped it, and a pass that got through names nothing`() = runBlocking {
+        // `blockedBy` is what the PreRun arc reads to decide between a retry
+        // and a sign-in (decisions § 1544), and it is NOT `lastFault`: a
+        // permanent rejection sets that one and the loop carries on past it,
+        // so a pass that rejects a run and then drains the rest is a pass that
+        // got through.
+        val stopped = drainQueueLoop(
+            snapshot = listOf(run("a")),
+            push = PushQueuedRun { throw HttpException(503, "upstream timeout") },
+            refresh = RefreshAuthForDrain { error("unreachable") },
+            onSuccessfulDrain = OnSuccessfulDrain { error("nothing drains") },
+            report = DrainFailureReport { reported += it },
+            classify = ::classifyDrainError,
+        )
+        assertEquals(SyncFault.ServerBusy, stopped.blockedBy)
+        assertTrue(stopped.anyTransientFailure)
+
+        val carriedOn = drainQueueLoop(
+            snapshot = listOf(run("bad"), run("fine")),
+            push = PushQueuedRun { r ->
+                if (r.id == "bad") throw HttpException(400, "bad request")
+            },
+            refresh = RefreshAuthForDrain { error("unreachable") },
+            onSuccessfulDrain = OnSuccessfulDrain { },
+            report = DrainFailureReport { reported += it },
+            classify = ::classifyDrainError,
+        )
+        assertNull(carriedOn.blockedBy)
+        assertFalse(carriedOn.anyTransientFailure)
+        assertEquals(listOf("bad"), carriedOn.rejectedIds)
+    }
+
+    @Test fun `a 401 the refresh cannot repair blocks the pass on the sign-in fault`() = runBlocking {
+        // The whole reason `blockedBy` carries a fault: this pass and a 5xx
+        // set the same boolean, and the arc must offer a sign-in for one and a
+        // retry for the other.
+        val result = drainQueueLoop(
+            snapshot = listOf(run("a")),
+            push = PushQueuedRun { throw HttpException(401, "JWT expired") },
+            refresh = RefreshAuthForDrain { false },
+            onSuccessfulDrain = OnSuccessfulDrain { error("nothing drains") },
+            report = DrainFailureReport { reported += it },
+            classify = ::classifyDrainError,
+        )
+        assertEquals(SyncFault.SignInRequired, result.blockedBy)
+    }
+
+    @Test fun `a report sink that throws does not take the drain with it`() = runBlocking {
+        // The report is an L4 diagnostic hanging off the one path that carries
+        // a runner's unsynced runs. A sink that throws must cost the log line
+        // and nothing else — the alternative is a logger ending the pass that
+        // was about to upload the run it was logging about.
+        val result = drainQueueLoop(
+            snapshot = listOf(run("a"), run("b")),
+            push = PushQueuedRun { r ->
+                if (r.id == "a") throw HttpException(400, "bad request")
+            },
+            refresh = RefreshAuthForDrain { error("unreachable") },
+            onSuccessfulDrain = OnSuccessfulDrain { reported += DrainFailure(it, SyncFault.Unknown, RuntimeException("drained")) },
+            report = DrainFailureReport { error("the log is on fire") },
+            classify = ::classifyDrainError,
+        )
+        assertEquals(listOf("a"), result.rejectedIds)
+        assertEquals(listOf("b"), result.drainedIds)
+        assertEquals(listOf("b"), reported.map { it.runId })
+    }
+
+    @Test fun `the refresh's own failure is reported, not only the 401 that provoked it`() = runBlocking {
+        // The live lambda used to catch its own error and return a bare
+        // `false`, so the one failure on this path — a session the server will
+        // not renew — reached no log at all. Both throwables are reported and
+        // only one of them is the banner.
+        val result = drainQueueLoop(
+            snapshot = listOf(run("a")),
+            push = PushQueuedRun { throw HttpException(401, "JWT expired") },
+            refresh = RefreshAuthForDrain { throw HttpException(400, "invalid_grant") },
+            onSuccessfulDrain = OnSuccessfulDrain { error("nothing drains") },
+            report = DrainFailureReport { reported += it },
+            classify = ::classifyDrainError,
+        )
+        assertEquals(
+            listOf("JWT expired", "invalid_grant"),
+            reported.map { it.error.message },
+        )
+        assertEquals(SyncFault.SignInRequired, result.lastFault)
     }
 
     @Test fun `an all-success pass rejects nothing`() = runBlocking {
@@ -471,6 +588,7 @@ class DrainQueueLoopTest {
             push = PushQueuedRun { },
             refresh = RefreshAuthForDrain { error("unreachable") },
             onSuccessfulDrain = OnSuccessfulDrain { },
+            report = DrainFailureReport { reported += it },
             classify = { error("unreachable") },
         )
         assertEquals(emptyList<String>(), result.rejectedIds)
@@ -491,6 +609,7 @@ class DrainQueueLoopTest {
             },
             refresh = RefreshAuthForDrain { error("unreachable") },
             onSuccessfulDrain = OnSuccessfulDrain { },
+            report = DrainFailureReport { reported += it },
             classify = ::classifyDrainError,
         )
         assertEquals(listOf("skipped", "down"), result.attemptedIds)
@@ -508,6 +627,7 @@ class DrainQueueLoopTest {
             },
             refresh = RefreshAuthForDrain { true },
             onSuccessfulDrain = OnSuccessfulDrain { },
+            report = DrainFailureReport { reported += it },
             classify = ::classifyDrainError,
         )
         // Two pushes, one entry: `attemptedIds` is about runs, not requests.
@@ -525,9 +645,8 @@ class DrainQueueLoopTest {
         drainedIds = drained,
         rejectedIds = rejected,
         attemptedIds = attempted,
-        anyTransientFailure = false,
+        blockedBy = null,
         lastFault = null,
-        failures = emptyList(),
     )
 
     @Test fun `a fresh rejection enters the carried set`() {

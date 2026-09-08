@@ -9,9 +9,10 @@
 	/// component is for the prerendered pages that render their head in
 	/// the browser only.
 	///
-	/// `jsonLd` entries must already be escaped for the script-element
-	/// context (use the builders in site_meta.ts / share_meta.ts, which
-	/// run escapeJsonLd) — they're injected via {@html} because a literal
+	/// `jsonLd` entries must already be serialised and escaped for the
+	/// script-element context (use the builders in site_meta.ts /
+	/// share_meta.ts, which run `serialiseJsonLd` from $lib/util/json_ld,
+	/// which does both) — they're injected via {@html} because a literal
 	/// <script> in Svelte markup would be hoisted and compiled away.
 
 	interface Props {

@@ -547,15 +547,31 @@ interface EmbeddedTrackPoint {
 	ts?: string;
 }
 
-function embeddedHaversineM(lat1: number, lng1: number, lat2: number, lng2: number): number {
+/// The third rail of `haversineMetres`, and the one that has to be a copy: a
+/// Deno Edge Function cannot import from `apps/web/src/lib`, and this module
+/// is what decides the `fastest_*_s` an IMPORTED run lands with while the two
+/// clients decide it for a recorded one. Exported so the twin contract can be
+/// pinned to the last bit rather than described. Expression for expression the
+/// same as `runs/run_stats.ts` and `run_stats.dart`, clamp included — this used
+/// to take the unclamped `atan2` form, and on an evenly-spaced 5 km track the
+/// two forms sum to 5000.000000000002 m and 4999.999999999998 m respectively, so
+/// against a strict window comparison the importer found a 5 km best in a run
+/// the phone found none in (§ 1525).
+export function embeddedHaversineM(
+	lat1: number,
+	lng1: number,
+	lat2: number,
+	lng2: number,
+): number {
 	const r = 6371000;
-	const toRad = Math.PI / 180;
-	const dLat = (lat2 - lat1) * toRad;
-	const dLng = (lng2 - lng1) * toRad;
-	const s1 = Math.sin(dLat / 2);
-	const s2 = Math.sin(dLng / 2);
-	const a = s1 * s1 + Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * s2 * s2;
-	return r * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+	const dLat = ((lat2 - lat1) * Math.PI) / 180;
+	const dLng = ((lng2 - lng1) * Math.PI) / 180;
+	const sinLat = Math.sin(dLat / 2);
+	const sinLng = Math.sin(dLng / 2);
+	const a = sinLat * sinLat +
+		Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * sinLng * sinLng;
+	const clamped = a > 1 ? 1 : a < 0 ? 0 : a;
+	return r * 2 * Math.asin(Math.sqrt(clamped));
 }
 
 function pointMs(p: EmbeddedTrackPoint): number | null {
@@ -563,6 +579,17 @@ function pointMs(p: EmbeddedTrackPoint): number | null {
 	const ms = Date.parse(p.ts);
 	return Number.isFinite(ms) ? ms : null;
 }
+
+/// Relative slack on the window comparison. `cum` is an accumulated sum of
+/// hundreds of great-circle legs, so a track that IS exactly the window
+/// measures a hair either side of it and the strict `<` decided whether a
+/// nominally-10.00 km effort produced a best at all on the last bit. Scaled by
+/// the window rather than absolute, because the drift grows with the sum:
+/// measured, an evenly-spaced 10 km track of 1 000 legs sums to
+/// 9 999.999 999 999 900 m, and the largest relative drift over 20 000 legs of
+/// a marathon window is 9.2e-14. 1e-9 of the marathon window is 42 µm — four
+/// orders of magnitude above that and far below any GPS fix.
+export const WINDOW_TOLERANCE_RATIO = 1e-9;
 
 /// Fastest continuous `windowMetres` (whole seconds) anywhere in the track,
 /// or null when the track has < 2 points, is shorter than the window, or has
@@ -580,13 +607,14 @@ export function fastestWindowSeconds(
 		cum[i] = cum[i - 1] +
 			embeddedHaversineM(track[i - 1].lat, track[i - 1].lng, track[i].lat, track[i].lng);
 	}
-	if (cum[n - 1] < windowMetres) return null;
+	const covers = windowMetres * (1 - WINDOW_TOLERANCE_RATIO);
+	if (cum[n - 1] < covers) return null;
 
 	let best: number | null = null;
 	let i = 0;
 	for (let j = 1; j < n; j++) {
-		while (i + 1 < j && cum[j] - cum[i + 1] >= windowMetres) i++;
-		if (cum[j] - cum[i] < windowMetres) continue;
+		while (i + 1 < j && cum[j] - cum[i + 1] >= covers) i++;
+		if (cum[j] - cum[i] < covers) continue;
 
 		const ti = pointMs(track[i]);
 		const tj = pointMs(track[j]);

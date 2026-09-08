@@ -18,6 +18,12 @@ import {
 	stripServerManagedProfileFields,
 	type ParsedBackup
 } from './backup_reader';
+import {
+	keepKnownColumns,
+	PROFILE_RESTORE_COLUMNS,
+	ROUTE_RESTORE_COLUMNS,
+	RUN_RESTORE_COLUMNS
+} from './restore_columns';
 
 export interface RestoreProgress {
 	stage: 'reading' | 'profile' | 'tracks' | 'runs' | 'routes' | 'done';
@@ -91,6 +97,26 @@ export interface RestoreBackend {
 	fetchValidEventIds(ids: string[]): Promise<Set<string>>;
 }
 
+/**
+ * One warning per section naming every column the archive carried that this
+ * build's schema has no home for — not one per row.
+ *
+ * The account page renders the warning COUNT, not the text, so a stale archive
+ * of 500 runs used to read as "500 warnings" beside an import of zero. The
+ * names are what a reader can act on, and they are the same handful on every
+ * row of a section by construction.
+ */
+function noteDroppedColumns(
+	section: string,
+	dropped: readonly string[],
+	result: RestoreResult
+): void {
+	if (dropped.length === 0) return;
+	result.warnings.push(
+		`${section}: dropped ${[...dropped].sort().join(', ')} — not columns of this schema`
+	);
+}
+
 export interface RestoreOrchestrateOptions {
 	generateNewIds?: boolean;
 	onProgress?: (p: RestoreProgress) => void;
@@ -122,7 +148,12 @@ export async function restoreOrchestrate(
 		onProgress?.({ stage: 'profile', current: 0, total: 1 });
 		try {
 			const portableProfile = stripServerManagedProfileFields(parsed.profile);
-			await backend.upsertProfile({ ...portableProfile, id: userId });
+			const known = keepKnownColumns(
+				{ ...portableProfile, id: userId },
+				PROFILE_RESTORE_COLUMNS
+			);
+			noteDroppedColumns('profile', known.dropped, result);
+			await backend.upsertProfile(known.row);
 			result.profileRestored = true;
 		} catch (e) {
 			result.warnings.push(`profile: ${(e as Error).message}`);
@@ -146,6 +177,7 @@ export async function restoreOrchestrate(
 				: new Set<string>();
 
 		let i = 0;
+		const droppedRunColumns = new Set<string>();
 		for (const r of runs) {
 			onProgress?.({ stage: 'runs', current: i, total: runs.length });
 			const origId = r.id as string;
@@ -194,31 +226,39 @@ export async function restoreOrchestrate(
 			else delete row.track_url;
 			delete row.hr_series_url;
 
+			const known = keepKnownColumns(row, RUN_RESTORE_COLUMNS);
+			for (const name of known.dropped) droppedRunColumns.add(name);
+
 			try {
-				await backend.upsertRun(row);
+				await backend.upsertRun(known.row);
 				result.runsImported++;
 			} catch (e) {
 				result.warnings.push(`run ${origId}: ${(e as Error).message}`);
 			}
 			i++;
 		}
+		noteDroppedColumns('runs', [...droppedRunColumns], result);
 	}
 
 	// Routes.
 	if (parsed.routes.length > 0) {
 		const routes = parsed.routes;
 		let i = 0;
+		const droppedRouteColumns = new Set<string>();
 		for (const r of routes) {
 			onProgress?.({ stage: 'routes', current: i, total: routes.length });
 			const newId = opts.generateNewIds ? newUUID() : (r.id as string);
+			const known = keepKnownColumns({ ...r, id: newId, user_id: userId }, ROUTE_RESTORE_COLUMNS);
+			for (const name of known.dropped) droppedRouteColumns.add(name);
 			try {
-				await backend.upsertRoute({ ...r, id: newId, user_id: userId });
+				await backend.upsertRoute(known.row);
 				result.routesImported++;
 			} catch (e) {
 				result.warnings.push(`route ${r.id}: ${(e as Error).message}`);
 			}
 			i++;
 		}
+		noteDroppedColumns('routes', [...droppedRouteColumns], result);
 	}
 
 	onProgress?.({ stage: 'done', current: 1, total: 1 });

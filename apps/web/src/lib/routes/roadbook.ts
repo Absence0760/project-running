@@ -14,6 +14,7 @@
  * Pure + framework-free. Twin of `apps/mobile_android/lib/roadbook.dart` —
  * keep the allocation, cutoff rules, edge cases, and test count in lockstep.
  */
+import { haversineMetres } from '../runs/run_stats';
 import { gradeFactor, MIN_SEGMENT_M } from '../runs/grade_adjusted_pace';
 import { parseCutoff, parseTarget } from './route_markers';
 
@@ -102,17 +103,6 @@ export function targetBandS(targetElapsedS: number): number {
 
 const MINUTES_PER_DAY = 1440;
 
-function haversineM(a: RoadbookWaypoint, b: RoadbookWaypoint): number {
-	const r = 6_371_000;
-	const deg = Math.PI / 180;
-	const dLat = (b.lat - a.lat) * deg;
-	const dLng = (b.lng - a.lng) * deg;
-	const h =
-		Math.sin(dLat / 2) ** 2 +
-		Math.cos(a.lat * deg) * Math.cos(b.lat * deg) * Math.sin(dLng / 2) ** 2;
-	return r * 2 * Math.asin(Math.min(1, Math.sqrt(h)));
-}
-
 interface Cumulative {
 	dist: number[];
 	gap: number[];
@@ -146,7 +136,7 @@ function walk(waypoints: RoadbookWaypoint[]): Cumulative {
 		const a = waypoints[i - 1];
 		const b = waypoints[i];
 		const dEle = a.ele != null && b.ele != null ? b.ele - a.ele : 0;
-		dist.push(dist[i - 1] + haversineM(a, b));
+		dist.push(dist[i - 1] + haversineMetres(a.lat, a.lng, b.lat, b.lng));
 		gain.push(gain[i - 1] + Math.max(0, dEle));
 		loss.push(loss[i - 1] + Math.max(0, -dEle));
 	}

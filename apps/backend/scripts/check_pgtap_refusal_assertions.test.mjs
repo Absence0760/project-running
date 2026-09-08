@@ -15,10 +15,16 @@ import {
   EXPECTED_SURVIVORS,
   FILTERED_RPC_ARGUMENTS,
   STAMPED_VALUE_ASSERTIONS,
+  UNOBSERVED_RPC_WRITES,
   assertionDescriptions,
+  assertionReads,
   assignedColumns,
+  bareWriterCall,
+  byFunctionName,
   conditionallyStampedColumns,
   descriptionOf,
+  droppedSignatures,
+  functionBodies,
   parameterLandings,
   readMigrations,
   rpcArgumentLandings,
@@ -44,6 +50,8 @@ import {
   splitArgs,
   statementEnd,
   statementStart,
+  statementsIn,
+  writingFunctions,
   throwsPinsItsError,
   verdictFor,
 } from './check_pgtap_refusal_assertions.mjs';
@@ -575,6 +583,87 @@ test('an earlier return inside a branch makes what follows it skippable', () => 
 	});
 });
 
+test('a block form that closes with a bare end closes the frame it opened', () => {
+	// An EXPRESSION `case` closes with a bare `end`, not `end case`, so the frame
+	// it opened used to stay on the stack and the enclosing `end if` popped IT
+	// instead — leaving the `if` open, and everything after it reading as
+	// unconditional when it is not (decisions 1538).
+	const exprCase =
+		'begin\n  if new.a is null then\n    new.b := case when new.x > 0 then 1 else 2 end;\n  end if;\n  new.c := 3;\n  return new;\nend;';
+	assert.deepEqual(assignedUnder(exprCase, 'insert'), {
+		unconditional: ['c'],
+		conditional: ['b'],
+	});
+
+	// The unsafe direction the same mis-nesting takes under a `tg_op` split: the
+	// else arm's assignment is attributed to the operation the THEN arm names,
+	// and the other operation is left reporting nothing at all.
+	const split =
+		"begin\n  if tg_op = 'INSERT' then\n    new.a := case when new.x is null then 0 else new.x end;\n  else\n    new.b := 1;\n  end if;\n  return new;\nend;";
+	assert.deepEqual(assignedUnder(split, 'insert'), { unconditional: ['a'], conditional: [] });
+	assert.deepEqual(assignedUnder(split, 'update'), { unconditional: ['b'], conditional: [] });
+
+	// A plpgsql BLOCK closes with a bare `end` too, and unlike a `case` it is not
+	// a branch: what it assigns carries out of it, so the sibling assignment
+	// after it is inside the `if` and the one after the `if` is not.
+	const nested =
+		'begin\n  if new.a is null then\n    begin\n      new.b := 1;\n    end;\n    new.c := 2;\n  end if;\n  new.d := 3;\n  return new;\nend;';
+	assert.deepEqual(assignedUnder(nested, 'insert'), {
+		unconditional: ['d'],
+		conditional: ['b', 'c'],
+	});
+
+	// An exception handler is a second way out of the block, and the guard cannot
+	// read what it leaves assigned, so the block stops carrying its must-set.
+	const handled =
+		'begin\n  begin\n    new.b := 1;\n  exception when others then null;\n  end;\n  return new;\nend;';
+	assert.deepEqual(assignedUnder(handled, 'insert'), {
+		unconditional: [],
+		conditional: ['b'],
+	});
+});
+
+test('a case arm that assigns nothing is a path through the case', () => {
+	// `when` separates a `case`'s arms the way `elsif` separates an `if`'s. Read
+	// as one region, the empty arm inherits the previous arm's assignment and the
+	// closing `else` then makes the whole thing look exhaustive.
+	const gap =
+		"begin\n  case new.kind\n    when 'a' then new.x := 1;\n    when 'b' then null;\n    else new.x := 2;\n  end case;\n  return new;\nend;";
+	assert.deepEqual(assignedUnder(gap, 'insert'), { unconditional: [], conditional: ['x'] });
+
+	// Every arm assigning it, with an `else` to make the arms exhaustive, is the
+	// case that IS unconditional — so the fix above is not a blanket downgrade.
+	const covered =
+		"begin\n  case new.kind\n    when 'a' then new.x := 1;\n    else new.x := 2;\n  end case;\n  new.y := 3;\n  return new;\nend;";
+	assert.deepEqual(assignedUnder(covered, 'insert'), {
+		unconditional: ['x', 'y'],
+		conditional: [],
+	});
+
+	// The region before the first `when` is the selector expression, not an arm.
+	// Counting it as a path makes every `case` unconditional in nothing.
+	const noElse =
+		"begin\n  case new.kind\n    when 'a' then new.x := 1;\n  end case;\n  return new;\nend;";
+	assert.deepEqual(assignedUnder(noElse, 'insert'), { unconditional: [], conditional: ['x'] });
+});
+
+test('a block keyword inside a string is payload, not structure', () => {
+	// `raise exception 'no end if here'` used to close the enclosing `if`, which
+	// promoted every assignment after the message to unconditional. A bare `end`
+	// closing a frame makes this far likelier than it was: an error string
+	// containing the word "end" is ordinary.
+	const message =
+		"begin\n  if new.a is null then\n    raise exception 'no end if here';\n    new.b := 1;\n  end if;\n  return new;\nend;";
+	assert.deepEqual(assignedUnder(message, 'insert'), { unconditional: [], conditional: ['b'] });
+
+	// But the `tg_op` comparison is read out of the same text, so a string is
+	// masked for the token walk and kept verbatim for the condition.
+	const tgOp =
+		"begin\n  if tg_op = 'INSERT' then\n    new.a := 1;\n  end if;\n  return new;\nend;";
+	assert.deepEqual(assignedUnder(tgOp, 'insert'), { unconditional: ['a'], conditional: [] });
+	assert.deepEqual(assignedUnder(tgOp, 'update'), { unconditional: [], conditional: [] });
+});
+
 test('stampedColumns replays the migrations rather than reading the last one', () => {
 	/** @param {string} name @param {string} col */
 	const stamp = (name, col) =>
@@ -930,8 +1019,9 @@ test('parameterLandings separates a parameter planted verbatim from one an expre
 test('rpcArgumentLandings resolves an argument to its parameter, positionally and by name', () => {
 	const writers = new Map([
 		[
-			'f',
+			'f/3',
 			{
+				name: 'f',
 				params: ['p_one', 'p_two', 'p_three'],
 				lands: /** @type {import('./check_pgtap_refusal_assertions.mjs').ParameterLanding[]} */ ([
 					{ table: 't', column: 'one', param: 'p_one', op: 'insert', verbatim: true },
@@ -961,6 +1051,116 @@ test('rpcArgumentLandings resolves an argument to its parameter, positionally an
 	);
 	// Another function whose name merely ends the same way is not this one.
 	assert.deepEqual(rpcArgumentLandings('select gf(1, 2, 3)', writers), []);
+});
+
+test('functionBodies keys on the signature, so one name can hold two definitions', () => {
+	const text =
+		'create function f(p_a uuid) returns void language plpgsql as $$\nbegin\n  perform 1;\nend;\n$$;\n' +
+		'create function f(p_a uuid, p_b text) returns void language plpgsql as $$\nbegin\n  perform 2;\nend;\n$$;';
+	const defs = functionBodies(text);
+	assert.deepEqual([...defs.keys()], ['f/1', 'f/2']);
+	assert.match(defs.get('f/1')?.body ?? '', /perform 1/);
+	assert.match(defs.get('f/2')?.body ?? '', /perform 2/);
+	// A genuine redefinition of the SAME signature still wins, which is what a
+	// replay depends on.
+	const replaced = functionBodies(
+		`${text}\ncreate or replace function f(p_a uuid) returns void language plpgsql as $$\nbegin\n  perform 3;\nend;\n$$;`,
+	);
+	assert.equal(replaced.size, 2);
+	assert.match(replaced.get('f/1')?.body ?? '', /perform 3/);
+});
+
+test('droppedSignatures counts the types a drop names, not the commas in them', () => {
+	assert.deepEqual(droppedSignatures('drop function if exists confirm_age_and_terms();'), [
+		{ name: 'confirm_age_and_terms', arity: 0 },
+	]);
+	assert.deepEqual(
+		droppedSignatures(
+			'drop function if exists public.discoverable_routes_in_bbox(\n  double precision, double precision,\n  integer, text, numeric[], numeric[]);',
+		),
+		[{ name: 'discoverable_routes_in_bbox', arity: 6 }],
+	);
+	// A type carrying its own parenthesised modifier is one type.
+	assert.deepEqual(droppedSignatures('drop function f(character varying(255), numeric(6, 2));'), [
+		{ name: 'f', arity: 2 },
+	]);
+});
+
+test('an overloaded name resolves to the signature the call site wrote', () => {
+	/** @param {string} c @param {string} param */
+	const land = (c, param) =>
+		/** @type {import('./check_pgtap_refusal_assertions.mjs').ParameterLanding} */ ({
+			table: 't',
+			column: c,
+			param,
+			op: 'insert',
+			verbatim: true,
+		});
+	const writers = new Map([
+		['f/1', { name: 'f', params: ['p_a'], lands: [land('narrow', 'p_a')] }],
+		['f/2', { name: 'f', params: ['p_a', 'p_b'], lands: [land('wide', 'p_b')] }],
+	]);
+	// Keyed on the bare name, the later definition won and a one-argument call
+	// was bound against the two-parameter list — reaching a column it never
+	// supplied a value for, or missing the one it did (decisions 1539).
+	assert.deepEqual(
+		rpcArgumentLandings('select f(1)', writers).map((l) => l.column),
+		['narrow'],
+	);
+	assert.deepEqual(
+		rpcArgumentLandings('select f(1, 2)', writers).map((l) => l.column),
+		['wide'],
+	);
+	// A named argument only one signature declares picks that one out even when
+	// the arity alone could not.
+	assert.deepEqual(
+		rpcArgumentLandings('select f(p_b => 2)', writers).map((l) => l.column),
+		['wide'],
+	);
+
+	// Where arity and names leave two signatures possible, Postgres would decide
+	// on the argument TYPES, which this scan cannot read — so it claims nothing
+	// rather than attributing a landing to a signature the call may not bind.
+	const ambiguous = new Map([
+		['g/2', { name: 'g', params: ['p_a', 'p_b'], lands: [land('two', 'p_a')] }],
+		['g/3', { name: 'g', params: ['p_a', 'p_b', 'p_c'], lands: [land('three', 'p_a')] }],
+	]);
+	assert.deepEqual(rpcArgumentLandings('select g(1)', ambiguous), []);
+	// An exact arity match outranks a wider signature reached on defaults, so
+	// the same pair IS decidable when the call fills one of them exactly.
+	assert.deepEqual(
+		rpcArgumentLandings('select g(1, 2)', ambiguous).map((l) => l.column),
+		['two'],
+	);
+});
+
+test('a dropped signature does not survive the migration replay', () => {
+	const create = (/** @type {string} */ sig, /** @type {string} */ col) =>
+		`create function f(${sig}) returns void language plpgsql as $$\nbegin\n  insert into t (${col}) values (p_a);\nend;\n$$;`;
+	const kept = writerFunctions([
+		{ name: '001.sql', text: create('p_a uuid', 'narrow') },
+		{ name: '002.sql', text: `drop function if exists f(uuid);\n${create('p_a uuid, p_b text', 'wide')}` },
+	]);
+	assert.deepEqual([...kept.keys()], ['f/2']);
+	// And a drop with no replacement leaves nothing behind at all.
+	const gone = writerFunctions([
+		{ name: '001.sql', text: create('p_a uuid', 'narrow') },
+		{ name: '002.sql', text: 'drop function if exists f(uuid);' },
+	]);
+	assert.equal(gone.size, 0);
+});
+
+test('signatureParameters reads a signature that documents itself', () => {
+	// Six of this tree's `create function` signatures carry a trailing comment
+	// per parameter. Left in the text, the comment is the start of the NEXT
+	// parameter's slice and every name after the first parses as empty — so the
+	// list a call site binds against was one entry long (decisions 1539).
+	assert.deepEqual(
+		signatureParameters(
+			"p_query text default null,   -- matches title\n  p_limit int default 60  -- how many",
+		),
+		['p_query', 'p_limit'],
+	);
 });
 
 test('a verbatim landing carries the trigger scan through the RPC', () => {
@@ -997,8 +1197,9 @@ test('the writer-function population is non-empty and names the RPC-only write s
 	// those are the ones the direct INSERT/UPDATE scan can never see.
 	const writers = writerFunctions(readMigrations());
 	assert.ok(writers.size >= 20, `only ${writers.size} parameter-planting functions found`);
-	const crossing = writers.get('upsert_checkpoint_crossing');
-	assert.ok(crossing !== undefined, 'upsert_checkpoint_crossing is not read as a writer');
+	const live = [...writers.values()].filter((w) => w.name === 'upsert_checkpoint_crossing');
+	assert.equal(live.length, 1, 'upsert_checkpoint_crossing should have one live signature');
+	const crossing = live[0];
 	assert.ok(crossing.params.includes('p_body_weight_kg'));
 	const health = crossing.lands.filter((l) => l.column === 'body_weight_kg');
 	assert.equal(health.length, 2, 'both arms of the upsert should land body_weight_kg');
@@ -1060,6 +1261,126 @@ test('every pgtap positive handing a value to a filtering RPC is registered', ()
 			`FILTERED_RPC_ARGUMENTS entry ${entry.file} / "${entry.description}" is stale`,
 		);
 	}
+});
+
+// ── ...and a positive whose whole SQL is one call to a writing function ──────
+
+test('writingFunctions reads what a body writes, including what it computes', () => {
+	const write = (/** @type {string} */ body) =>
+		`create function f() returns void language plpgsql as $$\nbegin\n${body}\nend;\n$$;`;
+	const only = (/** @type {string} */ body) =>
+		writingFunctions([{ name: '001.sql', text: write(body) }]).get('f/0')?.tables ?? [];
+	// A function that plants no parameter still writes a row, which is what this
+	// population is about — writerFunctions would not see this one at all.
+	assert.deepEqual(only('  insert into audit_log (at) values (now());'), ['audit_log']);
+	assert.deepEqual(only('  update t set seen_at = now() where id = 1;'), ['t']);
+	assert.deepEqual(only('  update t x set seen_at = now() where x.id = 1;'), ['t']);
+	assert.deepEqual(only('  delete from t where id = 1;'), ['t']);
+	// The identifier after UPDATE in an upsert's conflict arm is the SET clause,
+	// not a table called `set`.
+	assert.deepEqual(
+		only("  insert into t (id) values (1) on conflict (id) do update set seen_at = now();"),
+		['t'],
+	);
+	// A write named only in a comment or a message is not a write.
+	assert.deepEqual(only("  raise notice 'would insert into t (id)';"), []);
+	assert.deepEqual(only('  -- insert into t (id) values (1);\n  perform 1;'), []);
+});
+
+test('statementsIn splits on the semicolons that are code', () => {
+	assert.deepEqual(statementsIn('  select f(1) ;  '), ['select f(1)']);
+	assert.deepEqual(statementsIn('set local role x; select f(1)'), ['set local role x', 'select f(1)']);
+	// A semicolon inside a literal is payload — reading it as a statement break
+	// would make a one-statement assertion look like two and drop it from the
+	// population without saying so.
+	assert.deepEqual(statementsIn("select f('a; b')"), ["select f('a; b')"]);
+});
+
+test('bareWriterCall selects only an assertion whose whole SQL is that call', () => {
+	const byName = byFunctionName(
+		new Map([
+			['f/2', { name: 'f', params: ['p_a', 'p_b'], tables: ['t'] }],
+			['g/1', { name: 'g', params: ['p_a'], tables: ['u'] }],
+		]),
+	);
+	assert.equal(bareWriterCall('select f(1, 2)', byName)?.name, 'f');
+	assert.equal(bareWriterCall('  select * from f(1, 2)  ', byName)?.name, 'f');
+	// A call that is one statement among several is not what this scan is about:
+	// the assertion around it is claiming something about the sequence.
+	assert.equal(bareWriterCall('select f(1, 2); select 1', byName), null);
+	// Nor is a statement that merely mentions the function.
+	assert.equal(bareWriterCall('insert into t (a) values (f(1, 2))', byName), null);
+	assert.equal(bareWriterCall('select h(1)', byName), null);
+	// An overload the arity cannot separate resolves to none, so the guard asks
+	// about a write set no call site may have reached.
+	const two = byFunctionName(
+		new Map([
+			['k/2', { name: 'k', params: ['p_a', 'p_b'], tables: ['t'] }],
+			['k/3', { name: 'k', params: ['p_a', 'p_b', 'p_c'], tables: ['u'] }],
+		]),
+	);
+	assert.equal(bareWriterCall('select k(1)', two), null);
+	assert.equal(bareWriterCall('select k(1, 2)', two)?.tables[0], 't');
+});
+
+test('assertionReads keeps the offset, so an assertion cannot be its own witness', () => {
+	const text = "select lives_ok($$ select f(1) $$, 'writes');\nselect is((select count(*) from t), 1, 'reads');";
+	const reads = assertionReads(text);
+	const witness = reads.filter((r) => r.relations.has('t'));
+	assert.equal(witness.length, 1);
+	assert.notEqual(witness[0].offset, text.indexOf('lives_ok'));
+});
+
+test('every bare writer call in the suite is observed or registered', () => {
+	// 510 again: the population has to be non-empty or a broken parse reads as a
+	// clean suite.
+	const writing = byFunctionName(writingFunctions(readMigrations()));
+	const registry = new Map(UNOBSERVED_RPC_WRITES.map((e) => [`${e.file}\u0000${e.description}`, e]));
+	/** @type {Set<string>} */
+	const matched = new Set();
+	/** @type {string[]} */
+	const offenders = [];
+	let population = 0;
+	for (const file of readdirSync(TESTS_DIR).filter((f) => f.endsWith('.sql'))) {
+		const text = readFileSync(join(TESTS_DIR, file), 'utf8');
+		/** @type {{ offset: number, relations: Set<string> }[] | null} */
+		let reads = null;
+		for (const call of findCalls(text, 'lives_ok')) {
+			const sql = literalOf(call.argv[0]);
+			if (sql === null) continue;
+			const written = bareWriterCall(sql, writing);
+			if (written === null) continue;
+			population += 1;
+			reads ??= assertionReads(text);
+			if (
+				reads.some((r) => r.offset !== call.offset && written.tables.some((t) => r.relations.has(t)))
+			) {
+				continue;
+			}
+			const description = call.argv[1] === undefined ? '' : (descriptionOf(call.argv[1]) ?? '');
+			const key = `${file}\u0000${description}`;
+			const entry = registry.get(key);
+			if (entry === undefined) {
+				offenders.push(`${file}:${call.line}`);
+				continue;
+			}
+			matched.add(key);
+			assert.deepEqual(entry.tables, written.tables, `${entry.file} names a stale write set`);
+			assert.ok(entry.reason.length > 40, `${entry.file} entry needs a real reason`);
+			if (entry.readBack === undefined) continue;
+			assert.ok(
+				assertionDescriptions(text).has(entry.readBack),
+				`${entry.file} names a read-back no assertion carries: "${entry.readBack}"`,
+			);
+		}
+	}
+	assert.ok(population >= 40, `only ${population} bare writer calls found`);
+	assert.deepEqual(offenders, []);
+	assert.deepEqual(
+		UNOBSERVED_RPC_WRITES.filter((e) => !matched.has(`${e.file}\u0000${e.description}`)),
+		[],
+		'a registry entry that no longer names an unobserved call excuses nothing',
+	);
 });
 
 test('the money path and the two ping positives are read back, not excused by prose', () => {

@@ -1,7 +1,7 @@
-import 'dart:math';
-
 import 'package:core_models/core_models.dart';
 import 'package:latlong2/latlong.dart';
+
+import '../run_stats.dart' show haversineMetres;
 
 /// The result of tapping the run-detail map. Mirrors `SelectedSegment`
 /// in `apps/web/src/lib/components/RunMap.svelte`. Carries the index
@@ -38,16 +38,9 @@ class SelectedSegment {
 /// produce visually identical highlights and stats.
 const double segmentRadiusMetres = 150;
 
-double _haversineMetres(LatLng a, LatLng b) {
-  const r = 6371000.0;
-  final lat1 = a.latitude * pi / 180;
-  final lat2 = b.latitude * pi / 180;
-  final dLat = (b.latitude - a.latitude) * pi / 180;
-  final dLng = (b.longitude - a.longitude) * pi / 180;
-  final h = sin(dLat / 2) * sin(dLat / 2) +
-      cos(lat1) * cos(lat2) * sin(dLng / 2) * sin(dLng / 2);
-  return 2 * r * asin(sqrt(h));
-}
+/// The `LatLng` door onto the shared `haversineMetres`, not a second formula.
+double _haversineMetres(LatLng a, LatLng b) =>
+    haversineMetres(a.latitude, a.longitude, b.latitude, b.longitude);
 
 /// Cumulative haversine distance from index 0 to each point. O(n) — the
 /// runs we render top out around 2k points, well below the cost of

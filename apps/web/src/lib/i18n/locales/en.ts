@@ -4516,7 +4516,7 @@ export const en = {
 	"payouts.statusRestricted": "Your payout account needs attention before you can take payment",
 	"payouts.manageDashboard": "Open Stripe dashboard",
 	"payouts.notConfigured": "Payments aren't configured on this build yet.",
-	"payouts.merchantNote": "You are the merchant of record: you own refunds and chargebacks, and the platform fee is returned when you refund.",
+	"payouts.merchantNote": "We are the merchant of record: the charge carries our name on your buyer’s statement, refunds are issued by us under the policy you set on each event, and a disputed charge is debited from our Stripe account, not yours. The platform fee comes back to you when an order is refunded.",
 	"payouts.redirecting": "Redirecting…",
 	"payouts.setupFailed": "Could not start payment setup: {error}",
 	"eventEditor.chargeToggle": "Charge for this event",

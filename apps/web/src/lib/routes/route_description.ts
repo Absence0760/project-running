@@ -1,3 +1,4 @@
+import { haversineMetres } from '../runs/run_stats';
 import { bandForDistance } from './distance_bands';
 import type { RouteSurface } from '../types';
 
@@ -64,26 +65,6 @@ export const ELEVATION_THRESHOLDS = {
 	mountainous: 70,
 } as const;
 
-/**
- * Great-circle distance in metres. Local copy (not imported from
- * routing_quality) so this module stays dependency-light and the Dart
- * twin can mirror it 1:1 without dragging the routing helpers across.
- */
-function haversineM(
-	a: { lat: number; lng: number },
-	b: { lat: number; lng: number },
-): number {
-	const R = 6371000;
-	const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-	const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-	const lat1 = (a.lat * Math.PI) / 180;
-	const lat2 = (b.lat * Math.PI) / 180;
-	const h =
-		Math.sin(dLat / 2) ** 2 +
-		Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-	return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
-}
-
 /** Bucket total gain (m) over distance into a coarse elevation character. */
 export function elevationProfile(
 	distanceM: number,
@@ -110,7 +91,8 @@ export function elevationProfile(
  */
 export function routeShape(input: RouteDescriptionInput): RouteShape {
 	if (!input.start || !input.end) return 'point_to_point';
-	return haversineM(input.start, input.end) <= LOOP_CLOSE_M
+	return haversineMetres(input.start.lat, input.start.lng, input.end.lat, input.end.lng) <=
+		LOOP_CLOSE_M
 		? 'loop'
 		: 'point_to_point';
 }

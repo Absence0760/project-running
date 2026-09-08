@@ -1,4 +1,5 @@
 import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart' show dedupeShadowedExercises;
 import 'package:flutter/material.dart';
 import 'package:ui_kit/ui_kit.dart' show TextLane;
 
@@ -15,11 +16,19 @@ import 'full_screen_form.dart';
 /// a logged set when the typed name matches by normalised key. [category] is
 /// the muscle-group bucket the browse/picker groups + filters by; [authorId]
 /// is null for a seeded global, set for an owner custom.
+///
+/// [nameKey] is the row's STORED `exercises.name_key`, carried rather than
+/// re-derived because it is what the two partial uniques are enforced on and so
+/// what makes two rows one exercise — the question
+/// [dedupeShadowedExercises] answers. Matching a TYPED name is the other
+/// question and stays a fold, because a string a user typed has no stored key
+/// (decisions § 1334).
 typedef GymCatalogueEntry = ({
   String name,
   String id,
   String category,
   String? authorId,
+  String nameKey,
 });
 
 /// The logged-set role vocabulary (DB CHECK union, migration 20270224_001),
@@ -72,6 +81,7 @@ Future<bool?> showGymComposeSheet({
   String? seedTitle,
   List<String> suggestions = const [],
   List<GymCatalogueEntry> catalogue = const [],
+  bool catalogueUnavailable = false,
   String? prefillTitle,
   ApiClient? api,
 }) {
@@ -89,6 +99,7 @@ Future<bool?> showGymComposeSheet({
       seedTitle: seedTitle,
       suggestions: suggestions,
       catalogue: catalogue,
+      catalogueUnavailable: catalogueUnavailable,
       prefillTitle: prefillTitle,
       api: api,
     ),
@@ -110,6 +121,13 @@ class GymComposeSheet extends StatefulWidget {
   /// matches a catalogue entry by normalised key binds its id onto the set.
   final List<GymCatalogueEntry> catalogue;
 
+  /// The catalogue read failed, or has not answered yet. [catalogue] is then
+  /// whatever was last known rather than a statement about what exists, so the
+  /// picker must not offer to create a name it cannot prove is free — and the
+  /// browse affordance stays reachable, because a feature that silently
+  /// vanishes on a transient error explains nothing.
+  final bool catalogueUnavailable;
+
   /// Seed for a NEW workout (the class -> gym seam). Pre-fills the title; sets
   /// stay empty for the user to fill. Ignored when [existing] is set.
   final String? prefillTitle;
@@ -126,6 +144,7 @@ class GymComposeSheet extends StatefulWidget {
     this.seedTitle,
     this.suggestions = const [],
     this.catalogue = const [],
+    this.catalogueUnavailable = false,
     this.prefillTitle,
     this.api,
   });
@@ -145,10 +164,28 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
   String? _error;
   bool _saving = false;
 
-  /// Local, growable catalogue copy. Seeded from the prop; a custom created
-  /// from the picker is appended so it binds + autocompletes immediately,
-  /// without waiting for the host to reload from the server.
-  late List<GymCatalogueEntry> _catalogue;
+  /// Customs created from the picker this session, kept locally so they bind +
+  /// autocomplete immediately without waiting for the host to reload.
+  List<GymCatalogueEntry> _createdCustoms = const [];
+
+  /// The effective catalogue: the CURRENT prop unioned with this session's
+  /// created customs, under the read's own shadow precedence.
+  ///
+  /// Read off `widget` on every access rather than snapshotted in `initState`,
+  /// because the host fills it from an async read — a snapshot binds every
+  /// typed name to nothing whenever the catalogue lands after the sheet opens.
+  ///
+  /// The union goes through [dedupeShadowedExercises] rather than an `id` test,
+  /// which cannot see a shadow: a custom created here under a seeded global's
+  /// name is a SECOND id under one folded key (the author's partial unique
+  /// cannot see a row whose `author_id` is null, so the insert succeeds), and
+  /// holding both left the list showing one exercise twice and
+  /// [_catalogueByKey]'s last-wins map deciding which id a logged set bound to.
+  List<GymCatalogueEntry> get _catalogue => dedupeShadowedExercises(
+        [...widget.catalogue, ..._createdCustoms],
+        nameKey: (e) => e.nameKey,
+        authorId: (e) => e.authorId,
+      );
 
   /// normalised name -> catalogue id, for binding a typed name at save time.
   Map<String, String> get _catalogueByKey => {
@@ -172,7 +209,6 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
   @override
   void initState() {
     super.initState();
-    _catalogue = [...widget.catalogue];
     final existing = widget.existing;
     _titleCtl = TextEditingController(
         text:
@@ -332,12 +368,10 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
       MaterialPageRoute<GymCatalogueEntry>(
         builder: (_) => ExerciseCataloguePickerScreen(
           catalogue: _catalogue,
+          unavailable: widget.catalogueUnavailable,
           api: widget.api,
-          onCreated: (created) {
-            if (!_catalogue.any((e) => e.id == created.id)) {
-              _catalogue = [..._catalogue, created];
-            }
-          },
+          onCreated: (created) =>
+              _createdCustoms = [..._createdCustoms, created],
         ),
       ),
     );
@@ -516,7 +550,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
             Row(
               children: [
                 Expanded(child: _nameField(ex, l10n)),
-                if (_catalogue.isNotEmpty)
+                if (_catalogue.isNotEmpty || widget.catalogueUnavailable)
                   IconButton(
                     tooltip: l10n.gymCatalogueBrowse,
                     icon: const Icon(Icons.menu_book_outlined),

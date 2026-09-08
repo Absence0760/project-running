@@ -145,9 +145,9 @@ export const MAX_OP_HOLDERS = 3;
 export const REGISTERED = [
 	{
 		kind: 'ops',
-		key: 'apps/web/src/lib/social/club_slug.ts:clubSlug|apps/web/src/routes/plans/[id]/+page.svelte:planSlug',
+		key: 'apps/web/src/lib/social/club_slug.ts:clubSlug|apps/web/src/lib/training/plan_slug.ts:planSlug',
 		reason:
-			'Not a copy, once the copied part was removed. `planSlug` derived its slug with `toLowerCase()` where `clubSlug` folds, which is § 1251\'s `İstanbul` -> `i-stanbul` reversal; it now folds through the same generated table (§ 1398). What is left shared is the kebab transform, because that is what a slug IS. They are not one contract: the club slug is a PERSISTED public identity with a length cap, a fallback and a Dart twin under a registered parity pair, and this is a download filename with two call sites — so extracting a common `slugify` would restructure one half of a pair whose other half cannot be run in this lane. Filed rather than done.',
+			'Not a copy, once the copied part was removed. `planSlug` derived its slug with `toLowerCase()` where `clubSlug` folds, which is § 1251\'s `İstanbul` -> `i-stanbul` reversal; it now folds through the same generated table (§ 1398), and § 1530 moved it out of `/plans/[id]/+page.svelte` so a unit suite could hold the pin. What is left shared is the kebab transform, because that is what a slug IS. They are not one contract: the club slug is a PERSISTED public identity with a length cap, its own fallback and a Dart twin under a registered parity pair, so its answer may never move; this is a download filename with two call sites and no persistence at all. A common `slugify` would put the filename inside the parity pair and make every future change to it a lockstep edit on the phone.',
 	},
 	{
 		kind: 'clone',

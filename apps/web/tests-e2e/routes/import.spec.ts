@@ -117,6 +117,14 @@ test.describe('/routes — Import route modal', () => {
 
 	let routeId: string | null = null;
 
+	// `rate_limits` holds one row per (user, bucket, hour) shared by every
+	// spec in the run and by any run started in the same clock hour, so a
+	// create budget is whatever the last test left rather than a fresh 30.
+	// State the precondition instead of inheriting it.
+	test.beforeEach(async () => {
+		await resetRateLimit(USER_A.id, 'create_route');
+	});
+
 	test.afterEach(async () => {
 		if (routeId) {
 			try {
@@ -126,6 +134,9 @@ test.describe('/routes — Import route modal', () => {
 			}
 			routeId = null;
 		}
+		// Playwright abandons a timed-out test rather than unwinding it, so
+		// the cap test below cannot undo its own plant from the test body.
+		await resetRateLimit(USER_A.id, 'create_route');
 	});
 
 	test('the Browse-files picker opens the file chooser from the keyboard', async ({ page }) => {
@@ -454,36 +465,32 @@ test.describe('/routes — Import route modal', () => {
 			count: 30
 		});
 
-		try {
-			await page.goto('/routes');
-			await page.getByRole('button', { name: /Import/ }).first().click();
-			await expect(
-				page.locator('[aria-label="Route file drop zone"]')
-			).toBeVisible({ timeout: 5_000 });
+		await page.goto('/routes');
+		await page.getByRole('button', { name: /Import/ }).first().click();
+		await expect(
+			page.locator('[aria-label="Route file drop zone"]')
+		).toBeVisible({ timeout: 5_000 });
 
-			await page.locator('input[type="file"]').setInputFiles({
-				name: 'e2e-import-ratelimited.gpx',
-				mimeType: 'application/gpx+xml',
-				buffer: Buffer.from(MINIMAL_GPX, 'utf-8')
-			});
+		await page.locator('input[type="file"]').setInputFiles({
+			name: 'e2e-import-ratelimited.gpx',
+			mimeType: 'application/gpx+xml',
+			buffer: Buffer.from(MINIMAL_GPX, 'utf-8')
+		});
 
-			const nameInput = page.locator('.preview input[type="text"]').first();
-			await expect(nameInput).toBeVisible({ timeout: 5_000 });
-			await nameInput.fill(`rate-limited import ${Date.now()}`);
+		const nameInput = page.locator('.preview input[type="text"]').first();
+		await expect(nameInput).toBeVisible({ timeout: 5_000 });
+		await nameInput.fill(`rate-limited import ${Date.now()}`);
 
-			await page.getByRole('button', { name: /^Save Route$/ }).click();
+		await page.getByRole('button', { name: /^Save Route$/ }).click();
 
-			const errorToast = page.locator('.toast-error');
-			await expect(errorToast).toBeVisible({ timeout: 10_000 });
-			await expect(errorToast).toHaveText(/creating routes too quickly/i);
-			// Negative pin: generic fallback + raw exception must not leak.
-			await expect(page.getByText('Failed to save route')).toHaveCount(0);
-			await expect(
-				page.getByText(/rate limit exceeded for create_route/i)
-			).toHaveCount(0);
-		} finally {
-			await resetRateLimit(USER_A.id, 'create_route');
-		}
+		const errorToast = page.locator('.toast-error');
+		await expect(errorToast).toBeVisible({ timeout: 10_000 });
+		await expect(errorToast).toHaveText(/creating routes too quickly/i);
+		// Negative pin: generic fallback + raw exception must not leak.
+		await expect(page.getByText('Failed to save route')).toHaveCount(0);
+		await expect(
+			page.getByText(/rate limit exceeded for create_route/i)
+		).toHaveCount(0);
 	});
 
 	test('cancel the modal with X button: closes without import or error toast', async ({

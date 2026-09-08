@@ -50,6 +50,10 @@
         <item quantity="one">%1$d gespeicherter Lauf wartet. Die letzte Synchronisierung kam nicht durch. Zum erneuten Versuch tippen.</item>
         <item quantity="other">%1$d gespeicherte Läufe warten. Die letzte Synchronisierung kam nicht durch. Zum erneuten Versuch tippen.</item>
     </plurals>
+    <plurals name="cd_sync_sign_in_required">
+        <item quantity="one">%1$d gespeicherter Lauf wartet. Deine Sitzung ist abgelaufen. Zum erneuten Anmelden tippen.</item>
+        <item quantity="other">%1$d gespeicherte Läufe warten. Deine Sitzung ist abgelaufen. Zum erneuten Anmelden tippen.</item>
+    </plurals>
     <string name="cd_sync_unreadable_retry">Gespeicherte Läufe nicht lesbar, zum Wiederholen tippen</string>
     <plurals name="sync_rejected">
         <item quantity="one">%1$d abgelehnt</item>

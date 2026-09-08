@@ -12,6 +12,20 @@ import { USER_A } from '../fixtures/users';
 const uniqueText = (prefix: string) =>
 	`${prefix} ${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
+/**
+ * GoTrue's user endpoint, with or without the query string an
+ * `emailRedirectTo` puts on it.
+ *
+ * A Playwright glob is anchored at both ends, so `**\/auth/v1/user`
+ * compiles to `^(.*\/)auth/v1/user$` and matches the bare path only —
+ * `updateUser({ email }, { emailRedirectTo })` reaches GoTrue as
+ * `PUT /auth/v1/user?redirect_to=...` and slips straight past it. A
+ * pattern that never matches is worse than no mock at all: the request
+ * escapes to the real server, and every "was never sent" assertion is
+ * then scored against a handler nothing ever invoked.
+ */
+const AUTH_USER_ENDPOINT = /\/auth\/v1\/user(\?|$)/;
+
 test.describe('/settings/account', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
@@ -170,7 +184,7 @@ test.describe('/settings/account', () => {
 		// skipped the current-password proof can't change USER_A's password.
 		const guardUpdateUser = async (page: import('@playwright/test').Page) => {
 			const seen = { put: 0 };
-			await page.route('**/auth/v1/user', async (route) => {
+			await page.route(AUTH_USER_ENDPOINT, async (route) => {
 				if (route.request().method() !== 'PUT') {
 					await route.continue();
 					return;
@@ -279,9 +293,17 @@ test.describe('/settings/account', () => {
 			page
 		}) => {
 			let sawRequest = false;
-			await page.route('**/auth/v1/user', async (route) => {
-				if (route.request().method() === 'PUT') sawRequest = true;
-				await route.continue();
+			// Aborted, not continued: this case exists because the guard can
+			// regress, and a regression that lets the request through would
+			// otherwise start a real GoTrue address change on the shared
+			// fixture user before the assertion below reported it.
+			await page.route(AUTH_USER_ENDPOINT, async (route) => {
+				if (route.request().method() !== 'PUT') {
+					await route.continue();
+					return;
+				}
+				sawRequest = true;
+				await route.abort();
 			});
 
 			await page.goto('/settings/account');
@@ -299,11 +321,13 @@ test.describe('/settings/account', () => {
 		test('a valid new address requests the change and shows the pending state', async ({
 			page
 		}) => {
-			await page.route('**/auth/v1/user', async (route) => {
+			let stubbed = 0;
+			await page.route(AUTH_USER_ENDPOINT, async (route) => {
 				if (route.request().method() !== 'PUT') {
 					await route.continue();
 					return;
 				}
+				stubbed += 1;
 				// GoTrue returns the user row unchanged (email flips only
 				// after both confirmations); a bare 200 is enough for the
 				// SDK to resolve without an error.
@@ -326,6 +350,11 @@ test.describe('/settings/account', () => {
 			await expect(pending).toContainText(next);
 			await expect(pending).toContainText(USER_A.email);
 			await expect(page.getByTestId('new-email-input')).toHaveCount(0);
+			// The stub is the only thing standing between this case and a
+			// real address change on the shared fixture user, and a route
+			// pattern that stops matching says nothing at all. Assert it
+			// fired, so the silence can never pass for a pass.
+			expect(stubbed).toBe(1);
 		});
 	});
 });

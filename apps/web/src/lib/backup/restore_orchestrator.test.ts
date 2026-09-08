@@ -752,3 +752,95 @@ test('coalesceRunActivity clones — original metadata is not mutated', async ()
 	assert.equal(inputMeta.activity_type, 'cycle');
 	assert.equal(inputMeta.title, 'Original');
 });
+
+// ─────────────────── unknown columns ───────────────────
+
+test('a run column this schema dropped is removed, not sent as a whole-row 400', async () => {
+	// Reason: PostgREST refuses a payload naming a column the table does not
+	// have (PGRST204) for the WHOLE row, and `runs.kind` was dropped by
+	// 20261206_001 — so an archive written before it failed every run it
+	// carried, after each track blob had already been uploaded to Storage.
+	const backend = makeFakeBackend();
+	const result = await restoreOrchestrate(
+		makeParsedBackup({
+			runs: [
+				{ id: 'r-1', distance_m: 5000, kind: 'run' },
+				{ id: 'r-2', distance_m: 6000, kind: 'run' }
+			]
+		}),
+		'uid',
+		backend
+	);
+	assert.equal(result.runsImported, 2);
+	for (const call of backend.calls.filter((c) => c.method === 'upsertRun')) {
+		const row = call.arg as Record<string, unknown>;
+		assert.equal('kind' in row, false, 'a dropped column must not reach the wire');
+		assert.equal(row.distance_m, row.id === 'r-1' ? 5000 : 6000, 'the rest of the row lands');
+	}
+});
+
+test('the dropped names are ONE warning per section, not one per row', async () => {
+	// Reason: the account page renders the warning COUNT, not the text, so a
+	// stale archive of 500 runs read as "500 warnings" beside an import of
+	// zero. The names are the same handful on every row by construction.
+	const backend = makeFakeBackend();
+	const runs = Array.from({ length: 50 }, (_, i) => ({
+		id: `r-${i}`,
+		kind: 'run',
+		pace_s_per_km: 300
+	}));
+	const result = await restoreOrchestrate(
+		makeParsedBackup({
+			runs,
+			routes: [{ id: 'rt-1', name: 'Loop', legacy_polyline: 'abc' }],
+			profile: { display_name: 'Tester', favourite_colour: 'blue' }
+		}),
+		'uid',
+		backend
+	);
+	assert.equal(result.runsImported, 50);
+	assert.deepEqual(result.warnings, [
+		'profile: dropped favourite_colour — not columns of this schema',
+		'runs: dropped kind, pace_s_per_km — not columns of this schema',
+		'routes: dropped legacy_polyline — not columns of this schema'
+	]);
+});
+
+test('an archive carrying no unknown column warns about nothing', async () => {
+	const backend = makeFakeBackend();
+	const result = await restoreOrchestrate(
+		makeParsedBackup({
+			runs: [{ id: 'r-1', distance_m: 5000 }],
+			routes: [{ id: 'rt-1', name: 'Loop' }],
+			profile: { display_name: 'Tester' }
+		}),
+		'uid',
+		backend
+	);
+	assert.deepEqual(result.warnings, []);
+});
+
+test('a prototype key in the archive is a dropped column, never a column', async () => {
+	// Reason: the rows are parsed from a user-supplied JSON file, so
+	// `constructor` / `toString` are keys an archive can carry and both answer
+	// true to `in` on any object's prototype chain. Only `Object.hasOwn` on the
+	// allowlist tells a column from an inherited property.
+	const backend = makeFakeBackend();
+	const result = await restoreOrchestrate(
+		makeParsedBackup({ runs: [{ id: 'r-1', constructor: 'x', toString: 'y' }] }),
+		'uid',
+		backend
+	);
+	assert.equal(result.runsImported, 1);
+	const row = backend.calls.find((c) => c.method === 'upsertRun')?.arg as Record<string, unknown>;
+	assert.deepEqual(Object.keys(row).sort(), [
+		'activity_type',
+		'event_id',
+		'id',
+		'metadata',
+		'user_id'
+	]);
+	assert.deepEqual(result.warnings, [
+		'runs: dropped constructor, toString — not columns of this schema'
+	]);
+});

@@ -74,6 +74,13 @@ void main() {
         createdAt: DateTime.utc(2026),
       ),
     ];
-    expect(dedupeShadowedExercises(rows).map((e) => e.id), ['mine']);
+    expect(
+      dedupeShadowedExercises(
+        rows,
+        nameKey: (r) => r.nameKey,
+        authorId: (r) => r.authorId,
+      ).map((e) => e.id),
+      ['mine'],
+    );
   });
 }

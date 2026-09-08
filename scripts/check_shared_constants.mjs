@@ -342,6 +342,19 @@ export function parseNamedInt(src, declName) {
 }
 
 /**
+ * A named numeric literal, normalised to its VALUE rather than its spelling.
+ * `1e-9` and `0.000000001` are the same tolerance and must compare equal;
+ * `parseNamedInt` stops at the first integer, which reads `1e-9` as `1`.
+ * @param {string} src @param {string} declName @returns {string[]}
+ */
+export function parseNamedNumber(src, declName) {
+	const decl = new RegExp(`\\b${declName}\\b[^=\\n]*=\\s*(-?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)`).exec(src);
+	if (!decl) return [];
+	const n = Number(decl[1]);
+	return Number.isFinite(n) ? [String(n)] : [];
+}
+
+/**
  * Both ends of a Kotlin `val NAME = <lo>..<hi>` range declaration. A range is
  * one declaration where the other rails need two constants, so it cannot be
  * read by `parseNamedInt` — that stops at the first integer and would compare
@@ -1608,13 +1621,13 @@ export const REGISTRY = [
 				],
 			},
 			{
-				label: 'mobile (apps/mobile_android/lib/gym_prs.dart)',
+				label: 'mobile (packages/core_models/lib/src/exercise_key.dart)',
 				sites: (ctx) => [
 					{
 						key: 'post-fold (after the table)',
 						where: 'kExerciseCasePostFold',
 						values: parseCaseFoldPair(
-							ctx.read('apps/mobile_android/lib/gym_prs.dart'),
+							ctx.read('packages/core_models/lib/src/exercise_key.dart'),
 							'kExerciseCasePostFold = [',
 						),
 					},
@@ -1661,13 +1674,13 @@ export const REGISTRY = [
 				],
 			},
 			{
-				label: 'mobile (apps/mobile_android/lib/gym_prs.dart)',
+				label: 'mobile (packages/core_models/lib/src/exercise_key.dart)',
 				sites: (ctx) => [
 					{
 						key: 'whitespace',
 						where: 'kExerciseWhitespace',
 						values: parseWhitespaceClass(
-							ctx.read('apps/mobile_android/lib/gym_prs.dart'),
+							ctx.read('packages/core_models/lib/src/exercise_key.dart'),
 							'kExerciseWhitespace =',
 						),
 					},
@@ -1773,6 +1786,62 @@ export const REGISTRY = [
 			},
 		],
 	},
+	{
+		name: 'embedded best-effort window tolerance',
+		why:
+			'The three rails that decide a run\'s fastest_{5k,10k,half,marathon}_s ' +
+			'each compare an accumulated sum of great-circle legs against the window. ' +
+			'A track that IS the window measures a picometre either side of it, so ' +
+			'the comparison needs slack — and the slack has to be the SAME on all ' +
+			'three, or the same GPX yields a best when imported through one path and ' +
+			'none through another. That is not hypothetical: before 1525 the Deno ' +
+			'importer summed an even 5 km track to 5000.000000000002 m through an ' +
+			'unclamped atan2 while the two clients summed it to 4999.999999999998 m, ' +
+			'and only the importer reported a 5 km best.',
+		match: 'all',
+		compare: 'ordered',
+		rails: [
+			{
+				label: 'web (apps/web/src/lib/integrations/garmin-fit.ts)',
+				sites: (ctx) => [
+					{
+						key: 'ratio',
+						where: 'WINDOW_TOLERANCE_RATIO',
+						values: parseNamedNumber(
+							ctx.read('apps/web/src/lib/integrations/garmin-fit.ts'),
+							'WINDOW_TOLERANCE_RATIO',
+						),
+					},
+				],
+			},
+			{
+				label: 'mobile (apps/mobile_android/lib/run_stats.dart)',
+				sites: (ctx) => [
+					{
+						key: 'ratio',
+						where: 'windowToleranceRatio',
+						values: parseNamedNumber(
+							ctx.read('apps/mobile_android/lib/run_stats.dart'),
+							'windowToleranceRatio',
+						),
+					},
+				],
+			},
+			{
+				label: 'importer (apps/backend/supabase/functions/_shared/strava.ts)',
+				sites: (ctx) => [
+					{
+						key: 'ratio',
+						where: 'WINDOW_TOLERANCE_RATIO',
+						values: parseNamedNumber(
+							ctx.read('apps/backend/supabase/functions/_shared/strava.ts'),
+							'WINDOW_TOLERANCE_RATIO',
+						),
+					},
+				],
+			},
+		],
+	},
 ];
 
 /// The column list `FetchExportProfile` asks PostgREST for. Read out of the
@@ -1835,7 +1904,7 @@ function splitColumns(literal) {
 // must not drift is the three rails from EACH OTHER, which is this.
 
 export const WEB_FOLD_TABLE = 'apps/web/src/lib/gym/exercise_fold_table.ts';
-export const MOBILE_FOLD_TABLE = 'apps/mobile_android/lib/exercise_fold_table.dart';
+export const MOBILE_FOLD_TABLE = 'packages/core_models/lib/src/exercise_fold_table.dart';
 
 /** Below this a parse has read a fragment of the table, not the table. */
 export const FOLD_TABLE_MIN = 1000;

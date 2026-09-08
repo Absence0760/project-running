@@ -13,8 +13,10 @@ import { assert, assertEquals, assertExists } from 'https://deno.land/std@0.224.
 import {
 	CROSS_PROVIDER_DISTANCE_FRACTION,
 	CROSS_PROVIDER_START_TOLERANCE_S,
+	WINDOW_TOLERANCE_RATIO,
 	collectRunIdentities,
 	computeEmbeddedBests,
+	embeddedHaversineM,
 	fastestWindowSeconds,
 	isCrossProviderDuplicate,
 	type RawRunRow,
@@ -180,4 +182,46 @@ Deno.test('computeEmbeddedBests — a track with no timestamps writes nothing (n
 
 Deno.test('fastestWindowSeconds — null when the track is shorter than the window', () => {
 	assertEquals(fastestWindowSeconds(evenTrack('2026-01-01T09:00:00Z', 10, 100, 30), 5000), null);
+});
+
+Deno.test('fastestWindowSeconds — a track that measures exactly the window still yields a best', () => {
+	// Fifty 100 m legs at the equator IS a 5 km run at 5:00/km, and the
+	// accumulated haversine sum of it measures 4999.999 999 999 998 2 m —
+	// 1.819e-12 m short. Compared strictly, that decided there was no 5 km
+	// effort in a 5 km run on the last bit of a float. Worse on this rail than
+	// on the two clients: the unclamped `atan2` form this module used to carry
+	// summed the SAME track to 5000.000 000 000 001 8 m, so the importer found
+	// a best where the phone found none. Web's twin case is in
+	// `apps/web/src/lib/integrations/embedded_best_efforts.test.ts`.
+	const track = evenTrack('2026-01-01T09:00:00Z', 50, 100, 30);
+	assertEquals(fastestWindowSeconds(track, 5000), 1500);
+	assertEquals(computeEmbeddedBests(track).fastest_5k_s, 1500);
+});
+
+Deno.test('fastestWindowSeconds — the tolerance is relative, so it never admits a real shortfall', () => {
+	// A millimetre short of the window is a real shortfall at every distance
+	// the app measures: the ratio of the marathon window is 42 µm, twenty times
+	// less than a millimetre, so the answer stays null.
+	assert(WINDOW_TOLERANCE_RATIO * 42195 < 0.001);
+	const short = evenTrack('2026-01-01T09:00:00Z', 50, 100 - 0.001 / 50, 30);
+	assertEquals(fastestWindowSeconds(short, 5000), null);
+});
+
+Deno.test('embeddedHaversineM is the canonical form, to the last bit', () => {
+	// The importer cannot import `apps/web/src/lib`, so this arc is a copy by
+	// necessity — and a copy pinned only by prose is what let it be the
+	// unclamped `atan2` while both clients used the clamped `asin`. The sum
+	// below is exact, not a tolerance: the atan2 form gives
+	// 5000.0000000000018 for the same fifty legs, and that single ULP decided
+	// whether the importer wrote a `fastest_5k_s` the phone would not have.
+	const track = evenTrack('2026-01-01T09:00:00Z', 50, 100, 30);
+	let cum = 0;
+	for (let i = 1; i < track.length; i++) {
+		cum += embeddedHaversineM(track[i - 1].lat, track[i - 1].lng, track[i].lat, track[i].lng);
+	}
+	assertEquals(cum, 4999.999999999998);
+	// And it clamps: `sqrt(1 - a)` on a near-antipodal pair is NaN unclamped.
+	const antipodal = embeddedHaversineM(-87.5, 0, 87.5, 180);
+	assert(Number.isFinite(antipodal), `near-antipodal must be a number, got ${antipodal}`);
+	assert(antipodal > 20_010_000 && antipodal < 20_020_000, `got ${antipodal}`);
 });

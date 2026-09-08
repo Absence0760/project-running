@@ -33,6 +33,24 @@
 // as `grep -cE` applies them, so a commented-out declaration does not count
 // and neither does one nested inside another call's arguments.
 //
+// **The second claim is about the files the census does NOT name.** 493 of the
+// 553 mobile suites carry no `### ` heading, and that is the census's design
+// rather than a gap in it — headings index the web suite and name the Dart
+// mirror in prose — so "walk the tree and fail on a file the index omits" is a
+// 493-row change, not the four the filing assumed. What the omission actually
+// costs is that an unnamed suite can stop declaring tests and no number moves.
+// So the rule is turned round: no test file may declare ZERO. A suite that
+// counts nothing is one the census could only ever state a wrong number for,
+// and it reads exactly like a suite that passes (decisions § 1535).
+//
+// That rule is only as honest as the counters, and the Dart one had a blind
+// spot big enough to hide 16 committed suites: `realtimeWidgetTest` is a
+// `testWidgets` wrapper this repo defines, and the document's own recompute
+// command — `grep -cE '^\s*(test|testWidgets)\('` — reports 0 for every file
+// that uses it. `DART_TEST_WRAPPERS` names the wrapper WITH the file that
+// defines it, and that definition is re-read: an entry whose wrapper has
+// stopped wrapping a test declaration fails rather than inflating counts.
+//
 // Run: `node scripts/check_test_inventory_counts.mjs`
 // CI:  the `workflow-lint` job in .github/workflows/ci.yml.
 // Unit tests: `node --test scripts/check_test_inventory_counts.test.mjs`
@@ -103,6 +121,29 @@ export const PARAMETERISED = [
 // ---------------------------------------------------------------------------
 
 /**
+ * Test-declaration wrappers this repo defines itself. A counter that knows only
+ * the framework's own spelling reports a file built on one of these as holding
+ * no tests at all, which is both a wrong census number and a hole in the
+ * zero-declaration rule below.
+ *
+ * Each names the file that DEFINES it and the declaration it wraps, and both
+ * are re-read: an entry is a claim about the tree, not a permission.
+ * @type {Array<{ call: string, definedIn: string, wraps: string, reason: string }>}
+ */
+export const DART_TEST_WRAPPERS = [
+	{
+		call: 'realtimeWidgetTest',
+		definedIn: 'apps/mobile_android/test/realtime_drain.dart',
+		wraps: 'testWidgets',
+		reason:
+			'`realtime_client` arms a 50 s disconnect timer from inside `unsubscribe`, which a ' +
+			'screen calls from `dispose`, so every screen holding a channel fails the pending-' +
+			'timer check on teardown unless the test unmounts and pumps past it. The wrapper is ' +
+			'that teardown; 16 committed suites are written on it and counted 0 without this.',
+	},
+];
+
+/**
  * How a declaration is counted, per file kind. Each is the document's own
  * prescribed recompute command, line-anchored the way `grep -cE` applies it.
  * @type {Array<{ id: string, match: (path: string) => boolean, count: (src: string) => number }>}
@@ -111,7 +152,13 @@ export const COUNTERS = [
 	{
 		id: 'dart',
 		match: (p) => p.endsWith('.dart'),
-		count: (src) => lineMatches(src, /^\s*(?:test|testWidgets)\(/),
+		count: (src) =>
+			lineMatches(
+				src,
+				new RegExp(
+					`^\\s*(?:test|testWidgets${DART_TEST_WRAPPERS.map((w) => `|${w.call}`).join('')})\\(`,
+				),
+			),
 	},
 	{
 		id: 'deno',
@@ -420,6 +467,143 @@ export function check(md, expand, read, notAFileSection = NOT_A_FILE_SECTION, pa
 
 // ---------------------------------------------------------------------------
 
+/**
+ * A file whose NAME says it is a test suite, under each convention this repo
+ * uses. Not "a file some counter can read" — that is every `.ts` in the tree —
+ * and not a roster, so a suite added under one of these names is measured the
+ * day it lands.
+ */
+export const TEST_FILE =
+	/(?:^|\/)(?:[^/]+_test\.(?:dart|go)|[^/]+\.test\.(?:ts|mjs|js)|[^/]+Test\.kt)$/;
+
+/** pgTAP suites are named for what they cover, so they are located instead. */
+export const PGTAP_DIR = 'apps/backend/supabase/tests/';
+
+/**
+ * The floor under the WALK. A predicate that stopped matching would find no
+ * suites and agree with a repo that has none, and two broken halves pass by
+ * agreeing. Measured at 2,219 the day this landed.
+ */
+export const MIN_TEST_FILES = 1800;
+
+/**
+ * Suites that legitimately declare nothing. Each must still match a tracked
+ * file AND still count zero, so an exemption cannot outlive what it excused.
+ * @type {Array<{ path: string, reason: string }>}
+ */
+export const ZERO_DECLARATIONS_OK = [
+	{
+		path: 'apps/graph_cycle/internal/graph/testhelpers_test.go',
+		reason:
+			'Go compiles `_test.go` files only under `go test`, so an in-package helper has to ' +
+			'carry the suffix to be visible to the suite. This one holds two constructors and ' +
+			'no `func Test`, which is the convention working rather than a suite that stopped.',
+	},
+];
+
+/**
+ * Claim 2: every suite the tree holds declares at least one test, counted the
+ * way the census would count it.
+ *
+ * @param {string[]} files every tracked path
+ * @param {(path: string) => string} read
+ * @returns {{ errors: string[], ok: string[] }}
+ */
+export function checkPopulation(files, read) {
+	/** @type {string[]} */
+	const errors = [];
+	const suites = files.filter(
+		(f) => TEST_FILE.test(f) || (f.startsWith(PGTAP_DIR) && f.endsWith('.sql')),
+	);
+	if (suites.length < MIN_TEST_FILES) {
+		return {
+			errors: [
+				`the suite walk found ${suites.length} file(s) and this guard's floor is ` +
+					`${MIN_TEST_FILES}. Either TEST_FILE stopped matching — in which case this ` +
+					`claim measures nothing and would agree with a repo holding no tests — or the ` +
+					`suites went, in which case lower the floor deliberately.`,
+			],
+			ok: [],
+		};
+	}
+
+	for (const wrapper of DART_TEST_WRAPPERS) {
+		if (!files.includes(wrapper.definedIn)) {
+			errors.push(
+				`DART_TEST_WRAPPERS counts \`${wrapper.call}(\` as a test declaration and names ` +
+					`${wrapper.definedIn} as where it is defined, which the tree no longer holds. A ` +
+					`counter crediting a call nothing defines inflates every number below it.`,
+			);
+			continue;
+		}
+		const src = read(wrapper.definedIn);
+		const defines = new RegExp(`\\b${wrapper.call}\\s*\\(`).test(src);
+		if (!defines || !src.includes(`${wrapper.wraps}(`)) {
+			errors.push(
+				`${wrapper.definedIn} no longer defines \`${wrapper.call}\` as a \`${wrapper.wraps}\` ` +
+					`wrapper, so counting that call as a test declaration is a guess. Re-point the ` +
+					`entry or delete it.`,
+			);
+		}
+	}
+
+	/** @type {Set<number>} */
+	const usedExemptions = new Set();
+	let counted = 0;
+	for (const path of suites) {
+		let n;
+		try {
+			n = counterFor(path)(read(path));
+		} catch (err) {
+			errors.push(err instanceof Error ? err.message : String(err));
+			continue;
+		}
+		const at = ZERO_DECLARATIONS_OK.findIndex((e) => e.path === path);
+		if (n > 0) {
+			if (at !== -1) {
+				errors.push(
+					`ZERO_DECLARATIONS_OK excuses ${path}, which now declares ${n} test(s). Delete ` +
+						'the entry — an exemption that has outlived its subject is cover for nothing ' +
+						'and hides the next one.',
+				);
+				usedExemptions.add(at);
+			}
+			counted++;
+			continue;
+		}
+		if (at !== -1) {
+			usedExemptions.add(at);
+			continue;
+		}
+		errors.push(
+			`${path} is named as a test suite and declares no test the census's own recompute ` +
+				'command can see. Either it has stopped running anything — which reads exactly ' +
+				'like a suite that passes, and which no count in the inventory would move — or it ' +
+				'declares them through a wrapper the counters do not know, which is a wrong number ' +
+				'wherever the census states one. Teach DART_TEST_WRAPPERS the wrapper, or declare ' +
+				'the file in ZERO_DECLARATIONS_OK with the reason it holds none.',
+		);
+	}
+	ZERO_DECLARATIONS_OK.forEach((e, i) => {
+		if (usedExemptions.has(i)) return;
+		errors.push(
+			`the ZERO_DECLARATIONS_OK entry for ${e.path} matches no test file. Delete it rather ` +
+				'than leaving a standing permission nobody re-reads.',
+		);
+	});
+
+	return {
+		errors,
+		ok:
+			errors.length === 0
+				? [
+						`${counted} of ${suites.length} suite(s) declare at least one test; ` +
+							`${ZERO_DECLARATIONS_OK.length} declared empty with a reason`,
+					]
+				: [],
+	};
+}
+
 /** @returns {string[]} every file git tracks, repo-relative */
 function tracked() {
 	return execFileSync('git', ['ls-files', '-z'], {
@@ -482,13 +666,17 @@ export function loadFile(path) {
 
 const invokedDirectly = process.argv[1] && import.meta.url === `file://${process.argv[1]}`;
 if (invokedDirectly) {
-	const { errors, ok } = check(loadFile(INVENTORY), expander(tracked()), loadFile);
+	const files = tracked();
+	const census = check(loadFile(INVENTORY), expander(files), loadFile);
+	const population = checkPopulation(files, loadFile);
+	const ok = [...census.ok, ...population.ok];
+	const errors = [...census.errors, ...population.errors];
 	for (const line of ok) console.log(`[OK] check_test_inventory_counts: ${line}`);
 	for (const line of errors) console.error(`::error::check_test_inventory_counts: ${line}`);
 	if (errors.length > 0) {
 		console.error(
-			`\ncheck_test_inventory_counts: ${errors.length} census disagreement(s). The suite ` +
-				'is the fact; the inventory is the transcription.',
+			`\ncheck_test_inventory_counts: ${errors.length} problem(s) across the census and the ` +
+				'suites it does not name. The suite is the fact; the inventory is the transcription.',
 		);
 		process.exit(1);
 	}

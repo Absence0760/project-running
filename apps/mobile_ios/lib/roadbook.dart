@@ -17,6 +17,7 @@ library;
 import 'dart:math' as math;
 
 import 'grade_adjusted_pace.dart' show gradeFactor, minSegmentM;
+import 'run_stats.dart' show haversineMetres;
 import 'route_markers.dart' show parseCutoff, parseTarget;
 
 class RoadbookWaypoint {
@@ -137,18 +138,6 @@ double targetBandS(int targetElapsedS) =>
 
 const int _minutesPerDay = 1440;
 
-double _haversineM(RoadbookWaypoint a, RoadbookWaypoint b) {
-  const r = 6371000.0;
-  const deg = math.pi / 180;
-  final dLat = (b.lat - a.lat) * deg;
-  final dLng = (b.lng - a.lng) * deg;
-  final h = math.pow(math.sin(dLat / 2), 2) +
-      math.cos(a.lat * deg) *
-          math.cos(b.lat * deg) *
-          math.pow(math.sin(dLng / 2), 2);
-  return r * 2 * math.asin(math.min(1, math.sqrt(h)));
-}
-
 class _Cumulative {
   final List<double> dist;
   final List<double> gap;
@@ -184,7 +173,7 @@ _Cumulative _walk(List<RoadbookWaypoint> waypoints) {
     final a = waypoints[i - 1];
     final b = waypoints[i];
     final dEle = (a.ele != null && b.ele != null) ? b.ele! - a.ele! : 0.0;
-    dist.add(dist[i - 1] + _haversineM(a, b));
+    dist.add(dist[i - 1] + haversineMetres(a.lat, a.lng, b.lat, b.lng));
     gain.add(gain[i - 1] + math.max(0.0, dEle));
     loss.add(loss[i - 1] + math.max(0.0, -dEle));
   }

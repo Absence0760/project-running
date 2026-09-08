@@ -71,6 +71,20 @@
 //      in a job the gate waits for. They are about whether a diagnosis is
 //      ATTRIBUTED correctly; this one is about whether it is DELIVERED.
 //
+//   7. A workflow that runs on a PULL REQUEST either reaches the required
+//      status check or is DECLARED advisory with a reason. Rule 3 makes every
+//      job in `ci.yml` block a merge; nothing said anything about the other
+//      workflows, and a `needs:` entry cannot name a job in a sibling file. So
+//      a scanner in a file of its own runs on every PR, goes red on a finding,
+//      and merges anyway — which is what `gitleaks.yml` did for its whole life
+//      until § 1264 moved it behind a called job. The remedy is not always the
+//      fold: `security.yml` is refused it on a measured reason, and
+//      `pr-title-lint.yml` triggers on `edited`, which is how a RETITLE
+//      re-lints and which `ci.yml` deliberately does not carry. What the rule
+//      buys is that each of those is a decision on the record rather than an
+//      omission, and that the next PR-triggered workflow is one too
+//      (decisions § 1537).
+//
 // THE SUBJECT IS PER RULE, and stated in the output. For this file's whole
 // life every rule read `.github/workflows` and nothing else, so the two
 // composite actions under `.github/actions` were outside all of them at once
@@ -304,7 +318,61 @@ export const RULE_SUBJECTS = [
 		actions: true,
 		why: "the shell runs an action's `run:` block exactly as it runs a job's, and an action step's text is further from the job that reports it than any other",
 	},
+	{
+		rule: 6,
+		what: "the job counts CLAUDE.md states are the ones ci.yml holds",
+		actions: false,
+		why: 'the subject is one workflow and one document, neither of which an action is',
+	},
+	{
+		rule: 7,
+		what: 'a PR-triggered workflow reaches the required check or is declared advisory',
+		actions: false,
+		why: 'the subject is a whole workflow and its triggers, which an action has none of',
+	},
 ];
+
+/// Workflows that run on a pull request and deliberately do NOT block a merge.
+///
+/// Each is a decision, and each reason has to say what makes the fold the wrong
+/// answer rather than merely an unmade one — the fold is cheap (§ 1149's caller
+/// job) and has been taken twice, so "we did not get to it" is not a standing
+/// entry, it is a followup.
+export const PR_ADVISORY = new Map([
+	[
+		'security.yml',
+		"CodeQL's `analyze` declares no severity threshold at the pinned SHA, so an alert " +
+			'never turns the job red and a fold would gate on the analysis COMPLETING rather ' +
+			'than on what it found — while re-keying all four analyses, since the action ' +
+			"derives its analysis key from the RUN's workflow path. What gates a finding is a " +
+			'repo setting; docs/ops/deployment.md § Merge gates carries the ask, and the silent ' +
+			'half (a leg reporting clean over a tree it never read) is already inside the gate ' +
+			'as check_codeql_coverage.mjs (decisions § 1264, § 1305, § 1356).',
+	],
+	[
+		'compliance-drift.yml',
+		'advisory by construction: it runs in warn mode and asks a human whether a doc applies ' +
+			'to the diff, which is a judgement rather than a verdict. A gate on it would be a ' +
+			'gate on the guess.',
+	],
+	[
+		'pr-title-lint.yml',
+		'it triggers on `edited`, which is how a corrected title re-lints. `ci.yml` carries no ' +
+			'`types:` and therefore not `edited`, deliberately — adding it rebuilds every job on ' +
+			'a description typo — so folding this in would leave a retitled PR wearing the ' +
+			'verdict on the title it no longer has.',
+	],
+	[
+		'labeler.yml',
+		'it labels a pull request and asserts nothing about it, so there is no verdict for a ' +
+			'gate to wait on.',
+	],
+	[
+		'dependabot-auto-merge.yml',
+		'it ACTS on a pull request (approve + enable auto-merge) rather than checking one. A ' +
+			'required check that merges the PR it is required by is a cycle.',
+	],
+]);
 
 /// The workflows and the composite actions as one list of step lists, so the
 /// two rules that apply to both read them the same way.
@@ -918,6 +986,135 @@ export function checkRuleSubjects(files, actions) {
 	return { errors, ok };
 }
 
+/// The trigger names in a workflow's `on:`, whichever of the three legal
+/// spellings it uses (`on: push`, `on: [a, b]`, or a mapping).
+/**
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function parseTriggers(text) {
+	const lines = text.split('\n');
+	for (let i = 0; i < lines.length; i++) {
+		const inline = /^on:\s*(\S.*)$/.exec(lines[i]);
+		if (inline) {
+			return inline[1]
+				.replace(/^\[|\]$/g, '')
+				.split(',')
+				.map((t) => t.trim())
+				.filter(Boolean);
+		}
+		if (!/^on:\s*$/.test(lines[i])) continue;
+		/** @type {string[]} */
+		const out = [];
+		for (let j = i + 1; j < lines.length; j++) {
+			if (lines[j].trim() === '' || /^\s*#/.test(lines[j])) continue;
+			if (/^\S/.test(lines[j])) break;
+			const key = /^ {2}([a-z_]+):/.exec(lines[j]);
+			if (key) out.push(key[1]);
+		}
+		return out;
+	}
+	return [];
+}
+
+/// The sibling workflows `ci.yml` CALLS, which is how a job in another file
+/// reaches a `needs:` list at all (decisions § 1149).
+/**
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function parseCalledWorkflows(text) {
+	return [...text.matchAll(/^\s*uses:\s*\.\/\.github\/workflows\/(\S+)\s*$/gm)].map(
+		(m) => m[1],
+	);
+}
+
+/// Rule 7 — a workflow that runs on a pull request either reaches the required
+/// check or is declared advisory. See the header.
+/**
+ * @param {readonly WorkflowFile[]} files
+ * @param {ReadonlyMap<string, string>} [advisory]
+ * @returns {{ errors: string[], ok: string[] }}
+ */
+export function checkPrGates(files, advisory = PR_ADVISORY) {
+	/** @type {string[]} */
+	const errors = [];
+	/** @type {string[]} */
+	const ok = [];
+
+	const ci = files.find((f) => f.name === 'ci.yml');
+	if (!ci) {
+		return { errors: ['ci.yml was not read, so nothing can be compared against the gate'], ok };
+	}
+	const called = new Set(parseCalledWorkflows(ci.text));
+	const onPr = files.filter((f) =>
+		parseTriggers(f.text).some((t) => t === 'pull_request' || t === 'pull_request_target'),
+	);
+	if (onPr.length === 0) {
+		return {
+			errors: [
+				'no workflow in this repo triggers on a pull request, which cannot be true while ' +
+					'`ci.yml` does — the trigger reader has stopped matching, and this rule would ' +
+					'then pass over any number of scanners that block nothing.',
+			],
+			ok,
+		};
+	}
+
+	/** @type {Set<string>} */
+	const usedAdvisory = new Set();
+	let gated = 0;
+	for (const wf of onPr) {
+		if (wf.name === ci.name || called.has(wf.name)) {
+			if (advisory.has(wf.name)) {
+				errors.push(
+					`${wf.name} is declared advisory in PR_ADVISORY and its jobs now reach the ` +
+						`\`${GATE_JOB}\`. Delete the entry — a standing permission for something that ` +
+						`has stopped needing it is cover for the next one.`,
+				);
+				usedAdvisory.add(wf.name);
+			}
+			gated++;
+			continue;
+		}
+		const reason = advisory.get(wf.name);
+		if (!reason) {
+			errors.push(
+				`${wf.name} runs on every pull request and no job of it is waited on by ` +
+					`\`${GATE_JOB}\`, so however red it goes the PR still merges — branch protection ` +
+					`requires one context and a \`needs:\` entry cannot name a job in another file. ` +
+					`Either call it from ci.yml the way terraform.yml and gitleaks.yml are called, ` +
+					`or add it to PR_ADVISORY with the reason the fold is the WRONG answer rather ` +
+					`than the unmade one.`,
+			);
+			continue;
+		}
+		usedAdvisory.add(wf.name);
+		if (reason.length < 80) {
+			errors.push(
+				`PR_ADVISORY buys ${wf.name} out of the gate with a ${reason.length}-character ` +
+					`reason. A scanner nothing blocks on is a real trade; it costs a sentence saying ` +
+					`why the fold is wrong here.`,
+			);
+		}
+	}
+	for (const name of advisory.keys()) {
+		if (usedAdvisory.has(name)) continue;
+		errors.push(
+			`PR_ADVISORY names ${name}, which no longer runs on a pull request. Delete it rather ` +
+				`than leaving a standing exemption nobody re-reads.`,
+		);
+	}
+
+	if (errors.length === 0) {
+		ok.push(
+			`${gated} PR-triggered workflow(s) reach \`${GATE_JOB}\`; ` +
+				`${advisory.size} declared advisory with a reason`,
+		);
+	}
+	return { errors, ok };
+}
+
 /// Rule 6. The job count the root `CLAUDE.md` states is the job count `ci.yml`
 /// holds, and the number the gate is said to wait for is the length of its own
 /// `needs:` list.
@@ -1020,6 +1217,7 @@ export function checkAll(files, actions = []) {
 	const delivery = checkShellSafeDiagnoses(files, actions);
 	const subjects = checkRuleSubjects(files, actions);
 	const stated = checkStatedJobCount(files, readFileSync(ORIENTATION_DOC, 'utf-8'));
+	const prGates = checkPrGates(files);
 	return {
 		errors: [
 			...subjects.errors,
@@ -1029,6 +1227,7 @@ export function checkAll(files, actions = []) {
 			...verdict.errors,
 			...delivery.errors,
 			...stated.errors,
+			...prGates.errors,
 		],
 		ok: [
 			...subjects.ok,
@@ -1038,6 +1237,7 @@ export function checkAll(files, actions = []) {
 			...verdict.ok,
 			...delivery.ok,
 			...stated.ok,
+			...prGates.ok,
 		],
 		scoping,
 		diagnoses,
@@ -1046,6 +1246,7 @@ export function checkAll(files, actions = []) {
 		delivery,
 		subjects,
 		stated,
+		prGates,
 	};
 }
 
