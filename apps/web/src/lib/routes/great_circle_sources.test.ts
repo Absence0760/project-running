@@ -56,7 +56,7 @@ const GREAT_CIRCLE_SOURCES: { file: string; arcs: number; reason: string }[] = [
 		file: 'src/lib/runs/run_stats.ts',
 		arcs: 1,
 		reason:
-			'THE canonical. Exported as `haversineMetres`, clamps `a` into [0, 1] before the arc, and is what `run_stats.dart` computes point for point — so it is the one form both platforms already agree on. Every other module in this tree that needs a great-circle distance imports it.',
+			'THE canonical. Exported as `haversineMetres`, clamps `a` into [0, 1] before the arc, and is what `run_stats.dart` computes point for point — so it is the one form both platforms already agree on. Every other module in this tree that needs a great-circle distance imports it, and `apps/mobile_android/test/great_circle_sources_test.dart` asserts the same of the Dart tree — a guard on one platform only is how `route_snap` stayed divergent (§ 1524).',
 	},
 ];
 

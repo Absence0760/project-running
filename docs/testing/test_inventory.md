@@ -2285,3 +2285,11 @@ The Dart half of the exercise-catalogue pair (§ 1460). The nine mirror the web 
 ### `apps/watch_wear/.../SyncFaultTest.kt` — 5 · `DiscardRunTest.kt` — 6 · `AuthFaultTest.kt` — 7
 
 The wrist's two classified faults and the PostRun discard. Counted in the Wear OS glob row above (802 across 79 files); listed here because the three are what moved it.
+
+## #789 round 46 (2026-09-07)
+
+### `apps/mobile_android/test/great_circle_sources_test.dart` — 4 tests
+
+The Dart mirror of `routes/great_circle_sources.test.ts`, and the reason that class of divergence survived: the web tree has been guarded since § 1470 while the phone had none, so `route_snap.dart` importing the clamped helper and `route_snap.ts` computing its own unclamped arc read as healthy from either side alone. Measured on the round-46 base, `apps/mobile_android/lib` carried **fourteen arcs across thirteen files** — two `atan2`, twelve `asin`, six of them `min(1, …)`-clamped, one clamped through a variable and five clamped at nothing — so seven answered NaN where `a` rounds past 1 and seven answered half a circumference.
+
+Anchored on the arc of a square root, as the web guard is, so a bearing's own `atan2(y, x)` is excluded by construction rather than by exclusion. Both tables are one row long now: the canonical, and a row added to admit a second copy has to say why it cannot import `run_stats`. The fourth test proves the matcher still fires against a moved root or a broken regex (§ 510).

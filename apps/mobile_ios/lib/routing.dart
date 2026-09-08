@@ -1,11 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:core_models/core_models.dart' show Waypoint;
 import 'package:flutter/foundation.dart' show kReleaseMode, visibleForTesting;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+import 'run_stats.dart' show haversineMetres;
 
 /// OSRM client for the in-app route builder. Two helpers: [snapToRoad]
 /// for the nearest-road service, and [fetchRouteThrough] for a full
@@ -557,22 +558,7 @@ Future<_RoutedSegment> _routeOneSegment(
 _RoutedSegment _straightSegment(Waypoint from, Waypoint to) {
   return _RoutedSegment(
     coordinates: [from, to],
-    distanceMetres: _haversineM(from, to),
+    distanceMetres: haversineMetres(from.lat, from.lng, to.lat, to.lng),
     ok: false,
   );
-}
-
-/// Haversine great-circle distance in metres for the straight-line
-/// fallback segment. 6,371,000 m mean Earth radius.
-double _haversineM(Waypoint a, Waypoint b) {
-  const r = 6_371_000.0;
-  const deg = math.pi / 180;
-  final dLat = (b.lat - a.lat) * deg;
-  final dLng = (b.lng - a.lng) * deg;
-  final lat1 = a.lat * deg;
-  final lat2 = b.lat * deg;
-  final h = math.sin(dLat / 2) * math.sin(dLat / 2) +
-      math.cos(lat1) * math.cos(lat2) *
-          math.sin(dLng / 2) * math.sin(dLng / 2);
-  return r * 2 * math.asin(math.min(1, math.sqrt(h)));
 }
