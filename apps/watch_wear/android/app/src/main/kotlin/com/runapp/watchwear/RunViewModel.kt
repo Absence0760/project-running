@@ -1438,12 +1438,31 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         launchGuarded { tearDownSession() }
     }
 
+    /// Where leaving the sign-in screen goes back to.
+    ///
+    /// Hardcoding PreRun was fine while PreRun was the only way in. PostRun
+    /// now offers the sign-in too — it is the screen the `SyncFault.
+    /// SignInRequired` banner renders on, and the one that had no way to act
+    /// on it (decisions § 1545) — and sending a runner who signs in from there
+    /// to PreRun throws away the summary of the run they had just finished, at
+    /// the exact moment the sign-in has made it uploadable.
+    private var signInReturnStage: Stage = Stage.PreRun
+
+    /// The stage to leave the sign-in screen for.
+    ///
+    /// Anything that moved the stage on while the runner was typing keeps it:
+    /// the return is a restore, not a claim about where they should be.
+    private fun stageAfterSignIn(): Stage =
+        if (_state.value.stage == Stage.SignIn) signInReturnStage else _state.value.stage
+
     fun openSignIn() {
+        val from = _state.value.stage
+        if (from != Stage.SignIn) signInReturnStage = from
         _state.value = _state.value.copy(stage = Stage.SignIn, authFault = null)
     }
 
     fun cancelSignIn() {
-        _state.value = _state.value.copy(stage = Stage.PreRun)
+        _state.value = _state.value.copy(stage = stageAfterSignIn())
     }
 
     fun signInWithEmail(email: String, password: String) {
@@ -1456,7 +1475,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 signInWithEmailInternal(email, password)
                 _state.value = _state.value.copy(
-                    stage = Stage.PreRun,
+                    stage = stageAfterSignIn(),
                     signInLoading = false,
                 )
             } catch (e: Throwable) {
