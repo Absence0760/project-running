@@ -1641,7 +1641,7 @@ These tables ship in the live schema but don't have a full column-by-column bloc
 | `gear_rotations` | `20270227_001` | Named multi-pair gear groupings (roadmap §7; decisions §183). `id, owner_id, name, created_at, updated_at`. Owner-only RLS (4 policies, like `gear`). A rotation is a many-to-many named group ("Daily trainers"), distinct from and additive to the single `is_default` current pair — assigning a rotation never changes run auto-tagging. No public-visibility path. |
 | `gear_rotation_members` | `20270227_001` | Many-to-many rotation↔gear link. `rotation_id, gear_id, created_at`, PK `(rotation_id, gear_id)`. Owner-only RLS; INSERT gated on owning BOTH the parent rotation AND the parent `gear` (the `run_gear` double-gate). Cascades on either parent delete (a deleted gear leaves its other rotations intact). |
 | `event_exceptions` | `20261019_001` | Cancelled occurrences of a recurring event. `event_id, instance_start, cancelled_by, reason, cancelled_at`, PK `(event_id, instance_start)`. |
-| `deletion_audit_log` | `20260917_001` | Tamper-evident account-deletion ledger keyed by the SHA-256 of the user id (no PII). `hashed_user_id, deleted_at, result (enum of outcomes), notes`. |
+| `deletion_audit_log` | `20260917_001` | Tamper-evident account-deletion ledger keyed by the SHA-256 of the user id (no PII). `hashed_user_id, deleted_at, result (enum of outcomes), notes`. Append-only since `20260920_001`. **Retention: 7 years from `deleted_at`**, swept daily by `cleanup-deletion-audit-log` (`20270713000002`) — the window was unbounded and undecided until then; the reasoning and what is given up are in [retention.md](../compliance/retention.md) and [decisions § 1602](../architecture/decisions.md). `20270713000002` also writes the table's own comment, so `\d+` states the shape of the hash and the window. |
 | `app_quota` | `20261007_001` | App-level (not per-user) third-party rate-limit counter. `provider, window_kind ('short'/'day'), window_start, count`, PK `(provider, window_kind, window_start)`. |
 | `lifecycle_email_log` | `20261202_001` | Idempotency ledger for one-shot lifecycle emails (welcome, etc.). `user_id, template, sent_at`, PK `(user_id, template)`. |
 | `account_deletion_receipts` | `20270217_001` | Non-cascading send-once ledger for the account-deletion receipt email (the user — and so `lifecycle_email_log` — is gone by send time). `email_hash` (hex SHA-256 of the lowercased address, no raw PII), `sent_at`, PK `email_hash`. Service-role only; 30-day cron retention. decisions §121. |
@@ -2041,10 +2041,10 @@ grant  execute on function public.<fn>(<args>) to authenticated;   -- and/or ser
 
 Add `authenticated` to the revoke list when no client role should hold it at all
 (the `cleanup_*` / `enqueue_*` cron family, and helpers only a SECURITY DEFINER
-trigger calls). 57 migrations write a function-level `from public, anon` revoke
-today (45 as `revoke execute`, 12 as `revoke all`); it is the house form for
+trigger calls). 58 migrations write a function-level `from public, anon` revoke
+today (46 as `revoke execute`, 12 as `revoke all`); it is the house form for
 exactly this reason, and `check_migration_function_revoke_noop.mjs` is what
-keeps it — it replays all 480 migrations in version order and fails the PR on
+keeps it — it replays all 482 migrations in version order and fails the PR on
 any EXECUTE revoke that leaves the other channel at its image-dependent
 default, in either direction. **Those four figures are derived, not typed**: the
 guard prints them and `check_migration_function_revoke_noop.test.mjs` asserts
