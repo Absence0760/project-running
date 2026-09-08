@@ -5,7 +5,17 @@
 -- 20261227_001) charges for an in-person event; the buyer's card is charged on
 -- the platform account via a DESTINATION charge, funds transfer to the host's
 -- connected account, and the platform takes an application fee. The host is
--- merchant of record, not the platform or the club.
+-- the PAYEE (transfer_data.destination), which is what this ledger models.
+--
+-- CORRECTION 2026-09-07 (decisions § 769 + § 1506). This header used to end
+-- "The host is merchant of record, not the platform or the club", and that is
+-- backwards: naming the settlement merchant is `on_behalf_of`, no call site
+-- sends it, and Stripe is explicit that the platform is then the business of
+-- record for the payment — and debits dispute amounts from the platform
+-- account for a destination charge with or without it. Comment only; no DDL
+-- was touched, so this migration still applies exactly as it did. Whether to
+-- start sending `on_behalf_of` is a pre-deploy sign-off question — see
+-- docs/features/club_events.md § Money movement.
 --
 -- This migration lays the RAIL, not the automation (P1 scope):
 --   * instructor_payout_accounts — the host's Connect account + capability
