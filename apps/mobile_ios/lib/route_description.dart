@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'distance_bands.dart' show bandForDistance;
+import 'run_stats.dart' show haversineMetres;
 
 /// Templated route describer — turns a route's stored stats into a short,
 /// human-readable description without calling any model. This is the
@@ -83,17 +84,6 @@ const int elevationRollingThreshold = 10;
 const int elevationHillyThreshold = 30;
 const int elevationMountainousThreshold = 70;
 
-double _haversineM(LatLng a, LatLng b) {
-  const r = 6371000.0;
-  final dLat = (b.lat - a.lat) * math.pi / 180;
-  final dLng = (b.lng - a.lng) * math.pi / 180;
-  final lat1 = a.lat * math.pi / 180;
-  final lat2 = b.lat * math.pi / 180;
-  final h = math.pow(math.sin(dLat / 2), 2) +
-      math.cos(lat1) * math.cos(lat2) * math.pow(math.sin(dLng / 2), 2);
-  return 2 * r * math.asin(math.min(1, math.sqrt(h)));
-}
-
 /// Bucket total gain (m) over distance into a coarse elevation character.
 ElevationResult elevationProfile(double distanceM, double elevationM) {
   if (distanceM <= 0 || elevationM <= 0) {
@@ -118,7 +108,7 @@ RouteShape routeShape(RouteDescriptionInput input) {
   final start = input.start;
   final end = input.end;
   if (start == null || end == null) return RouteShape.pointToPoint;
-  return _haversineM(start, end) <= loopCloseM
+  return haversineMetres(start.lat, start.lng, end.lat, end.lng) <= loopCloseM
       ? RouteShape.loop
       : RouteShape.pointToPoint;
 }

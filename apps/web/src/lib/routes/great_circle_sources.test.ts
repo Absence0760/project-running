@@ -51,7 +51,7 @@ const GREAT_CIRCLE_SOURCES: { file: string; arcs: number; reason: string }[] = [
 		file: 'src/lib/runs/run_stats.ts',
 		arcs: 1,
 		reason:
-			'THE canonical. Exported as `haversineMetres`, clamps `a` into [0, 1] before the arc, and is what `run_stats.dart` computes point for point — so it is the one form both platforms already agree on. Nine Dart modules import it; the web modules that do not yet are below.',
+			'THE canonical. Exported as `haversineMetres`, clamps `a` into [0, 1] before the arc, and is what `run_stats.dart` computes point for point — so it is the one form both platforms already agree on. Thirteen Dart modules import it; the web modules that do not yet are below.',
 	},
 	{
 		file: 'src/lib/components/RouteBuilder.svelte',
@@ -64,36 +64,6 @@ const GREAT_CIRCLE_SOURCES: { file: string; arcs: number; reason: string }[] = [
 		arcs: 1,
 		reason:
 			'Web-only, and the arc is INLINE in the effort loop rather than in a named function — invisible to `check_shared_reimplementations.mjs`, which does not extract anonymous bodies. A components-tree change.',
-	},
-	{
-		file: 'src/lib/integrations/race_match.ts',
-		arcs: 1,
-		reason:
-			'Half of the `race_match` parity pair, and `race_match.dart` carries its own copy too. Moving only the web half is what the `addDays` registration in `check_shared_reimplementations.mjs` refuses — the two halves move together or not at all.',
-	},
-	{
-		file: 'src/lib/routes/privacy.ts',
-		arcs: 1,
-		reason:
-			'Half of the `privacy` pair, matched by `privacy.dart:_haversine`. Both are the UNCLAMPED `atan2` form, so they agree with each other and the matched move would add the clamp on both sides at once.',
-	},
-	{
-		file: 'src/lib/routes/roadbook.ts',
-		arcs: 1,
-		reason:
-			'Half of the `roadbook` pair, matched by `roadbook.dart:_haversineM`, and carrying a third rail in the watch firmware. Matched move owed.',
-	},
-	{
-		file: 'src/lib/routes/route_description.ts',
-		arcs: 1,
-		reason:
-			'Half of the `route_description` pair, matched by `route_description.dart:_haversineM`. Matched move owed.',
-	},
-	{
-		file: 'src/lib/routes/turn_cues.ts',
-		arcs: 1,
-		reason:
-			'Half of the `turn_cues` pair, matched by `turn_cues.dart:_haversineM`, with a third rail in `apps/custom_watch/core/src/turn_cues.rs`. Matched move owed. The bearing computed in the same module takes an `atan2` of no square root and is not counted here.',
 	},
 	{
 		file: 'src/lib/segments/pace_segments.ts',

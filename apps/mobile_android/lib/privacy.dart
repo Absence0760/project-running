@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+import 'run_stats.dart' show haversineMetres;
 
 /// Pure Dart port of `apps/web/src/lib/routes/privacy.ts` (decisions §33).
 /// Geofences clipped from the start and end of a track before it
@@ -34,7 +34,7 @@ const String privacyZonesKey = 'privacy_zones';
 /// True when [point] is within the radius of any of [zones].
 bool isInAnyZone(double lat, double lng, List<PrivacyZone> zones) {
   for (final z in zones) {
-    if (_haversine(lat, lng, z.lat, z.lng) <= z.radiusM) return true;
+    if (haversineMetres(lat, lng, z.lat, z.lng) <= z.radiusM) return true;
   }
   return false;
 }
@@ -61,18 +61,4 @@ List<T> clipPointsToZones<T>(
     end--;
   }
   return points.sublist(start, end + 1);
-}
-
-double _haversine(double lat1, double lng1, double lat2, double lng2) {
-  const r = 6371000.0;
-  final dLat = (lat2 - lat1) * math.pi / 180;
-  final dLng = (lng2 - lng1) * math.pi / 180;
-  final sinLat = math.sin(dLat / 2);
-  final sinLng = math.sin(dLng / 2);
-  final a = sinLat * sinLat +
-      math.cos(lat1 * math.pi / 180) *
-          math.cos(lat2 * math.pi / 180) *
-          sinLng *
-          sinLng;
-  return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
 }
