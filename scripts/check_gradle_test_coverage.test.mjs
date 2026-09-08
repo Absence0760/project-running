@@ -50,7 +50,7 @@ function fixture(spec) {
 }
 
 /**
- * @param {{ tasks?: string, untested?: string | null, dir?: string, cacheKey?: string | null }} [opts]
+ * @param {{ tasks?: string, untested?: string | null, dir?: string, cacheKey?: string | null, echo?: boolean }} [opts]
  */
 function workflow(opts = {}) {
 	const untested =
@@ -73,6 +73,18 @@ function workflow(opts = {}) {
           path: ~/.gradle/caches
           key: gradle-${opts.cacheKey ?? `\${{ hashFiles('${dir}/**/*.gradle*') }}`}
 `;
+	// The echo loop ci.yml carried until § 1439, verbatim in shape: a declaration
+	// the guard reads and nobody prints is the state § 1533 made a failure, so a
+	// fixture that declares without echoing would now fail for that reason
+	// instead of the one its case is about.
+	const script =
+		opts.echo === false
+			? '          echo done\n'
+			: `          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            echo "::warning::\${line%%=*} holds unit tests that no job runs: \${line#*=}"
+          done <<< "$GRADLE_UNTESTED"
+`;
 	return `name: CI
 jobs:
   build-watch-wear:
@@ -82,8 +94,7 @@ ${cache}      - working-directory: ${dir}
       - name: Gradle unit tests nothing runs
 ${untested}        shell: bash
         run: |
-          echo done
-`;
+${script}`;
 }
 
 const PROJECTS = { 'apps/watch_wear/android': true, 'apps/host/android': true };
@@ -94,6 +105,73 @@ test('a project whose tests are run, beside one declared unrun, passes', () => {
 	assert.deepEqual(errors, []);
 	assert.match(ok[0], /1 of 2 Gradle project\(s\)/);
 	assert.match(ok[0], /1 test source file\(s\) declared unrun/);
+});
+
+test('a declaration no run: script reads fails, and the read is a variable not a mention', () => {
+	// § 1533. The guard's own subject is the declared VALUE, so a declaration is
+	// worth exactly what it is read for: with nothing printing it the gap is a
+	// note in a YAML file, which is the shape the rail replaced. Unreachable
+	// while the list is empty, which is why it is pinned before the next entry
+	// lands rather than after.
+	const silent = fixture({ projects: PROJECTS, workflow: workflow({ echo: false }) });
+	const { errors } = check({ root: silent });
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /no `run:` script that can see it reads it/);
+	assert.match(errors[0], /step scope: Gradle unit tests nothing runs/);
+
+	// A comment naming the variable is not a read of it. Anchoring on the bare
+	// word would credit exactly the sentence the echo exists to replace.
+	const mentioned = fixture({
+		projects: PROJECTS,
+		workflow: workflow({ echo: false }).replace(
+			'          echo done',
+			'          # GRADLE_UNTESTED used to be echoed here\n          echo done',
+		),
+	});
+	assert.equal(check({ root: mentioned }).errors.length, 1);
+
+	// And a one-line `run:` counts: an echo is not obliged to be a block scalar.
+	const inline = fixture({
+		projects: PROJECTS,
+		workflow: workflow({ echo: false }).replace(
+			'        run: |\n          echo done\n',
+			'        run: echo "$GRADLE_UNTESTED"\n',
+		),
+	});
+	assert.deepEqual(check({ root: inline }).errors, []);
+});
+
+test('a job-level declaration is satisfied by any step of that job, and only that job', () => {
+	// GitHub scopes an `env:` mapping, so the guard does too: crediting a read
+	// from a sibling job would pass a workflow whose declaring job prints
+	// nothing, and demanding the declaring STEP read it would fail a correct
+	// job-level declaration.
+	const jobLevel = `name: CI
+jobs:
+  build-watch-wear:
+    env:
+      GRADLE_UNTESTED: |
+        apps/host/android=1=${REASON}
+    steps:
+      - uses: actions/cache@v4
+        with:
+          path: ~/.gradle/caches
+          key: gradle-\${{ hashFiles('apps/watch_wear/android/**/*.gradle*') }}
+      - working-directory: apps/watch_wear/android
+        run: ./gradlew assembleDebug testDebugUnitTest --no-daemon
+      - shell: bash
+        run: |
+          echo "$GRADLE_UNTESTED"
+  other:
+    steps:
+      - run: echo "$GRADLE_UNTESTED"
+`;
+	assert.deepEqual(check({ root: fixture({ projects: PROJECTS, workflow: jobLevel }) }).errors, []);
+
+	const elsewhere = jobLevel.replace('      - shell: bash\n        run: |\n          echo "$GRADLE_UNTESTED"\n', '');
+	const { errors } = check({ root: fixture({ projects: PROJECTS, workflow: elsewhere }) });
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /job scope: build-watch-wear/);
 });
 
 test('deleting the test task from an invocation that still builds fails', () => {
