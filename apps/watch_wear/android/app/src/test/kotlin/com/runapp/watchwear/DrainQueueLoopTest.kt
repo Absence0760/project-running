@@ -275,20 +275,93 @@ class DrainQueueLoopTest {
         val result = drainQueueLoop(
             snapshot = listOf(run("a")),
             push = PushQueuedRun { throw HttpException(401, "JWT expired") },
-            refresh = RefreshAuthForDrain { throw RuntimeException("refresh socket reset") },
+            refresh = RefreshAuthForDrain { throw RuntimeException("Connection reset") },
             onSuccessfulDrain = OnSuccessfulDrain { },
             report = DrainFailureReport { reported += it },
             classify = ::classifyDrainError,
         )
         assertEquals(emptyList<String>(), result.drainedIds)
         assertTrue(result.anyTransientFailure)
-        assertEquals(SyncFault.SignInRequired, result.lastFault)
+        // The REFRESH's fault, not the 401's: the socket died before the
+        // refresh grant was answered, so nothing has said this session is
+        // spent.
+        assertEquals(SyncFault.Offline, result.lastFault)
         // Both throwables reach the log — the 401 that provoked the refresh and
         // the refresh's own failure. Only one of them can be the banner.
         assertEquals(
-            listOf("JWT expired", "refresh socket reset"),
+            listOf("JWT expired", "Connection reset"),
             reported.map { it.error.message },
         )
+    }
+
+    @Test fun `a refresh that never reached the server does not ask for a sign-in`() = runBlocking {
+        // The 401 proves the server answered moments earlier; it is not
+        // evidence about the refresh that followed. Since § 1544 the fault is
+        // an affordance — the PreRun arc spends its one slot offering a
+        // sign-in for `SignInRequired` — so a dropped socket read as a spent
+        // token costs the runner a password they did not need to retype.
+        val transports = listOf(
+            RuntimeException("Connection reset") to SyncFault.Offline,
+            RuntimeException("timeout") to SyncFault.Offline,
+            HttpException(503, "gateway") to SyncFault.ServerBusy,
+            HttpException(429, "too many requests") to SyncFault.ServerBusy,
+            // `sessionStore.save` throwing on an EncryptedSharedPreferences
+            // fault: the one failure on this path that never touched a network.
+            IllegalStateException("could not decrypt keyset") to SyncFault.Unknown,
+        )
+        for ((thrown, expected) in transports) {
+            reported.clear()
+            val result = drainQueueLoop(
+                snapshot = listOf(run("a"), run("b")),
+                push = PushQueuedRun { throw HttpException(401, "JWT expired") },
+                refresh = RefreshAuthForDrain { throw thrown },
+                onSuccessfulDrain = OnSuccessfulDrain { error("nothing drains") },
+                report = DrainFailureReport { reported += it },
+                classify = ::classifyDrainError,
+            )
+            assertEquals("lastFault for $thrown", expected, result.lastFault)
+            assertEquals("blockedBy for $thrown", expected, result.blockedBy)
+            // The log gets the refresh's own classification too, not the 401's.
+            assertEquals(expected, reported.last().fault)
+            assertTrue(result.anyTransientFailure)
+        }
+    }
+
+    @Test fun `a refresh grant the server refuses is still a sign-in`() = runBlocking {
+        // The other half of the same asymmetry: on the refresh endpoint a 4xx
+        // IS a session the server will not renew, where `syncFaultFor` would
+        // read the same 400 as `Refused` — a claim about a run this endpoint
+        // never saw.
+        val result = drainQueueLoop(
+            snapshot = listOf(run("a")),
+            push = PushQueuedRun { throw HttpException(401, "JWT expired") },
+            refresh = RefreshAuthForDrain { throw HttpException(400, "invalid_grant") },
+            onSuccessfulDrain = OnSuccessfulDrain { error("nothing drains") },
+            report = DrainFailureReport { reported += it },
+            classify = ::classifyDrainError,
+        )
+        assertEquals(SyncFault.SignInRequired, result.lastFault)
+        assertEquals(SyncFault.SignInRequired, result.blockedBy)
+        assertEquals(emptyList<String>(), result.rejectedIds)
+    }
+
+    @Test fun `a refresh that fails without saying why keeps the 401's verdict`() = runBlocking {
+        // A bare `false` carries no throwable to classify. The production
+        // lambda throws, but the seam allows this shape and the honest answer
+        // for it is the one thing that IS known: a 401 whose refresh did not
+        // succeed.
+        val result = drainQueueLoop(
+            snapshot = listOf(run("a")),
+            push = PushQueuedRun { throw HttpException(401, "JWT expired") },
+            refresh = RefreshAuthForDrain { false },
+            onSuccessfulDrain = OnSuccessfulDrain { error("nothing drains") },
+            report = DrainFailureReport { reported += it },
+            classify = ::classifyDrainError,
+        )
+        assertEquals(SyncFault.SignInRequired, result.lastFault)
+        assertEquals(SyncFault.SignInRequired, result.blockedBy)
+        // Nothing to report beyond the 401 itself.
+        assertEquals(listOf("JWT expired"), reported.map { it.error.message })
     }
 
     @Test fun `401, refresh succeeds, retry also 401, stops with backoff`() = runBlocking {

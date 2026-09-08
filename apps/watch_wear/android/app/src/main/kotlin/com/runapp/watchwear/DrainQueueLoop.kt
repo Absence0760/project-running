@@ -204,14 +204,31 @@ internal suspend fun drainQueueLoop(
                     // the retry itself fails, stop the loop and arm
                     // backoff — the next drain trigger (network flap,
                     // manual sync) will retry from this run forward.
-                    val refreshed = try {
-                        refresh()
+                    val refreshFault: SyncFault? = try {
+                        if (refresh()) {
+                            null
+                        } else {
+                            // No throwable, so nothing to classify: a refresh
+                            // that reported failure without saying why leaves
+                            // the 401's own verdict standing.
+                            SyncFault.SignInRequired
+                        }
                     } catch (inner: Throwable) {
-                        record(run.id, SyncFault.SignInRequired, inner)
-                        false
+                        // The refresh's OWN error, not the 401 that provoked
+                        // it. The 401 proves the server answered moments
+                        // earlier, so a refresh that dies on a dropped socket
+                        // or a `SessionStore` write that throws is not a
+                        // session the server refused to renew — and since
+                        // § 1544 that is an affordance, not a caption: the arc
+                        // offers a sign-in for `SignInRequired` and would cost
+                        // the runner a password they did not need to retype.
+                        val fault = syncFaultForRefresh(inner)
+                        record(run.id, fault, inner)
+                        fault
                     }
-                    if (!refreshed) {
-                        blockedBy = lastFault
+                    if (refreshFault != null) {
+                        lastFault = refreshFault
+                        blockedBy = refreshFault
                         break
                     }
                     try {
