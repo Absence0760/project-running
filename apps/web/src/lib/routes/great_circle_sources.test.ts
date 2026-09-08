@@ -51,7 +51,7 @@ const GREAT_CIRCLE_SOURCES: { file: string; arcs: number; reason: string }[] = [
 		file: 'src/lib/runs/run_stats.ts',
 		arcs: 1,
 		reason:
-			'THE canonical. Exported as `haversineMetres`, clamps `a` into [0, 1] before the arc, and is what `run_stats.dart` computes point for point — so it is the one form both platforms already agree on. Thirteen Dart modules import it; the web modules that do not yet are below.',
+			'THE canonical. Exported as `haversineMetres`, clamps `a` into [0, 1] before the arc, and is what `run_stats.dart` computes point for point — so it is the one form both platforms already agree on. Fifteen Dart modules import it; the web modules that do not yet are below.',
 	},
 	{
 		file: 'src/lib/components/RouteBuilder.svelte',
@@ -64,18 +64,6 @@ const GREAT_CIRCLE_SOURCES: { file: string; arcs: number; reason: string }[] = [
 		arcs: 1,
 		reason:
 			'Web-only, and the arc is INLINE in the effort loop rather than in a named function — invisible to `check_shared_reimplementations.mjs`, which does not extract anonymous bodies. A components-tree change.',
-	},
-	{
-		file: 'src/lib/segments/pace_segments.ts',
-		arcs: 1,
-		reason:
-			'Half of the `pace_segments` pair. The only remaining copy with NO clamp of any kind — `Math.asin(Math.sqrt(h))` is NaN for `h > 1` exactly as the `atan2` form is — so this is the live end of § 305 and the matched move is a fix, not a tidy.',
-	},
-	{
-		file: 'src/lib/segments/segments.ts',
-		arcs: 1,
-		reason:
-			'Half of the `segments` pair, matched by `segments.dart:_haversine`. Matched move owed.',
 	},
 ];
 

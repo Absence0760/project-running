@@ -4,6 +4,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 
 import 'geo.dart' show unwrapLonDeg;
+import 'run_stats.dart' show haversineMetres;
 
 /// Pure Dart port of `apps/web/src/lib/segments/segments.ts` (decisions §37).
 /// Walks a run track to extract elapsed time over a (start, end)
@@ -70,7 +71,7 @@ _TrackDistanceIndex _distanceIndex(List<Waypoint> track) {
   for (var i = 1; i < track.length; i++) {
     final a = track[i - 1];
     final b = track[i];
-    final d = _haversine(a.lat, a.lng, b.lat, b.lng);
+    final d = haversineMetres(a.lat, a.lng, b.lat, b.lng);
     cum[i] = cum[i - 1] + d;
     if (d > 0) steps.add(d);
   }
@@ -200,7 +201,7 @@ class _TrackBounds {
   });
 }
 
-/// Metres per degree of latitude on the 6371 km sphere [_haversine] uses is
+/// Metres per degree of latitude on the 6371 km sphere [haversineMetres] uses is
 /// 111_195; the smaller figure here is deliberate, so every degree window
 /// derived from a tolerance comes out slightly WIDER than the true one. The
 /// extent test must never reject a segment the full scan would have matched.
@@ -275,7 +276,7 @@ EffortResult? _scoreAgainstTrack(
   var startIdx = -1;
   var startBest = double.infinity;
   for (var i = 0; i < track.length; i++) {
-    final d = _haversine(track[i].lat, track[i].lng, start.lat, start.lng);
+    final d = haversineMetres(track[i].lat, track[i].lng, start.lat, start.lng);
     if (d < startBest) {
       startBest = d;
       startIdx = i;
@@ -286,7 +287,7 @@ EffortResult? _scoreAgainstTrack(
   var endIdx = -1;
   var endBest = double.infinity;
   for (var i = startIdx + 1; i < track.length; i++) {
-    final d = _haversine(track[i].lat, track[i].lng, end.lat, end.lng);
+    final d = haversineMetres(track[i].lat, track[i].lng, end.lat, end.lng);
     if (d < endBest) {
       endBest = d;
       endIdx = i;
@@ -393,19 +394,5 @@ double? _msAtDistance(
     return tA + (tB - tA) * frac;
   }
   return null;
-}
-
-double _haversine(double lat1, double lng1, double lat2, double lng2) {
-  const r = 6371000.0;
-  final dLat = (lat2 - lat1) * math.pi / 180;
-  final dLng = (lng2 - lng1) * math.pi / 180;
-  final sinLat = math.sin(dLat / 2);
-  final sinLng = math.sin(dLng / 2);
-  final a = sinLat * sinLat +
-      math.cos(lat1 * math.pi / 180) *
-          math.cos(lat2 * math.pi / 180) *
-          sinLng *
-          sinLng;
-  return 2 * r * math.asin(math.min(1, math.sqrt(a)));
 }
 
