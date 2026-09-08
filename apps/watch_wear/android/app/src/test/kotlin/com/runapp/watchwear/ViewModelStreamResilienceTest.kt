@@ -34,6 +34,12 @@ import org.junit.Test
 /// of both bridges were already wrapped, with `no paired phone, fine`
 /// written beside one of them. The streaming reads of the same payloads,
 /// running the same handlers, were not.
+///
+/// The "no guard is completely silent" rule used to live here and no
+/// longer does. It was never a rule about this file — it read one of the
+/// module's 57 sources and 21 of its 51 `catch` blocks, and could see
+/// neither of the two silences that carry no `catch` keyword at all.
+/// `SilentFailureGuardTest` owns it now, over the whole main source set.
 class ViewModelStreamResilienceTest {
 
     private val src: String by lazy {
@@ -292,25 +298,6 @@ class ViewModelStreamResilienceTest {
                 "`false` that carries no throwable, and `DrainFailureReport` then " +
                 "has nothing to log: ${refresh!!.groupValues[1]}",
             refresh.groupValues[1].contains("catch"),
-        )
-    }
-
-    @Test
-    fun `no guard is completely silent`() {
-        // Not a demand for a log on every catch — several of these are
-        // advisory polls whose comment IS the rationale. What must not
-        // exist is a catch that says nothing at all: sign-out's tile-cache
-        // wipe was one, and the cache that survives it is a map of where
-        // the signed-out user runs.
-        val silent = Regex("""catch\s*\([^)]*\)\s*\{\s*\}""")
-            .findAll(src)
-            .map { it.value }
-            .toList()
-        assertEquals(
-            "a catch in RunViewModel with an empty body — no log, no state, " +
-                "not even a reason: $silent",
-            emptyList<String>(),
-            silent,
         )
     }
 

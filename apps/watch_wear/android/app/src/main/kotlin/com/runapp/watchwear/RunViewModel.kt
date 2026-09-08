@@ -768,6 +768,9 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         checkpoints.clear()
         if (stranded != null) {
             withContext(Dispatchers.IO) {
+                // The checkpoint naming this file is cleared on the line above,
+                // so a throw here leaves an orphan and nothing to retry from.
+                // `sweepOrphanTracks` is the second pass over it.
                 runCatching { File(stranded.trackFilePath).delete() }
             }
         }
@@ -1695,6 +1698,9 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         store.remove(id)
         snapshot.firstOrNull { it.id == id }?.let { run ->
             withContext(Dispatchers.IO) {
+                // The queue entry is removed first, so a failed delete costs
+                // bytes rather than correctness and has nothing left to point
+                // at. `sweepOrphanTracks` reclaims it on the next pass.
                 runCatching { File(run.trackFilePath).delete() }
             }
         }

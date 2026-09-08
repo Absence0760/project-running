@@ -133,6 +133,11 @@ class LocalRunStore(private val context: Context) {
             prefs.remove(KEY_QUEUE)
         }
         for (run in dropped) {
+            // `delete()` answers false rather than throwing on a file that is
+            // already gone, so what this swallows is an I/O fault on a file the
+            // queue entry above no longer names — there is no record left to
+            // retry against. `sweepOrphanTracks` collects whatever survives, so
+            // the previous user's trace is not left on disk indefinitely.
             runCatching { File(run.trackFilePath).delete() }
         }
     }
