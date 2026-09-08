@@ -206,14 +206,20 @@ class _ExerciseCataloguePickerScreenState
 
   Future<void> _create() async {
     final api = widget.api;
+    // The name is bound before it is judged, so the blankness test and the
+    // value sent to the insert are one expression rather than two reads of a
+    // getter that could drift apart — and so the source scan that bans a
+    // decision taken on the display SPELLING can see this call site at all
+    // (§ 1573; the web twin's create path has the same shape for the same
+    // reason).
+    final name = _query;
     if (api == null ||
         widget.unavailable ||
-        !namesAnExercise(_query) ||
+        !namesAnExercise(name) ||
         _creating) {
       return;
     }
     final l10n = AppLocalizations.of(context);
-    final name = _query;
     setState(() => _creating = true);
     final made = await api.createCustomExercise(
       name: name,

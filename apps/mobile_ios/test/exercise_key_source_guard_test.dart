@@ -316,6 +316,22 @@ final _folded = RegExp(r'normaliseExerciseName\s*\(|namesAnExercise\s*\(');
 /// while saying everything inside `gym_compose_sheet.dart`.
 final _namesADisplayField = RegExp(r'\.name\b');
 
+/// A value whose OWN identifier is the display spelling, judged under the same
+/// file-level rule. The scan trusted a `.name` READ and not a value called
+/// `name`, which is the difference between a spelling taken off a row and one
+/// TYPED by the user — and the typed one is the whole reason the catalogue
+/// picker's create path exists. There the value reaches the test through a
+/// getter over a `TextEditingController`, whose text carries no `.name` and no
+/// "exercise", so no amount of chasing the declaration can reach it: the
+/// evidence is the identifier the call site binds, exactly as on the web rail
+/// (decisions § 1483).
+///
+/// Anchored at the START so `named`, whose `isEmpty` two lines under a `where`
+/// that already filtered on the key is a count of blocks rather than a blank
+/// name, is not swept in. Unlike the `.name` read it sits beside, this is
+/// judged on the length shape too.
+final _isANameIdentifier = RegExp(r'^name\b');
+
 final _emptyLiteral = RegExp(r"""^(?:''|"")$""");
 
 final _lengthTail = RegExp(r'\.length\s*$');
@@ -435,6 +451,7 @@ List<_Hit> blankSpellingTestHits(String path, String source) {
     // The fix itself, on either the operand or its declaration.
     if (_folded.hasMatch(origin)) continue;
     final spelling = _namesASpelling.hasMatch(origin) ||
+        (fileNames && _isANameIdentifier.hasMatch(f.subject.trim())) ||
         (f.chase && fileNames && _namesADisplayField.hasMatch(origin));
     if (!spelling) continue;
     final line = '\n'.allMatches(code.substring(0, at)).length + 1;
@@ -700,6 +717,22 @@ void main() {
         'lib/screens/composer.dart',
         'final e = Exercise();\n    final raw = block.name;\n    final name = raw;\n    if (name.isEmpty) continue;',
       ],
+      // The picker's create path: the value arrives through a getter over a
+      // TextEditingController, so the declaration chase cannot reach anything
+      // that names an exercise and the subject identifier is the only evidence
+      // there is (decisions § 1573).
+      "the picker's create path, whose value came from a search box": [
+        'lib/widgets/exercise_catalogue_picker.dart',
+        'final e = exercise;\n    final name = _query;\n    if (name.isEmpty) return;',
+      ],
+      'the same call site written as a comparison': [
+        'lib/widgets/exercise_catalogue_picker.dart',
+        "final e = exercise;\n    final name = _query;\n    if (name == '') return;",
+      ],
+      'the same call site written as a length test': [
+        'lib/widgets/exercise_catalogue_picker.dart',
+        'final e = exercise;\n    final name = _query;\n    if (name.length == 0) return;',
+      ],
     };
     caught.forEach((label, c) {
       expect(blankSpellingTestHits(c[0], c[1]).length, 1, reason: 'missed: $label');
@@ -748,5 +781,27 @@ void main() {
       expect(blankSpellingTestHits(c[0], c[1]), isEmpty,
           reason: 'false positive: $label');
     });
+  });
+
+  test('a regression at the picker create path fails the scan', () {
+    // The picker's own file as it stands, plus the regression the three cases
+    // above plant into it. Read from disk rather than restated, because what
+    // makes the call site reachable is a property of the FILE — it names an
+    // exercise, and the value under test is called `name` — and a restatement
+    // would keep passing after the file stopped having it. § 1368 recorded that
+    // this call site was out of the scan's reach on both rails; web closed its
+    // half in § 1483 and this is the port.
+    const picker = 'lib/widgets/exercise_catalogue_picker.dart';
+    final source = File(picker).readAsStringSync();
+    expect(blankSpellingTestHits(picker, source), isEmpty,
+        reason: 'the picker create path is fixed');
+    const fixed = '!namesAnExercise(name) ||';
+    expect(source.contains(fixed), isTrue,
+        reason: 'the create path moved — re-anchor this guard');
+    expect(
+        blankSpellingTestHits(picker, source.replaceFirst(fixed, 'name.isEmpty ||'))
+            .length,
+        1,
+        reason: 'a regression at the picker create path must fail this scan');
   });
 }
