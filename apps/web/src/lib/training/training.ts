@@ -375,8 +375,13 @@ export function phaseFor(weekIndex: number, totalWeeks: number): PlanPhase {
  * Structured-workout descriptor stored in `plan_workouts.structure`. Tempo,
  * interval, and repetition workouts use this; easy/long/recovery/rest do
  * not. See `docs/features/training.md` for the shape spec.
+ *
+ * An alias rather than an interface, and that is load-bearing: only an alias
+ * of an object type gets TypeScript's implicit index signature, so an
+ * interface is refused as the `Json` this jsonb column takes however
+ * JSON-shaped it is. The Dart twin has no such distinction.
  */
-export interface WorkoutStructure {
+export type WorkoutStructure = {
 	warmup?: { distance_m?: number; duration_s?: number; pace: 'easy' };
 	// A rep / recovery may be expressed by distance (distance_m) or by time
 	// (duration_s) — the runner reads whichever is present (distance wins).
@@ -393,7 +398,7 @@ export interface WorkoutStructure {
 	};
 	steady?: { distance_m?: number; duration_s?: number; pace_sec_per_km: number };
 	cooldown?: { distance_m?: number; duration_s?: number; pace: 'easy' };
-}
+};
 
 // ─────────────────────── Plan generation ───────────────────────
 

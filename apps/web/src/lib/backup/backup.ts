@@ -206,13 +206,13 @@ export async function restoreBackup(
  * existing supabase-js calls. Tests substitute a counter-tracking
  * fake; see `restore_orchestrator.test.ts`.
  */
-// Each `as Insertable<...>` below is the one thing a typed client cannot check
-// here and should not pretend to: an archived row is a JSON object read out of
-// a file the user supplied, so its column set is whatever build wrote the
-// archive, not whatever this build's schema declares. The server is the only
-// validator there is — a stale or hand-edited archive comes back as a
-// PostgREST 400, which the restore loop already records in `result.warnings`
-// rather than aborting on.
+// Each `as Insertable<...>` below narrows a VALUE shape, not a column set: the
+// orchestrator has already filtered every row against the generated Insert
+// keys (`restore_columns.ts`), so a name this build's schema has no home for
+// never reaches here. What no client can check is the values — an archived row
+// is JSON out of a file the user supplied, so a `distance_m` of `"far"` is
+// still the server's to refuse, and it comes back as a PostgREST 400 the
+// restore loop records in `result.warnings` rather than aborting on.
 function supabaseRestoreBackend(): RestoreBackend {
 	return {
 		async upsertProfile(row) {

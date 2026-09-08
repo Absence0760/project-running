@@ -187,6 +187,66 @@ test('fetchRunsForPeriodSummary ships the whole history column-narrowed, and sur
 	);
 });
 
+test('fetchRuns states its row shape and narrows through the shared helpers', () => {
+	// Reason: the select list is `.join()`ed from a caller's tuple, so it is
+	// `string`, the supabase-js parser answers `GenericStringError`, and the
+	// rows used to be walked as `any[]`. `any` is not a narrower claim than
+	// the truth — it is no claim at all, and it is what let this reader
+	// declare `Run` (three narrowed columns) while applying `parseRunSource`
+	// alone: `activity_type` and `metadata` reached every consumer raw behind
+	// a type promising the unions (§ 1519). The honest shape is what a
+	// projection of `runs` can return, and the two branches must route
+	// through the tested narrowers rather than re-spelling the map.
+	// Comments stripped: this guard's own reason names the shape it bans.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	// The last of the three: two overload declarations, then the body.
+	const start = source.lastIndexOf('export async function fetchRuns(');
+	assert.ok(start >= 0, 'Could not locate the fetchRuns implementation — rename?');
+	const next = source.indexOf('\nexport ', start + 1);
+	const body = source.slice(start, next > start ? next : undefined);
+	assert.doesNotMatch(
+		body,
+		/\bany\b/,
+		'fetchRuns must not walk its rows as `any` — that is the claim that hid two missing narrows.',
+	);
+	assert.match(
+		body,
+		/overrideTypes<Partial<RunRow>\[\]>/,
+		'the read must state the row shape a projection can return.',
+	);
+	assert.match(
+		body,
+		/rows\.map\(asProjectedRun\)/,
+		'the narrowed branch must use the shared projected narrower.',
+	);
+	assert.match(
+		body,
+		/asRun\(r, null\)/,
+		'the select(*) branch must use `asRun`, the one normaliser this table has.',
+	);
+	// Reason for the negative: `track` is a lazy Storage download, never a
+	// column, so since § 1468 it cannot be a member of `C[number]` and the
+	// narrowed overload's `Pick<Run, C[number]>` cannot declare it. Setting
+	// it on every row put a property on the object that its own type denies
+	// and no caller can read, and made the two run readers disagree about
+	// what a narrowed row carries (§ 1520).
+	// Reason: `asRun` is the ONE normaliser this table has, and `fetchRuns`
+	// carried its own partial copy of it — two of the three narrows missing —
+	// which is exactly the drift the one-normaliser-per-table rule names.
+	assert.doesNotMatch(
+		source,
+		/function asRun\(/,
+		'`asRun` must live in run_narrow.ts, not be re-declared here.',
+	);
+	const narrow = stripComments(read('src/lib/core/run_narrow.ts'));
+	const projected = narrow.slice(narrow.indexOf('export function asProjectedRun'));
+	assert.doesNotMatch(
+		projected,
+		/track/,
+		'a narrowed row must not carry `track` — its row type cannot declare it.',
+	);
+});
+
 test('fetchRouteById clips waypoints for non-owner club members (RLS is not the boundary)', () => {
 	// Reason: RLS lets an active club member SELECT the base `routes`
 	// row, which carries the unclipped polyline + geom + start_point. The

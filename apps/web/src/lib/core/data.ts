@@ -7,6 +7,7 @@ import { isDuplicateKeyError, supabaseErrorFields } from './supabase_error';
 import { singleEmbed, fitnessSnapshotDue, publicRouteListFill } from './data_normalise';
 import { TABLES, BUCKETS, METADATA_KEYS } from './schema';
 import type { Database, Json } from '../database.types';
+import { asProjectedRun, asRun, type RunRow } from './run_narrow';
 import { SELECT_SEPARATOR, type Join } from './database';
 import type { Insertable, Updatable } from './database';
 import type { JsonObject, TrackPoint } from '../types';
@@ -181,7 +182,15 @@ import {
 /// only at the call site, so the check lives at the tuple's own declaration
 /// instead and the row type is `Pick`ed from that same tuple: one declaration,
 /// two derivations, which is the whole point of § 1330.
-export type RunColumns = readonly (keyof Run & keyof Database['public']['Tables']['runs']['Row'])[];
+///
+/// Making the implementation generic over the tuple and casting the join to
+/// `Join<C, D>` does not recover the parse, and it is worse than the string:
+/// measured, `ParseQuery` neither resolves nor collapses to
+/// `GenericStringError` but stays a deferred conditional, so the body cannot
+/// read a single field off the row it is meant to narrow (§ 1518). The row
+/// shape is therefore stated once, at the read, as what a projection of this
+/// table can return.
+export type RunColumns = readonly (keyof Run & keyof RunRow)[];
 
 export interface FetchRunsOptions<C extends RunColumns = RunColumns> {
 	/** Cap the number of rows returned. Pair with `offset` for paging. */
@@ -219,7 +228,9 @@ export async function fetchRuns(opts?: Omit<FetchRunsOptions, 'columns'>): Promi
 export async function fetchRuns<C extends RunColumns>(
 	opts: FetchRunsOptions<C> & { columns: C },
 ): Promise<Pick<Run, C[number]>[]>;
-export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
+export async function fetchRuns(
+	opts?: FetchRunsOptions,
+): Promise<Run[] | Partial<Run>[]> {
 	// Explicit user_id filter as defence in depth — RLS already scopes
 	// runs to the caller, but every other personal-data list in this
 	// file follows the same explicit-scope pattern. See audit
@@ -243,10 +254,20 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 		return q.order('started_at', { ascending: false }).order('id', { ascending: false });
 	};
 
-	let rows: any[];
+	// One page of the read, as the row shape a projection of `runs` can
+	// return. The join above erases the select literal, so the parser answers
+	// `GenericStringError` and the rows used to be walked as `any[]` — which
+	// is what let this reader promise `Run` while applying one of its three
+	// narrows. `Partial` is the honest claim for both branches; the `*` one
+	// states its own completeness below, since the ternary means no literal
+	// survives for the compiler to read it off.
+	const page = (from: number, to: number) =>
+		build().range(from, to).overrideTypes<Partial<RunRow>[]>();
+
+	let rows: Partial<RunRow>[];
 	if (opts?.limit != null) {
 		const from = opts.offset ?? 0;
-		const { data, error } = await build().range(from, from + opts.limit - 1);
+		const { data, error } = await page(from, from + opts.limit - 1);
 		if (error || !data) {
 			if (opts?.throwOnError && error) throw error;
 			return [];
@@ -263,7 +284,7 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 		const SAFETY_MAX = 50_000;
 		rows = [];
 		for (let from = 0; from < SAFETY_MAX; from += PAGE) {
-			const { data, error } = await build().range(from, from + PAGE - 1);
+			const { data, error } = await page(from, from + PAGE - 1);
 			if (error || !data) {
 				if (opts?.throwOnError && error) throw error;
 				break;
@@ -275,16 +296,16 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 			console.warn(`fetchRuns reached the ${SAFETY_MAX}-row ceiling; older runs may be omitted`);
 		}
 	}
-	// Defensive narrow on read: the DB CHECK constraint stops bad
-	// `source` values at write time, but historical rows imported before
-	// the constraint or rows from a future client whose new value
-	// hasn't propagated to this build need a fallback. parseRunSource
-	// coerces unknowns to 'app'.
-	return rows.map((r) => ({
-		...r,
-		source: parseRunSource(r.source),
-		track: null,
-	}));
+	// Defensive narrow on read: the DB CHECK constraints stop bad `source` /
+	// `activity_type` values at write time, but historical rows imported
+	// before the constraint, or rows from a future client whose new value
+	// hasn't propagated to this build, need a fallback — and `metadata` is
+	// jsonb, which admits a string, a number and an array as well as an
+	// object. A projection narrows only what it selected; the unnarrowed read
+	// selected every column, which is the one thing the erased select literal
+	// stops the compiler from seeing for itself.
+	if (opts?.columns) return rows.map(asProjectedRun);
+	return (rows as RunRow[]).map((r) => asRun(r, null));
 }
 
 /// Runs for the signed-in user that surface a hard fetch failure instead of
@@ -313,8 +334,11 @@ export async function fetchRunsWithError(
 /// columns the dashboard's consumers read (streaks, training-load,
 /// race-predictor, consistency, intensity, trend, goals, snapshot,
 /// this-week, recent list) — `metadata` stays because those consumers
-/// read `avg_bpm` / `elevation_m` / `indoor` from it. `track` is nulled
-/// like `fetchRuns` (it is a lazy Storage download, never a column).
+/// read `avg_bpm` / `elevation_m` / `indoor` from it. `track` is NOT set — it
+/// is a lazy Storage download rather than a column, so it is not one of the
+/// ten and `DashboardRun` does not declare it. `fetchRuns` answers the same
+/// way for a narrowed read and sets it only for `select('*')`, whose row type
+/// is the whole of `Run`.
 /// The `started_at desc` order means the PostgREST 1000-row cap, if a
 /// very high-volume runner ever hits it inside the window, drops only
 /// the oldest rows in the window — never the recent ones any consumer
@@ -643,35 +667,6 @@ export async function fetchRunById(
 		}
 	}
 	return { run: asRun(data, track), error: null };
-}
-
-/// One whole `runs` row as the `Run` a consumer reads.
-///
-/// `source` and `activity_type` are CHECK-constrained unions the generated row
-/// types as bare strings — `source` was already parsed here, `activity_type`
-/// was not, so a value outside the union arrived typed as one of its members.
-/// `metadata` is jsonb, typed `Json`: the column can legitimately hold a
-/// scalar or an array, neither of which is a metadata bag, so one becomes null
-/// rather than being handed on as a bag every reader will index into.
-///
-/// Only a read that selects every column can use this. The windowed
-/// projections (`fetchRunsForDashboard`, `fetchRunsForRecap`) carry their own
-/// row shapes — see § 1330.
-function asRun(
-	row: Database['public']['Tables']['runs']['Row'],
-	track: TrackPoint[] | null,
-): Run {
-	const { metadata, ...rest } = row;
-	return {
-		...rest,
-		source: parseRunSource(row.source),
-		activity_type: parseActivityType(row.activity_type),
-		metadata:
-			metadata != null && typeof metadata === 'object' && !Array.isArray(metadata)
-				? metadata
-				: null,
-		track,
-	};
 }
 
 /// Fetch every run by the signed-in user against `routeId`, ordered
@@ -1216,20 +1211,7 @@ export async function saveRunAsRoute(
 ): Promise<{ id: string }> {
 	const { summarizeRouteFromTrack } = await import('../routes/route_simplify');
 	if (track.length < 2) throw new Error('Not enough GPS points to save a route');
-	// `waypoints` is annotated rather than inferred: `route_simplify`'s `LatLng`
-	// is an interface, and an interface has no implicit index signature, so an
-	// array of them is refused as the `Json` the column takes. `TrackPoint` is
-	// the same shape declared as an alias, which is what `Route.waypoints`
-	// already promises the row holds.
-	const {
-		waypoints,
-		distance_m,
-		elevation_m,
-	}: {
-		waypoints: Array<{ lat: number; lng: number; ele?: number | null }>;
-		distance_m: number;
-		elevation_m: number;
-	} = summarizeRouteFromTrack(track, 10);
+	const { waypoints, distance_m, elevation_m } = summarizeRouteFromTrack(track, 10);
 
 	const { data: authUser } = await supabase.auth.getUser();
 	const userId = authUser.user?.id;
@@ -3472,15 +3454,7 @@ export async function createEvent(input: {
 			category: input.category,
 			is_public: input.is_public ?? true,
 			discipline: input.discipline?.trim() || null,
-			// Restated as an object literal on the way into the jsonb column.
-			// TypeScript gives an implicit index signature only to a type ALIAS
-			// of an object type, never to an `interface` — which stays open to
-			// declaration merging — so a named record shape is refused as a
-			// `Json` however JSON-shaped it is. Declaring these two as aliases
-			// where they live is the fix; both are TS<->Dart parity modules this
-			// change does not own.
-			gym_template:
-				input.category === 'class' && input.gym_template ? { ...input.gym_template } : null,
+			gym_template: input.category === 'class' ? (input.gym_template ?? null) : null,
 			description: input.description?.trim() || null,
 			starts_at: input.starts_at,
 			// Anchor the event to the organiser's local timezone so discovery's
@@ -3527,19 +3501,13 @@ export async function updateEvent(
 	// RLS `is_event_organiser` gates the UPDATE; owner/admin/event_organiser
 	// only. `events` stays bare here per the F11 registry tail (see schema.ts).
 	//
-	// `gym_template` is pulled out and restated for the reason `createEvent`
-	// states: an interface has no implicit index signature, so it is refused as
-	// the `Json` the column takes. Left out of the update entirely when the
-	// caller did not patch it — putting the key back with an `undefined` would
-	// turn "leave it alone" into a write.
+	// `gym_template` is left out of the update entirely when the caller did not
+	// patch it — putting the key back with an `undefined` would turn "leave it
+	// alone" into a write.
 	const { gym_template, ...fields } = patch;
 	const { error } = await supabase
 		.from('events')
-		.update(
-			gym_template === undefined
-				? fields
-				: { ...fields, gym_template: gym_template ? { ...gym_template } : null },
-		)
+		.update(gym_template === undefined ? fields : { ...fields, gym_template })
 		.eq('id', id);
 	if (error) throw error;
 }
@@ -5169,9 +5137,7 @@ export async function createTrainingPlan(input: {
 			target_duration_seconds: wo.target_duration_seconds,
 			target_pace_sec_per_km: wo.target_pace_sec_per_km,
 			target_pace_tolerance_sec: wo.target_pace_tolerance_sec,
-			// Same restatement as `createEvent`'s `gym_template`: `WorkoutStructure`
-			// is an interface, and an interface has no implicit index signature.
-			structure: wo.structure ? { ...wo.structure } : null,
+			structure: wo.structure ?? null,
 			notes: wo.notes
 		}))
 	);

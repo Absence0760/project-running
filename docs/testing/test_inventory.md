@@ -2289,3 +2289,21 @@ The Dart half of the exercise-catalogue pair (§ 1460). The nine mirror the web 
 ### `apps/watch_wear/.../SyncFaultTest.kt` — 5 · `DiscardRunTest.kt` — 6 · `AuthFaultTest.kt` — 7
 
 The wrist's two classified faults and the PostRun discard. Counted in the Wear OS glob row above (802 across 79 files); listed here because the three are what moved it.
+
+## #789 round 46 — web-data lane (2026-09-07)
+
+### `apps/web/src/lib/core/run_narrow.test.ts` — 7 tests (new file)
+
+The read-side narrowing a `runs` row goes through before it is a `Run` — `asRun`, relocated out of `core/data.ts`, plus its projection sibling `asProjectedRun`. Split out so the rule can be run rather than only read: that module evaluates the supabase singleton and `$env/static/public` at import, which is why everything in it is pinned by source guards. Four cases cover `asRun`: a `source` and an `activity_type` the build has never heard of each coerce to their documented default, a jsonb bag that is an array or a string answers null, and `track` round-trips the argument it is handed rather than defaulting, because it is not a column. Three cover `asProjectedRun`: a projection of one column carries exactly that key — no `track`, no `source`, no `activity_type`, no `metadata` — a projection of three narrows exactly the ones it was given, and a selected-but-empty column keeps its key and is narrowed, because `undefined` is the marker for "not selected" and JSON has no such value. See [decisions § 1519](../architecture/decisions.md) + [§ 1520](../architecture/decisions.md).
+
+### `apps/web/src/lib/core/data.test.ts` — 52 tests (1 added)
+
+The `fetchRuns` implementation must not walk its rows as `any` (checked against the comment-stripped source, since the guard's own reason names the shape it bans), must state the row shape a projection can return, must route both branches through the tested narrowers, and must not re-declare `asRun` — the one normaliser this table has, which `fetchRuns` had been carrying a two-narrows-short copy of. The negative half reads `run_narrow.ts` and requires `asProjectedRun` to mention `track` nowhere. Mutation-verified four ways: restoring `let rows: any[]`, putting `track: null` back on the projected row (which also fails two of the `run_narrow` cases), re-declaring `asRun` in `data.ts`, and inlining the full-row map that replaced it.
+
+### `apps/web/src/lib/backup/restore_orchestrator.test.ts` — 36 tests (4 added)
+
+The archive-column allowlist. A run carrying `kind` — dropped by migration `20261206_001`, so a real pre-2026-12 archive — imports with the rest of the row intact rather than failing as a whole-row PGRST204 after its track blob has already been uploaded; 50 such runs plus a route and a profile produce exactly three warnings, one per section, rather than 52; an archive carrying no unknown column warns about nothing; and `constructor` / `toString` are dropped columns rather than columns, which is the difference between `Object.hasOwn` and `in` on a row parsed from a user-supplied file. The allowlists themselves are compile-time: `satisfies Record<keyof Insertable<T>, true>` was mutation-verified in both directions — deleting `is_dnf` fails as a missing property, adding `kind` fails as an excess one. See [decisions § 1521](../architecture/decisions.md).
+
+Run by this lane and passing: `apps/web/src/lib/{core,backup,training,social}/*.test.ts` under `tsx --test` (1425 tests, 0 failures), `npm run check` (2575 files, 0 errors, 5 pre-existing `state_referenced_locally` warnings in `PlanEditor.svelte`), `apps/web`'s `tsconfig_coverage.test.mjs` (3/3), and `npm run check:script-types`.
+
+NOT run by this lane, and not claimed: Playwright, any Flutter suite, the full web unit suite, and anything needing the local Supabase stack.

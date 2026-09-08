@@ -233,6 +233,20 @@ migrations — see `personal_data_export_profile_guard_test.go` and
   orphaned the Storage object and cost a run its GPS trace when a track-short
   archive was restored into the very account it was taken from. A fresh insert
   still lands with the column null, which is the truthful value there.
+- **A column this build's schema has no home for is dropped, not sent.** (web
+  only so far — see the followup for the Dart half.) PostgREST refuses a
+  payload naming a column the table does not have for the whole row, so an
+  archive written before `runs.kind` was dropped (`20261206_001`) used to fail
+  every run it carried — one 400 at a time, each after that run's track blob
+  had already been uploaded to Storage. `restore_columns.ts` filters each row
+  against the generated `Insert` keys before it is sent and reports the dropped
+  names as ONE warning per section (`profile` / `runs` / `routes`) rather than
+  one per row. The allowlists are `satisfies Record<keyof Insertable<T>, true>`,
+  so a column a migration ADDS fails the build until the restore is taught
+  about it — silently discarding a new column off every archive that carries it
+  is the failure mode that check exists to prevent. Value types are still the
+  server's to refuse: a `distance_m` of `"far"` comes back as a 400 into
+  `result.warnings`.
 - **An archive that declares itself incomplete says so at restore time.**
   `RestoreResult.archiveIncomplete` + `archiveIncompleteSections` carry the
   manifest verdict, and both Settings → Account surfaces render a persistent
