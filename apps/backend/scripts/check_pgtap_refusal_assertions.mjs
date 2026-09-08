@@ -1046,26 +1046,38 @@ export function closingParen(text, open) {
  * @returns {string[]}
  */
 export function signatureParameters(signature) {
-  return splitArgs(signature)
+  // A trailing `-- what this one is for` belongs to the parameter it follows,
+  // not to the next one, and left in place it makes every parameter after the
+  // first parse as no name at all — which shortens the list a call site is
+  // bound against and silently drops every landing past the comment.
+  return splitArgs(blockSource(signature).text)
     .map((p) => p.trim().replace(/^(?:in|out|inout|variadic)\s+/i, ''))
     .map((p) => /^([a-z0-9_]+)/i.exec(p)?.[1]?.toLowerCase() ?? '')
     .filter((p) => p !== '');
 }
 
 /**
- * The signature and body of each `create [or replace] function` in [text],
- * keyed by name, lower-cased. Later definitions win, so replaying the
- * migrations in order leaves what the database actually has.
+ * @typedef {{ name: string, params: string[], body: string }} FunctionDefinition
+ */
+
+/**
+ * The name, signature and body of each `create [or replace] function` in
+ * [text], keyed by `<name>/<arity>` — which is how Postgres identifies a
+ * function, and so the only key under which replaying the migrations leaves
+ * what the database actually has.
  *
- * An overloaded name collapses onto its last definition. Nothing in this tree
- * overloads a function that writes a table, and a collapse would over-report
- * rather than under-report: the surviving parameter list is what a call site is
- * resolved against, so a mismatched one names columns the guard then asks about.
+ * Keying on the bare NAME collapsed an overloaded one onto its last definition,
+ * and the surviving parameter list is what a call site is resolved against — so
+ * a call to the other signature was bound to the wrong parameters and its
+ * landings attributed to the wrong columns, or dropped (decisions 1539). Three
+ * of this tree's overloaded names write a table, so the collapse was live
+ * rather than hypothetical; it happened to be harmless only because in all
+ * three the surviving definition was also the last one written.
  * @param {string} text
- * @returns {Map<string, { params: string[], body: string }>}
+ * @returns {Map<string, FunctionDefinition>}
  */
 export function functionBodies(text) {
-  /** @type {Map<string, { params: string[], body: string }>} */
+  /** @type {Map<string, FunctionDefinition>} */
   const out = new Map();
   for (const m of text.matchAll(/create\s+(?:or\s+replace\s+)?function\s+(?:public\.)?([a-z0-9_]+)\s*\(/gi)) {
     const open = (m.index ?? 0) + m[0].length;
@@ -1077,10 +1089,45 @@ export function functionBodies(text) {
     const start = rest.indexOf(tag) + tag.length;
     const end = rest.indexOf(tag, start);
     if (end < 0) continue;
-    out.set(m[1].toLowerCase(), {
-      params: signatureParameters(text.slice(open, close)),
+    const name = m[1].toLowerCase();
+    const params = signatureParameters(text.slice(open, close));
+    out.set(signatureKey(name, params.length), {
+      name,
+      params,
       body: rest.slice(start, end),
     });
+  }
+  return out;
+}
+
+/**
+ * The `<name>/<arity>` key both replays below are keyed on.
+ * @param {string} name
+ * @param {number} arity
+ * @returns {string}
+ */
+export function signatureKey(name, arity) {
+  return `${name}/${arity}`;
+}
+
+/**
+ * Every signature [text] drops, by name and arity — so a replay keyed on the
+ * signature does not resurrect a definition the migration after it deleted.
+ * Keying on the bare name made this invisible: a `create` of the wider
+ * signature overwrote the narrower entry whether or not it was dropped, so the
+ * two errors cancelled.
+ * @param {string} text
+ * @returns {{ name: string, arity: number }[]}
+ */
+export function droppedSignatures(text) {
+  /** @type {{ name: string, arity: number }[]} */
+  const out = [];
+  for (const m of text.matchAll(/drop\s+function\s+(?:if\s+exists\s+)?(?:public\.)?([a-z0-9_]+)\s*\(/gi)) {
+    const open = (m.index ?? 0) + m[0].length;
+    const close = closingParen(text, open);
+    if (close === null) continue;
+    const inner = blockSource(text.slice(open, close)).text.trim();
+    out.push({ name: m[1].toLowerCase(), arity: inner === '' ? 0 : splitArgs(inner).length });
   }
   return out;
 }
@@ -1405,7 +1452,14 @@ export function stampedColumns(migrations, mode = 'unconditional') {
   /** @type {Map<string, { table: string, fn: string, ops: Set<TriggerOp> }>} */
   const triggers = new Map();
   for (const { text } of migrations) {
-    for (const [name, fn] of functionBodies(text)) bodies.set(name, fn.body);
+    // A trigger function takes no parameters, so the 0-arity signature is the
+    // only one a `create trigger ... execute function` can name.
+    for (const { name, arity } of droppedSignatures(text)) {
+      if (arity === 0) bodies.delete(name);
+    }
+    for (const fn of functionBodies(text).values()) {
+      if (fn.params.length === 0) bodies.set(fn.name, fn.body);
+    }
     for (const m of text.matchAll(
       /drop\s+trigger\s+(?:if\s+exists\s+)?([a-z0-9_]+)\s+on\s+(?:public\.)?([a-z0-9_]+)/gi,
     )) {
@@ -1626,26 +1680,59 @@ export function parameterLandings(body, params) {
 }
 
 /**
+ * @typedef {{ name: string, params: string[], lands: ParameterLanding[] }} WriterFunction
+ */
+
+/**
  * Every function the migrations leave behind that plants one of its own
- * parameters in a column, with the parameter list a call site is resolved
- * against.
+ * parameters in a column, keyed by `<name>/<arity>` and carrying the parameter
+ * list a call site is resolved against.
  * @param {{ name: string, text: string }[]} migrations
- * @returns {Map<string, { params: string[], lands: ParameterLanding[] }>}
+ * @returns {Map<string, WriterFunction>}
  */
 export function writerFunctions(migrations) {
-  /** @type {Map<string, { params: string[], lands: ParameterLanding[] }>} */
+  /** @type {Map<string, WriterFunction>} */
   const out = new Map();
   for (const { text } of migrations) {
-    for (const [name, fn] of functionBodies(text)) {
+    for (const { name, arity } of droppedSignatures(text)) out.delete(signatureKey(name, arity));
+    for (const fn of functionBodies(text).values()) {
+      const key = signatureKey(fn.name, fn.params.length);
       const lands = parameterLandings(fn.body, fn.params);
       if (lands.length === 0) {
-        out.delete(name);
+        out.delete(key);
         continue;
       }
-      out.set(name, { params: fn.params, lands });
+      out.set(key, { name: fn.name, params: fn.params, lands });
     }
   }
   return out;
+}
+
+/**
+ * Which of a name's live signatures a call site binds, given the arguments it
+ * actually wrote.
+ *
+ * Postgres resolves an overload on argument TYPES as well, which a text scan
+ * cannot read — so a call that arity and the named arguments cannot separate is
+ * resolved to none rather than to a guess, the same discipline
+ * `parameterLandings` applies to a column list and a values list of different
+ * lengths. An exact arity match outranks a wider signature reached on defaults,
+ * which is Postgres's own preference.
+ * @param {WriterFunction[]} candidates
+ * @param {string[]} args
+ * @returns {WriterFunction | null}
+ */
+export function resolveOverload(candidates, args) {
+  const named = args.flatMap((a) => {
+    const m = /^([a-z0-9_]+)\s*=>/i.exec(a.trim());
+    return m === null ? [] : [m[1].toLowerCase()];
+  });
+  const usable = candidates.filter(
+    (c) => args.length <= c.params.length && named.every((n) => c.params.includes(n)),
+  );
+  const exact = usable.filter((c) => c.params.length === args.length);
+  const pick = exact.length > 0 ? exact : usable;
+  return pick.length === 1 ? pick[0] : null;
 }
 
 /**
@@ -1654,27 +1741,35 @@ export function writerFunctions(migrations) {
  * — a parameter left on its default was supplied by nobody and its column is
  * not this assertion's claim.
  * @param {string} sql
- * @param {Map<string, { params: string[], lands: ParameterLanding[] }>} writers
+ * @param {Map<string, WriterFunction>} writers
  * @returns {(ParameterLanding & { fn: string })[]}
  */
 export function rpcArgumentLandings(sql, writers) {
+  /** @type {Map<string, WriterFunction[]>} */
+  const byName = new Map();
+  for (const fn of writers.values()) {
+    const seen = byName.get(fn.name);
+    if (seen === undefined) byName.set(fn.name, [fn]);
+    else seen.push(fn);
+  }
   /** @type {(ParameterLanding & { fn: string })[]} */
   const out = [];
-  for (const [name, fn] of writers) {
+  for (const [name, candidates] of byName) {
     for (const m of sql.matchAll(new RegExp(`(?<![A-Za-z0-9_.])${name}\\s*\\(`, 'gi'))) {
       const open = (m.index ?? 0) + m[0].length;
       const close = closingParen(sql, open);
       if (close === null) continue;
       const inner = sql.slice(open, close);
+      const args = inner.trim() === '' ? [] : splitArgs(inner);
+      const fn = resolveOverload(candidates, args);
+      if (fn === null) continue;
       /** @type {Set<string>} */
       const supplied = new Set();
-      if (inner.trim() !== '') {
-        splitArgs(inner).forEach((arg, i) => {
-          const named = /^([a-z0-9_]+)\s*=>/i.exec(arg.trim());
-          if (named !== null) supplied.add(named[1].toLowerCase());
-          else if (fn.params[i] !== undefined) supplied.add(fn.params[i]);
-        });
-      }
+      args.forEach((arg, i) => {
+        const named = /^([a-z0-9_]+)\s*=>/i.exec(arg.trim());
+        if (named !== null) supplied.add(named[1].toLowerCase());
+        else if (fn.params[i] !== undefined) supplied.add(fn.params[i]);
+      });
       for (const landing of fn.lands) {
         if (!supplied.has(landing.param)) continue;
         out.push({ fn: name, ...landing });

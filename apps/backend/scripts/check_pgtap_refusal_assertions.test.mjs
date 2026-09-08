@@ -19,6 +19,8 @@ import {
   assignedColumns,
   conditionallyStampedColumns,
   descriptionOf,
+  droppedSignatures,
+  functionBodies,
   parameterLandings,
   readMigrations,
   rpcArgumentLandings,
@@ -1011,8 +1013,9 @@ test('parameterLandings separates a parameter planted verbatim from one an expre
 test('rpcArgumentLandings resolves an argument to its parameter, positionally and by name', () => {
 	const writers = new Map([
 		[
-			'f',
+			'f/3',
 			{
+				name: 'f',
 				params: ['p_one', 'p_two', 'p_three'],
 				lands: /** @type {import('./check_pgtap_refusal_assertions.mjs').ParameterLanding[]} */ ([
 					{ table: 't', column: 'one', param: 'p_one', op: 'insert', verbatim: true },
@@ -1042,6 +1045,116 @@ test('rpcArgumentLandings resolves an argument to its parameter, positionally an
 	);
 	// Another function whose name merely ends the same way is not this one.
 	assert.deepEqual(rpcArgumentLandings('select gf(1, 2, 3)', writers), []);
+});
+
+test('functionBodies keys on the signature, so one name can hold two definitions', () => {
+	const text =
+		'create function f(p_a uuid) returns void language plpgsql as $$\nbegin\n  perform 1;\nend;\n$$;\n' +
+		'create function f(p_a uuid, p_b text) returns void language plpgsql as $$\nbegin\n  perform 2;\nend;\n$$;';
+	const defs = functionBodies(text);
+	assert.deepEqual([...defs.keys()], ['f/1', 'f/2']);
+	assert.match(defs.get('f/1')?.body ?? '', /perform 1/);
+	assert.match(defs.get('f/2')?.body ?? '', /perform 2/);
+	// A genuine redefinition of the SAME signature still wins, which is what a
+	// replay depends on.
+	const replaced = functionBodies(
+		`${text}\ncreate or replace function f(p_a uuid) returns void language plpgsql as $$\nbegin\n  perform 3;\nend;\n$$;`,
+	);
+	assert.equal(replaced.size, 2);
+	assert.match(replaced.get('f/1')?.body ?? '', /perform 3/);
+});
+
+test('droppedSignatures counts the types a drop names, not the commas in them', () => {
+	assert.deepEqual(droppedSignatures('drop function if exists confirm_age_and_terms();'), [
+		{ name: 'confirm_age_and_terms', arity: 0 },
+	]);
+	assert.deepEqual(
+		droppedSignatures(
+			'drop function if exists public.discoverable_routes_in_bbox(\n  double precision, double precision,\n  integer, text, numeric[], numeric[]);',
+		),
+		[{ name: 'discoverable_routes_in_bbox', arity: 6 }],
+	);
+	// A type carrying its own parenthesised modifier is one type.
+	assert.deepEqual(droppedSignatures('drop function f(character varying(255), numeric(6, 2));'), [
+		{ name: 'f', arity: 2 },
+	]);
+});
+
+test('an overloaded name resolves to the signature the call site wrote', () => {
+	/** @param {string} c @param {string} param */
+	const land = (c, param) =>
+		/** @type {import('./check_pgtap_refusal_assertions.mjs').ParameterLanding} */ ({
+			table: 't',
+			column: c,
+			param,
+			op: 'insert',
+			verbatim: true,
+		});
+	const writers = new Map([
+		['f/1', { name: 'f', params: ['p_a'], lands: [land('narrow', 'p_a')] }],
+		['f/2', { name: 'f', params: ['p_a', 'p_b'], lands: [land('wide', 'p_b')] }],
+	]);
+	// Keyed on the bare name, the later definition won and a one-argument call
+	// was bound against the two-parameter list — reaching a column it never
+	// supplied a value for, or missing the one it did (decisions 1539).
+	assert.deepEqual(
+		rpcArgumentLandings('select f(1)', writers).map((l) => l.column),
+		['narrow'],
+	);
+	assert.deepEqual(
+		rpcArgumentLandings('select f(1, 2)', writers).map((l) => l.column),
+		['wide'],
+	);
+	// A named argument only one signature declares picks that one out even when
+	// the arity alone could not.
+	assert.deepEqual(
+		rpcArgumentLandings('select f(p_b => 2)', writers).map((l) => l.column),
+		['wide'],
+	);
+
+	// Where arity and names leave two signatures possible, Postgres would decide
+	// on the argument TYPES, which this scan cannot read — so it claims nothing
+	// rather than attributing a landing to a signature the call may not bind.
+	const ambiguous = new Map([
+		['g/2', { name: 'g', params: ['p_a', 'p_b'], lands: [land('two', 'p_a')] }],
+		['g/3', { name: 'g', params: ['p_a', 'p_b', 'p_c'], lands: [land('three', 'p_a')] }],
+	]);
+	assert.deepEqual(rpcArgumentLandings('select g(1)', ambiguous), []);
+	// An exact arity match outranks a wider signature reached on defaults, so
+	// the same pair IS decidable when the call fills one of them exactly.
+	assert.deepEqual(
+		rpcArgumentLandings('select g(1, 2)', ambiguous).map((l) => l.column),
+		['two'],
+	);
+});
+
+test('a dropped signature does not survive the migration replay', () => {
+	const create = (/** @type {string} */ sig, /** @type {string} */ col) =>
+		`create function f(${sig}) returns void language plpgsql as $$\nbegin\n  insert into t (${col}) values (p_a);\nend;\n$$;`;
+	const kept = writerFunctions([
+		{ name: '001.sql', text: create('p_a uuid', 'narrow') },
+		{ name: '002.sql', text: `drop function if exists f(uuid);\n${create('p_a uuid, p_b text', 'wide')}` },
+	]);
+	assert.deepEqual([...kept.keys()], ['f/2']);
+	// And a drop with no replacement leaves nothing behind at all.
+	const gone = writerFunctions([
+		{ name: '001.sql', text: create('p_a uuid', 'narrow') },
+		{ name: '002.sql', text: 'drop function if exists f(uuid);' },
+	]);
+	assert.equal(gone.size, 0);
+});
+
+test('signatureParameters reads a signature that documents itself', () => {
+	// Six of this tree's `create function` signatures carry a trailing comment
+	// per parameter. Left in the text, the comment is the start of the NEXT
+	// parameter's slice and every name after the first parses as empty — so the
+	// list a call site binds against was one entry long (decisions 1539).
+	assert.deepEqual(
+		signatureParameters(
+			"p_query text default null,   -- matches title\n  p_limit int default 60  -- how many",
+		),
+		['p_query', 'p_limit'],
+	);
 });
 
 test('a verbatim landing carries the trigger scan through the RPC', () => {
@@ -1078,8 +1191,9 @@ test('the writer-function population is non-empty and names the RPC-only write s
 	// those are the ones the direct INSERT/UPDATE scan can never see.
 	const writers = writerFunctions(readMigrations());
 	assert.ok(writers.size >= 20, `only ${writers.size} parameter-planting functions found`);
-	const crossing = writers.get('upsert_checkpoint_crossing');
-	assert.ok(crossing !== undefined, 'upsert_checkpoint_crossing is not read as a writer');
+	const live = [...writers.values()].filter((w) => w.name === 'upsert_checkpoint_crossing');
+	assert.equal(live.length, 1, 'upsert_checkpoint_crossing should have one live signature');
+	const crossing = live[0];
 	assert.ok(crossing.params.includes('p_body_weight_kg'));
 	const health = crossing.lands.filter((l) => l.column === 'body_weight_kg');
 	assert.equal(health.length, 2, 'both arms of the upsert should land body_weight_kg');
