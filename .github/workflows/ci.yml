@@ -1561,8 +1561,8 @@ jobs:
       - name: watchOS catalog usage, native declarations and duplicated sources
         run: |
           if ! node scripts/check_watch_ios_source.mjs; then
-            echo "::error::apps/watch_ios carries a source-level defect no compiler reports — a localizing literal with no String Catalog entry, a catalog entry nothing references, an Info.plist / entitlements capability that disagrees with the code, a complication formatter that has drifted from its RunFormat copy, an App Group named two ways, a run hand-off metadata key one end of the WCSession envelope sends and the other never lifts out, or a route-push key one of that envelope's three ends spells differently (which drops the whole route, after the runner has been told it was armed). Nothing here is about a half-declared locale; that is the check above."
-            echo "The failing line above names the file, the line and the fix. Reproduce with: node scripts/check_watch_ios_source.mjs (stdlib only, no Xcode needed). decisions § 884 – § 887, § 966."
+            echo "::error::apps/watch_ios carries a source-level defect no compiler reports — a localizing literal with no String Catalog entry, a catalog entry nothing references, an Info.plist / entitlements capability that disagrees with the code, a complication formatter that has drifted from its RunFormat copy, an App Group named two ways, a run hand-off metadata key one end of the WCSession envelope sends and the other never lifts out, a route-push key one of that envelope's three ends spells differently (which drops the whole route, after the runner has been told it was armed), or a password grant / hardcoded credential that has lost the \`#if DEBUG\` fence keeping it out of the shipped app. Nothing here is about a half-declared locale; that is the check above."
+            echo "The failing line above names the file, the line and the fix. Reproduce with: node scripts/check_watch_ios_source.mjs (stdlib only, no Xcode needed). decisions § 884 – § 887, § 966, § 1596."
             exit 1
           fi
       - name: The watchOS source guard's own unit tests
