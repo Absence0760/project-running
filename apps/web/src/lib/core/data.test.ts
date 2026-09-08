@@ -216,13 +216,13 @@ test('fetchRuns states its row shape and narrows through the shared helpers', ()
 	);
 	assert.match(
 		body,
-		/rows\.map\(narrowProjectedRun\)/,
+		/rows\.map\(asProjectedRun\)/,
 		'the narrowed branch must use the shared projected narrower.',
 	);
 	assert.match(
 		body,
-		/\.map\(narrowFullRun\)/,
-		'the select(*) branch must use the shared full-row narrower.',
+		/asRun\(r, null\)/,
+		'the select(*) branch must use `asRun`, the one normaliser this table has.',
 	);
 	// Reason for the negative: `track` is a lazy Storage download, never a
 	// column, so since § 1468 it cannot be a member of `C[number]` and the
@@ -230,8 +230,16 @@ test('fetchRuns states its row shape and narrows through the shared helpers', ()
 	// it on every row put a property on the object that its own type denies
 	// and no caller can read, and made the two run readers disagree about
 	// what a narrowed row carries (§ 1520).
+	// Reason: `asRun` is the ONE normaliser this table has, and `fetchRuns`
+	// carried its own partial copy of it — two of the three narrows missing —
+	// which is exactly the drift the one-normaliser-per-table rule names.
+	assert.doesNotMatch(
+		source,
+		/function asRun\(/,
+		'`asRun` must live in run_narrow.ts, not be re-declared here.',
+	);
 	const narrow = stripComments(read('src/lib/core/run_narrow.ts'));
-	const projected = narrow.slice(narrow.indexOf('export function narrowProjectedRun'));
+	const projected = narrow.slice(narrow.indexOf('export function asProjectedRun'));
 	assert.doesNotMatch(
 		projected,
 		/track/,

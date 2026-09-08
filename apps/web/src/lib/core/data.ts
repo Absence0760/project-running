@@ -7,7 +7,7 @@ import { isDuplicateKeyError, supabaseErrorFields } from './supabase_error';
 import { singleEmbed, fitnessSnapshotDue, publicRouteListFill } from './data_normalise';
 import { TABLES, BUCKETS, METADATA_KEYS } from './schema';
 import type { Database, Json } from '../database.types';
-import { narrowFullRun, narrowProjectedRun, type RunRow } from './run_narrow';
+import { asProjectedRun, asRun, type RunRow } from './run_narrow';
 import { SELECT_SEPARATOR, type Join } from './database';
 import type { Insertable, Updatable } from './database';
 import type { JsonObject, TrackPoint } from '../types';
@@ -304,8 +304,8 @@ export async function fetchRuns(
 	// object. A projection narrows only what it selected; the unnarrowed read
 	// selected every column, which is the one thing the erased select literal
 	// stops the compiler from seeing for itself.
-	if (opts?.columns) return rows.map(narrowProjectedRun);
-	return (rows as RunRow[]).map(narrowFullRun);
+	if (opts?.columns) return rows.map(asProjectedRun);
+	return (rows as RunRow[]).map((r) => asRun(r, null));
 }
 
 /// Runs for the signed-in user that surface a hard fetch failure instead of
@@ -667,35 +667,6 @@ export async function fetchRunById(
 		}
 	}
 	return { run: asRun(data, track), error: null };
-}
-
-/// One whole `runs` row as the `Run` a consumer reads.
-///
-/// `source` and `activity_type` are CHECK-constrained unions the generated row
-/// types as bare strings — `source` was already parsed here, `activity_type`
-/// was not, so a value outside the union arrived typed as one of its members.
-/// `metadata` is jsonb, typed `Json`: the column can legitimately hold a
-/// scalar or an array, neither of which is a metadata bag, so one becomes null
-/// rather than being handed on as a bag every reader will index into.
-///
-/// Only a read that selects every column can use this. The windowed
-/// projections (`fetchRunsForDashboard`, `fetchRunsForRecap`) carry their own
-/// row shapes — see § 1330.
-function asRun(
-	row: Database['public']['Tables']['runs']['Row'],
-	track: TrackPoint[] | null,
-): Run {
-	const { metadata, ...rest } = row;
-	return {
-		...rest,
-		source: parseRunSource(row.source),
-		activity_type: parseActivityType(row.activity_type),
-		metadata:
-			metadata != null && typeof metadata === 'object' && !Array.isArray(metadata)
-				? metadata
-				: null,
-		track,
-	};
 }
 
 /// Fetch every run by the signed-in user against `routeId`, ordered

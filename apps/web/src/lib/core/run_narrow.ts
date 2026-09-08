@@ -7,24 +7,44 @@
 // test.
 
 import type { Database } from '../database.types';
-import { parseRunSource, parseActivityType, parseRunMetadata, type Run } from '../types';
+import {
+	parseRunSource,
+	parseActivityType,
+	parseRunMetadata,
+	type Run,
+	type TrackPoint
+} from '../types';
 
 export type RunRow = Database['public']['Tables']['runs']['Row'];
 
-/// The three `runs` columns the `Run` overlay types more narrowly than the
-/// column does: two CHECK-constrained `text`s and a jsonb bag. A read that
-/// declares `Run` and applies fewer than three of these is promising a
-/// vocabulary it never checked — which is what the unnarrowed `fetchRuns`
-/// did until its rows stopped being `any[]` and the compiler could see it
+/// One whole `runs` row as the `Run` a consumer reads — the ONE normaliser
+/// this table has, per the house rule that the several reads of a table cannot
+/// drift into doing different subsets of the narrowing.
+///
+/// The three columns are the ones the `Run` overlay types more narrowly than
+/// the column does: `source` and `activity_type` are CHECK-constrained unions
+/// the generated row types as bare strings, and `metadata` is jsonb typed
+/// `Json`, which admits a scalar and an array as well as a bag every reader
+/// will index into. A read that declares `Run` and applies fewer than three of
+/// these is promising a vocabulary it never checked — which is what the
+/// unnarrowed `fetchRuns` did, with its own partial copy of this function,
+/// until its rows stopped being `any[]` and the compiler could see it
 /// (§ 1519).
-export function narrowFullRun(r: RunRow): Run {
+///
+/// `track` is a parameter rather than a default because it is not a column:
+/// `fetchRunById` lazily downloads it from Storage, and a read that selected
+/// every column still cannot have read it, so that read passes null.
+///
+/// Only a read that selects every column can use this. The windowed
+/// projections (`fetchRunsForDashboard`, `fetchRunsForRecap`) carry their own
+/// row shapes — see § 1330 — and narrow through `asProjectedRun`.
+export function asRun(row: RunRow, track: TrackPoint[] | null): Run {
 	return {
-		...r,
-		source: parseRunSource(r.source),
-		activity_type: parseActivityType(r.activity_type),
-		metadata: parseRunMetadata(r.metadata),
-		// A lazy Storage download, never a column, so `*` cannot have read it.
-		track: null,
+		...row,
+		source: parseRunSource(row.source),
+		activity_type: parseActivityType(row.activity_type),
+		metadata: parseRunMetadata(row.metadata),
+		track
 	};
 }
 
@@ -35,7 +55,7 @@ export function narrowFullRun(r: RunRow): Run {
 /// which is what the blanket `track: null` did on every narrowed row (§ 1520).
 /// `undefined` is exactly "not selected": JSON has no such value, so a
 /// selected-but-empty column arrives as `null` and is narrowed like any other.
-export function narrowProjectedRun({
+export function asProjectedRun({
 	source,
 	activity_type,
 	metadata,
