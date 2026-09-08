@@ -21,6 +21,12 @@ class ExerciseCataloguePickerScreen extends StatefulWidget {
   /// affordance is hidden and browse stays read-only.
   final ApiClient? api;
 
+  /// Whether [catalogue] is known to be the whole catalogue. A THIRD state
+  /// rather than a synonym for empty: every decision below is a claim about
+  /// what the catalogue does NOT hold, and a list that failed to load — or has
+  /// not answered yet — supports none of them.
+  final bool unavailable;
+
   /// Invoked with a freshly-created owner custom so the host merges it into its
   /// own catalogue copy (binding the id without a reload).
   final void Function(GymCatalogueEntry created)? onCreated;
@@ -29,6 +35,7 @@ class ExerciseCataloguePickerScreen extends StatefulWidget {
     super.key,
     required this.catalogue,
     this.api,
+    this.unavailable = false,
     this.onCreated,
   });
 
@@ -183,15 +190,28 @@ class _ExerciseCataloguePickerScreenState
   /// `length(...) between 1 and 120`, so an affordance offered on one test and
   /// an insert attempted on the other is a 23514 the reader cannot act on
   /// (decisions 1367).
+  ///
+  /// False whenever the catalogue is [ExerciseCataloguePickerScreen.unavailable]
+  /// too. The test is "the catalogue does not hold this name", and a list that
+  /// failed to load is evidence of nothing: the insert then either mints a
+  /// shadow the reader did not ask for — against a seeded global, which the
+  /// author's partial unique cannot see — or 23505s against their own custom,
+  /// after the affordance said the name was free.
   bool get _canCreate =>
       widget.api != null &&
+      !widget.unavailable &&
       namesAnExercise(_query) &&
       _exact.isEmpty &&
       !_creating;
 
   Future<void> _create() async {
     final api = widget.api;
-    if (api == null || !namesAnExercise(_query) || _creating) return;
+    if (api == null ||
+        widget.unavailable ||
+        !namesAnExercise(_query) ||
+        _creating) {
+      return;
+    }
     final l10n = AppLocalizations.of(context);
     final name = _query;
     setState(() => _creating = true);
@@ -271,6 +291,18 @@ class _ExerciseCataloguePickerScreenState
               ],
             ),
           ),
+          if (widget.unavailable)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  l10n.gymCatalogueUnavailable,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ),
+            ),
           if (_canCreate)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -285,7 +317,12 @@ class _ExerciseCataloguePickerScreenState
             ),
           Expanded(
             child: filtered.isEmpty
-                ? Center(
+                // "No exercises match" is a claim about the catalogue, so while
+                // it is unavailable the notice above is the only honest thing
+                // to say and the centre stays blank.
+                ? (hiddenExact == null && widget.unavailable
+                    ? const SizedBox.shrink()
+                    : Center(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Text(
@@ -302,7 +339,7 @@ class _ExerciseCataloguePickerScreenState
                             ),
                       ),
                     ),
-                  )
+                  ))
                 : ListView.builder(
                     itemCount: filtered.length,
                     itemBuilder: (ctx, i) {

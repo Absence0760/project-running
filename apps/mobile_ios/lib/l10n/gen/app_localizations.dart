@@ -16911,6 +16911,12 @@ abstract class AppLocalizations {
   /// **'No exercises match.'**
   String get gymCatalogueEmpty;
 
+  /// No description provided for @gymCatalogueUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the exercise catalogue, so this list may be incomplete.'**
+  String get gymCatalogueUnavailable;
+
   /// Shown when the typed name matches a catalogue entry the category filter is hiding
   ///
   /// In en, this message translates to:

@@ -465,6 +465,46 @@ void main() {
     }
   });
 
+  testWidgets(
+      'an unavailable catalogue keeps browse reachable and refuses the create',
+      (tester) async {
+    // A feature that silently vanishes on a transient error explains nothing,
+    // so the browse affordance stays reachable while the catalogue is unknown
+    // — and the picker behind it then refuses to call any name free.
+    final f = await _store('catalogue_unavailable_');
+    try {
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: GymComposeSheet(
+            store: f.store,
+            catalogueUnavailable: true,
+            api: _ScriptedApi(_row('mine-1', 'Farmer Carry', 'farmer carry')),
+          ),
+        ),
+      ));
+      await tester.pump();
+
+      expect(find.byIcon(Icons.menu_book_outlined), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.menu_book_outlined));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(
+        find.text(
+            "Couldn't load the exercise catalogue, so this list may be incomplete."),
+        findsOneWidget,
+      );
+      await tester.enterText(find.byType(TextField).first, 'Farmer Carry');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Add “Farmer Carry” as a custom exercise'), findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
   testWidgets('a catalogue that lands after the sheet mounts still binds an id',
       (tester) async {
     // The host fills its catalogue from an async read, so the prop arrives

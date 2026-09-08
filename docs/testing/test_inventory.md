@@ -1317,7 +1317,7 @@ Mirror of the web suite above, vector for vector. Twelve of the fourteen fail ag
 The accent-fold drift guard, and the generator under it. Pins that the two causes of a mismatch are reported as different sentences — a hand-edit or a stale commit against a Node whose Unicode tables have moved — because the second reaches a PR that touched none of it, and sending that reader hunting for an edit they did not make wastes the run. Plus: a render that lost its version stamp is itself a finding (without it the guard cannot tell the causes apart), the committed table is what the generator renders, its keys are strictly ascending and parallel to its values, the Hangul arithmetic reproduces NFD across all 11,172 syllables independently of the generator's own assertion, the fold answers the divergence classes and leaves the undecomposable letters alone, and `dartLiteral` emits ASCII only.
 
 
-### Exercise catalogue picker — `apps/web/src/lib/components/exercise_catalogue_picker.test.ts` (20) · `apps/mobile_android/test/exercise_catalogue_picker_test.dart` (20 widget)
+### Exercise catalogue picker — `apps/web/src/lib/components/exercise_catalogue_picker.test.ts` (20) · `apps/mobile_android/test/exercise_catalogue_picker_test.dart` (22 widget)
 
 The gym catalogue picker's search / hidden-exact / ordering decision, pinned on both platforms but by deliberately different instruments ([decisions § 1333](../architecture/decisions.md), [§ 1382](../architecture/decisions.md)). Web has no harness that can compile a `.svelte` component, so the decision was moved OUT of the markup into a pure module and `cataloguePickerView` is tested directly: a blank query lists everything and offers no create, the search folds both sides through the canonical key, an exact name the CATEGORY filter is hiding is reported rather than dropped into “No exercises match.”, a shadowed name reports the same entry whichever order the fetch returned, and five ordering cases pin the folded comparator — an accented name not filed after `z`, the phone's order rather than the host collation's, § 1334's measured eight-name list, the id tiebreak for names the fold calls equal, and that the input array is not reordered in place. `flutter_test` renders widgets natively, so the Dart side pins the WIDGET instead and therefore reaches strictly more than the web module can — the rendered sentence and the rendered order, which § 1333 says only a browser can prove on web: the same search / hidden-exact / ordering cases plus the create path end to end (no affordance without an API client, a create under a category filed there and under “all” filed under other, a refused create reported while staying on the picker, tapping a row popping with that entry) and the shadowing badge. The counts are NOT a mirror pair and are not expected to match — the two suites test different objects. The iOS twin runs the Dart file byte-for-byte.
 
@@ -2278,10 +2278,22 @@ The single meta-tag clipper the eight copies became, including the case the copi
 
 The coach roster's column sort, extracted from `+page.svelte` because a `$derived` cannot be exercised without booting SvelteKit and the property worth pinning — that the order never depends on `Array.prototype.sort`'s stability — is one a render never shows twice.
 
-### `packages/core_models/test/exercise_catalogue_test.dart` — 9 tests · `packages/api_client/test/exercise_catalogue_read_test.dart` — 4 tests
+### `packages/core_models/test/exercise_catalogue_test.dart` — 10 tests · `packages/api_client/test/exercise_catalogue_read_test.dart` — 4 tests
 
-The Dart half of the exercise-catalogue pair (§ 1460). The nine mirror the web suite's eight plus one the web half cannot express — two rows sharing a display name but not a stored key, which must both survive because the index still serves both. The read suite pins the paged walk and that an unavailable catalogue throws rather than answering an empty list.
+The Dart half of the exercise-catalogue pair (§ 1460, § 1513). The ten mirror the web suite's eight plus two the web half cannot express — the reduction of a surface's own record entries through the same generic rule, and two rows sharing a display name but not a stored key, which must both survive because the index still serves both. The read suite pins the paged walk and that an unavailable catalogue throws rather than answering an empty list.
 
 ### `apps/watch_wear/.../SyncFaultTest.kt` — 5 · `DiscardRunTest.kt` — 6 · `AuthFaultTest.kt` — 7
 
 The wrist's two classified faults and the PostRun discard. Counted in the Wear OS glob row above (802 across 79 files); listed here because the three are what moved it.
+
+## #789 round 46 — the phone's exercise catalogue (2026-09-07)
+
+### `apps/mobile_android/test/gym_compose_sheet_test.dart` — 24 widget · `apps/mobile_android/test/exercise_catalogue_picker_test.dart` — 22 widget · `apps/mobile_android/test/gym_screen_test.dart` — 28
+
+The three suites behind the phone half of the catalogue ([decisions § 1513](../architecture/decisions.md), [§ 1514](../architecture/decisions.md)). The composer gained two: a catalogue that lands AFTER the sheet mounts still binds a typed name to its id, and a custom created under a seeded global's name leaves ONE row in the list — the custom — rather than two ids under one folded key. Each is mutation-tested against the code it replaced, and neither catches the other's defect: restoring the mount-time snapshot leaves the shadow case green, because the global never arrives to be shadowed. A third pins that an unavailable catalogue keeps browse reachable while the create affordance behind it refuses.
+
+The picker gained two for the same third state — the notice rendered, no create offered for any name, and no "No exercises match." claim about a catalogue nobody has; and that the rows it DOES hold stay listed and pickable beside the notice, because a stale entry still binds its id correctly.
+
+The screen's two are the pair that separates the states: the SAME empty catalogue offers browse when the read failed and hides it when the read answered. The affordance is the only observable difference, which is the point — an empty catalogue is the state in which every typed name looks free.
+
+The iOS twin runs all three byte-for-byte.

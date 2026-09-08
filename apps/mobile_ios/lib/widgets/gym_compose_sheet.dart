@@ -81,6 +81,7 @@ Future<bool?> showGymComposeSheet({
   String? seedTitle,
   List<String> suggestions = const [],
   List<GymCatalogueEntry> catalogue = const [],
+  bool catalogueUnavailable = false,
   String? prefillTitle,
   ApiClient? api,
 }) {
@@ -98,6 +99,7 @@ Future<bool?> showGymComposeSheet({
       seedTitle: seedTitle,
       suggestions: suggestions,
       catalogue: catalogue,
+      catalogueUnavailable: catalogueUnavailable,
       prefillTitle: prefillTitle,
       api: api,
     ),
@@ -119,6 +121,13 @@ class GymComposeSheet extends StatefulWidget {
   /// matches a catalogue entry by normalised key binds its id onto the set.
   final List<GymCatalogueEntry> catalogue;
 
+  /// The catalogue read failed, or has not answered yet. [catalogue] is then
+  /// whatever was last known rather than a statement about what exists, so the
+  /// picker must not offer to create a name it cannot prove is free — and the
+  /// browse affordance stays reachable, because a feature that silently
+  /// vanishes on a transient error explains nothing.
+  final bool catalogueUnavailable;
+
   /// Seed for a NEW workout (the class -> gym seam). Pre-fills the title; sets
   /// stay empty for the user to fill. Ignored when [existing] is set.
   final String? prefillTitle;
@@ -135,6 +144,7 @@ class GymComposeSheet extends StatefulWidget {
     this.seedTitle,
     this.suggestions = const [],
     this.catalogue = const [],
+    this.catalogueUnavailable = false,
     this.prefillTitle,
     this.api,
   });
@@ -358,6 +368,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
       MaterialPageRoute<GymCatalogueEntry>(
         builder: (_) => ExerciseCataloguePickerScreen(
           catalogue: _catalogue,
+          unavailable: widget.catalogueUnavailable,
           api: widget.api,
           onCreated: (created) =>
               _createdCustoms = [..._createdCustoms, created],
@@ -539,7 +550,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
             Row(
               children: [
                 Expanded(child: _nameField(ex, l10n)),
-                if (_catalogue.isNotEmpty)
+                if (_catalogue.isNotEmpty || widget.catalogueUnavailable)
                   IconButton(
                     tooltip: l10n.gymCatalogueBrowse,
                     icon: const Icon(Icons.menu_book_outlined),
