@@ -19,11 +19,13 @@
 // or Devanagari, and resvg then paints one `.notdef` box per code point. That
 // measures the placeholder rather than the text, in a direction that is not
 // merely weak — the lower bound passes for free, and the ceiling fires on the
-// box's width instead of the script's. It did: all four painted 1002.6 px on
-// the runner, three failing the ceiling and Devanagari passing it by 10 px.
-// So a subject the host cannot paint is SKIPPED, loudly, instead of being
-// measured; `UNIVERSAL` keeps that escape away from the scripts every face
-// carries, so a suite where everything skipped cannot read as green.
+// box's width instead of the script's. It did: the first three each reported
+// 1002.6 px there and failed, while Devanagari — the same fallback, but graded
+// against `OTHER_EM`'s lower ceiling — passed by 10 px and went on being read
+// as a measurement. So a subject the host cannot paint is SKIPPED, loudly,
+// instead of being measured; `UNIVERSAL` keeps that escape away from the
+// scripts every face carries, so a suite where everything skipped cannot read
+// as green.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
