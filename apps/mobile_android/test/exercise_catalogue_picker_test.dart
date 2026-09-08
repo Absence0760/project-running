@@ -3,6 +3,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../lib/gym_prs.dart' show normaliseExerciseName;
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/exercise_catalogue_picker.dart';
 import '../lib/widgets/top_banner.dart' show kTopBannerMaxDuration;
@@ -55,8 +56,17 @@ GymCatalogueEntry _entry(
   String name,
   String category, {
   String? authorId,
+  String? nameKey,
 }) =>
-    (name: name, id: id, category: category, authorId: authorId);
+    (
+      name: name,
+      id: id,
+      category: category,
+      authorId: authorId,
+      // The server stamps the key from the name with the same fold, so a
+      // fixture that does not override it carries the key that row would have.
+      nameKey: nameKey ?? normaliseExerciseName(name),
+    );
 
 ExerciseRow _row(String id, String name, String category) => ExerciseRow(
       id: id,

@@ -226,7 +226,13 @@ class _GymScreenState extends State<GymScreen> {
         final cat = await api.fetchExerciseCatalogue();
         _catalogue = [
           for (final e in cat)
-            (name: e.name, id: e.id, category: e.category, authorId: e.authorId),
+            (
+              name: e.name,
+              id: e.id,
+              category: e.category,
+              authorId: e.authorId,
+              nameKey: e.nameKey,
+            ),
         ];
       } catch (e) {
         debugPrint('gym_screen: catalogue fetch failed: $e');

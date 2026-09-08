@@ -6106,7 +6106,11 @@ class ApiClient {
           .map((r) => ExerciseRow.fromJson(r as Map<String, dynamic>))
           .toList();
     });
-    return dedupeShadowedExercises(rows);
+    return dedupeShadowedExercises(
+      rows,
+      nameKey: (r) => r.nameKey,
+      authorId: (r) => r.authorId,
+    );
   }
 
   /// Create an owner-scoped custom catalogue entry (migration 20270222_001).

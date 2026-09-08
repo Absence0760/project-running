@@ -105,13 +105,16 @@ class _ExerciseCataloguePickerScreenState
     extends State<ExerciseCataloguePickerScreen> {
   final TextEditingController _search = TextEditingController();
   String _category = 'all';
-  late List<GymCatalogueEntry> _entries;
   bool _creating = false;
+
+  /// Read off `widget` rather than snapshotted in `initState`: the host fills
+  /// its catalogue from an async read, and a snapshot is a claim about what
+  /// exists taken before the read had answered.
+  List<GymCatalogueEntry> get _entries => widget.catalogue;
 
   @override
   void initState() {
     super.initState();
-    _entries = [...widget.catalogue];
     _search.addListener(() => setState(() {}));
   }
 
@@ -207,6 +210,7 @@ class _ExerciseCataloguePickerScreenState
       id: made.id,
       category: made.category,
       authorId: made.authorId,
+      nameKey: made.nameKey,
     );
     widget.onCreated?.call(entry);
     Navigator.of(context).pop(entry);
