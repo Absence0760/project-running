@@ -9,8 +9,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
+	DART_TEST_WRAPPERS,
+	MIN_TEST_FILES,
+	PGTAP_DIR,
+	ZERO_DECLARATIONS_OK,
 	censusHeadings,
 	check,
+	checkPopulation,
 	claimsIn,
 	counterFor,
 	expander,
@@ -240,4 +245,99 @@ test('a bullet with no count is prose, not a failure — the heading above it ca
 	const md = ['### `a/**/*_test.go` — 1 tests across 1 files', '', '- **`one_test.go`** — the claim loop'].join('\n');
 	const t = tree({ 'a/one_test.go': ONE });
 	assert.deepEqual(check(md, t.expand, t.read, [], []).errors, []);
+});
+
+// ---------------------------------------------------------------------------
+// Claim 2: the suites the census does not name (decisions § 1535).
+// ---------------------------------------------------------------------------
+
+/**
+ * A population big enough to clear MIN_TEST_FILES, plus whatever the case
+ * plants. A floor exists so a predicate that stopped matching cannot pass by
+ * finding nothing, which means every case has to clear it.
+ * @param {Record<string, string>} extra
+ * @returns {{ files: string[], read: (p: string) => string }}
+ */
+function population(extra = {}) {
+	/** @type {Record<string, string>} */
+	const files = {};
+	for (let i = 0; i < MIN_TEST_FILES; i++) files[`apps/pad/test/pad_${i}_test.dart`] = "test('x', () {});\n";
+	for (const wrapper of DART_TEST_WRAPPERS) {
+		files[wrapper.definedIn] = `void ${wrapper.call}(String d) { ${wrapper.wraps}(d, (t) async {}); }\n`;
+	}
+	for (const e of ZERO_DECLARATIONS_OK) files[e.path] = 'func helper() {}\n';
+	Object.assign(files, extra);
+	return {
+		files: Object.keys(files),
+		read: (p) => {
+			if (!(p in files)) throw new Error(`no such file ${p}`);
+			return files[p];
+		},
+	};
+}
+
+test('a suite that declares nothing fails, because no census number would move', () => {
+	const live = population();
+	assert.deepEqual(checkPopulation(live.files, live.read).errors, []);
+
+	const dead = population({ 'apps/x/test/gone_test.dart': '// everything here was deleted\n' });
+	const { errors } = checkPopulation(dead.files, dead.read);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /apps\/x\/test\/gone_test\.dart is named as a test suite and declares no test/);
+});
+
+test('the population is every naming convention the repo uses, pgTAP included', () => {
+	for (const [path, src] of [
+		['apps/x/test/a_test.dart', '// nothing\n'],
+		['apps/x/internal/a_test.go', '// nothing\n'],
+		['apps/web/src/lib/a.test.ts', '// nothing\n'],
+		['apps/x/src/test/kotlin/AThingTest.kt', '// nothing\n'],
+		[`${PGTAP_DIR}a_thing.sql`, 'select 1;\n'],
+	]) {
+		const t = population({ [path]: src });
+		const { errors } = checkPopulation(t.files, t.read);
+		assert.equal(errors.length, 1, `${path} was not read as a suite`);
+		assert.match(errors[0], /declares no test/);
+	}
+	// And a source file that merely holds tests inside it is not a suite by name.
+	const rust = population({ 'apps/custom_watch/core/src/thing.rs': 'fn f() {}\n' });
+	assert.deepEqual(checkPopulation(rust.files, rust.read).errors, []);
+});
+
+test('a walk that stopped matching fails rather than agreeing with an empty repo', () => {
+	const { errors } = checkPopulation(['README.md'], () => '');
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /found 0 file\(s\) and this guard's floor is/);
+});
+
+test('a wrapper is counted only while it still wraps a declaration', () => {
+	const wrapper = DART_TEST_WRAPPERS[0];
+	assert.equal(counterFor('a/b_test.dart')(`  ${wrapper.call}('x', (t) async {});\n`), 1);
+
+	const gone = population();
+	const withoutDefinition = gone.files.filter((f) => f !== wrapper.definedIn);
+	const { errors } = checkPopulation(withoutDefinition, gone.read);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /names the tree no longer holds|no longer holds/);
+
+	const hollow = population({ [wrapper.definedIn]: `void ${wrapper.call}(String d) {}\n` });
+	const second = checkPopulation(hollow.files, hollow.read);
+	assert.equal(second.errors.length, 1);
+	assert.match(second.errors[0], /no longer defines/);
+});
+
+test('an exemption that has stopped applying fails in both directions', () => {
+	const entry = ZERO_DECLARATIONS_OK[0];
+	const revived = population({ [entry.path]: 'func TestX(t *testing.T) {}\n' });
+	const { errors } = checkPopulation(revived.files, revived.read);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /now declares 1 test\(s\)/);
+
+	const gone = population();
+	const { errors: missing } = checkPopulation(
+		gone.files.filter((f) => f !== entry.path),
+		gone.read,
+	);
+	assert.equal(missing.length, 1);
+	assert.match(missing[0], /matches no test file/);
 });

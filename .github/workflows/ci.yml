@@ -1173,7 +1173,11 @@ jobs:
     #   check_test_inventory_counts.mjs — a per-file test count stated in
     #     docs/testing/test_inventory.md is re-derived from the suite it
     #     describes, so the inventory cannot claim coverage the tree does not
-    #     have. Reads docs AND the suites, like the guard above it.
+    #     have. Reads docs AND the suites, like the guard above it. It also
+    #     reads the suites the census does NOT name: 493 of the 553 mobile
+    #     suites carry no heading, so instead of demanding a row for each, no
+    #     test file may declare ZERO — a suite counting nothing reads exactly
+    #     like one that passes and moves no number (decisions § 1535).
     #
     # Seven unrelated registries under one job name, so the name cannot say
     # which drifted and every step says it for itself — the rule
@@ -1295,8 +1299,8 @@ jobs:
       - name: test_inventory.md counts match the suites they describe
         run: |
           if ! node scripts/check_test_inventory_counts.mjs; then
-            echo "::error::A per-file test count stated in docs/testing/test_inventory.md is not the count that file's suite actually declares. Nothing here is about relative doc links, the parity registries, the doc checkboxes or the watch counts — those are the other guards in this job."
-            echo "The failing line above names the entry, the number it states and the number re-derived from the suite. The suite declares the number; the inventory restates it, so fix the inventory. Reproduce with: node scripts/check_test_inventory_counts.mjs."
+            echo "::error::Either a per-file test count stated in docs/testing/test_inventory.md is not the count that file's suite actually declares, or a file named as a test suite declares no test at all. Nothing here is about relative doc links, the parity registries, the doc checkboxes or the watch counts — those are the other guards in this job."
+            echo "The failing line above names the entry, the number it states and the number re-derived from the suite. The suite declares the number; the inventory restates it, so fix the inventory. A suite counting zero is the other claim: it has either stopped running anything, or it declares tests through a wrapper the counters do not know, which is a wrong number wherever the census states one. Reproduce with: node scripts/check_test_inventory_counts.mjs."
             exit 1
           fi
           if ! node --test scripts/check_test_inventory_counts.test.mjs; then
