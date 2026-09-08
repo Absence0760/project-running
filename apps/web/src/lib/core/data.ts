@@ -189,7 +189,9 @@ import {
 /// `GenericStringError` but stays a deferred conditional, so the body cannot
 /// read a single field off the row it is meant to narrow (§ 1518). The row
 /// shape is therefore stated once, at the read, as what a projection of this
-/// table can return.
+/// table can return. The UNNARROWED read shares nothing with that: it hands
+/// `.select()` a literal `'*'` of its own and infers the whole row for itself
+/// (§ 1560), so only this branch carries a stated shape.
 export type RunColumns = readonly (keyof Run & keyof RunRow)[];
 
 export interface FetchRunsOptions<C extends RunColumns = RunColumns> {
@@ -237,13 +239,17 @@ export async function fetchRuns(
 	// `/tmp/data-isolation-audit/client-realtime.md` M2.
 	const userId = auth.user?.id;
 	if (!userId) return [];
-	const build = () => {
+	const build = <S extends string>(select: S) => {
 		let q = supabase
 			.from(TABLES.runs)
-			// `Join<RunColumns, D>` used to stand here and evaluated to `string`:
-			// the type only spells a literal for a TUPLE, and this is an
-			// unbounded array. It read as if the literal survived the join.
-			.select(opts?.columns ? opts.columns.join(SELECT_SEPARATOR) : '*')
+			// Generic over the select list rather than a ternary over it. A
+			// ternary is a union of `string` and `'*'`, which is `string`, so the
+			// literal arm was erased for the parser too and neither branch could
+			// be read off. A type parameter is instantiated at each CALL site
+			// instead, so `build('*')` carries its own literal; § 1518 measured
+			// that a deferred `ParseQuery` cannot be read in the body, and
+			// nothing here reads a field off the row.
+			.select(select)
 			.eq('user_id', userId);
 		if (opts?.startedAtFrom != null) q = q.gte('started_at', opts.startedAtFrom);
 		if (opts?.startedAtBefore != null) q = q.lt('started_at', opts.startedAtBefore);
@@ -254,26 +260,22 @@ export async function fetchRuns(
 		return q.order('started_at', { ascending: false }).order('id', { ascending: false });
 	};
 
-	// One page of the read, as the row shape a projection of `runs` can
-	// return. The join above erases the select literal, so the parser answers
-	// `GenericStringError` and the rows used to be walked as `any[]` — which
-	// is what let this reader promise `Run` while applying one of its three
-	// narrows. `Partial` is the honest claim for both branches; the `*` one
-	// states its own completeness below, since the ternary means no literal
-	// survives for the compiler to read it off.
-	const page = (from: number, to: number) =>
-		build().range(from, to).overrideTypes<Partial<RunRow>[]>();
-
-	let rows: Partial<RunRow>[];
-	if (opts?.limit != null) {
-		const from = opts.offset ?? 0;
-		const { data, error } = await page(from, from + opts.limit - 1);
-		if (error || !data) {
-			if (opts?.throwOnError && error) throw error;
-			return [];
+	// The paging, the `limit`/`offset` window, the `throwOnError` contract and
+	// the safety ceiling, shared by both branches and generic in the row type
+	// the caller's own page function hands back. Sharing them is what the
+	// per-projection sibling § 1518 refused would have cost four copies of.
+	const collect = async <R>(
+		page: (from: number, to: number) => PromiseLike<{ data: R[] | null; error: unknown }>,
+	): Promise<R[]> => {
+		if (opts?.limit != null) {
+			const from = opts.offset ?? 0;
+			const { data, error } = await page(from, from + opts.limit - 1);
+			if (error || !data) {
+				if (opts?.throwOnError && error) throw error;
+				return [];
+			}
+			return data;
 		}
-		rows = data;
-	} else {
 		// No explicit limit means "every run". PostgREST caps an unbounded
 		// SELECT at 1000 rows, which silently dropped the oldest activities
 		// of a high-volume history (a 1,500-run Strava migrant lost ~500)
@@ -282,7 +284,7 @@ export async function fetchRuns(
 		// than dropping silently. Theme C (strava-migration / pro).
 		const PAGE = 1000;
 		const SAFETY_MAX = 50_000;
-		rows = [];
+		const rows: R[] = [];
 		for (let from = 0; from < SAFETY_MAX; from += PAGE) {
 			const { data, error } = await page(from, from + PAGE - 1);
 			if (error || !data) {
@@ -295,17 +297,30 @@ export async function fetchRuns(
 		if (rows.length >= SAFETY_MAX) {
 			console.warn(`fetchRuns reached the ${SAFETY_MAX}-row ceiling; older runs may be omitted`);
 		}
-	}
+		return rows;
+	};
+
 	// Defensive narrow on read: the DB CHECK constraints stop bad `source` /
 	// `activity_type` values at write time, but historical rows imported
 	// before the constraint, or rows from a future client whose new value
 	// hasn't propagated to this build, need a fallback — and `metadata` is
 	// jsonb, which admits a string, a number and an array as well as an
 	// object. A projection narrows only what it selected; the unnarrowed read
-	// selected every column, which is the one thing the erased select literal
-	// stops the compiler from seeing for itself.
-	if (opts?.columns) return rows.map(asProjectedRun);
-	return (rows as RunRow[]).map((r) => asRun(r, null));
+	// selects every column, and says so with a literal the parser reads for
+	// itself rather than with an assertion this function makes about itself.
+	if (opts?.columns) {
+		const columns = opts.columns;
+		// The joined list is `string`, so the parser answers `GenericStringError`
+		// and the rows would be walked as errors. `Partial<RunRow>` is the honest
+		// claim for a projection: which of the columns arrived is the caller's
+		// tuple to say, and the overload above says it.
+		const rows = await collect((from, to) =>
+			build(columns.join(SELECT_SEPARATOR)).range(from, to).overrideTypes<Partial<RunRow>[]>(),
+		);
+		return rows.map(asProjectedRun);
+	}
+	const rows = await collect((from, to) => build('*').range(from, to));
+	return rows.map((r) => asRun(r, null));
 }
 
 /// Runs for the signed-in user that surface a hard fetch failure instead of
