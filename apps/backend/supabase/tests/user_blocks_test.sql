@@ -2,7 +2,7 @@
 -- Persona-hunt Round 3 finding Woman #1.
 
 begin;
-select plan(11);
+select plan(12);
 
 do $$
 declare
@@ -95,6 +95,19 @@ set local "request.jwt.claims" =
 select lives_ok(
   $$ select unblock_user('88888888-8888-8888-8888-888888bbbbbb'::uuid) $$,
   'Alice can unblock Bob via the RPC'
+);
+
+-- The row itself is gone. `is_blocked_either_way` below is a SECURITY
+-- DEFINER predicate, so it would answer false for a block that had
+-- never existed just as readily as for one that was deleted; step 4's
+-- read of `user_blocks` runs BEFORE the unblock and cannot witness it.
+-- Alice is the blocker, so the owner-read policy shows her exactly the
+-- rows an unblock that deleted nothing would have left behind.
+select is(
+  (select count(*) from user_blocks
+    where blocker_id = '88888888-8888-8888-8888-888888aaaaaa'::uuid),
+  0::bigint,
+  'unblock_user deletes the row, not just the predicate''s answer'
 );
 
 -- 8. is_blocked_either_way returns false after unblock.

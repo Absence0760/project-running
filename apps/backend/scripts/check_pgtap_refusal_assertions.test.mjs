@@ -25,6 +25,7 @@ import {
   descriptionOf,
   droppedSignatures,
   functionBodies,
+  observesWrite,
   parameterLandings,
   readMigrations,
   rpcArgumentLandings,
@@ -1331,6 +1332,31 @@ test('assertionReads keeps the offset, so an assertion cannot be its own witness
 	assert.notEqual(witness[0].offset, text.indexOf('lives_ok'));
 });
 
+test('a read placed BEFORE the write is not a witness for it', () => {
+	// decisions 1605. The offset is what separates the two orderings, and the
+	// suite carried both shapes: `reports_test.sql` counted the reporter's rows
+	// two steps above the re-file, `user_blocks_test.sql` read `user_blocks`
+	// four steps above the unblock. Neither read could observe the write it was
+	// credited with, and the pre-tightening rule accepted both.
+	const before =
+		"select is((select count(*) from t), 0, 'reads');\nselect lives_ok($$ select f(1) $$, 'writes');";
+	const after =
+		"select lives_ok($$ select f(1) $$, 'writes');\nselect is((select count(*) from t), 1, 'reads');";
+	for (const [text, observed] of /** @type {[string, boolean][]} */ ([
+		[before, false],
+		[after, true],
+	])) {
+		const call = [...findCalls(text, 'lives_ok')][0];
+		const reads = assertionReads(text);
+		assert.equal(observesWrite(reads, call.offset, ['t']), observed);
+		// The old rule could not tell them apart: both read `t` somewhere.
+		assert.equal(
+			reads.some((r) => r.offset !== call.offset && r.relations.has('t')),
+			true,
+		);
+	}
+});
+
 test('every bare writer call in the suite is observed or registered', () => {
 	// 510 again: the population has to be non-empty or a broken parse reads as a
 	// clean suite.
@@ -1352,11 +1378,7 @@ test('every bare writer call in the suite is observed or registered', () => {
 			if (written === null) continue;
 			population += 1;
 			reads ??= assertionReads(text);
-			if (
-				reads.some((r) => r.offset !== call.offset && written.tables.some((t) => r.relations.has(t)))
-			) {
-				continue;
-			}
+			if (observesWrite(reads, call.offset, written.tables)) continue;
 			const description = call.argv[1] === undefined ? '' : (descriptionOf(call.argv[1]) ?? '');
 			const key = `${file}\u0000${description}`;
 			const entry = registry.get(key);
