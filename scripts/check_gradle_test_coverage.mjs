@@ -3,10 +3,10 @@
 //
 // This is the CodeQL coverage defect (§ 1304, § 1352) one layer over: a scanner
 // that reports success over ground it never read. Here the scanner is the test
-// suite. `apps/watch_wear/android` carries 767 `@Test` methods and exactly one
+// suite. `apps/watch_wear/android` carries 816 `@Test` methods and exactly one
 // line in one workflow runs them — `./gradlew assembleDebug testDebugUnitTest`,
 // a hardcoded `working-directory` with nothing reading it. Drop the second task
-// from that line and 767 tests stop running, every check stays green, and the
+// from that line and 816 tests stop running, every check stays green, and the
 // job even keeps its name: it still builds the app. Nothing in the repo could
 // tell the difference.
 //
