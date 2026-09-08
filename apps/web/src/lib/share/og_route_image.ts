@@ -76,10 +76,11 @@ export function buildRouteOgSvg(input: RouteImageInput): string {
 		}
 	}
 
-	// Title block, lower-left. Wraps at ~30 chars by truncating —
-	// the SVG renderer doesn't reflow text and a route name longer
-	// than two lines would overlap the polyline. 90 chars caps it at
-	// a reasonable two-line display.
+	// Title block, lower-left, truncated at 30 characters: an SVG <text>
+	// neither reflows nor clips, so a longer name paints straight over the
+	// polyline and off the card. 30 is sized for a Latin name at 56px against
+	// the 1120px between the margins — a script whose glyphs are that wide
+	// still overruns it, which the single-line <text> cannot express.
 	const name = (input.name ?? '').trim() || 'Untitled route';
 	const meta = buildMetaLine(input.distance_m, input.surface);
 	const titleY = H - 160;
