@@ -1046,26 +1046,38 @@ export function closingParen(text, open) {
  * @returns {string[]}
  */
 export function signatureParameters(signature) {
-  return splitArgs(signature)
+  // A trailing `-- what this one is for` belongs to the parameter it follows,
+  // not to the next one, and left in place it makes every parameter after the
+  // first parse as no name at all — which shortens the list a call site is
+  // bound against and silently drops every landing past the comment.
+  return splitArgs(blockSource(signature).text)
     .map((p) => p.trim().replace(/^(?:in|out|inout|variadic)\s+/i, ''))
     .map((p) => /^([a-z0-9_]+)/i.exec(p)?.[1]?.toLowerCase() ?? '')
     .filter((p) => p !== '');
 }
 
 /**
- * The signature and body of each `create [or replace] function` in [text],
- * keyed by name, lower-cased. Later definitions win, so replaying the
- * migrations in order leaves what the database actually has.
+ * @typedef {{ name: string, params: string[], body: string }} FunctionDefinition
+ */
+
+/**
+ * The name, signature and body of each `create [or replace] function` in
+ * [text], keyed by `<name>/<arity>` — which is how Postgres identifies a
+ * function, and so the only key under which replaying the migrations leaves
+ * what the database actually has.
  *
- * An overloaded name collapses onto its last definition. Nothing in this tree
- * overloads a function that writes a table, and a collapse would over-report
- * rather than under-report: the surviving parameter list is what a call site is
- * resolved against, so a mismatched one names columns the guard then asks about.
+ * Keying on the bare NAME collapsed an overloaded one onto its last definition,
+ * and the surviving parameter list is what a call site is resolved against — so
+ * a call to the other signature was bound to the wrong parameters and its
+ * landings attributed to the wrong columns, or dropped (decisions 1539). Three
+ * of this tree's overloaded names write a table, so the collapse was live
+ * rather than hypothetical; it happened to be harmless only because in all
+ * three the surviving definition was also the last one written.
  * @param {string} text
- * @returns {Map<string, { params: string[], body: string }>}
+ * @returns {Map<string, FunctionDefinition>}
  */
 export function functionBodies(text) {
-  /** @type {Map<string, { params: string[], body: string }>} */
+  /** @type {Map<string, FunctionDefinition>} */
   const out = new Map();
   for (const m of text.matchAll(/create\s+(?:or\s+replace\s+)?function\s+(?:public\.)?([a-z0-9_]+)\s*\(/gi)) {
     const open = (m.index ?? 0) + m[0].length;
@@ -1077,10 +1089,45 @@ export function functionBodies(text) {
     const start = rest.indexOf(tag) + tag.length;
     const end = rest.indexOf(tag, start);
     if (end < 0) continue;
-    out.set(m[1].toLowerCase(), {
-      params: signatureParameters(text.slice(open, close)),
+    const name = m[1].toLowerCase();
+    const params = signatureParameters(text.slice(open, close));
+    out.set(signatureKey(name, params.length), {
+      name,
+      params,
       body: rest.slice(start, end),
     });
+  }
+  return out;
+}
+
+/**
+ * The `<name>/<arity>` key both replays below are keyed on.
+ * @param {string} name
+ * @param {number} arity
+ * @returns {string}
+ */
+export function signatureKey(name, arity) {
+  return `${name}/${arity}`;
+}
+
+/**
+ * Every signature [text] drops, by name and arity — so a replay keyed on the
+ * signature does not resurrect a definition the migration after it deleted.
+ * Keying on the bare name made this invisible: a `create` of the wider
+ * signature overwrote the narrower entry whether or not it was dropped, so the
+ * two errors cancelled.
+ * @param {string} text
+ * @returns {{ name: string, arity: number }[]}
+ */
+export function droppedSignatures(text) {
+  /** @type {{ name: string, arity: number }[]} */
+  const out = [];
+  for (const m of text.matchAll(/drop\s+function\s+(?:if\s+exists\s+)?(?:public\.)?([a-z0-9_]+)\s*\(/gi)) {
+    const open = (m.index ?? 0) + m[0].length;
+    const close = closingParen(text, open);
+    if (close === null) continue;
+    const inner = blockSource(text.slice(open, close)).text.trim();
+    out.push({ name: m[1].toLowerCase(), arity: inner === '' ? 0 : splitArgs(inner).length });
   }
   return out;
 }
@@ -1143,6 +1190,40 @@ export function tgOpCondition(cond) {
 }
 
 /**
+ * A function body prepared for the block walk below: comments blanked in place
+ * and a byte map of which offsets are code rather than string payload.
+ *
+ * Blanking rather than deleting keeps every offset, so a condition sliced out
+ * of the result still lines up with the token that opened it. The map is what
+ * stops a keyword inside a `raise` message from opening or closing a block, and
+ * it matters far more once a bare `end` closes one: an error string containing
+ * the word "end" is ordinary, one containing "end if" is not. The string itself
+ * is kept verbatim rather than blanked, because `tg_op = 'INSERT'` is read out
+ * of this same text.
+ * @param {string} body
+ * @returns {{ text: string, code: Uint8Array }}
+ */
+export function blockSource(body) {
+  const code = new Uint8Array(body.length);
+  let text = '';
+  let i = 0;
+  while (i < body.length) {
+    const skip = skipToken(body, i);
+    if (skip === null) {
+      code[i] = 1;
+      text += body[i];
+      i += 1;
+      continue;
+    }
+    const comment =
+      (body[i] === '-' && body[i + 1] === '-') || (body[i] === '/' && body[i + 1] === '*');
+    for (let j = i; j < skip; j += 1) text += comment && body[j] !== '\n' ? ' ' : body[j];
+    i = skip;
+  }
+  return { text: text.toLowerCase(), code };
+}
+
+/**
  * The columns a trigger function assigns, split by the operation that reaches
  * the assignment and by whether a row can be stored that the assignment did not
  * touch.
@@ -1163,6 +1244,17 @@ export function tgOpCondition(cond) {
  * operation rather than describing the row, so an assignment under it is
  * unconditional for the operation it names and absent for the other — which is
  * why the result is split by operation (decisions 1485).
+ *
+ * Every block form plpgsql can nest is opened and closed here, because the walk
+ * is only as good as its nesting. `if` / `case` / `loop` close with the keyword
+ * that names them, but a plpgsql BLOCK and an EXPRESSION `case when … then …
+ * end` both close with a BARE `end` — so a body carrying either one used to
+ * leave a frame open and hand the next `end if` the wrong frame, which reads
+ * everything after it as conditional and, under a `tg_op` split, unwinds onto
+ * the wrong operation set (decisions 1538). A `case`'s own arms are separated
+ * by `when` for the same reason an `if`'s are by `elsif`: without that, an arm
+ * that assigns nothing inherits the previous arm's must-set, and a `case` with
+ * an `else` then reports a column only some arms assign as unconditional.
  * @param {string} body
  * @returns {Record<TriggerOp, { unconditional: string[], conditional: string[] }>}
  */
@@ -1171,7 +1263,7 @@ export function assignedColumns(body) {
   // before the bare `if` inside it, and a whole `if ... end if` written on one
   // line has to close before the next assignment is judged. `elsif` carries no
   // word boundary before its `if`, so it never opens a second block.
-  const clean = body.replace(/--[^\n]*/g, '').toLowerCase();
+  const { text: clean, code } = blockSource(body);
   /** @param {Record<TriggerOp, Set<string>>} m */
   const clone = (m) => ({ insert: new Set(m.insert), update: new Set(m.update) });
   /** @type {Record<TriggerOp, Set<string>>} */
@@ -1179,11 +1271,13 @@ export function assignedColumns(body) {
   /** @type {{ ops: Set<TriggerOp>, must: Record<TriggerOp, Set<string>> }[]} */
   const exits = [];
   /** @type {{
+   *   kind: 'if' | 'case' | 'loop' | 'block',
    *   entry: Record<TriggerOp, Set<string>>,
    *   entryOps: Set<TriggerOp>,
    *   outerReturned: boolean,
    *   decided: { taken: Set<TriggerOp>, skipped: Set<TriggerOp> } | null,
    *   hasElse: boolean,
+   *   handled: boolean,
    *   branches: { ops: Set<TriggerOp>, must: Record<TriggerOp, Set<string>> | null }[],
    * }[]} */
   const stack = [];
@@ -1191,8 +1285,9 @@ export function assignedColumns(body) {
   let ops = new Set(TRIGGER_OPS);
   let returned = false;
   const tokens =
-    /\bend\s+if\b|\bend\s+case\b|\bend\s+loop\b|\bcase\b|\bloop\b|\belsif\b|\belse\b|\bif\b|\breturn\b|\bnew\.([a-z0-9_]+)\s*:=/g;
+    /\bend\s+if\b|\bend\s+case\b|\bend\s+loop\b|\bexception\s+when\b|\bcase\b|\bloop\b|\bbegin\b|\belsif\b|\belse\b|\bwhen\b|\bif\b|\bend\b|\breturn\b|\bnew\.([a-z0-9_]+)\s*:=/g;
   for (const m of clean.matchAll(tokens)) {
+    if (code[m.index] !== 1) continue;
     if (m[1] !== undefined) {
       if (returned) continue;
       for (const op of ops) {
@@ -1207,16 +1302,39 @@ export function assignedColumns(body) {
       returned = true;
       continue;
     }
+    if (token === 'begin') {
+      // A block is not a branch: it always runs when it is reached, so what it
+      // assigns carries out of it. Popping it on the bare `end` is what stops
+      // that `end` from closing the `if` the block sits inside.
+      stack.push({
+        kind: 'block',
+        entry: clone(must),
+        entryOps: ops,
+        outerReturned: returned,
+        decided: null,
+        hasElse: false,
+        handled: false,
+        branches: [],
+      });
+      continue;
+    }
+    if (token.startsWith('exception')) {
+      const open = stack[stack.length - 1];
+      if (open !== undefined && open.kind === 'block') open.handled = true;
+      continue;
+    }
     if (token === 'if' || token === 'case' || token === 'loop') {
       const then = token === 'if' ? /\bthen\b/.exec(clean.slice(m.index)) : null;
       const decided =
         then === null ? null : tgOpCondition(clean.slice(m.index + 2, m.index + then.index));
       stack.push({
+        kind: token === 'if' ? 'if' : token === 'case' ? 'case' : 'loop',
         entry: clone(must),
         entryOps: ops,
         outerReturned: returned,
         decided,
         hasElse: false,
+        handled: false,
         branches: [],
       });
       if (decided !== null) ops = new Set([...ops].filter((o) => decided.taken.has(o)));
@@ -1224,18 +1342,28 @@ export function assignedColumns(body) {
       returned = false;
       continue;
     }
-    if (token === 'else' || token === 'elsif') {
+    if (token === 'else' || token === 'elsif' || token === 'when') {
       const frame = stack[stack.length - 1];
       if (frame === undefined) continue;
-      frame.branches.push({ ops, must: returned ? null : clone(must) });
+      // `when` separates the arms of a `case`, and nothing else here: `exit
+      // when` inside a loop and the arms of an exception handler are not
+      // branches of the frame they sit in, and reading them as such would
+      // reset a must-set that is still accumulating.
+      if (token === 'when' && frame.kind !== 'case') continue;
+      // The region before a `case`'s first `when` is its selector expression,
+      // not an arm, so it is not a path through the frame.
+      if (token !== 'when' || frame.branches.length > 0) {
+        frame.branches.push({ ops, must: returned ? null : clone(must) });
+      }
       if (token === 'else' && frame.decided !== null) {
         const { skipped } = frame.decided;
         ops = new Set([...frame.entryOps].filter((o) => skipped.has(o)));
         frame.hasElse = true;
       } else {
-        // An `elsif` chain is not exhaustive without a final `else`, and the
-        // guard cannot read which operations it admits, so the whole frame
-        // falls back to the join every undecided condition gets.
+        // An `elsif` chain — or a run of `case` arms — is not exhaustive
+        // without a final `else`, and the guard cannot read which operations it
+        // admits, so the whole frame falls back to the join every undecided
+        // condition gets.
         ops = frame.entryOps;
         frame.decided = null;
         frame.hasElse = token === 'else';
@@ -1246,6 +1374,17 @@ export function assignedColumns(body) {
     }
     const frame = stack.pop();
     if (frame === undefined) continue;
+    if (frame.kind === 'block') {
+      // An exception handler is a second path out of the block, and the guard
+      // cannot read what it leaves assigned, so a handled block falls back to
+      // the entry state the way an `if` without an `else` does.
+      if (frame.handled) {
+        must = clone(frame.entry);
+        returned = frame.outerReturned;
+      }
+      ops = frame.entryOps;
+      continue;
+    }
     frame.branches.push({ ops, must: returned ? null : clone(must) });
     const joined = clone(frame.entry);
     for (const op of TRIGGER_OPS) {
@@ -1313,7 +1452,14 @@ export function stampedColumns(migrations, mode = 'unconditional') {
   /** @type {Map<string, { table: string, fn: string, ops: Set<TriggerOp> }>} */
   const triggers = new Map();
   for (const { text } of migrations) {
-    for (const [name, fn] of functionBodies(text)) bodies.set(name, fn.body);
+    // A trigger function takes no parameters, so the 0-arity signature is the
+    // only one a `create trigger ... execute function` can name.
+    for (const { name, arity } of droppedSignatures(text)) {
+      if (arity === 0) bodies.delete(name);
+    }
+    for (const fn of functionBodies(text).values()) {
+      if (fn.params.length === 0) bodies.set(fn.name, fn.body);
+    }
     for (const m of text.matchAll(
       /drop\s+trigger\s+(?:if\s+exists\s+)?([a-z0-9_]+)\s+on\s+(?:public\.)?([a-z0-9_]+)/gi,
     )) {
@@ -1534,26 +1680,60 @@ export function parameterLandings(body, params) {
 }
 
 /**
+ * @typedef {{ name: string, params: string[], lands: ParameterLanding[] }} WriterFunction
+ */
+
+/**
  * Every function the migrations leave behind that plants one of its own
- * parameters in a column, with the parameter list a call site is resolved
- * against.
+ * parameters in a column, keyed by `<name>/<arity>` and carrying the parameter
+ * list a call site is resolved against.
  * @param {{ name: string, text: string }[]} migrations
- * @returns {Map<string, { params: string[], lands: ParameterLanding[] }>}
+ * @returns {Map<string, WriterFunction>}
  */
 export function writerFunctions(migrations) {
-  /** @type {Map<string, { params: string[], lands: ParameterLanding[] }>} */
+  /** @type {Map<string, WriterFunction>} */
   const out = new Map();
   for (const { text } of migrations) {
-    for (const [name, fn] of functionBodies(text)) {
+    for (const { name, arity } of droppedSignatures(text)) out.delete(signatureKey(name, arity));
+    for (const fn of functionBodies(text).values()) {
+      const key = signatureKey(fn.name, fn.params.length);
       const lands = parameterLandings(fn.body, fn.params);
       if (lands.length === 0) {
-        out.delete(name);
+        out.delete(key);
         continue;
       }
-      out.set(name, { params: fn.params, lands });
+      out.set(key, { name: fn.name, params: fn.params, lands });
     }
   }
   return out;
+}
+
+/**
+ * Which of a name's live signatures a call site binds, given the arguments it
+ * actually wrote.
+ *
+ * Postgres resolves an overload on argument TYPES as well, which a text scan
+ * cannot read — so a call that arity and the named arguments cannot separate is
+ * resolved to none rather than to a guess, the same discipline
+ * `parameterLandings` applies to a column list and a values list of different
+ * lengths. An exact arity match outranks a wider signature reached on defaults,
+ * which is Postgres's own preference.
+ * @template {{ params: string[] }} T
+ * @param {T[]} candidates
+ * @param {string[]} args
+ * @returns {T | null}
+ */
+export function resolveOverload(candidates, args) {
+  const named = args.flatMap((a) => {
+    const m = /^([a-z0-9_]+)\s*=>/i.exec(a.trim());
+    return m === null ? [] : [m[1].toLowerCase()];
+  });
+  const usable = candidates.filter(
+    (c) => args.length <= c.params.length && named.every((n) => c.params.includes(n)),
+  );
+  const exact = usable.filter((c) => c.params.length === args.length);
+  const pick = exact.length > 0 ? exact : usable;
+  return pick.length === 1 ? pick[0] : null;
 }
 
 /**
@@ -1562,27 +1742,35 @@ export function writerFunctions(migrations) {
  * — a parameter left on its default was supplied by nobody and its column is
  * not this assertion's claim.
  * @param {string} sql
- * @param {Map<string, { params: string[], lands: ParameterLanding[] }>} writers
+ * @param {Map<string, WriterFunction>} writers
  * @returns {(ParameterLanding & { fn: string })[]}
  */
 export function rpcArgumentLandings(sql, writers) {
+  /** @type {Map<string, WriterFunction[]>} */
+  const byName = new Map();
+  for (const fn of writers.values()) {
+    const seen = byName.get(fn.name);
+    if (seen === undefined) byName.set(fn.name, [fn]);
+    else seen.push(fn);
+  }
   /** @type {(ParameterLanding & { fn: string })[]} */
   const out = [];
-  for (const [name, fn] of writers) {
+  for (const [name, candidates] of byName) {
     for (const m of sql.matchAll(new RegExp(`(?<![A-Za-z0-9_.])${name}\\s*\\(`, 'gi'))) {
       const open = (m.index ?? 0) + m[0].length;
       const close = closingParen(sql, open);
       if (close === null) continue;
       const inner = sql.slice(open, close);
+      const args = inner.trim() === '' ? [] : splitArgs(inner);
+      const fn = resolveOverload(candidates, args);
+      if (fn === null) continue;
       /** @type {Set<string>} */
       const supplied = new Set();
-      if (inner.trim() !== '') {
-        splitArgs(inner).forEach((arg, i) => {
-          const named = /^([a-z0-9_]+)\s*=>/i.exec(arg.trim());
-          if (named !== null) supplied.add(named[1].toLowerCase());
-          else if (fn.params[i] !== undefined) supplied.add(fn.params[i]);
-        });
-      }
+      args.forEach((arg, i) => {
+        const named = /^([a-z0-9_]+)\s*=>/i.exec(arg.trim());
+        if (named !== null) supplied.add(named[1].toLowerCase());
+        else if (fn.params[i] !== undefined) supplied.add(fn.params[i]);
+      });
       for (const landing of fn.lands) {
         if (!supplied.has(landing.param)) continue;
         out.push({ fn: name, ...landing });
@@ -1644,6 +1832,173 @@ export const FILTERED_RPC_ARGUMENTS = [
       'refused by the first one\'s open job. `p_user_id` reaches `jobs.payload` only inside a ' +
       '`jsonb_build_object`, so the payload was never this assertion\'s claim, and the ' +
       '`data_export_jobs` row it IS about is read back by the assertions around it.',
+  },
+];
+
+// ── ...and a positive whose whole SQL is one call to a writing function ──────
+//
+// The three scans above all ask the same question about a VALUE: is the thing
+// this assertion supplied the thing that reached the table. None of them asks
+// the question one step before it — whether anything reached the table at all.
+//
+// A `lives_ok` whose entire SQL is `select <fn>(…)` measures exactly one thing:
+// that no error was raised. A function that authorised the caller and then
+// wrote nothing satisfies it, and so does one whose write was silently
+// swallowed by an `on conflict do nothing` or an early `return`. That is
+// decisions 741's inversion in its positive form — the assertion passes on the
+// absence of the thing it exists to prove — and `checkpoint_crossings_test`'s
+// organiser-write assertion was that shape until it was repaired by hand rather
+// than by a guard.
+//
+// The discriminator available to a static scan is whether the SUITE ever looks:
+// some assertion in the same file must READ one of the tables the function
+// writes. That is weaker than pinning the row to this call — a read before the
+// write counts — and deliberately so, because the alternative is a vocabulary
+// of reader RPCs, which is a guard keyed on spelling. What it does catch is the
+// file that calls a writer and never observes the write at all, which is the
+// only shape from which nothing can be concluded.
+
+/**
+ * @typedef {{ name: string, params: string[], tables: string[] }} WritingFunction
+ */
+
+const FUNCTION_WRITE =
+  /\binsert\s+into\s+(?:only\s+)?(?:public\.)?([a-z_][a-z0-9_]*)|\bdelete\s+from\s+(?:only\s+)?(?:public\.)?([a-z_][a-z0-9_]*)|\bupdate\s+(?:only\s+)?(?:public\.)?([a-z_][a-z0-9_]*)(?:\s+(?!set\b)[a-z0-9_]+)?\s+set\b/gi;
+
+/**
+ * Every function the migrations leave behind that writes a table, keyed by
+ * `<name>/<arity>` and carrying the tables it writes.
+ *
+ * Wider than `writerFunctions`, which is about where a PARAMETER lands: a
+ * function that computes everything it stores writes a row all the same, and it
+ * is the row's existence this population is about. The UPDATE arm reads the
+ * identifier before the SET clause rather than the one after the keyword, so an
+ * `on conflict do update set` does not register a table called `set`, and a
+ * write named inside a `raise` message is payload rather than a write.
+ * @param {{ name: string, text: string }[]} migrations
+ * @returns {Map<string, WritingFunction>}
+ */
+export function writingFunctions(migrations) {
+  /** @type {Map<string, WritingFunction>} */
+  const out = new Map();
+  for (const { text } of migrations) {
+    for (const { name, arity } of droppedSignatures(text)) out.delete(signatureKey(name, arity));
+    for (const fn of functionBodies(text).values()) {
+      const key = signatureKey(fn.name, fn.params.length);
+      const { text: body, code } = blockSource(fn.body);
+      const tables = [
+        ...new Set(
+          [...body.matchAll(FUNCTION_WRITE)]
+            .filter((m) => code[m.index] === 1)
+            .map((m) => m[1] ?? m[2] ?? m[3]),
+        ),
+      ].sort();
+      if (tables.length === 0) {
+        out.delete(key);
+        continue;
+      }
+      out.set(key, { name: fn.name, params: fn.params, tables });
+    }
+  }
+  return out;
+}
+
+/**
+ * Group a signature-keyed map by function name, so a call site can be resolved
+ * against every live overload of the name it wrote.
+ * @template {{ name: string }} T
+ * @param {Map<string, T>} functions
+ * @returns {Map<string, T[]>}
+ */
+export function byFunctionName(functions) {
+  /** @type {Map<string, T[]>} */
+  const out = new Map();
+  for (const fn of functions.values()) {
+    const seen = out.get(fn.name);
+    if (seen === undefined) out.set(fn.name, [fn]);
+    else seen.push(fn);
+  }
+  return out;
+}
+
+/**
+ * The statements [sql] holds, split on the semicolons that are code rather than
+ * string payload.
+ * @param {string} sql
+ * @returns {string[]}
+ */
+export function statementsIn(sql) {
+  const mask = codeMask(sql);
+  /** @type {string[]} */
+  const out = [];
+  let last = 0;
+  for (let i = 0; i < sql.length; i += 1) {
+    if (mask[i] !== 1 || sql[i] !== ';') continue;
+    out.push(sql.slice(last, i));
+    last = i + 1;
+  }
+  out.push(sql.slice(last));
+  return out.map((x) => x.trim()).filter((x) => x !== '');
+}
+
+/**
+ * The writing function [sql] is one bare call to, or null when it is anything
+ * else — several statements, a statement that is not a call, or a call whose
+ * overload the arity and the named arguments cannot separate.
+ * @param {string} sql
+ * @param {Map<string, WritingFunction[]>} byName
+ * @returns {WritingFunction | null}
+ */
+export function bareWriterCall(sql, byName) {
+  const statements = statementsIn(sql);
+  if (statements.length !== 1) return null;
+  const call = /^select\s+(?:\*\s+from\s+)?(?:public\.)?([a-z0-9_]+)\s*\(/i.exec(statements[0]);
+  if (call === null) return null;
+  const candidates = byName.get(call[1].toLowerCase());
+  if (candidates === undefined) return null;
+  const open = call[0].length;
+  const close = closingParen(statements[0], open);
+  if (close === null) return null;
+  const inner = statements[0].slice(open, close);
+  return resolveOverload(candidates, inner.trim() === '' ? [] : splitArgs(inner));
+}
+
+/**
+ * Every relation the file's pgtap assertions read, with the offset of the
+ * assertion that reads it — so one assertion cannot be its own witness.
+ * @param {string} text
+ * @returns {{ offset: number, relations: Set<string> }[]}
+ */
+export function assertionReads(text) {
+  /** @type {{ offset: number, relations: Set<string> }[]} */
+  const out = [];
+  for (const name of PGTAP_ASSERTIONS) {
+    for (const call of findCalls(text, name)) {
+      out.push({ offset: call.offset, relations: relationsIn(call.argv.join(',')) });
+    }
+  }
+  return out;
+}
+
+/**
+ * Positive assertions whose whole SQL is one call to a writing function and
+ * whose file never reads the table it writes, with what does observe the write
+ * instead. Same discipline as the registries above: `tables` is matched exactly
+ * so an entry cannot outlive the write set it was written about, and a
+ * `readBack` must still name an assertion in the same file.
+ * @type {{ file: string, description: string, tables: string[], readBack?: string, reason: string }[]}
+ */
+export const UNOBSERVED_RPC_WRITES = [
+  {
+    file: 'integration_tokens_caller_guard_test.sql',
+    description: "service_role can rotate any user's tokens (token-refresh path)",
+    tables: ['integrations'],
+    readBack: 'the rotated access token is what a later read returns',
+    reason:
+      'The rotation is observed through `get_integration_tokens`, the paired reader RPC, rather ' +
+      'than off the row: what `integrations` stores is the encrypted secret, and reading the ' +
+      'ciphertext back would say the column changed rather than that the token did. The named ' +
+      'read-back asserts the decrypted value the next reader gets.',
   },
 ];
 
@@ -1816,6 +2171,7 @@ function main() {
   const stamped = stampedColumns(migrations);
   const conditional = conditionallyStampedColumns(migrations);
   const writers = writerFunctions(migrations);
+  const writing = byFunctionName(writingFunctions(migrations));
   const registered = new Set(STAMPED_VALUE_ASSERTIONS.map((e) => `${e.file}\u0000${e.description}`));
   const conditionallyRegistered = new Map(
     CONDITIONALLY_STAMPED_ASSERTIONS.map((e) => [`${e.file}\u0000${e.description}`, e]),
@@ -1823,17 +2179,24 @@ function main() {
   const filteredRegistered = new Map(
     FILTERED_RPC_ARGUMENTS.map((e) => [`${e.file}\u0000${e.description}`, e]),
   );
+  const unobservedRegistered = new Map(
+    UNOBSERVED_RPC_WRITES.map((e) => [`${e.file}\u0000${e.description}`, e]),
+  );
   /** @type {Set<string>} */
   const matched = new Set();
   /** @type {Set<string>} */
   const conditionallyMatched = new Set();
   /** @type {Set<string>} */
   const filteredMatched = new Set();
+  /** @type {Set<string>} */
+  const unobservedMatched = new Set();
 
   for (const file of files) {
     const text = readFileSync(join(TESTS_DIR, file), 'utf8');
     /** @type {Set<string> | null} */
     let descriptions = null;
+    /** @type {{ offset: number, relations: Set<string> }[] | null} */
+    let reads = null;
     for (const call of findCalls(text, 'throws_ok')) {
       if (throwsPinsItsError(call.argv)) continue;
       failures.push(
@@ -1906,6 +2269,47 @@ function main() {
         }
       }
 
+      const written = bareWriterCall(sql, writing);
+      if (written !== null) {
+        reads ??= assertionReads(text);
+        const observed = reads.some(
+          (r) => r.offset !== call.offset && written.tables.some((t) => r.relations.has(t)),
+        );
+        if (!observed) {
+          const entry = unobservedRegistered.get(key);
+          if (entry === undefined) {
+            failures.push(
+              `${file}:${call.line}  "${description}" is one bare call to ${written.name}, and no ` +
+                `assertion in this file reads ${written.tables.join(
+                  ' / ',
+                )} — so it measures only that no error was raised, and a ${written.name} that ` +
+                `authorised the caller and wrote nothing at all passes it just as well ` +
+                `(decisions 1540). Read the row back, or register the assertion in ` +
+                `UNOBSERVED_RPC_WRITES naming what observes the write instead.`,
+            );
+          } else {
+            unobservedMatched.add(key);
+            if (entry.tables.join('\u0000') !== written.tables.join('\u0000')) {
+              failures.push(
+                `UNOBSERVED_RPC_WRITES entry ${file} / "${description}" names ${entry.tables.join(
+                  ', ',
+                )} but ${written.name} now writes ${written.tables.join(
+                  ', ',
+                )}. The reason was written about the old set — re-read it against the new one.`,
+              );
+            }
+            if (entry.readBack !== undefined) {
+              descriptions ??= assertionDescriptions(text);
+              if (!descriptions.has(entry.readBack)) {
+                failures.push(
+                  `UNOBSERVED_RPC_WRITES entry ${file} / "${description}" names the read-back "${entry.readBack}", and no assertion in that file carries that description any more. The read-back is what makes the entry's reason true, so restore it or replace the entry's justification.`,
+                );
+              }
+            }
+          }
+        }
+      }
+
       const branchWrites = stampedValueWrites(sql, conditional);
       if (branchWrites.length === 0) continue;
       const columns = [...new Set(branchWrites.map((w) => `${w.table}.${w.column}`))].sort();
@@ -1963,15 +2367,24 @@ function main() {
     );
   }
 
+  for (const entry of UNOBSERVED_RPC_WRITES) {
+    const key = `${entry.file}\u0000${entry.description}`;
+    if (unobservedMatched.has(key)) continue;
+    failures.push(
+      `UNOBSERVED_RPC_WRITES entry ${entry.file} / "${entry.description}" is stale: no unobserved bare writer call is there any more. It was rewritten, renamed or deleted, or the file now reads the table — remove the entry so the next one cannot hide behind it.`,
+    );
+  }
+
   if (process.argv.includes('--static-only')) {
     report(
       failures,
       `${files.length} test files scanned for unpinned negatives, for positives emptied by one of ` +
         `the ${stampedPairCount(stamped)} unconditionally stamped columns, and for the ` +
         `${CONDITIONALLY_STAMPED_ASSERTIONS.length} positives supplying one of the ` +
-        `${stampedPairCount(conditional)} conditionally stamped ones, and for the ` +
+        `${stampedPairCount(conditional)} conditionally stamped ones, for the ` +
         `${FILTERED_RPC_ARGUMENTS.length} handing one to a function that does not plant it ` +
-        `verbatim`,
+        `verbatim, and for the ${UNOBSERVED_RPC_WRITES.length} whose whole SQL is one call to ` +
+        `one of the ${writingFunctions(migrations).size} functions that write a table`,
     );
     return;
   }
