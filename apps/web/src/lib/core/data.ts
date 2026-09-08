@@ -7,7 +7,7 @@ import { isDuplicateKeyError, supabaseErrorFields } from './supabase_error';
 import { singleEmbed, fitnessSnapshotDue, publicRouteListFill } from './data_normalise';
 import { TABLES, BUCKETS, METADATA_KEYS } from './schema';
 import type { Database, Json } from '../database.types';
-import { asProjectedRun, asRun, type RunRow } from './run_narrow';
+import { asProjectedRun, asRun, type ProjectedRun, type RunRow } from './run_narrow';
 import { SELECT_SEPARATOR, type Join } from './database';
 import type { Insertable, Updatable } from './database';
 import type { JsonObject, TrackPoint } from '../types';
@@ -232,7 +232,7 @@ export async function fetchRuns<C extends RunColumns>(
 ): Promise<Pick<Run, C[number]>[]>;
 export async function fetchRuns(
 	opts?: FetchRunsOptions,
-): Promise<Run[] | Partial<Run>[]> {
+): Promise<Run[] | ProjectedRun[]> {
 	// Explicit user_id filter as defence in depth — RLS already scopes
 	// runs to the caller, but every other personal-data list in this
 	// file follows the same explicit-scope pattern. See audit
