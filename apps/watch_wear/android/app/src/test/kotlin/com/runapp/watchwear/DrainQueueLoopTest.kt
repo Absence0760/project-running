@@ -40,7 +40,7 @@ class DrainQueueLoopTest {
         )
         assertEquals(emptyList<String>(), result.drainedIds)
         assertFalse(result.anyTransientFailure)
-        assertNull(result.lastError)
+        assertNull(result.lastFault)
     }
 
     @Test fun `every-success path drains every id in order`() = runBlocking {
@@ -56,11 +56,11 @@ class DrainQueueLoopTest {
         assertEquals(listOf("a", "b", "c"), removed)
         assertFalse(result.anyTransientFailure)
         // Successful pass clears the sync-error banner.
-        assertNull(result.lastError)
+        assertNull(result.lastFault)
     }
 
     @Test fun `success clears a previous-run error message`() = runBlocking {
-        // [success, success, success] should leave lastError null.
+        // [success, success, success] should leave the fault null.
         var pushCalls = 0
         val result = drainQueueLoop(
             snapshot = listOf(run("a"), run("b"), run("c")),
@@ -73,7 +73,7 @@ class DrainQueueLoopTest {
             classify = { error("no errors thrown") },
         )
         assertEquals(3, pushCalls)
-        assertNull(result.lastError)
+        assertNull(result.lastFault)
     }
 
     // ─────────────────── SkipAndContinue (4xx) ───────────────────
@@ -125,11 +125,11 @@ class DrainQueueLoopTest {
         // Permanent failures don't arm backoff — retrying would just re-skip.
         assertFalse(result.anyTransientFailure)
         // Skip-followed-by-success clears the banner.
-        assertNull(result.lastError)
+        assertNull(result.lastFault)
     }
 
-    @Test fun `skip persists lastError when no later success clears it`() = runBlocking {
-        // [skip-only] → lastError sticks for the UI banner.
+    @Test fun `skip persists the fault when no later success clears it`() = runBlocking {
+        // [skip-only] → the fault sticks for the UI banner.
         val result = drainQueueLoop(
             snapshot = listOf(run("malformed")),
             push = PushQueuedRun { throw HttpException(400, "bad request") },
@@ -139,8 +139,12 @@ class DrainQueueLoopTest {
         )
         assertEquals(emptyList<String>(), result.drainedIds)
         assertFalse(result.anyTransientFailure)
-        // Single permanent-skip run leaves lastError for the UI.
-        assertEquals("bad request", result.lastError)
+        // Single permanent-skip run leaves the fault for the UI. The wrist is
+        // told a catalogued sentence; the raw text a bug report needs rides
+        // `failures` and reaches `Log.e`, never the display (decisions § 1490).
+        assertEquals(SyncFault.Refused, result.lastFault)
+        assertEquals(listOf("malformed"), result.failures.map { it.runId })
+        assertEquals("bad request", result.failures.single().error.message)
     }
 
     // ─────────────────── StopAndRetryLater (5xx) ───────────────────
@@ -165,7 +169,8 @@ class DrainQueueLoopTest {
         assertEquals(listOf("a"), result.drainedIds)
         // 5xx arms backoff so the next drain trigger waits.
         assertTrue(result.anyTransientFailure)
-        assertEquals("upstream timeout", result.lastError)
+        assertEquals(SyncFault.ServerBusy, result.lastFault)
+        assertEquals("upstream timeout", result.failures.single().error.message)
     }
 
     @Test fun `network timeout (non-http) also breaks the loop`() = runBlocking {
@@ -215,7 +220,7 @@ class DrainQueueLoopTest {
         assertEquals(listOf("a"), result.drainedIds)
         // 401 followed by successful refresh+retry is NOT a transient failure.
         assertFalse(result.anyTransientFailure)
-        assertNull(result.lastError)
+        assertNull(result.lastFault)
     }
 
     @Test fun `401 followed by REFRESH FAILURE stops + arms backoff`() = runBlocking {
@@ -237,7 +242,11 @@ class DrainQueueLoopTest {
         assertEquals(emptyList<String>(), result.drainedIds)
         // Refresh failure arms backoff so the next drain trigger waits.
         assertTrue(result.anyTransientFailure)
-        assertEquals("JWT expired", result.lastError)
+        // A 401 the refresh could not repair is the one fault whose remedy is
+        // an action on the wrist, so it is its own member rather than a
+        // generic failure.
+        assertEquals(SyncFault.SignInRequired, result.lastFault)
+        assertEquals("JWT expired", result.failures.single().error.message)
     }
 
     @Test fun `401 with refresh-throws stops + arms backoff`() = runBlocking {
@@ -252,8 +261,13 @@ class DrainQueueLoopTest {
         )
         assertEquals(emptyList<String>(), result.drainedIds)
         assertTrue(result.anyTransientFailure)
-        // Refresh exception message bubbles into lastError.
-        assertEquals("refresh socket reset", result.lastError)
+        assertEquals(SyncFault.SignInRequired, result.lastFault)
+        // Both throwables reach the log — the 401 that provoked the refresh and
+        // the refresh's own failure. Only one of them can be the banner.
+        assertEquals(
+            listOf("JWT expired", "refresh socket reset"),
+            result.failures.map { it.error.message },
+        )
     }
 
     @Test fun `401, refresh succeeds, retry also 401, stops with backoff`() = runBlocking {
@@ -311,7 +325,7 @@ class DrainQueueLoopTest {
         // Exactly one refresh fired (only one 401).
         assertEquals(1, refreshCount)
         assertFalse(result.anyTransientFailure)
-        assertNull(result.lastError)
+        assertNull(result.lastFault)
     }
 
     @Test fun `mixed ok, skip-permanent, ok drains 2, leaves skipped`() = runBlocking {
@@ -330,7 +344,7 @@ class DrainQueueLoopTest {
         assertEquals(listOf("a", "c"), result.drainedIds)
         assertFalse(result.anyTransientFailure)
         // Trailing success clears the banner even if a middle run was skipped.
-        assertNull(result.lastError)
+        assertNull(result.lastFault)
     }
 
     @Test fun `mixed ok, transient, ok drains only the first and stops`() = runBlocking {
@@ -351,7 +365,8 @@ class DrainQueueLoopTest {
         assertEquals(listOf("a", "down"), pushedIds)
         assertEquals(listOf("a"), removed)
         assertTrue(result.anyTransientFailure)
-        assertEquals("bad gateway", result.lastError)
+        assertEquals(SyncFault.ServerBusy, result.lastFault)
+        assertEquals("bad gateway", result.failures.single().error.message)
     }
 
     @Test fun `pure-skip queue does NOT arm backoff`() = runBlocking {
@@ -369,7 +384,10 @@ class DrainQueueLoopTest {
         assertEquals(emptyList<String>(), result.drainedIds)
         // Permanent skips don't count as transient — backoff stays off.
         assertFalse(result.anyTransientFailure)
-        assertEquals("validation failed", result.lastError)
+        assertEquals(SyncFault.Refused, result.lastFault)
+        // Three refusals, three log lines. The banner can only say one thing;
+        // the diagnostic must not lose the other two.
+        assertEquals(listOf("a", "b", "c"), result.failures.map { it.runId })
     }
 
     // ─────────────────── Side-effect ordering ───────────────────
@@ -405,10 +423,10 @@ class DrainQueueLoopTest {
     // ───────────── Permanent rejection, carried out to the UI ─────────────
 
     @Test fun `a permanent skip is reported as a rejection a later success cannot erase`() = runBlocking {
-        // The defect: `lastError = null` runs on every success, so the trailing
+        // The defect: `lastFault = null` runs on every success, so the trailing
         // clean run wiped the skipped run's message, `anyTransientFailure` stayed
         // false, and the caller reported a successful sync while the queue count
-        // never fell. `lastError` KEEPS that behaviour — the two assertions above
+        // never fell. `lastFault` KEEPS that behaviour — the two assertions above
         // state it deliberately — and the rejection rides its own field.
         val result = drainQueueLoop(
             snapshot = listOf(run("malformed"), run("clean")),
@@ -422,7 +440,9 @@ class DrainQueueLoopTest {
         assertEquals(listOf("malformed"), result.rejectedIds)
         assertEquals(listOf("clean"), result.drainedIds)
         // The stated decision, unchanged.
-        assertNull(result.lastError)
+        assertNull(result.lastFault)
+        // …and the refusal is still in the log even though the banner cleared.
+        assertEquals(listOf("malformed"), result.failures.map { it.runId })
         assertFalse(result.anyTransientFailure)
     }
 
@@ -506,7 +526,8 @@ class DrainQueueLoopTest {
         rejectedIds = rejected,
         attemptedIds = attempted,
         anyTransientFailure = false,
-        lastError = null,
+        lastFault = null,
+        failures = emptyList(),
     )
 
     @Test fun `a fresh rejection enters the carried set`() {

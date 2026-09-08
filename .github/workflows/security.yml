@@ -220,13 +220,19 @@ jobs:
       # which is the outcome the silent version never produced.
       - name: Build every Gradle project for the CodeQL extractor
         env:
-          # `<path>=<reason>`, one per line. Every entry must name a project
-          # the walk below actually finds, so an entry cannot outlive the
-          # directory it excuses; `scripts/check_codeql_coverage.mjs` in the
-          # `workflow-lint` job fails the PR on a stale one, on a walk that
-          # has stopped matching the tree, and on a reason left blank.
+          # `<path>=<hidden-source-count>=<reason>`, one per line. Every entry
+          # must name a project the walk below actually finds, so an entry
+          # cannot outlive the directory it excuses, and the count is
+          # RECOMPUTED from the tree rather than read: an exclusion that stops
+          # saying how much it hides is one nobody is deciding any more, and a
+          # bridge added to an excluded project has to be somebody's edit
+          # rather than nobody's (decisions § 1500).
+          # `scripts/check_codeql_coverage.mjs` in the `workflow-lint` job
+          # fails the PR on a stale entry, on a walk that has stopped matching
+          # the tree, on a reason left blank, and on a count that no longer
+          # matches the .kt/.java files under the path.
           CODEQL_KOTLIN_UNBUILT: |
-            apps/mobile_android/android=the Flutter Gradle host. settings.gradle.kts reads flutter.sdk out of a local.properties that only the Flutter tool writes, and :app compiles against every plugin subproject melos bootstraps, so building it here means adding the pinned Flutter SDK and a melos bootstrap to this job and paying those minutes on every PR and every weekly cron. Until that trade is taken, 11 Kotlin files are unscanned - MainActivity.kt, RunActionReceiver.kt (a BroadcastReceiver) and the platform-channel bridges that mediate health permissions, calendar access and foreground-service actions (decisions § 1352).
+            apps/mobile_android/android=11=the Flutter Gradle host, and what stands in the way is toolchain minutes rather than a missing file. settings.gradle.kts reads flutter.sdk out of a local.properties that only the Flutter tool writes, and :app compiles against every plugin subproject melos bootstraps, so building it here makes this job a second copy of ci.yml's build-mobile-android - the pinned Flutter SDK (a fourth site check_toolchain_pins.mjs then holds in lockstep), a melos bootstrap, the pub cache and a full Gradle configuration - paid on every PR and every weekly cron. The wrapper is no longer the blocker: decisions § 1439 committed apps/mobile_android/android/gradlew, so the loop below has an executable to run here. The cheaper close is to drive the extractor from build-mobile-android, which already pays for every one of those, and that is deliberately not taken blind: that job is in the CI gate's needs: list, so a tracer that misbehaves blocks every merge rather than one workflow, and its Kotlin task is UP-TO-DATE by the time it could run - which extracts no source and reports exactly as clean as a full scan, the state § 1304 and § 1352 exist to prevent. Unread meanwhile: MainActivity.kt, RunActionReceiver.kt (a BroadcastReceiver) and the platform-channel bridges mediating health permissions, calendar access and foreground-service actions (decisions § 1352, § 1500).
         shell: bash
         run: |
           set -euo pipefail
@@ -243,11 +249,18 @@ jobs:
           for p in $PROJECTS; do
             rel=${p#./}
             reason=""
+            hidden=""
             while IFS= read -r line; do
-              case "$line" in "$rel="*) reason=${line#*=} ;; esac
+              case "$line" in
+                "$rel="*)
+                  rest=${line#*=}
+                  hidden=${rest%%=*}
+                  reason=${rest#*=}
+                  ;;
+              esac
             done <<< "$CODEQL_KOTLIN_UNBUILT"
             if [ -n "$reason" ]; then
-              echo "::warning::$rel is NOT scanned by the java-kotlin analysis: $reason"
+              echo "::warning::$rel is NOT scanned by the java-kotlin analysis; $hidden source file(s) go unread: $reason"
               continue
             fi
             echo "::group::gradlew compileDebugKotlin ($rel)"
@@ -282,7 +295,11 @@ jobs:
           build-mode: none
           # The `actions` language only ships a `security-extended`
           # ceiling; CodeQL silently falls back to that when
-          # security-and-quality isn't available.
+          # security-and-quality isn't available. Asking for the broadest
+          # anyway is the right direction to fail in — the fallback is a
+          # superset of every narrower suite — but the fallback is silent, so
+          # the step below reads what actually ran out of the SARIF instead of
+          # leaving the workflow's request to stand as the record (§ 1503).
           queries: security-and-quality
           # Every entry below narrows this analysis, so each one carries its
           # reason in the comment lines directly above it — inside the block,
@@ -309,6 +326,63 @@ jobs:
       - uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
           category: '/language:actions'
+          # Kept on disk as well as uploaded, so the step below can read what
+          # ran. Nothing else in this workflow needs its SARIF locally.
+          output: sarif-results
+      - name: Report the query suite that actually ran
+        # `queries: security-and-quality` above is a REQUEST. CodeQL resolves
+        # it against what the language ships and falls back without saying so,
+        # which left the workflow asserting a suite nothing could confirm we
+        # got: if a release stopped honouring the fallback or renamed the
+        # suite, this leg would run something narrower and every guard reading
+        # the workflow would still be green (decisions § 1503).
+        #
+        # The SARIF is the record of what executed, and the discriminator is
+        # version-independent rather than a rule-id allowlist: the quality half
+        # of `security-and-quality` is exactly the queries tagged for
+        # maintainability / correctness / readability and NOT tagged security,
+        # so if none of those ran, the fallback happened. Reported rather than
+        # failed, because the fallback is CodeQL's decision and the suite we
+        # get is still the widest one available.
+        #
+        # An empty rule set IS a failure: a SARIF naming no queries is an
+        # analysis that ran none, and it reports exactly as clean as one that
+        # ran everything — the state §§ 1304 and 1352 exist to make loud.
+        shell: bash
+        run: |
+          set -euo pipefail
+          # `find` on a missing directory exits non-zero, and under `set -e`
+          # that aborts before any of the diagnoses below are printed — the one
+          # failure mode of this step that would report nothing at all.
+          files=$(find sarif-results -name '*.sarif' -type f 2>/dev/null | sort || true)
+          if [ -z "$files" ]; then
+            echo "::error::the actions analysis wrote no SARIF under sarif-results/, so nothing records which queries ran. A scan whose output cannot be read is one whose scope cannot be checked."
+            exit 1
+          fi
+          rules='[.runs[]?.tool | (.driver.rules // []) + ([.extensions[]?.rules // []] | flatten)] | flatten'
+          total=0
+          quality=0
+          for f in $files; do
+            if ! t=$(jq "$rules | length" "$f"); then
+              echo "::error::jq could not read $f as SARIF. The analysis produced a file this step cannot interpret, which leaves the query suite unmeasured exactly as an absent file would."
+              exit 1
+            fi
+            q=$(jq "$rules
+                    | map(select((.properties.tags // []) | (any(startswith(\"security\")) | not)
+                          and any(. == \"maintainability\" or . == \"correctness\" or . == \"readability\" or . == \"reliability\")))
+                    | length" "$f")
+            total=$((total + t))
+            quality=$((quality + q))
+          done
+          if [ "$total" -eq 0 ]; then
+            echo "::error::the actions analysis names 0 queries across $files. CodeQL reported over an empty rule set, which is indistinguishable from a clean scan of everything; treat this as a broken analysis, not a quiet result."
+            exit 1
+          fi
+          if [ "$quality" -eq 0 ]; then
+            echo "::warning::the actions leg asked for security-and-quality and ran $total queries, none of them from the quality half — so CodeQL resolved the request down to its security-extended ceiling, as the init step's comment expects. Nothing is wrong; this is the fallback being observed rather than assumed."
+          else
+            echo "::notice::the actions leg ran $total queries, $quality of them from the quality half, so security-and-quality resolved rather than falling back."
+          fi
 
   trivy-job-worker-image:
     name: Trivy (job_worker container)

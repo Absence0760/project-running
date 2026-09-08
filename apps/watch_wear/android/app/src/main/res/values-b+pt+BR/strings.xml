@@ -124,8 +124,18 @@
     <string name="tap_here">Toque aqui</string>
     <string name="submit">Enviar</string>
     <string name="cancel">Cancelar</string>
-    <string name="token_refresh_failed">Falha ao renovar o token: %1$s</string>
+    <string name="auth_fault_credentials">E-mail ou senha incorretos</string>
+    <string name="auth_fault_rate_limited">Muitas tentativas — espere um minuto</string>
+    <string name="auth_fault_server">Servidor ocupado — tente de novo</string>
+    <string name="auth_fault_offline">Sem conexão</string>
+    <string name="auth_fault_session_expired">Sessão expirada — entre novamente</string>
+    <string name="auth_fault_unknown">Falha ao entrar</string>
     <string name="sync_queue_unreadable">Corridas salvas ilegíveis</string>
+    <string name="sync_fault_offline">Sem conexão — vamos tentar de novo</string>
+    <string name="sync_fault_server">Servidor ocupado — vamos tentar de novo</string>
+    <string name="sync_fault_sign_in">Entre novamente para sincronizar</string>
+    <string name="sync_fault_refused">O servidor recusou esta corrida</string>
+    <string name="sync_fault_unknown">Falha na sincronização</string>
 
     <string name="no_gps_time_only">Sem GPS — somente tempo</string>
     <string name="gps_lost">GPS perdido</string>

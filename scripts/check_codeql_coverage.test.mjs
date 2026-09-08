@@ -18,6 +18,7 @@ import { join } from 'node:path';
 
 import {
 	check,
+	countSources,
 	findExpression,
 	globNamesSomething,
 	jobsDeclaring,
@@ -34,8 +35,12 @@ function fixtureRoot(dirs) {
 	const root = mkdtempSync(join(tmpdir(), 'codeql-coverage-'));
 	for (const d of dirs) {
 		mkdirSync(join(root, d), { recursive: true });
-		const marker = d.endsWith('android') ? 'settings.gradle.kts' : 'go.mod';
-		writeFileSync(join(root, d, marker), '');
+		const gradle = d.endsWith('android');
+		writeFileSync(join(root, d, gradle ? 'settings.gradle.kts' : 'go.mod'), '');
+		// Two source files per Gradle project, so an exclusion's declared size
+		// has something to be measured against rather than agreeing with an
+		// empty directory by accident.
+		if (gradle) for (const f of ['Main.kt', 'Bridge.kt']) writeFileSync(join(root, d, f), '');
 	}
 	return root;
 }
@@ -53,7 +58,18 @@ const GO_STEP = `      - name: Build every Go module for CodeQL
 /// does not fail on the reason floor.
 const REASON = '# a reason long enough to say what would have to change to close this narrowing';
 
-/** @param {{ jsWith?: string, actionsWith?: string }} [opts] */
+/// The analyze step plus the reader that measures what the `actions` suite
+/// resolved to — the pair `suiteMayDowngrade` requires of that leg.
+const ACTIONS_TAIL = `      - uses: github/codeql-action/analyze@abc
+        with:
+          category: '/language:actions'
+          output: sarif-results
+      - name: Report the query suite that actually ran
+        run: |
+          find sarif-results -name '*.sarif' -type f
+`;
+
+/** @param {{ jsWith?: string, actionsWith?: string, actionsTail?: string }} [opts] */
 function interpretedJobs(opts = {}) {
 	const jsWith =
 		opts.jsWith ?? `          languages: javascript-typescript
@@ -73,17 +89,17 @@ ${jsWith}  codeql-actions:
     steps:
       - uses: github/codeql-action/init@abc
         with:
-${actionsWith}`;
+${actionsWith}${opts.actionsTail ?? ACTIONS_TAIL}`;
 }
 
-/** @param {{ kotlinStep?: string, jsWith?: string, actionsWith?: string }} [opts] */
+/** @param {{ kotlinStep?: string, jsWith?: string, actionsWith?: string, actionsTail?: string }} [opts] */
 function workflow(opts = {}) {
 	const kotlin =
 		opts.kotlinStep ??
 		`      - name: Build every Gradle project for the CodeQL extractor
         env:
           CODEQL_KOTLIN_UNBUILT: |
-            apps/mobile_android/android=a reason long enough to say what would have to change to close it
+            apps/mobile_android/android=2=a reason long enough to say what would have to change to close it
         shell: bash
         run: |
           PROJECTS=$(find . \\( -name settings.gradle -o -name settings.gradle.kts \\) \\
@@ -164,7 +180,7 @@ test('an exclusion bought with a placeholder reason fails', () => {
 	const root = fixtureRoot(TREES);
 	const thin = workflow().replace(
 		/apps\/mobile_android\/android=.*/,
-		'apps/mobile_android/android=TODO',
+		'apps/mobile_android/android=2=TODO',
 	);
 	const { errors } = check({ root, workflowText: thin });
 	assert.equal(errors.length, 1);
@@ -175,7 +191,7 @@ test('an exclusion list covering every tree fails rather than scanning nothing',
 	const root = fixtureRoot(TREES);
 	const all = workflow().replace(
 		/(apps\/mobile_android\/android=.*)/,
-		'$1\n            apps/watch_wear/android=also excluded, with a reason of at least forty characters',
+		'$1\n            apps/watch_wear/android=2=also excluded, with a reason of at least forty characters',
 	);
 	const { errors } = check({ root, workflowText: all });
 	assert.equal(errors.length, 1);
@@ -216,18 +232,91 @@ test('runScripts and jobsDeclaring read the shapes the workflow actually uses', 
 	const text = workflow();
 	assert.deepEqual(jobsDeclaring(text, 'go'), ['codeql-go']);
 	assert.deepEqual(jobsDeclaring(text, 'java-kotlin'), ['codeql-kotlin']);
-	assert.equal(runScripts(text).length, 2);
+	assert.equal(runScripts(text).length, 3);
 });
 
 test('parseUnbuilt refuses a line the step’s own skip loop could not match', () => {
 	// The loop matches on `<path>=`, so a bare path excludes nothing and the
 	// build it was meant to skip runs anyway — a silent no-op, not a failure.
-	const { entries, malformed } = parseUnbuilt('apps/a=because\napps/b\n\n');
-	assert.deepEqual(
-		entries.map((e) => e.path),
-		['apps/a'],
+	// A line carrying no count is refused for the other half of the same
+	// reason: it excludes fine and stops saying how much it hides.
+	const { entries, malformed } = parseUnbuilt(
+		'apps/a=3=because\napps/b\napps/c=because\napps/d=many=because\n\n',
 	);
-	assert.deepEqual(malformed, ['apps/b']);
+	assert.deepEqual(entries, [{ path: 'apps/a', hidden: 3, reason: 'because' }]);
+	assert.deepEqual(malformed, ['apps/b', 'apps/c=because', 'apps/d=many=because']);
+});
+
+test('an exclusion whose declared size no longer matches the tree fails, both directions', () => {
+	// The state the prose figure could not reach: a bridge lands in a project
+	// no security scan reads, and the only thing that said how much was hidden
+	// is a sentence nobody recomputes.
+	const root = fixtureRoot(TREES);
+	writeFileSync(join(root, 'apps/mobile_android/android', 'NewReceiver.kt'), '');
+	const grown = check({ root, workflowText: workflow() });
+	assert.equal(grown.errors.length, 1);
+	assert.match(grown.errors[0], /hides 2 \.kt\/\.java file\(s\) and it now holds 3/);
+	assert.match(grown.errors[0], /reports clean over it either way/);
+
+	const shrunk = check({
+		root,
+		workflowText: workflow().replace(
+			'apps/mobile_android/android=2=',
+			'apps/mobile_android/android=9=',
+		),
+	});
+	assert.equal(shrunk.errors.length, 1);
+	assert.match(shrunk.errors[0], /hides 9 .* and it now holds 3/);
+	assert.match(shrunk.errors[0], /covers less than it was granted for/);
+});
+
+test('countSources counts the language’s files under a tree and skips generated ones', () => {
+	const root = fixtureRoot(['apps/watch_wear/android']);
+	mkdirSync(join(root, 'apps/watch_wear/android/build/generated'), { recursive: true });
+	writeFileSync(join(root, 'apps/watch_wear/android/build/generated/Gen.kt'), '');
+	mkdirSync(join(root, 'apps/watch_wear/android/src'), { recursive: true });
+	writeFileSync(join(root, 'apps/watch_wear/android/src/Legacy.java'), '');
+	assert.equal(countSources(root, 'apps/watch_wear/android', ['.kt', '.java']), 3);
+	assert.equal(countSources(root, 'apps/watch_wear/android', ['.go']), 0);
+});
+
+test('a downgradable suite that keeps no SARIF, or never reads it, fails', () => {
+	// `queries: security-and-quality` on the actions leg is a request CodeQL
+	// resolves down without saying so, so the workflow's own text can never be
+	// the record of what ran. This guard cannot read the answer — no CodeQL, no
+	// network — but it can refuse a job that stopped looking for it.
+	const root = fixtureRoot(TREES);
+	const noOutput = check({
+		root,
+		workflowText: workflow({
+			actionsTail: `      - uses: github/codeql-action/analyze@abc
+        with:
+          category: '/language:actions'
+`,
+		}),
+	});
+	assert.equal(noOutput.errors.length, 1);
+	assert.match(noOutput.errors[0], /declares no `output:`/);
+
+	const unread = check({
+		root,
+		workflowText: workflow({
+			actionsTail: `      - uses: github/codeql-action/analyze@abc
+        with:
+          output: sarif-results
+`,
+		}),
+	});
+	assert.equal(unread.errors.length, 1);
+	assert.match(unread.errors[0], /no `run:` step in the job reads it/);
+});
+
+test('a leg not flagged as downgradable owes no SARIF reader', () => {
+	// The javascript leg's suite is the one it asks for, so demanding a
+	// measurement of it would be a claim about nothing.
+	const root = fixtureRoot(TREES);
+	const { errors } = check({ root, workflowText: workflow() });
+	assert.deepEqual(errors, []);
 });
 
 test('walkSurfaces skips vendored and build trees', () => {

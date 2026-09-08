@@ -30,6 +30,15 @@ bool weighInEnabled(String? raw) => isTruthyFlagValue(raw);
 /// closed is the only safe answer here: the P3 weigh-in fields are Art 9
 /// health data and stay uncollected until owner + CISO + counsel sign-off
 /// flips the flag at deploy time (decisions §150).
+///
+/// This is the client half of a defence-in-depth pair: the DB enforces the
+/// real gate, persisting a crossing's health columns only when the checkpoint
+/// requires_weigh_in AND the RPC caller passed consent. That half is measured
+/// by `apps/backend/supabase/tests/weigh_in_health_gate_test.sql` — all four
+/// health columns, plus the merge branch a second volunteer's write takes and
+/// no client can reach. Naming it here is the point: the SQL half went unpinned
+/// on that branch for exactly as long as no reader of either client could find
+/// it (decisions §1497).
 bool get weighInGate {
   try {
     return weighInEnabled(dotenv.env[kWeighInEnvKey]);

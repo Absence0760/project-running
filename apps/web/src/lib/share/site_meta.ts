@@ -7,11 +7,10 @@
 /// treatment for the "Threkir" query.
 ///
 /// Pure string helpers so a unit test can pin the wire shape without
-/// booting SvelteKit. The three-character JSON-LD escape is duplicated
-/// here rather than shared (a three-line helper isn't worth a module —
-/// same call the sibling builders make).
+/// booting SvelteKit.
 
 import { normaliseSiteUrl } from './share_meta';
+import { serialiseJsonLd } from '../util/json_ld';
 
 const SITE_NAME = 'Threkir';
 
@@ -19,17 +18,6 @@ const SITE_NAME = 'Threkir';
 /// nodes and available as the landing-page meta description default.
 export const SITE_DESCRIPTION =
 	'Track your runs, build training plans, and follow friends — a cross-platform running app for road, trail, and ultra.';
-
-/// Escape the three characters that let a string break out of a
-/// `<script type="application/ld+json">` block when injected verbatim
-/// into HTML. `<` is the only strictly necessary one (`</script>`); the
-/// other two keep the payload valid JSON either way (belt-and-braces).
-function escapeJsonLd(json: string): string {
-	return json
-		.replace(/</g, '\\u003c')
-		.replace(/>/g, '\\u003e')
-		.replace(/&/g, '\\u0026');
-}
 
 /// schema.org `Organization` node for the brand. `logo` points at the
 /// 512px app icon (a square raster Google accepts for the knowledge
@@ -47,7 +35,7 @@ export function buildOrganizationJsonLd(base: string | null | undefined): string
 		logo: `${b}/icon-512.png`,
 		description: SITE_DESCRIPTION,
 	};
-	return escapeJsonLd(JSON.stringify(graph));
+	return serialiseJsonLd(graph);
 }
 
 /// schema.org `WebSite` node. Deliberately carries no `potentialAction`
@@ -64,5 +52,5 @@ export function buildWebSiteJsonLd(base: string | null | undefined): string {
 		url: `${b}/`,
 		description: SITE_DESCRIPTION,
 	};
-	return escapeJsonLd(JSON.stringify(graph));
+	return serialiseJsonLd(graph);
 }

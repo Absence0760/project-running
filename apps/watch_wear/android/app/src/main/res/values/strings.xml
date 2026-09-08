@@ -157,8 +157,24 @@
     <string name="tap_here">Tap here</string>
     <string name="submit">Submit</string>
     <string name="cancel">Cancel</string>
-    <string name="token_refresh_failed">Token refresh failed: %1$s</string>
+    <!-- Why the watch could not authenticate. Replaces the GoTrue error body
+         that used to reach the wrist verbatim, and the half-translated
+         "Token refresh failed: <English>" frame (decisions § 1492). -->
+    <string name="auth_fault_credentials">Email or password is wrong</string>
+    <string name="auth_fault_rate_limited">Too many tries — wait a minute</string>
+    <string name="auth_fault_server">Server busy — try again</string>
+    <string name="auth_fault_offline">No connection</string>
+    <string name="auth_fault_session_expired">Session expired — sign in again</string>
+    <string name="auth_fault_unknown">Sign-in failed</string>
     <string name="sync_queue_unreadable">Saved runs unreadable</string>
+    <!-- Why the last sync attempt did not get through, as a sentence the
+         runner can act on. Replaces the raw exception message that used to
+         reach this banner untranslated (decisions § 1490). -->
+    <string name="sync_fault_offline">No connection — will retry</string>
+    <string name="sync_fault_server">Server busy — will retry</string>
+    <string name="sync_fault_sign_in">Sign in again to sync</string>
+    <string name="sync_fault_refused">Server refused this run</string>
+    <string name="sync_fault_unknown">Sync failed</string>
 
     <!-- ───────────── Running screen ───────────── -->
     <string name="no_gps_time_only">No GPS — time only</string>

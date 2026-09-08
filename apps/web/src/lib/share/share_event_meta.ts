@@ -15,29 +15,14 @@ import {
 	normaliseSiteUrl,
 } from './share_meta';
 import { escapeHtml } from '../util/html_escape';
+import { serialiseJsonLd } from '../util/json_ld';
+import { collapseAndClip } from '../util/clip_text';
 import type { SharedEvent } from './share_event_lookup';
 
 const SITE_NAME = 'Threkir';
 
-/// Escape the three characters that could break out of a
-/// `<script type="application/ld+json">` when injected verbatim.
-function escapeJsonLd(json: string): string {
-	return json
-		.replace(/</g, '\\u003c')
-		.replace(/>/g, '\\u003e')
-		.replace(/&/g, '\\u0026');
-}
-
-/// Collapse + truncate a user-set string for a meta tag so a
-/// pathological title/description can't blow out the head.
-function clean(raw: string | null | undefined, max: number): string {
-	const collapsed = (raw ?? '').replace(/\s+/g, ' ').trim();
-	if (!collapsed) return '';
-	return collapsed.length > max ? `${collapsed.slice(0, max - 1).trimEnd()}…` : collapsed;
-}
-
 export function buildEventShareTitle(event: SharedEvent | null | undefined): string {
-	const t = clean(event?.title, 80);
+	const t = collapseAndClip(event?.title, 80);
 	return t ? `${t} — ${SITE_NAME}` : `Event — ${SITE_NAME}`;
 }
 
@@ -48,10 +33,10 @@ export function buildEventShareDescription(event: SharedEvent | null | undefined
 	if (date) bits.push(date);
 	const km = formatKmStable(event.distance_m);
 	if (km) bits.push(km);
-	if (event.club_name) bits.push(`hosted by ${clean(event.club_name, 60)}`);
-	if (event.club_location) bits.push(`in ${clean(event.club_location, 60)}`);
+	if (event.club_name) bits.push(`hosted by ${collapseAndClip(event.club_name, 60)}`);
+	if (event.club_location) bits.push(`in ${collapseAndClip(event.club_location, 60)}`);
 	const lead = bits.length ? `${bits.join(' · ')}. ` : '';
-	const desc = clean(event.description, 160);
+	const desc = collapseAndClip(event.description, 160);
 	return `${lead}${desc || `A public event on ${SITE_NAME}.`}`.trim();
 }
 
@@ -83,7 +68,7 @@ export function buildEventJsonLd(
 	const graph: Record<string, unknown> = {
 		'@context': 'https://schema.org',
 		'@type': isAthletic ? 'SportsEvent' : 'Event',
-		name: clean(event?.title, 120) || 'Event',
+		name: collapseAndClip(event?.title, 120) || 'Event',
 		description: buildEventShareDescription(event),
 		url: canonical,
 		eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
@@ -99,17 +84,17 @@ export function buildEventJsonLd(
 	if (event?.club_name) {
 		graph.organizer = {
 			'@type': 'Organization',
-			name: clean(event.club_name, 120),
+			name: collapseAndClip(event.club_name, 120),
 			...(event.club_slug ? { url: `${base}/clubs/${event.club_slug}` } : {}),
 		};
 	}
 	if (event?.club_location) {
 		graph.location = {
 			'@type': 'Place',
-			name: clean(event.club_location, 120),
+			name: collapseAndClip(event.club_location, 120),
 		};
 	}
-	return escapeJsonLd(JSON.stringify(graph));
+	return serialiseJsonLd(graph);
 }
 
 export interface ShareEventMetaInput {

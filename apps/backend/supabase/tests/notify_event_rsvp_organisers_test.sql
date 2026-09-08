@@ -8,7 +8,7 @@
 
 begin;
 
-select plan(5);
+select plan(6);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -45,6 +45,19 @@ select lives_ok(
   'a member can RSVP going to the event');
 
 reset role;
+
+-- `enforce_event_capacity` may rewrite a supplied 'going' to 'waitlisted', and
+-- a `lives_ok` cannot tell the two apart. The notification counts below happen
+-- to separate them today -- `notify_event_rsvp` returns early on any other
+-- status -- but that is a claim about a SECOND trigger's control flow, and a
+-- fan-out later widened to tell the organiser about a waitlisted RSVP would
+-- leave them green with nothing here noticing.
+select is(
+  (select status from event_attendees
+   where event_id = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeee001'
+     and user_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaae004'),
+  'going',
+  'the RSVP is stored going, not silently waitlisted');
 
 select is(
   (select count(*)::int from notifications

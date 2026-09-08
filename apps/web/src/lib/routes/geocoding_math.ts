@@ -4,6 +4,8 @@
 // `geocoding.ts` re-exports thin wrappers that inject the env-read
 // key.
 
+import { haversineMetres } from '../runs/run_stats';
+
 export interface PlaceSearchResult {
 	name: string;
 	lng: number;
@@ -42,22 +44,6 @@ export function isUsableLongitude(v: unknown): v is number {
 	return typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 180;
 }
 
-export function haversineM(
-	a: { lng: number; lat: number },
-	b: { lng: number; lat: number },
-): number {
-	const R = 6371000;
-	const toRad = (d: number) => (d * Math.PI) / 180;
-	const dLat = toRad(b.lat - a.lat);
-	const dLng = toRad(b.lng - a.lng);
-	const sinLat = Math.sin(dLat / 2);
-	const sinLng = Math.sin(dLng / 2);
-	const h =
-		sinLat * sinLat +
-		Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * sinLng * sinLng;
-	return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
-}
-
 // Maximum distance in metres from a bbox centroid to one of its four
 // corners — used as the search radius for region matches. For
 // "Virginia" this is ~470 km; for "Richmond, VA" ~30 km; for a
@@ -73,7 +59,9 @@ export function bboxRadius(
 		[e, s],
 		[e, n],
 	];
-	return Math.max(...corners.map(([lng, lat]) => haversineM(center, { lng, lat })));
+	return Math.max(
+		...corners.map(([lng, lat]) => haversineMetres(center.lat, center.lng, lat, lng)),
+	);
 }
 
 /// Why the search dispatcher reports an outcome rather than a bare

@@ -5,16 +5,24 @@
 //
 // Pure functions. Unit-testable. No Svelte / Supabase dependencies.
 
-export interface PrivacyZone {
+/// Declared as an ALIAS, not an interface, and that is load-bearing rather
+/// than stylistic: TypeScript gives an object type an implicit index signature
+/// only when it is an alias — an interface stays open to declaration merging
+/// and so never gets one — and without one a zone list cannot be assigned to
+/// the `Json` of the `user_settings.prefs` bag it is persisted into (§ 1363).
+/// An interface here does not fail the write; it pushes every writer into
+/// restating the fields by hand, which is a second declaration of the privacy
+/// contract § 33 makes.
+export type PrivacyZone = {
 	lat: number;
 	lng: number;
 	radius_m: number;
-}
+};
 
-export interface LatLng {
+export type LatLng = {
 	lat: number;
 	lng: number;
-}
+};
 
 export const PRIVACY_ZONES_KEY = 'privacy_zones';
 

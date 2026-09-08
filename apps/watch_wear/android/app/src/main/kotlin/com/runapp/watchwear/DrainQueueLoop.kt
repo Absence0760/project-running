@@ -22,7 +22,8 @@ package com.runapp.watchwear
 ///     uploaded successfully)
 ///   - whether any transient failure occurred (drives the
 ///     `DrainBackoff.onFailure` / `onSuccess` decision in the caller)
-///   - the last error message (used as the UI's `syncError` banner)
+///   - the classified fault the wrist states, and every raw failure the pass
+///     met so the caller can log what a bug report needs
 ///
 /// The loop short-circuits on the first transient failure so a
 /// down-network state can't hammer the backend with every run in the
@@ -39,8 +40,8 @@ data class DrainQueueLoopResult(
     /// — 400/404/409/422 and unknown). They are still in the queue and no
     /// retry will ever move them.
     ///
-    /// Separate from [lastError] rather than folded into it, because the two
-    /// have different lifetimes on purpose. `lastError` is the transient
+    /// Separate from [lastFault] rather than folded into it, because the two
+    /// have different lifetimes on purpose. `lastFault` is the transient
     /// banner and a later success in the same pass clears it — a decision
     /// `DrainQueueLoopTest` states twice and this does not reverse. A
     /// permanent rejection is not a banner: it is a standing fact about a
@@ -61,9 +62,29 @@ data class DrainQueueLoopResult(
     /// or `RetryAfterRefresh` followed by another transient failure.
     /// Caller arms backoff when set.
     val anyTransientFailure: Boolean,
-    /// Last user-readable error message — sticks on the UI as
-    /// `syncError` until the next success clears it.
-    val lastError: String?,
+    /// The fault the wrist states — sticks on the UI as `syncFault` until the
+    /// next success clears it.
+    ///
+    /// A classification rather than the throwable's own message, because the
+    /// message is English, technical and unbounded, and this is the only
+    /// user-facing string on the watch that never went through a catalogue
+    /// (decisions § 1490). The raw text is not lost: it rides [failures].
+    val lastFault: SyncFault?,
+    /// Every failure the pass met, in order, carrying the throwable itself.
+    ///
+    /// Distinct from [lastFault] in lifetime and in purpose. That one is the
+    /// banner and a trailing success clears it; this one is the diagnostic and
+    /// nothing clears it, because a pass that rejected four runs and then
+    /// drained a fifth still has four things a bug report needs. The caller
+    /// logs these; nothing renders them.
+    val failures: List<DrainFailure>,
+)
+
+/// One failed upload attempt, as the log needs it.
+data class DrainFailure(
+    val runId: String,
+    val fault: SyncFault,
+    val error: Throwable,
 )
 
 /// Fold one pass's verdicts into the set of queue entries known to be
@@ -119,8 +140,9 @@ internal suspend fun drainQueueLoop(
     val drained = mutableListOf<String>()
     val rejected = mutableListOf<String>()
     val attempted = mutableListOf<String>()
+    val failures = mutableListOf<DrainFailure>()
     var anyTransientFailure = false
-    var lastError: String? = null
+    var lastFault: SyncFault? = null
 
     for (run in snapshot) {
         attempted += run.id
@@ -128,9 +150,10 @@ internal suspend fun drainQueueLoop(
             push(run)
             onSuccessfulDrain.invoke(run.id)
             drained += run.id
-            lastError = null
+            lastFault = null
         } catch (e: Throwable) {
-            lastError = e.message ?: e.javaClass.simpleName
+            lastFault = syncFaultFor(e)
+            failures += DrainFailure(run.id, lastFault, e)
             when (classify(e)) {
                 DrainAction.RetryAfterRefresh -> {
                     // One-shot refresh-then-retry. If refresh fails OR
@@ -140,7 +163,7 @@ internal suspend fun drainQueueLoop(
                     val refreshed = try {
                         refresh()
                     } catch (inner: Throwable) {
-                        lastError = inner.message ?: lastError
+                        failures += DrainFailure(run.id, SyncFault.SignInRequired, inner)
                         false
                     }
                     if (!refreshed) {
@@ -151,9 +174,13 @@ internal suspend fun drainQueueLoop(
                         push(run)
                         onSuccessfulDrain.invoke(run.id)
                         drained += run.id
-                        lastError = null
+                        lastFault = null
                     } catch (inner: Throwable) {
-                        lastError = inner.message ?: lastError
+                        // The retry's OWN fault, not the 401 that provoked it:
+                        // the refresh worked, so telling the runner to sign in
+                        // again names the one thing that has just succeeded.
+                        lastFault = syncFaultFor(inner)
+                        failures += DrainFailure(run.id, lastFault, inner)
                         anyTransientFailure = true
                         break
                     }
@@ -184,6 +211,7 @@ internal suspend fun drainQueueLoop(
         rejectedIds = rejected,
         attemptedIds = attempted,
         anyTransientFailure = anyTransientFailure,
-        lastError = lastError,
+        lastFault = lastFault,
+        failures = failures,
     )
 }

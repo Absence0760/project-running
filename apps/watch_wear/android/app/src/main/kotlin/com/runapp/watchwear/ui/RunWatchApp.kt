@@ -228,7 +228,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                             syncFailed = state.syncFailed,
                             syncing = state.syncing,
                             authed = state.authed,
-                            authError = state.authError,
+                            authFault = state.authFault,
                             online = state.online,
                             batteryOptimised = state.batteryOptimised,
                             batteryPercent = state.batteryPercent,
@@ -260,7 +260,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     }
                 }
                 Stage.SignIn -> SignInScreen(
-                    authError = state.authError,
+                    authFault = state.authFault,
                     loading = state.signInLoading,
                     onSubmit = vm::signInWithEmail,
                     onCancel = vm::cancelSignIn,
@@ -302,7 +302,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     preferredUnit = state.preferredUnit,
                     synced = state.thisRunSynced,
                     syncing = state.syncing,
-                    syncError = state.syncError,
+                    syncFault = state.syncFault,
                     onSync = vm::sync,
                     onStartNext = vm::startNextRun,
                     onDiscard = vm::discard,
@@ -649,7 +649,7 @@ private fun PreRunScreen(
     syncFailed: Boolean,
     syncing: Boolean,
     authed: Boolean,
-    authError: String?,
+    authFault: com.runapp.watchwear.AuthFault?,
     online: Boolean,
     batteryOptimised: Boolean,
     batteryPercent: Int?,
@@ -1085,9 +1085,9 @@ private fun PreRunScreen(
                     style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                     color = DuskPalette.warning,
                 )
-                if (authError != null) {
+                if (authFault != null) {
                     Text(
-                        authError,
+                        stringResource(com.runapp.watchwear.authFaultMessage(authFault)),
                         style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                         color = DuskPalette.error,
                         textAlign = TextAlign.Center,
@@ -1369,7 +1369,7 @@ private fun PreRunScreen(
 /// retail watches have one.
 @Composable
 private fun SignInScreen(
-    authError: String?,
+    authFault: com.runapp.watchwear.AuthFault?,
     loading: Boolean,
     onSubmit: (email: String, password: String) -> Unit,
     onCancel: () -> Unit,
@@ -1434,10 +1434,10 @@ private fun SignInScreen(
             )
         }
 
-        if (authError != null) {
+        if (authFault != null) {
             item {
                 Text(
-                    authError,
+                    stringResource(com.runapp.watchwear.authFaultMessage(authFault)),
                     style = MaterialTheme.typography.caption3,
                     color = DuskPalette.error,
                     textAlign = TextAlign.Center,
@@ -2139,7 +2139,7 @@ private fun PostRunScreen(
     preferredUnit: com.runapp.watchwear.recording.DistanceUnit,
     synced: Boolean,
     syncing: Boolean,
-    syncError: String?,
+    syncFault: com.runapp.watchwear.SyncFault?,
     onSync: () -> Unit,
     onStartNext: () -> Unit,
     onDiscard: () -> Unit,
@@ -2226,9 +2226,9 @@ private fun PostRunScreen(
                         color = DuskPalette.success,
                     )
                 }
-                if (syncError != null) {
+                if (syncFault != null) {
                     Text(
-                        syncError,
+                        stringResource(com.runapp.watchwear.syncFaultMessage(syncFault)),
                         style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                         color = DuskPalette.error,
                         textAlign = TextAlign.Center,

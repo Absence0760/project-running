@@ -12,11 +12,16 @@
 //
 // Pure — no Svelte, no Supabase — so it runs under `npx tsx --test`.
 
+import type { JsonObject } from '../types';
 import type { EnteredSet, StepOutcome } from './gym_session_types';
 
 export const GYM_SESSION_DRAFT_KEY = 'gym_session_draft';
 
-export interface GymSessionDraftResult {
+/// Declared as type ALIASES rather than interfaces: only an alias of an
+/// object type gets TypeScript's implicit index signature, and without it a
+/// shape whose every field is JSON is still refused by `Json` (decisions
+/// § 1363). These two are written straight into `gym_workouts.metadata`.
+export type GymSessionDraftResult = {
 	step_index: number;
 	status: 'completed' | 'skipped';
 	reps: number | null;
@@ -24,12 +29,12 @@ export interface GymSessionDraftResult {
 	rpe: number | null;
 	duration_s: number | null;
 	distance_m: number | null;
-}
+};
 
-export interface GymSessionDraft {
+export type GymSessionDraft = {
 	saved_at: string;
 	results: GymSessionDraftResult[];
-}
+};
 
 export interface RestoredSession {
 	outcomes: (StepOutcome | undefined)[];
@@ -85,7 +90,7 @@ export function draftMetadata(
 	outcomes: readonly (StepOutcome | undefined)[],
 	currentIndex: number,
 	savedAtIso: string,
-): Record<string, unknown> {
+): JsonObject {
 	return {
 		routine_id: routineId,
 		[GYM_SESSION_DRAFT_KEY]: {
@@ -101,7 +106,7 @@ export function draftMetadata(
 // RPC asks `jsonb_typeof(...) = 'object'`, so an array under the key has to
 // answer "not a draft" here too, or a row three rails call performed reads as
 // in-flight on one of them.
-function isJsonObject(v: unknown): v is Record<string, unknown> {
+function isJsonObject(v: unknown): v is JsonObject {
 	return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
@@ -120,7 +125,7 @@ export function hasSessionDraft(metadata: unknown): boolean {
 /// — a draft whose routine is unknown can't be replayed against anything.
 export function draftRoutineId(metadata: unknown): string | null {
 	if (!hasSessionDraft(metadata)) return null;
-	const id = (metadata as Record<string, unknown>)['routine_id'];
+	const id = (metadata as JsonObject)['routine_id'];
 	return typeof id === 'string' && id !== '' ? id : null;
 }
 
@@ -177,7 +182,7 @@ export function resumedStartedAt(durationS: number | null | undefined, nowMs: nu
 /// "Save as is": keep the logged sets as a plain workout by dropping only the
 /// draft marker. `routine_id` stays (the link is real); no adherence verdict is
 /// claimed, because the session never ran to completion.
-export function stripSessionDraft(metadata: unknown): Record<string, unknown> {
+export function stripSessionDraft(metadata: unknown): JsonObject {
 	if (!isJsonObject(metadata)) return {};
 	const out = { ...metadata };
 	delete out[GYM_SESSION_DRAFT_KEY];

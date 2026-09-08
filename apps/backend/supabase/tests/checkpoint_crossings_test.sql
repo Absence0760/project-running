@@ -13,15 +13,21 @@
 --   4. Identity rule: an upsert with neither user_id nor bib raises 23514.
 --   5. Health column-lock: a direct SELECT of body_weight_kg is denied (42501)
 --      to authenticated/anon, while the non-health columns select fine.
---   6. Health fail-closed (decisions §150): the Art 9 health value persists ONLY
---      when the checkpoint requires_weigh_in AND the caller consented; otherwise
---      it is dropped to NULL.
+--   6. Health fail-closed (decisions §150), for `body_weight_kg` on the INSERT
+--      branch: the Art 9 value persists ONLY when the checkpoint
+--      requires_weigh_in AND the caller consented; otherwise it is dropped to
+--      NULL. That is HALF the gate. The other three health columns and the
+--      MERGE branch — where `medical_hold` is `not null default false` and so
+--      answers a closed gate with `false` rather than NULL, and where the
+--      `else cc.<col>` arms decide what a second volunteer's write does to an
+--      existing crossing — are pinned by `weigh_in_health_gate_test.sql`.
+--      Neither file is the whole gate; read them as a pair.
 --   7. fetch_checkpoint_crossings_for_organiser returns the health columns for an
 --      organiser and raises 42501 for a non-organiser.
 
 begin;
 
-select plan(17);
+select plan(18);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -77,6 +83,20 @@ select lives_ok(
        null, '500', 'Erin Aid',
        '2026-06-06 08:00+00', null) $$,
   'an event organiser can write a crossing via upsert_checkpoint_crossing');
+
+-- The `lives_ok` says only that the call was not refused. It cannot say a row
+-- landed carrying the values handed over, and the RPC does not plant them
+-- verbatim on every arm -- `least` / `greatest` / `coalesce` decide `in_time`,
+-- `out_time` and `runner_name` whenever the crossing already exists.
+select is(
+  (select count(*)::int from checkpoint_crossings
+   where checkpoint_id = '01010101-0101-0101-0101-0101010101c1'
+     and bib = '500'
+     and runner_name = 'Erin Aid'
+     and in_time = '2026-06-06 08:00+00'::timestamptz
+     and out_time is null),
+  1,
+  'the organiser''s crossing stored the bib, name and in_time it supplied');
 
 -- A non-organiser authenticated user (plain member) is rejected 42501.
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000201a2","role":"authenticated"}';

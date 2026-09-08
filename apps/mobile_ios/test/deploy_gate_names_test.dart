@@ -77,6 +77,18 @@ void main() {
             reason: '${gate.key} reads $dart and ${gate.value} reads $web, which now DO '
                 'satisfy the convention — delete the _knownExceptions entry, which is '
                 'cover for nothing and hides the next one.');
+        // A declaration that lives only here is not a declaration. The reason
+        // above asserts both headers state the exception, and the web one did
+        // not — the same shape as § 1354's defect, where the one place a reader
+        // could learn about it said the opposite. So each side must NAME the
+        // other's key, which is the only form of the claim a reader acts on.
+        expect(_read(gate.key).contains(web!), true,
+            reason: '${gate.key} is a declared exception but never names $web, so a '
+                'reader of the mobile gate cannot learn which key the web half reads.');
+        expect(_read(gate.value).contains(dart!), true,
+            reason: '${gate.value} is a declared exception but never names $dart, so an '
+                'operator who flipped the web gate has no way to learn the phone reads a '
+                'different key and is still closed.');
         continue;
       }
       expect(follows, true,

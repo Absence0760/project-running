@@ -11,7 +11,7 @@ import org.junit.Test
 /// § 1107 made `gradeRecovery` fail closed on an unreadable queue: the grade
 /// is `Ignore`, nothing is queued and nothing is cleared. Correct for the
 /// data, and completely silent for the runner — the prompt is a full-screen
-/// takeover with no failure line, and `syncError` renders on `PostRunScreen`,
+/// takeover with no failure line, and `syncFault` renders on `PostRunScreen`,
 /// a screen a runner sitting under this takeover cannot reach. So "Save it"
 /// did nothing, twice over: the tap was inert AND the prompt was never raised
 /// at all on a cold start into an unreadable queue.
@@ -45,7 +45,7 @@ class RecoveryPromptDisclosureTest {
         assertTrue(
             "the takeover must render the unreadable-queue string. Without it the " +
                 "runner taps \"Save it\", the re-grade answers Ignore, and nothing " +
-                "visibly happens at all — the prompt is a takeover and `syncError` " +
+                "visibly happens at all — the prompt is a takeover and `syncFault` " +
                 "renders on PostRunScreen.",
             block.contains("R.string.sync_queue_unreadable"),
         )

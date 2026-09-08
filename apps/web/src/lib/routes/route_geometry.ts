@@ -6,6 +6,7 @@
  * this module.
  */
 import { lonDeltaDeg, wrapLonDeg } from './geo';
+import { haversineMetres } from '../runs/run_stats';
 
 export interface RouteWaypoint {
 	lat: number;
@@ -46,7 +47,7 @@ export function interpolateAlongRoute(
 	for (let i = 1; i < waypoints.length; i++) {
 		const a = waypoints[i - 1];
 		const b = waypoints[i];
-		const segLen = haversineM(a.lat, a.lng, b.lat, b.lng);
+		const segLen = haversineMetres(a.lat, a.lng, b.lat, b.lng);
 		if (segLen <= 0) continue;
 		const segEnd = seen + segLen;
 		if (target <= segEnd || i === waypoints.length - 1) {
@@ -97,7 +98,7 @@ export function distanceAlongRoute(
 	for (let i = 1; i < waypoints.length; i++) {
 		const a = waypoints[i - 1];
 		const b = waypoints[i];
-		const segLen = haversineM(a.lat, a.lng, b.lat, b.lng);
+		const segLen = haversineMetres(a.lat, a.lng, b.lat, b.lng);
 		const cosLat = Math.cos(a.lat * deg);
 		const bx = lonDeltaDeg(a.lng, b.lng) * cosLat * rPerDeg;
 		const by = (b.lat - a.lat) * rPerDeg;
@@ -108,7 +109,7 @@ export function distanceAlongRoute(
 			abLenSq <= 0 ? 0 : Math.min(1, Math.max(0, (px * bx + py * by) / abLenSq));
 		const footLat = a.lat + (b.lat - a.lat) * t;
 		const footLng = wrapLonDeg(a.lng + lonDeltaDeg(a.lng, b.lng) * t);
-		const offset = haversineM(point.lat, point.lng, footLat, footLng);
+		const offset = haversineMetres(point.lat, point.lng, footLat, footLng);
 		if (offset < bestOffset) {
 			bestOffset = offset;
 			best = seen + t * segLen;
@@ -156,28 +157,9 @@ function cumulativeLengthM(waypoints: RouteWaypoint[]): number {
 	for (let i = 1; i < waypoints.length; i++) {
 		const a = waypoints[i - 1];
 		const b = waypoints[i];
-		total += haversineM(a.lat, a.lng, b.lat, b.lng);
+		total += haversineMetres(a.lat, a.lng, b.lat, b.lng);
 	}
 	return total;
-}
-
-function haversineM(
-	lat1: number,
-	lng1: number,
-	lat2: number,
-	lng2: number,
-): number {
-	const r = 6_371_000;
-	const deg = Math.PI / 180;
-	const dLat = (lat2 - lat1) * deg;
-	const dLng = (lng2 - lng1) * deg;
-	const a =
-		Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-		Math.cos(lat1 * deg) *
-			Math.cos(lat2 * deg) *
-			Math.sin(dLng / 2) *
-			Math.sin(dLng / 2);
-	return r * 2 * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
 function lerpNullable(

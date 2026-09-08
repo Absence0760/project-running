@@ -53,7 +53,7 @@ test('buildWebSiteJsonLd — no SearchAction (no public search endpoint to targe
 // ---------------- escaping ----------------
 
 test('JSON-LD payloads escape the script-terminating characters', () => {
-	// Every builder must run escapeJsonLd so a `</script>` can never
+	// Every builder must serialise through serialiseJsonLd so a `</script>` can never
 	// terminate the injected element early. The base is templated, not
 	// user input, but the escape is defence-in-depth + keeps the payload
 	// valid when dropped into HTML verbatim.

@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import {
 	buildMetaLine,
 	buildRouteOgSvg,
-	truncate,
 } from './og_route_image';
 import { escapeHtml } from '../util/html_escape';
 
@@ -84,15 +83,27 @@ test('buildMetaLine — marathon uses two-decimal km', () => {
 	assert.equal(buildMetaLine(42195, 'road'), '42.20 km · road');
 });
 
-test('truncate — passes short strings through', () => {
-	assert.equal(truncate('hi', 30), 'hi');
-});
-
-test('truncate — uses an ellipsis when over the cap', () => {
-	const s = 'this string is long enough to be cut off';
-	assert.equal(truncate(s, 10), 'this stri…');
+test('buildRouteOgSvg — a long route name is clipped to the card, ellipsis included', () => {
+	const svg = buildRouteOgSvg({
+		name: 'a route name far longer than the title line can hold',
+		track: sampleTrack,
+	});
+	const title = /font-size="56"[^>]*>([^<]*)</.exec(svg)?.[1];
+	// 29, not 30: the cut landed on a space, which trimEnd takes before the
+	// ellipsis goes on. The budget is a ceiling, not a target.
+	assert.equal(title, 'a route name far longer than…');
+	assert.ok(title.length <= 30);
 });
 
 test('escapeHtml — escapes the five reserved characters', () => {
 	assert.equal(escapeHtml(`a<b>&c"d'e`), 'a&lt;b&gt;&amp;c&quot;d&#39;e');
+});
+
+test('buildRouteOgSvg — a route name cut mid-emoji does not reach the rasteriser broken', () => {
+	const svg = buildRouteOgSvg({
+		name: `${'a'.repeat(28)}\u{1F3C3} and more of the name`,
+		track: sampleTrack,
+	});
+	assert.equal(Buffer.from(svg, 'utf8').toString('utf8'), svg);
+	assert.doesNotMatch(svg, /[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
 });

@@ -1,10 +1,10 @@
 /// Pure SEO builders for the Learn pages — sibling of share_meta.ts.
 /// Splits the title / description / canonical / JSON-LD wire shape out
 /// of the +page.svelte files so unit tests can pin them without booting
-/// SvelteKit. Mirrors share_meta.ts's idioms (trailing-slash
-/// normalisation + the JSON-LD escape) rather than abstracting them — a
-/// three-line escape is not worth a shared module (conventions discourage
-/// premature abstraction).
+/// SvelteKit. Mirrors share_meta.ts's trailing-slash normalisation; the
+/// JSON-LD escape is shared rather than mirrored, as `util/json_ld`.
+
+import { serialiseJsonLd } from '../util/json_ld';
 
 const SITE_NAME = 'Threkir';
 
@@ -33,17 +33,6 @@ export function buildGuideDescription(description: string | null | undefined): s
 	return d || `Beginner running guides on ${SITE_NAME}.`;
 }
 
-/// Escape the three characters that let a string break out of a
-/// `<script type="application/ld+json">` block when injected verbatim
-/// into HTML. `<` is the only strictly necessary one (`</script>`); the
-/// other two keep the payload valid JSON either way (belt-and-braces).
-function escapeJsonLd(json: string): string {
-	return json
-		.replace(/</g, '\\u003c')
-		.replace(/>/g, '\\u003e')
-		.replace(/&/g, '\\u0026');
-}
-
 export type GuideJsonLdInput = {
 	title: string;
 	description: string;
@@ -60,7 +49,7 @@ export type GuideJsonLdInput = {
 /// (Home → Learn → category → article) for breadcrumb rich results.
 /// Returns a string ready to drop inside a `<script
 /// type="application/ld+json">`. Guide content is repo-authored, not
-/// user input, but the output is still run through `escapeJsonLd` for
+/// user input, but the output is still run through `serialiseJsonLd` for
 /// consistency + defence-in-depth.
 export function buildGuideJsonLd(input: GuideJsonLdInput): string {
 	const base = normaliseSiteUrl(input.base);
@@ -91,7 +80,7 @@ export function buildGuideJsonLd(input: GuideJsonLdInput): string {
 			],
 		},
 	};
-	return escapeJsonLd(JSON.stringify(graph));
+	return serialiseJsonLd(graph);
 }
 
 export type LearnCollectionEntry = { slug: string; title: string };
@@ -160,5 +149,5 @@ export function buildLearnCollectionJsonLd(input: LearnCollectionJsonLdInput): s
 		};
 	}
 
-	return escapeJsonLd(JSON.stringify(node));
+	return serialiseJsonLd(node);
 }

@@ -398,6 +398,61 @@ That operator reaches every case the **test process** imports, and `_shared/hand
 
 **Dart analyzer complains that a `debug*` method on a production class isn't called** — the `@visibleForTesting` annotation suppresses this in test files but the warning still fires at the declaration site. Add `// ignore: invalid_use_of_visible_for_testing_member` only if you need to call from non-test code (you almost certainly don't).
 
+### Specs that cannot pass on this workstation
+
+Green in CI, red here, and neither is the diff's fault. Both cost a round to
+diagnose before they were written down; check this list before spending another
+one. Anything **not** listed is a real failure until proven otherwise — see the
+`routes/detail.spec.ts` star case in [followups.md](../product/followups.md) for
+a genuinely load-dependent one, which is a different animal from these two.
+
+**`tests-e2e/routes/heatmap-pins.spec.ts` — both `clubs_in_bbox` cases.** They
+fail as `[42501] permission denied for function clubs_in_bbox`, read through the
+service-role fixture client (`getAdminClient()`). Every migration that defines
+the function revokes EXECUTE `from public` and grants it `to anon, authenticated`
+(`20260911_001`, re-emitted in `20260912_001`; `20270128_001` and `20270218_001`
+`create or replace` it and inherit that ACL). `service_role` is never granted by
+name — the RPC only ever answers a service-role caller when the CLI image's own
+bootstrap hands `service_role` a default EXECUTE, which CI's pinned **2.84.2**
+does and the **2.109.1** on this workstation's PATH does not. **Do not "fix" it
+with a `grant execute … to service_role` in a migration**: production's client
+traffic is anon/authenticated, so that widens a production grant to silence a
+local-only artifact. Drive the stack from the repo's own `npx supabase` (2.116.0
+restored the default — measured 2026-08-28, when the whole pgtap suite passed
+under it including `donations_status_lock_test` and `coach_roster_summary_test`,
+which fail under 2.109.1 for exactly this reason), or trust CI. Those two pgtap
+failures are recorded in [test_inventory.md](test_inventory.md) as the same
+split.
+
+**`tests-e2e/settings/account.spec.ts` § "change email — request path".** The
+second case fails as `element(s) not found` on `email-change-pending`, which
+reads exactly like a product bug and is two problems stacked:
+
+1. *The mock is dead.* The case intends to fulfil `PUT /auth/v1/user` itself, but
+   `page.route('**/auth/v1/user', …)` never matches the request. `handleChangeEmail`
+   passes `emailRedirectTo`, and `@supabase/auth-js` appends it as a
+   `?redirect_to=…` query string; Playwright anchors a glob at **both** ends
+   (`**/auth/v1/user` compiles to `^(.*/)auth/v1/user$` — checked against
+   playwright-core 1.62.1's own `globToRegexPattern`), so a URL carrying a query
+   string is not matched. The request therefore reaches live GoTrue. The sibling
+   case's `expect(sawRequest).toBe(false)` runs through the same never-matching
+   pattern, so that half of it cannot fail.
+2. *The hook has nothing to call.* GoTrue then invokes `[auth.hook.send_email]`
+   at `http://host.docker.internal:54321/functions/v1/auth-email`. There is no
+   `supabase_edge_runtime_project-running` container on this workstation at all —
+   not even an exited one — so the hook times out, `updateUser` returns an error,
+   and `pendingEmail` is never set. `docker ps -a | grep edge_runtime` is the
+   one-line check; `supabase start` will not recreate a container the CLI thinks
+   is already up, and a stale one boots into `failed to determine entrypoint`
+   because it is bound to whichever worktree first created it. Only
+   `supabase stop && supabase start` **from the worktree you want mounted** fixes
+   it, which is a shared-resource action across every worktree — never do it
+   while another lane is running.
+
+Fixing (1) makes the case hermetic and removes its dependency on (2) entirely.
+Until then it is red here and green in CI, where the edge runtime is booted
+fresh per job.
+
 ---
 
 ## Tests to add when the competitor-parity backlog lands

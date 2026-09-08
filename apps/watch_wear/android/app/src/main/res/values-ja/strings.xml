@@ -117,8 +117,18 @@
     <string name="tap_here">ここをタップ</string>
     <string name="submit">送信</string>
     <string name="cancel">キャンセル</string>
-    <string name="token_refresh_failed">トークンの更新に失敗しました：%1$s</string>
+    <string name="auth_fault_credentials">メールアドレスまたはパスワードが違います</string>
+    <string name="auth_fault_rate_limited">試行回数が多すぎます — 少し待ってください</string>
+    <string name="auth_fault_server">サーバー混雑 — もう一度お試しください</string>
+    <string name="auth_fault_offline">接続なし</string>
+    <string name="auth_fault_session_expired">セッションの期限切れ — 再度サインイン</string>
+    <string name="auth_fault_unknown">サインインに失敗しました</string>
     <string name="sync_queue_unreadable">保存した記録を読み取れません</string>
+    <string name="sync_fault_offline">接続なし — 再試行します</string>
+    <string name="sync_fault_server">サーバー混雑 — 再試行します</string>
+    <string name="sync_fault_sign_in">再度サインインして同期</string>
+    <string name="sync_fault_refused">サーバーがこの記録を拒否しました</string>
+    <string name="sync_fault_unknown">同期に失敗しました</string>
 
     <string name="no_gps_time_only">GPS なし — 時間のみ</string>
     <string name="gps_lost">GPS を喪失</string>

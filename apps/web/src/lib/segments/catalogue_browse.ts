@@ -106,6 +106,18 @@ function num(value: number | string | null | undefined): number | null {
  * beside the code, which is the only shape both platforms can hold exactly.
  * Ties break on `id`, so the result never depends on sort stability either —
  * which matters on the Dart side, where `List.sort` is not stable.
+ *
+ * **This is not the exercise KEY, and it must not become it.** `fold` leaves
+ * whitespace alone where `normaliseExerciseName` collapses the shared class, so
+ * `Bench Press` and `Bench<U+00A0>Press` — ONE exercise, bound to the same PRs
+ * and the same routine rows — are two orderable names here and file in two
+ * places in a list. That asymmetry is deliberate (§ 1334): the key answers "is
+ * this the same exercise", the fold answers "where does a reader look for it",
+ * and collapsing whitespace here would change the order of every route and
+ * every segment on both platforms to fix a catalogue problem. The catalogue
+ * problem is fixed where it lives — `dedupeShadowedExercises` reduces a
+ * catalogue to one row per KEY before it is ordered, so no surface holds both
+ * spellings to file apart.
  */
 export function compareFoldedNames(
 	aName: string,

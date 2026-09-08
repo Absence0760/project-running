@@ -106,6 +106,7 @@ import { readRankRows } from '../segments/effort_rank';
 import type { RecapPeriodKind } from '../types';
 import { GYM_SESSION_DRAFT_KEY, hasSessionDraft } from '../gym/gym_session_draft';
 import { dedupeShadowedExercises } from '../gym/exercise_catalogue';
+import { namesAnExercise } from '../gym/gym_prs';
 import type { RoutineHistoryAggregate, RoutineSessionRow } from '../gym/routine_history';
 import type { YearInRunningRecap } from '../runs/recap';
 import { mergeRecapRuns, recapYearWindow } from '../runs/recap_window';
@@ -166,13 +167,21 @@ import {
 /// a column, so a migration that drops one fails to compile at the declaration
 /// rather than asking PostgREST for nothing.
 ///
-/// The wire string is `.join()`ed from the tuple, which is `string` rather than a
-/// literal type. That costs nothing today — the browser client is constructed
-/// without the `Database` generic, so supabase-js infers no row shape from any
-/// select in this file — but whoever types that client has to convert these
-/// joins back to literals, and `route_list_columns.ts` already carries the
-/// `Join<T, D>` template-literal type that does it.
-export type RunColumns = readonly (keyof Run)[];
+/// The intersection is what makes that true, and `keyof Run` alone did not:
+/// the overlay adds `track` — a lazy Storage download that has never been a
+/// column — and `has_track`, a field only the `public_runs` view carries. Both
+/// passed `satisfies` and both reach PostgREST as a 42703 that fails the WHOLE
+/// read, not just the column. Narrowing to the generated row's own keys is the
+/// check the typed client makes available; `data.test.ts` pins both refusals.
+///
+/// The wire string is `.join()`ed from the tuple, so it is `string` and
+/// supabase-js's select parser can read nothing from it — unlike every other
+/// narrowed read here, whose columns are a module constant `Join<T, D>` can
+/// re-state as the literal it spells. These are a caller's parameter, known
+/// only at the call site, so the check lives at the tuple's own declaration
+/// instead and the row type is `Pick`ed from that same tuple: one declaration,
+/// two derivations, which is the whole point of § 1330.
+export type RunColumns = readonly (keyof Run & keyof Database['public']['Tables']['runs']['Row'])[];
 
 export interface FetchRunsOptions<C extends RunColumns = RunColumns> {
 	/** Cap the number of rows returned. Pair with `offset` for paging. */
@@ -220,11 +229,10 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 	const build = () => {
 		let q = supabase
 			.from(TABLES.runs)
-			.select(
-				(opts?.columns ? opts.columns.join(SELECT_SEPARATOR) : '*') as
-					| '*'
-					| Join<RunColumns, typeof SELECT_SEPARATOR>,
-			)
+			// `Join<RunColumns, D>` used to stand here and evaluated to `string`:
+			// the type only spells a literal for a TUPLE, and this is an
+			// unbounded array. It read as if the literal survived the join.
+			.select(opts?.columns ? opts.columns.join(SELECT_SEPARATOR) : '*')
 			.eq('user_id', userId);
 		if (opts?.startedAtFrom != null) q = q.gte('started_at', opts.startedAtFrom);
 		if (opts?.startedAtBefore != null) q = q.lt('started_at', opts.startedAtBefore);
@@ -2275,7 +2283,7 @@ export async function searchClubsWithError(
 		location_label: (r.location_label ?? null) as string | null,
 		is_public: r.is_public as boolean,
 		is_verified: (r.is_verified as boolean | undefined) ?? false,
-		join_policy: (r.join_policy ?? 'open') as JoinPolicy,
+		join_policy: parseJoinPolicy(r.join_policy as string | null),
 		member_count: (r.member_count ?? 0) as number,
 		requires_activity_waiver: (r.requires_activity_waiver as boolean | undefined) ?? false,
 		website_url: (r.website_url ?? null) as string | null,
@@ -2713,7 +2721,11 @@ export async function fetchMyClubsWithError(): Promise<{
 		.eq('user_id', userId)
 		.order('joined_at', { ascending: false });
 	if (error) return { clubs: [], error: error.message };
-	const clubs = (data ?? []).map((row: any) => row.clubs).filter(Boolean);
+	// `(row: any)` stood here and hid that this read alone skipped `asClub`:
+	// the embedded row's `join_policy` arrived as the bare `string` the
+	// generated type gives it and was handed on under a type promising the
+	// union. Typing the client is what made the gap visible.
+	const clubs = (data ?? []).map((row) => row.clubs).filter(Boolean).map(asClub);
 	return enrichClubs(clubs);
 }
 
@@ -2817,7 +2829,6 @@ async function enrichClubs(
 	const withMembership = (): ClubWithMeta[] =>
 		clubs.map((c) => ({
 			...c,
-			join_policy: (c.join_policy ?? 'open') as JoinPolicy,
 			member_count: c.member_count ?? 0,
 			viewer_role: roles.get(c.id) ?? null,
 			viewer_status: statuses.get(c.id) ?? null
@@ -2899,7 +2910,7 @@ export async function createClub(input: {
 			return {
 				...data,
 				invite_token: inviteToken,
-				join_policy: (data.join_policy ?? 'open') as JoinPolicy
+				join_policy: parseJoinPolicy(data.join_policy)
 			};
 		}
 		// 23505 is the slug-uniqueness conflict — retry with a suffix.
@@ -5767,7 +5778,10 @@ export async function fetchSuggestedPeople(limit = 12): Promise<PeopleSuggestion
 	const hydrated = await hydratePeopleSuggestions(ids, viewerId);
 	// Rank by combined local signal (shared clubs + shared events) desc, then
 	// shared-club count desc, then display_name. `shared_clubs` stays the
-	// displayed count so the existing People-tab subtitle is unchanged.
+	// displayed count so the existing People-tab subtitle is unchanged. The
+	// name term is `search_ranking.ts`'s, id tiebreak included, so this list
+	// and the People search agree about two runners sharing a display name.
+	const { comparePersonName } = await import('../social/search_ranking');
 	return hydrated
 		.map((p) => ({
 			...p,
@@ -5777,7 +5791,7 @@ export async function fetchSuggestedPeople(limit = 12): Promise<PeopleSuggestion
 		.sort((a, b) => {
 			if (b._score !== a._score) return b._score - a._score;
 			if (b.shared_clubs !== a.shared_clubs) return b.shared_clubs - a.shared_clubs;
-			return (a.display_name ?? '').localeCompare(b.display_name ?? '');
+			return comparePersonName(a, b);
 		})
 		.slice(0, limit)
 		.map(({ _score, ...p }) => p);
@@ -9833,7 +9847,12 @@ export async function createCustomExercise(input: {
 	const userId = auth.user?.id;
 	if (!userId) return null;
 	const name = input.name.trim();
-	if (name.length === 0) return null;
+	// The display spelling is not the rail the row is keyed on: `name_key` is
+	// stamped from it by trigger and carries a `length between 1 and 120`
+	// CHECK, and the fold's whitespace class is not the set JS `trim()` strips.
+	// A name of one U+0085 survives the trim and mints an empty key the column
+	// refuses, so blankness is decided on the key (§ 1367).
+	if (!namesAnExercise(name)) return null;
 	const nowIso = new Date().toISOString();
 	const { data, error } = await supabase
 		.from(TABLES.exercises)
@@ -9859,7 +9878,13 @@ async function replaceGymSets(workoutId: string, sets: GymSetInput[]): Promise<v
 		.delete()
 		.eq('workout_id', workoutId);
 	if (delErr) throw delErr;
+	// Dropped on the key, not the spelling: `gym_sets.exercise_key` is stamped
+	// from `exercise_name` by trigger under a `length >= 1` CHECK, and a name
+	// of one U+0085 trims non-empty while folding to nothing. Dropping first
+	// also keeps `set_index` contiguous — a blank in the middle used to leave a
+	// hole in the numbering the surviving sets are read back by.
 	const rows = sets
+		.filter((s) => namesAnExercise(s.exercise_name))
 		.map((s, i) => ({
 			workout_id: workoutId,
 			set_index: i,
@@ -9872,8 +9897,7 @@ async function replaceGymSets(workoutId: string, sets: GymSetInput[]): Promise<v
 			set_type: s.set_type ?? 'working',
 			duration_s: s.duration_s ?? null,
 			exercise_id: s.exercise_id ?? null,
-		}))
-		.filter((r) => r.exercise_name.length > 0);
+		}));
 	if (rows.length === 0) return;
 	const { error: insErr } = await supabase.from(TABLES.gym_sets).insert(rows);
 	if (insErr) throw insErr;
@@ -10200,7 +10224,10 @@ export async function fetchGymRoutineHistory(
 export async function createGymRoutine(input: GymRoutineInput): Promise<GymRoutineSummary> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not signed in');
-	const exercises = input.exercises.filter((e) => e.exercise_name.trim().length > 0);
+	// The same key-not-spelling test `replaceGymSets` applies:
+	// `gym_routine_exercises.exercise_key` is trigger-stamped under a
+	// `length between 1 and 120` CHECK the display spelling does not decide.
+	const exercises = input.exercises.filter((e) => namesAnExercise(e.exercise_name));
 	const nowIso = new Date().toISOString();
 	const { data, error } = await supabase
 		.from(TABLES.gym_routines)

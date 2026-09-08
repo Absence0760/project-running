@@ -126,7 +126,7 @@ You should see `subscription_tier = 'pro'`. The `/settings/upgrade` page now sho
 
 ## Stripe Connect (paid events — club_events.md slice P1)
 
-This is a **separate** Stripe surface from the Pro purchase above: paid event registration uses **Stripe Connect destination charges** so a host (instructor) is the merchant of record and the platform takes an application fee. Three Edge Functions implement it — `events-connect-onboard` (host Express onboarding), `events-checkout` (destination-charge Checkout Session + soft reservation), `stripe-events-webhook` (the one idempotent order webhook). **TEST MODE ONLY** — use `sk_test_` / `ca_` / `whsec_` keys; never a live key.
+This is a **separate** Stripe surface from the Pro purchase above: paid event registration uses **Stripe Connect destination charges** so the money lands in a host's (instructor's) connected account and the platform takes an application fee. The platform, not the host, is the merchant of record — `on_behalf_of` is not sent ([club_events.md § Money movement](../features/club_events.md#money-movement--to-the-host-not-the-club)). Three Edge Functions implement it — `events-connect-onboard` (host Express onboarding), `events-checkout` (destination-charge Checkout Session + soft reservation), `stripe-events-webhook` (the one idempotent order webhook). **TEST MODE ONLY** — use `sk_test_` / `ca_` / `whsec_` keys; never a live key.
 
 > **This webhook + secret are SEPARATE from the RevenueCat one.** `stripe-events-webhook` has its own endpoint and its own `STRIPE_EVENTS_WEBHOOK_SECRET`. Do **not** reuse `pnpm dev:payments`' forwarder — that targets `revenuecat-webhook` and signs with the RevenueCat HMAC scheme; a Stripe event forwarded there returns `401 missing_signature`.
 
