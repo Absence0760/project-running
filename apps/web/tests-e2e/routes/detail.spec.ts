@@ -160,6 +160,21 @@ test.describe('/routes/[id]', () => {
 		});
 	});
 
+	// `toggleStar` is optimistic, so the button's class says nothing about
+	// whether the write reached the server. This reads the row the click is
+	// about, for the two places the test needs that distinction.
+	const readStarredFlag = async (): Promise<boolean> =>
+		(
+			await readRow(
+				'routes by id',
+				getAdminClient()
+					.from('routes')
+					.select('is_starred')
+					.eq('id', RUNNER_PUBLIC_ROUTE_ID)
+					.single()
+			)
+		).is_starred as boolean;
+
 	test('star + reload + starred-only filter shows it + unstar restores', async ({
 		page
 	}) => {
@@ -187,6 +202,15 @@ test.describe('/routes/[id]', () => {
 		await starBtn.click();
 		await expect(starBtn).toHaveClass(/starred/);
 
+		// `toggleStar` flips the class BEFORE `setRouteStar` resolves, so the
+		// class is not evidence the write left the browser — and `reload()`
+		// cancels whatever is still in flight. Reloading straight off the
+		// optimistic flip therefore races the PATCH it is supposed to be
+		// checking, and loses under load: the row stays unstarred and the
+		// assertion below reports it as a failed round-trip. Wait for the
+		// server to agree first, which is what the next line claims to test.
+		await expect.poll(readStarredFlag).toBe(true);
+
 		// Reload — server-side state must agree.
 		await page.reload();
 		await expect(page.locator('button.star-btn')).toHaveClass(/starred/, {
@@ -211,10 +235,21 @@ test.describe('/routes/[id]', () => {
 		// click above the aria-label flipped to "Show all routes".
 		await page.getByRole('button', { name: /Show all routes/ }).click();
 		await page.goto(`/routes/${RUNNER_PUBLIC_ROUTE_ID}`);
-		// Same hydration gate as the first click — owner-gated handler.
-		await page.waitForLoadState('networkidle');
-		await page.locator('button.star-btn').click();
-		await expect(page.locator('button.star-btn')).not.toHaveClass(/starred/);
+		// Not `networkidle`: the page's fetches are sequential, so any 500 ms
+		// gap between them satisfies it, and it says nothing about whether
+		// the owner-gated handler is mounted. The button renders only under
+		// `isOwner` and its class carries the state this click inverts, so
+		// asserting the starred class IS the readiness gate — and a failure
+		// then names which half went wrong instead of timing out on the
+		// post-state with no idea what the pre-state was.
+		const unstarBtn = page.locator('button.star-btn');
+		await expect(unstarBtn).toHaveClass(/starred/, { timeout: 10_000 });
+		await unstarBtn.click();
+		await expect(unstarBtn).not.toHaveClass(/starred/);
+		// The optimistic flip happens before `setRouteStar` resolves, so the
+		// class alone cannot tell a landed write from one still in flight —
+		// which is exactly the ambiguity the round-43 report was left with.
+		await expect.poll(readStarredFlag).toBe(false);
 	});
 
 	test('tag add → reload persists → remove restores', async ({ page }) => {
