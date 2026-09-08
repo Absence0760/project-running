@@ -41,7 +41,29 @@
  * what the renderer paints — and that is checked by behaviour rather than by
  * re-deriving numbers: `svg_text_width.render.test.ts` rasterises each script
  * class and fails if the ink outruns the estimate.
+ *
+ * ## Why the table alone is not the bound
+ *
+ * The table was measured on ONE host, and a table of font metrics cannot be
+ * more universal than the machine it was read on. Measured against a second
+ * host (the CI runner, whose `sans-serif` resolves to a different face) the
+ * same strings paint up to **11.2 %** wider than the table says — Cyrillic
+ * 1774 px against 1596, ASCII punctuation 1035 against 935, lowercase Latin
+ * 1187 against 1142. So a table presented as "the widest advance across six
+ * faces" was a bound on the six, and the host is not obliged to use one of
+ * them.
+ *
+ * `HOST_FACE_MARGIN` is the answer, and it is deliberately not a seventh
+ * measurement: the Lambda's face is a third unknown and the next host a
+ * fourth, so chasing them is a treadmill the estimate would keep losing. The
+ * margin covers the measured cross-host spread more than twice over. It costs
+ * a slightly earlier clip on a narrow face, which is the safe direction — an
+ * over-clipped title is legible, an overrun one paints off the card.
  */
+
+/// Headroom over the measured table for a face this code cannot see.
+/// The largest cross-host disagreement measured is 11.2 %; this is 25 %.
+const HOST_FACE_MARGIN = 1.25;
 
 /// Advance widths in em for U+0020..U+007E, in code-point order.
 const ASCII_ADVANCE_EM = [
@@ -172,7 +194,7 @@ export function estimateSvgTextWidthPx(text: string, fontSizePx: number): number
 	if (!Number.isFinite(fontSizePx) || fontSizePx <= 0) return 0;
 	let em = 0;
 	for (const c of clusters(text)) em += clusterEm(c);
-	return em * fontSizePx;
+	return em * fontSizePx * HOST_FACE_MARGIN;
 }
 
 /// `text` cut to fit `maxWidthPx` at `fontSizePx`, with an ellipsis in the
@@ -193,7 +215,9 @@ export function clipToWidthPx(text: string, maxWidthPx: number, fontSizePx: numb
 	let used = 0;
 	let kept = '';
 	for (const c of clusters(text)) {
-		const w = clusterEm(c) * fontSizePx;
+		// Through the same margin the estimate carries, or the running total
+		// and the fits-check above would be measuring in different units.
+		const w = clusterEm(c) * fontSizePx * HOST_FACE_MARGIN;
 		if (used + w > budget) break;
 		used += w;
 		kept += c;
