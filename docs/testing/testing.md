@@ -232,6 +232,31 @@ Three scopings are honest, in this order:
 
 Never a bare exact count over a shared user's day. `fixtures/dates.test.ts` enforces the one case where it is mechanically decidable: a spec that drives `save-as-meal` or `save-as-recipe` must first clear the day through `browserDayStart()`, and the guard fails naming the spec. A sweep of the tree found this to be the only genuine collision, with one fragile near-miss (`challenges/pace.spec.ts`, whose challenge window admits the seed's own morning run but whose assertions are qualitative enough not to flip).
 
+### 7. A rate-limit bucket is one row per hour, shared by the whole run
+
+`public.rate_limits` is keyed `(user_id, bucket, window_start)` where the window is the clock hour, so a spec that creates a route or a club is spending a budget every other spec in the run — and every run started in the same hour — is spending too. Three specs deliberately plant `USER_A`'s counter at its cap to pin the friendly "you are doing this too quickly" copy: `routes/import.spec.ts` and `routes/new.spec.ts` at 30 `create_route`, `clubs/new.spec.ts` at 5 `create_club`.
+
+Two rules follow, and both are about the fact that Playwright **abandons** a timed-out test rather than unwinding it, so a `try/finally` inside a test body is not a cleanup guarantee.
+
+1. **Undo a plant in `test.afterEach`**, never in an in-body `finally`. A cap test that times out between the plant and its cleanup leaves the counter at the cap for the rest of the hour, and every subsequent create in the suite then fails with the cap's own error.
+2. **State the budget in `test.beforeEach`** — `resetRateLimit(USER_A.id, 'create_route')` — in every spec that creates through the UI. A test's precondition is its own to state, not a previous test's teardown to guarantee.
+
+The club side has had (2) since the cap tests were written — all four specs that create a club as `USER_A` reset in `beforeEach`. The route side had none of it, and that is what produced the round-43 report of `routes/builder.spec.ts`'s save flow plus exactly four `routes/import.spec.ts` cases failing once and never reproducing: those are precisely the creates between the start of the directory and `import.spec.ts`'s own cap test, whose cleanup then cleared the counter and let the rest pass. A full `tests-e2e/routes/` run peaks the counter at **1**, so the budget itself is never the constraint — a leaked plant is. Planting 30 by hand reproduces the five failures exactly, and they go green with the resets in place.
+
+`clubs/new.spec.ts` still undoes its plant in an in-body `finally`, which is harmless only because every club-creating spec already resets in `beforeEach`; it is filed rather than changed here.
+
+### 8. A `page.route` glob is anchored at both ends, and a mock that never matches is silent
+
+Playwright compiles `**/auth/v1/user` to `^(.*/)auth/v1/user$`. It does not match `/auth/v1/user?redirect_to=…`, which is what `supabase.auth.updateUser(…, { emailRedirectTo })` actually sends. Nothing reports the miss: the request goes to the real server, the stub's body is never used, and any `expect(sawRequest).toBe(false)` beside it is scored against a handler nothing invoked.
+
+Prefer a `RegExp` (or a trailing `*`) whenever the endpoint can carry a query string, and — where the mock is what stands between the spec and a real mutation on a shared fixture user — **assert that it fired**. `settings/account.spec.ts` counts its `PUT` stub and asserts the count, so a pattern that silently stops matching fails the case instead of quietly widening its blast radius.
+
+### 9. An optimistic class flip is not evidence the write left the browser
+
+Every optimistic handler in the app sets local state and *then* awaits the network — `toggleStar` is the canonical one. A spec that asserts the class and immediately calls `page.reload()` cancels the in-flight request it is about to check, and the reload then reads a row the write never reached. It passes on a fast machine and fails under load, with the row left in the pre-click state.
+
+Read the row before navigating away: `await expect.poll(readStarredFlag).toBe(true)` between the click and the reload. The same rule covers any one-shot DOM read of a settling layout — `boundingBox()` is not a web-first assertion, so `dashboard/page.spec.ts`'s 44 px tap-target check polls it rather than snapshotting it once.
+
 ---
 
 ## How to add a new test

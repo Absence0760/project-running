@@ -483,10 +483,20 @@ test.describe('/dashboard', () => {
 
 			const hideBtn = page.locator('.pr-hide').first();
 			await expect(hideBtn).toBeVisible({ timeout: 10_000 });
-			const box = await hideBtn.boundingBox();
-			expect(box).not.toBeNull();
-			expect(box!.width).toBeGreaterThanOrEqual(44);
-			expect(box!.height).toBeGreaterThanOrEqual(44);
+			// `boundingBox()` is a one-shot read, not a web-first assertion:
+			// it reports whatever the layout happens to be at that instant
+			// and returns null outright for a row caught mid-swap, so a
+			// still-settling dashboard scored as a too-small control. Poll it
+			// like every other size assertion in the suite. The threshold is
+			// untouched — the rule under test is `min-width`/`min-height:
+			// 44px` on `.pr-hide`, which measures at exactly 44 with no
+			// headroom, so a control that never reaches it still fails here.
+			await expect
+				.poll(async () => (await hideBtn.boundingBox())?.width ?? 0)
+				.toBeGreaterThanOrEqual(44);
+			await expect
+				.poll(async () => (await hideBtn.boundingBox())?.height ?? 0)
+				.toBeGreaterThanOrEqual(44);
 		} finally {
 			if (runId) await deleteRun(runId);
 		}
