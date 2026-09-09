@@ -13,7 +13,7 @@
 
 begin;
 
-select plan(7);
+select plan(8);
 
 -- ── Fixture ──────────────────────────────────────────────────────
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -104,6 +104,22 @@ set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-1111111111aa"}
 select lives_ok(
   $$ select submit_report('club', '77777777-7777-7777-7777-1111111111aa', 'spam', 'Re-offended after dismissal') $$,
   'after the prior report is dismissed, the same reporter can re-file'
+);
+
+-- Read the re-filed row back. `lives_ok` alone says only that the
+-- partial unique index released; a submit_report that returned without
+-- inserting satisfies it identically, and step 6's read of `reports`
+-- runs BEFORE this call. Reporter A's own RLS view is the one that
+-- matters, and the notes pin the SECOND row rather than the dismissed
+-- first one.
+select is(
+  (select count(*)::int from reports
+   where target_kind = 'club'
+     and target_id = '77777777-7777-7777-7777-1111111111aa'
+     and status = 'pending'
+     and notes = 'Re-offended after dismissal'),
+  1,
+  're-filing inserts a fresh pending report, not just a clean return'
 );
 
 select * from finish();

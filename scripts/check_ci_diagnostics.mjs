@@ -85,6 +85,22 @@
 //      omission, and that the next PR-triggered workflow is one too
 //      (decisions § 1537).
 //
+//   8. The two DOCUMENTS that describe the merge gate say what that register
+//      holds. Rule 7 makes the advisory set a decision in code; nothing tied
+//      it to the prose an operator or a contributor actually reads, and both
+//      were already wrong about it. `docs/ops/deployment.md § Merge gates`
+//      explained the same five decisions by hand and named neither the
+//      register nor the guard, and the root `CLAUDE.md` said a red `lint
+//      title` "fails the PR on open" — which is what the row looks like and
+//      not what it does, `pr-title-lint.yml` being a workflow of its own that
+//      nothing waits for. So the section's advisory list is compared with
+//      `PR_ADVISORY` in BOTH directions, the section has to name the register
+//      and the gate job's display name, and every sentence in CLAUDE.md that
+//      names an advisory check has to call it advisory. Rule 6's shape one
+//      document over: a prose claim is a transcription of something this file
+//      already parses, and an anchor matching nothing is a hard error rather
+//      than a silent pass (decisions § 1585).
+//
 // THE SUBJECT IS PER RULE, and stated in the output. For this file's whole
 // life every rule read `.github/workflows` and nothing else, so the two
 // composite actions under `.github/actions` were outside all of them at once
@@ -329,6 +345,12 @@ export const RULE_SUBJECTS = [
 		what: 'a PR-triggered workflow reaches the required check or is declared advisory',
 		actions: false,
 		why: 'the subject is a whole workflow and its triggers, which an action has none of',
+	},
+	{
+		rule: 8,
+		what: 'the documents describing the merge gate say what PR_ADVISORY holds',
+		actions: false,
+		why: 'the subject is two documents and one register, and an action appears in none of them',
 	},
 ];
 
@@ -1205,6 +1227,260 @@ export function checkStatedJobCount(files, doc) {
 	return { errors, ok, stated: matched };
 }
 
+
+/// The operator-facing document that describes what protects `main`, and the
+/// heading inside it whose bullet list IS `PR_ADVISORY` written out in prose.
+export const GATE_DOC = join(REPO_ROOT, 'docs', 'ops', 'deployment.md');
+export const GATE_DOC_SECTION = /^##\s+Merge gates\b/;
+export const GATE_DOC_ADVISORY = /^###\s+What runs on a pull request and does not block it\s*$/;
+
+/// The name an advisory workflow's check run wears in a pull request's checks
+/// list, for the workflows the root orientation document talks about by that
+/// name rather than by their file.
+///
+/// A contributor meets `pr-title-lint.yml` as the row labelled `lint title`,
+/// and CLAUDE.md told them for its whole life that the row "fails the PR on
+/// open" — which is what the row looks like and not what it does. Every entry
+/// must name a workflow `PR_ADVISORY` still holds, and must be mentioned in
+/// the document at least once, so an entry cannot outlive either.
+/** @type {Map<string, string>} */
+export const ADVISORY_CHECK_NAMES = new Map([['pr-title-lint.yml', 'lint title']]);
+
+/// The `## ` section a heading opens, up to the next `## `.
+/**
+ * @param {string} text
+ * @param {RegExp} heading
+ * @returns {string[] | null} the section's lines, heading included
+ */
+export function docSection(text, heading) {
+	const lines = text.split('\n');
+	const start = lines.findIndex((l) => heading.test(l));
+	if (start === -1) return null;
+	const rest = lines.slice(start + 1);
+	const end = rest.findIndex((l) => /^##\s/.test(l));
+	return [lines[start], ...(end === -1 ? rest : rest.slice(0, end))];
+}
+
+/// The workflow file names a `- \`x.yml\` — …` bullet list names, under the
+/// heading that opens it and up to the next heading of any depth.
+/**
+ * @param {string[]} section
+ * @param {RegExp} heading
+ * @returns {string[] | null} null when the heading itself is gone
+ */
+export function advisoryBullets(section, heading) {
+	const at = section.findIndex((l) => heading.test(l));
+	if (at === -1) return null;
+	/** @type {string[]} */
+	const out = [];
+	for (const line of section.slice(at + 1)) {
+		if (/^#{2,4}\s/.test(line)) break;
+		const m = /^-\s+`([A-Za-z0-9._-]+\.ya?ml)`/.exec(line);
+		if (m) out.push(m[1]);
+	}
+	return out;
+}
+
+/// Sentences, split loosely enough that a bolded clause ending `.**` is not
+/// glued to the one after it.
+/**
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function sentences(text) {
+	return text.replace(/\n/g, ' ').split(/(?<=[.!?][)\]*`"']*)\s+/);
+}
+
+/// Rule 8 — the two documents that describe the merge gate say what the
+/// register holds. See the header.
+/**
+ * @param {readonly WorkflowFile[]} files
+ * @param {string} orientation the root CLAUDE.md's text
+ * @param {string | null} gateDoc docs/ops/deployment.md's text
+ * @param {ReadonlyMap<string, string>} [advisory]
+ * @param {ReadonlyMap<string, string>} [checkNames]
+ * @returns {{ errors: string[], ok: string[] }}
+ */
+export function checkGateDocs(
+	files,
+	orientation,
+	gateDoc,
+	advisory = PR_ADVISORY,
+	checkNames = ADVISORY_CHECK_NAMES,
+) {
+	/** @type {string[]} */
+	const errors = [];
+	/** @type {string[]} */
+	const ok = [];
+
+	if (gateDoc === null) {
+		return {
+			errors: [
+				'docs/ops/deployment.md was not read, so nothing compares the operator-facing ' +
+					'description of the required set against the register that enforces it.',
+			],
+			ok,
+		};
+	}
+	const section = docSection(gateDoc, GATE_DOC_SECTION);
+	if (section === null) {
+		return {
+			errors: [
+				`docs/ops/deployment.md holds no section matching /${GATE_DOC_SECTION.source}/, so ` +
+					'this rule reads nothing. Restore the heading, or re-anchor the rule on the one ' +
+					'that replaced it — a prose guard whose anchor has moved reports clean over ' +
+					'anything the prose now says.',
+			],
+			ok,
+		};
+	}
+	const text = section.join('\n');
+
+	// Half one: the section's advisory list is PR_ADVISORY, both directions.
+	const listed = advisoryBullets(section, GATE_DOC_ADVISORY);
+	if (listed === null) {
+		errors.push(
+			`the Merge-gates section holds no heading matching /${GATE_DOC_ADVISORY.source}/, so ` +
+				'the advisory list is unreadable and its half of this rule checks nothing.',
+		);
+	} else {
+		const named = new Set(listed);
+		for (const name of advisory.keys()) {
+			if (named.has(name)) continue;
+			errors.push(
+				`PR_ADVISORY holds ${name} and the Merge-gates section does not list it. The ` +
+					'section is what an operator reads to learn what a red row does and does not ' +
+					'mean; a workflow missing from it is one they will read as blocking.',
+			);
+		}
+		for (const name of named) {
+			if (advisory.has(name)) continue;
+			errors.push(
+				`the Merge-gates section lists ${name} as advisory and PR_ADVISORY does not hold ` +
+					'it. Either it now reaches the gate — in which case the prose is stale — or it ' +
+					'is a scanner nothing blocks on that the register has never been told about.',
+			);
+		}
+	}
+
+	// Half two: the section names the register and the guard that holds it, so
+	// a reader gets from the prose to the code without knowing it exists.
+	for (const token of ['PR_ADVISORY', 'check_ci_diagnostics.mjs']) {
+		if (text.includes(token)) continue;
+		errors.push(
+			`the Merge-gates section never names \`${token}\`, so the operator document and the ` +
+				'machine-checked register do not point at each other and only one of them gets ' +
+				'updated.',
+		);
+	}
+
+	// Half three: the gate the section calls the single required context is the
+	// job ci.yml actually aggregates on.
+	const ci = files.find((f) => f.name === 'ci.yml');
+	const display = ci ? gateDisplayName(ci.text) : null;
+	if (display === null) {
+		errors.push(
+			`ci.yml declares no \`name:\` for the \`${GATE_JOB}\` job, so the required context's ` +
+				'display name cannot be compared against what the operator document states.',
+		);
+	} else if (!text.includes(display)) {
+		errors.push(
+			`the Merge-gates section never names \`${display}\`, which is what ci.yml calls the ` +
+				`\`${GATE_JOB}\` job and therefore the exact string branch protection has to ` +
+				'require. A section describing the required set by a name it no longer wears ' +
+				'sends the operator to a context that does not exist.',
+		);
+	}
+
+	// Half four: the sentence a contributor meets an advisory check in says so.
+	for (const [wf, check] of checkNames) {
+		if (!advisory.has(wf)) {
+			errors.push(
+				`ADVISORY_CHECK_NAMES names ${wf}, which PR_ADVISORY no longer holds. Delete the ` +
+					'entry rather than leaving a rule that asserts a workflow is advisory when it ' +
+					'may now gate.',
+			);
+			continue;
+		}
+		// The check name is the workflow's own job `name:`, not a label kept in
+		// step with it by hand — the row a reader sees comes from there, and an
+		// entry pointing at a string no job wears would police a sentence about
+		// a check that does not exist.
+		const owner = files.find((f) => f.name === wf);
+		if (!owner) {
+			errors.push(
+				`ADVISORY_CHECK_NAMES names ${wf}, which is not among the workflows read. Its ` +
+					`check \`${check}\` cannot be verified against the job that produces it.`,
+			);
+			continue;
+		}
+		if (!jobDisplayNames(owner.text).includes(check)) {
+			errors.push(
+				`ADVISORY_CHECK_NAMES says ${wf} shows as \`${check}\`, and no job in it carries ` +
+					`that \`name:\` — the file declares ${JSON.stringify(jobDisplayNames(owner.text))}. ` +
+					'A check run wears its job name, so the rule below would be policing sentences ' +
+					'about a row nobody sees.',
+			);
+			continue;
+		}
+		const naming = sentences(orientation).filter((s) => s.includes(`\`${check}\``));
+		if (naming.length === 0) {
+			errors.push(
+				`the root CLAUDE.md never names \`${check}\`, ${wf}'s check run, so this half of ` +
+					'the rule reads nothing. Either the document has stopped telling a contributor ' +
+					'about it, or the name moved and the entry needs re-anchoring.',
+			);
+			continue;
+		}
+		for (const s of naming) {
+			if (/\badvisor(y|ily)\b/i.test(s)) continue;
+			errors.push(
+				`the root CLAUDE.md names \`${check}\` in a sentence that never calls it advisory: ` +
+					`"${s.trim().slice(0, 120)}". ${wf} is in PR_ADVISORY, so that check goes red ` +
+					'and the pull request merges; a sentence describing it as a gate sends a ' +
+					'contributor looking for a block that is not there.',
+			);
+		}
+	}
+
+	if (errors.length === 0) {
+		ok.push(
+			`docs/ops/deployment.md § Merge gates lists all ${advisory.size} advisory workflow(s) ` +
+				`PR_ADVISORY holds and names \`${display}\`; ${checkNames.size} advisory check ` +
+				'name(s) are called advisory wherever the root CLAUDE.md names them',
+		);
+	}
+	return { errors, ok };
+}
+
+/// Every job's `name:` in a workflow, which is the string its check run wears.
+/**
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function jobDisplayNames(text) {
+	return [...text.matchAll(/^ {4}name:\s*(\S.*?)\s*$/gm)].map((m) =>
+		m[1].replace(/^['"]|['"]$/g, ''),
+	);
+}
+
+/// The `name:` of the gate job, which is the string branch protection requires.
+/**
+ * @param {string} text
+ * @returns {string | null}
+ */
+export function gateDisplayName(text) {
+	const lines = text.split('\n');
+	const at = lines.findIndex((l) => new RegExp(`^\\s{2}${GATE_JOB}:\\s*$`).test(l));
+	if (at === -1) return null;
+	for (const line of lines.slice(at + 1)) {
+		if (/^\s{0,2}\S/.test(line)) break;
+		const m = /^\s{4}name:\s*(\S.*?)\s*$/.exec(line);
+		if (m) return m[1].replace(/^['"]|['"]$/g, '');
+	}
+	return null;
+}
+
 /**
  * @param {readonly WorkflowFile[]} files
  * @param {readonly WorkflowFile[]} [actions]
@@ -1218,6 +1494,11 @@ export function checkAll(files, actions = []) {
 	const subjects = checkRuleSubjects(files, actions);
 	const stated = checkStatedJobCount(files, readFileSync(ORIENTATION_DOC, 'utf-8'));
 	const prGates = checkPrGates(files);
+	const gateDocs = checkGateDocs(
+		files,
+		readFileSync(ORIENTATION_DOC, 'utf-8'),
+		existsSync(GATE_DOC) ? readFileSync(GATE_DOC, 'utf-8') : null,
+	);
 	return {
 		errors: [
 			...subjects.errors,
@@ -1228,6 +1509,7 @@ export function checkAll(files, actions = []) {
 			...delivery.errors,
 			...stated.errors,
 			...prGates.errors,
+			...gateDocs.errors,
 		],
 		ok: [
 			...subjects.ok,
@@ -1238,6 +1520,7 @@ export function checkAll(files, actions = []) {
 			...delivery.ok,
 			...stated.ok,
 			...prGates.ok,
+			...gateDocs.ok,
 		],
 		scoping,
 		diagnoses,
@@ -1247,6 +1530,7 @@ export function checkAll(files, actions = []) {
 		subjects,
 		stated,
 		prGates,
+		gateDocs,
 	};
 }
 

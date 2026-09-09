@@ -16917,6 +16917,12 @@ abstract class AppLocalizations {
   /// **'Couldn\'t load the exercise catalogue, so this list may be incomplete.'**
   String get gymCatalogueUnavailable;
 
+  /// Shown after creating a custom exercise whose name matches a seeded global, which the catalogue read then resolves to the custom.
+  ///
+  /// In en, this message translates to:
+  /// **'Added. It replaces the built-in exercise of the same name.'**
+  String get gymCatalogueShadowsBuiltIn;
+
   /// Shown when the typed name matches a catalogue entry the category filter is hiding
   ///
   /// In en, this message translates to:

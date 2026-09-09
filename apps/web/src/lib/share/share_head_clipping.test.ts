@@ -234,13 +234,22 @@ for (const b of builders) {
 
 /// A builder added without a row here would be censused by nothing, which is
 /// the failure this file exists to make impossible rather than to describe.
+///
+/// The scan reads the DECLARATION rather than the `function` keyword, matching
+/// `share_head_escaping.test.ts`' own census: an
+/// `export const buildShareX = (…) =>` is the same builder spelled
+/// differently, and a census keyed on the keyword would miss it silently — the
+/// direction a census must never fail in.
+const BUILDER_DECL =
+	/^export\s+(?:async\s+)?(?:function\s+(buildShare\w+)\s*[<(]|(?:const|let|var)\s+(buildShare\w+)\s*[:=])/gm;
+
 test('every buildShare* entity builder is censused above', () => {
 	const dir = dirname(fileURLToPath(import.meta.url));
 	const declared = new Set<string>();
 	for (const file of readdirSync(dir)) {
 		if (!file.endsWith('.ts') || file.endsWith('.test.ts')) continue;
 		const src = readFileSync(join(dir, file), 'utf-8');
-		for (const m of src.matchAll(/^export function (buildShare\w+)\(/gm)) declared.add(m[1]);
+		for (const m of src.matchAll(BUILDER_DECL)) declared.add(m[1] ?? m[2]);
 	}
 	const censused = new Set(builders.map((b) => b.name));
 	assert.ok(declared.size > 0, 'the scan found no buildShare* builders at all');

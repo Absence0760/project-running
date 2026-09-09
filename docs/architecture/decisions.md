@@ -28619,3 +28619,215 @@ The rule under test is not in doubt: `.pr-hide` has carried `min-width: 44px; mi
 It reproduces deterministically once the race is made visible instead of load-dependent: stalling `PATCH /rest/v1/routes` by 1500 ms fails the old shape after the reload with the button back to a bare `star-btn` and the row unstarred, and passes the same journey unchanged when the row is read before the reload. Both legs of the test now poll the row — `is_starred` true before the reload, false after the closing unstar — so the assertion is about the server, which is what the comment always claimed.
 
 The closing leg also loses its `networkidle`. The comment called it a hydration gate for the owner-only handler and it is not one: the page's fetches are sequential, so any 500 ms gap between two of them satisfies it, and it says nothing about `isOwner`. The button renders only under `isOwner` and its class carries the state the click inverts, so asserting the `starred` class before clicking is both a real readiness gate and a pre-state the failure message can name — where the old shape could only time out on the post-state with no record of what the pre-state had been.
+
+## 1560. Only the narrowed run read states a row shape; the unnarrowed one infers its own
+
+`fetchRuns` has two branches and they reach the row type by different routes. The narrowed read hands `.select()` a module constant that `Join<T, D>` re-states as one literal, so its shape is stated once at the read as what a projection of this table can return. Making the implementation generic over the tuple and casting the join does not recover the parse and is worse than the string: measured, `ParseQuery` neither resolves nor collapses to `GenericStringError` but stays a deferred conditional, so the body cannot read a single field off the row it is meant to narrow (§ 1518).
+
+The unnarrowed branch shares none of that. It hands `.select()` a literal `'*'` of its own and infers the whole row for itself, so a stated shape there would be a second declaration of something the generated types already say — and one that could drift from them. The two branches therefore look asymmetric on purpose: one carries a shape because a projection has no other way to name one, the other carries none because it does not need one.
+
+## 1561. A projected run DENIES `track` rather than declaring it optional
+
+`Partial<Run>` made every column optional, which is a claim about presence and not about selectability. `track` is not a key a projection can select at all (§ 1468), so a reader that names it on a projected row is asking for a column the read never looked at — a question that should not compile rather than one that answers `undefined`. The narrows are likewise applied if and only if the column is present: a key PostgREST did not send is a key the row type does not declare, so adding one invents a value for a column nobody selected, which is what the blanket `track: null` did on every narrowed row (§ 1520). `undefined` is exactly "not selected", since JSON has no such value and a selected-but-empty column arrives as `null` and narrows like any other.
+
+## 1562. A privacy clip is decided against the SESSION's viewer, never the reactive store
+
+`auth.ready()` is a bounded gate: when the initial session check is wedged it resolves its waiters on a timeout rather than hanging the page, so a mount-time fetch that awaits it can still run with `auth.user` null. supabase-js has the persisted token by then, so PostgREST answers as the owner — and `fetchRouteById` then compared the owner's `user_id` against null, took the non-owner branch, and handed the owner their own route with `geom` and `start_point` nulled and the waypoints server-clipped. `isOwner` flipped true the moment the store landed, so the owner-only affordances rendered over stripped geometry and nothing re-fetched.
+
+The store is a rendering convenience; the session is the identity the database already answered as. Resolving the viewer from the session makes the clip decision agree with the read that produced the row, and `viewer_identity_guard.test.ts` holds it at the source so the next reader cannot reach for the store again.
+
+## 1563. A restore does not upsert `handle`, because `set_my_handle` is the only write path
+
+`20270424000002` makes `handle` a public identity claimed through `set_my_handle` — SECURITY DEFINER, and named there as the only write path — because that function enforces the format and the case-insensitive uniqueness and tells the caller which of the two it failed. A restore that upserts the column directly answers neither question: into a different account it always collides with `user_profiles_handle_lower_key`, into a fresh one it silently re-claims a name the deleted account released or collides with whoever has taken it since, and either way it arrives as a 23505 that fails the whole profile row. Stripping it is the same call the `subscription_tier` / `subscription_at` / `parkrun_number` removes beside it already make, and the archive still carries the handle so the runner can claim it deliberately.
+
+## 1564. A restore drops the columns this schema no longer has, instead of failing every row
+
+PostgREST refuses a payload naming a column the table does not have (PGRST204) for the whole row, and a restore reads rows out of an archive written by whatever build produced it. An archive written before `runs.kind` was dropped (`20261206_001`) therefore failed every run it carried, one 400 at a time — after each run's track blob had already been uploaded to Storage. A restore that imports nothing and leaves an orphaned object per run behind.
+
+The three allowlists are STATED rather than derived at runtime, and that is the point of them: `restore_columns_test.dart` reads the `col*` constants out of the generated `db_rows.dart` and demands set EQUALITY, so a column a migration adds has to be admitted here deliberately instead of being silently discarded off every archive that carries it. That is the both-directions check the web side gets from `satisfies Record<keyof Insertable<T>, true>` and Dart has no structural analogue for. The moderation and derived-cache columns stay in the sets on purpose — `20270704000003` reverts a non-service-role write rather than raising, so listing them costs nothing and re-spelling the freeze list here would be a second copy to drift.
+
+What is reported is one warning per SECTION naming every dropped column, not one per row: the names are the same handful on every row of a section by construction, so a stale archive of 500 runs reports one line rather than 500.
+
+## 1565. Which side of U+0020 a shadowed exercise spelling sorts on is not fixed
+
+Two names sharing one exercise key — `Bench Press` and `Bench` + U+00A0 + `Press` — bind to the same PRs, the same routine rows and the same grouping, and sort not merely apart but on opposite sides of every other name beginning `Bench`. § 1496 read that split as fixed. It is not: of the 25 code points in the collapsed class, 20 sort ABOVE U+0020 and the five C0 members (U+0009–U+000D) sort BELOW it, so a shadowed spelling files after the whole `Bench …` block or before all of it depending on which member it carries.
+
+A surface that groups such a pair therefore cannot reach the second row by scanning in one direction from the first, whichever direction it picks. `gym_prs_test.dart` derives the split from the class rather than asserting it, so the claim cannot go stale against a class that changes.
+
+## 1566. The blankness scan reaches a decision taken on an arrow parameter
+
+`fetchExerciseSetHistoryBatch` decides blankness inside `names.filter((n) => …)`, and no rule the web scan had could see it: not the receiver, not the declaration chase, not the enclosing declaration. Its only cover was a positive assertion in `data.test.ts` that the body CALLS `namesAnExercise`, which a body can do while deciding on the spelling three lines away.
+
+Two fixes, both mutation-tested against a rewritten filter — the old scan reported nothing on the defect while the new one names it, and both are clean on correct source. The declaration chase now takes the NEAREST preceding declaration rather than the file's first: `data.ts` declares `name` dozens of times, so the chase answered about a club, a meal template or a gear item whenever it was asked about an exercise, and that fails in both directions — a real defect reads as clean when the first declaration is innocent, and clean code reads as a defect when it is not. And an arrow parameter resolves to the collection it iterates, which no declaration chase can reach because there is no `const n =` anywhere to find. This brings the web rail level with the Dart one, which already chased nearest.
+
+## 1567. The Dart exercise-key guard gains the four shapes the web one had, and the port finds a defect in both
+
+The web scan reads blankness written as an ordering comparison (`.trim().length > 0`, `.length < 1`), as a negated emptiness read, and on a subject the ENCLOSING declaration is what names; its raw-comparison scan judges a broad module operand by operand rather than skipping it whole. The Dart half had none of that, and its comparison scan skipped `api_client.dart` entirely — 8,000 lines holding `createGymRoutine` and `createCustomExercise`, judged by nothing.
+
+Ported with the shapes spelled Dart's way: `.isEmpty` / `.isNotEmpty` member reads with a leading `!` stripped off the chain, a class-member declaration rule (Dart puts no free functions in a class, so column 0 alone would name every `ApiClient` method after the class), and the same 0-or-1 bound on an ordering. All three roots were swept first and hold no live instance of any of the four.
+
+The port also surfaced a defect the new shapes made reachable, and it was in both rails: the declaration chase resolved an identifier to the file's FIRST declaration rather than the nearest preceding one, so a `createCustomExercise` rewritten to a length test resolved to an unrelated local 5,900 lines above and the scan reported nothing. It fails in both directions and both are pinned.
+
+## 1568. Two documents outlived the changes they described
+
+`packages/core_models/lib/src/exercise_catalogue.dart`'s header called reading the stored `name_key` "the one deliberate difference from the web half, which folds `name` through `normaliseExerciseName`". That was true while the web half re-derived; § 1510 closed it, and the note stayed. A registry entry describing a divergence that no longer exists is worse than none, because the next reader takes it as the design.
+
+`gym_programming.md` said `gym_routine_exercises.exercise_key` and `exercises.name_key` are stamped by the CLIENT and held by a validated CHECK, and closed the paragraph by filing the durable fix as a followup. Migration `20270711000001` shipped that fix — both columns are stamped server-side now, the way `gym_sets.exercise_key` already was, replacing a client-supplied value rather than rejecting it. The stale-client refusal the paragraph explains is no longer reachable; the reasoning is kept because the next client-stamped column inherits it, but it is now written in the past tense with the migration that ended it named.
+
+## 1570. A signed-out exercise-catalogue read is unknown, not a catalogue known to be empty
+
+Every decision downstream of `fetchExerciseCatalogue` is a claim about what the catalogue does NOT hold — chiefly that a typed name is free to create. An empty list is evidence for that claim; a read that never happened is evidence of nothing, and the two were the same value. The signed-out branch now answers with an explicit reason rather than a bare empty list, joining the failed-read branch that already did.
+
+The `/gym` page returns before `load()` when there is no user, so nothing reaches this branch today — which is exactly why it has to be right on its own. The next caller inherits whatever it says, and what it used to say is that the catalogue is known to hold nothing.
+
+## 1571. The exercise catalogue is published to the composer as a listenable, not by value
+
+The composer is presented as a pushed route whose builder runs once, so a catalogue handed to it by value is fixed for the life of that route: a best-effort read that answers while the sheet is open would never reach it, and the picker would keep offering to create a name the catalogue already held. Publishing a listenable instead means the route rebuilds when the read lands. Empty offline or signed-out is unchanged — the composer falls back to history-only suggestions and logs free text, exactly as before.
+
+## 1572. The picker's prop tracking is pinned on web, closing the third instance of § 1278's gap
+
+§ 1481 is a reactivity property of a Svelte component, and `apps/web` runs its unit suite under `tsx --test`, which cannot compile one — so the fix shipped with no behavioural pin, for the third time. The pin is taken where the harness can reach: the decision module the markup reads is exercised against the SNAPSHOT forms a stale prop produces, so a component that stops tracking the prop fails on the value it would render rather than on the render itself. The phone's half of the same gap is closed by a widget test, which reaches strictly more (§ 1333) — the two instruments are different on purpose and the counts are not a mirror pair.
+
+## 1573. The picker's create path binds the name before it judges it
+
+The value reaches the blankness test through a getter over a `TextEditingController`. Read twice — once to judge, once to send — the two reads can drift apart, and more importantly the source scan that bans a decision taken on the display SPELLING cannot see the call site at all, because there is no declaration anywhere for its chase to find. Binding the name to a local first makes the judgement and the value one expression and puts the call site inside the scan's reach; the web twin's create path has the same shape for the same reason.
+
+## 1574. A create that shadows a built-in exercise says so
+
+`exercises`' two uniques are PARTIAL, so the author's index cannot see a row whose `author_id` is null: creating a custom under a seeded global's name SUCCEEDS, `dedupeShadowedExercises` then resolves the pair to the custom, and the built-in stops appearing anywhere the reader looks. That is the behaviour `api_database.md` asks for and it is the one nothing told the reader about — an exercise they were using simply disappears, with no event anywhere to explain it.
+
+The test is made on the key the SERVER stamped, never on a re-derivation of the display spelling: the two part in the window a regenerated fold table opens (§ 1176), and the index is the authority on what a shadow is. That window is also the only way to reach the disclosure at all, since `canCreate` otherwise refuses a name the catalogue already holds — so it is what the fixtures state outright on both platforms. The mobile negative case is mutation-tested: a banner that fires unconditionally fails it.
+
+## 1576. The watch's `f32` haversine never had the clamp its `f64` sibling has always had
+
+Rounding can put the half-chord `a` a hair above 1, and the arc then asks for the square root of a negative number. The `f64` copy clamps; the `f32` one never did, and it is the more exposed of the two — `f32` carries ~1e-7 of relative precision against `f64`'s ~1e-16. Unclamped it answered NaN on 12,960 of the 258,480 half-degree antipodal pairs, where the `f64` copy answered a number on every one. The case that was already there passed the whole time, because it pins one antipodal pair that happens to land on the right side.
+
+## 1577. The Edge Function tree gets its own great-circle census, and the pin states what it kills
+
+`run_stats.ts`'s four cases stay green under a re-spelling back to the unclamped `atan2` form, because on the `asin` spelling both trees use `a` never exceeds 1 by more than one ulp — measured over 293,216,742 antipodal pairs — and `Math.sqrt` rounds that back to exactly 1.0. A pin that cannot fail on the form it forbids is not a pin.
+
+So the Deno-side census sweeps the 258,480 half-degree antipodal pairs and states precisely what it discriminates: the unclamped `atan2` form answers NaN on 10,080 of them and the shipped form on none. The importer's `embeddedHaversineM` cannot import from `apps/web/src/lib`, so it stays the one permitted copy and is pinned to the canonical expression for expression (§ 1525).
+
+## 1578. `race_match` had a second great-circle door no caller ever opened
+
+`RunMatchInput` carried a `runStartLatLng` and each half of the pair carried an object-shaped `haversineMetres` to measure from it. Nothing ever assigned the field — both call sites pass null — and nothing but the two suites called the function. Proximity has exactly one door, `listing.distance_m_away`, which `search_race_listings` computes server-side.
+
+A second great-circle entry point that no caller reaches is a rail to keep in lockstep for nothing, and worse, it invites a caller to measure a proximity the scorer would then double-count against the server's own figure. Removed on both platforms together with the field, so the pair still states one way to answer the question.
+
+## 1580. The og card's title is bounded in pixels, because the box is
+
+The og:image title is one SVG `<text>` node, which neither reflows nor clips: anything past the box paints over the artwork and off the card. What bounded it was a grapheme-cluster budget — the right unit for a `<meta>` description a reader counts (§ 1528) and the wrong one for a box measured in pixels, since one cluster is 0.24 em of `'` and 1.0 em of `東`. Measured against the shipped renderer at the 30 clusters the old budget allowed, in the 1120 px box: lowercase Latin 1142 px, uppercase Latin 1645, Cyrillic 1571, Han 1678, Hangul 1544, a flag 2013. The overrun was never only CJK — a route named in capitals overran by 525 px.
+
+It is an ESTIMATE and cannot be anything else. The card is built as a string and rasterised elsewhere, so nothing on this side can ask the renderer how wide a glyph is, and `font-family` ends in `sans-serif`, so the face is the host's and differs between the dev server, CI and the Lambda. An exact answer is available to no caller; a bound is, and a bound is all a clipper needs. The claim is therefore one-sided — the estimate must never fall BELOW what is painted — and it is checked by behaviour rather than by re-deriving the table: `svg_text_width.render.test.ts` rasterises each script class through the card's own renderer and reads the ink extent back.
+
+The cut still lands on a grapheme-cluster boundary wherever the runtime can name one, so § 1528's guarantee is unchanged and only the budget's unit moved. A box too narrow for the ellipsis alone yields nothing rather than a lone ellipsis that would itself overrun. The `<meta>` builders keep `collapseAndClip`: those are counted in characters by a reader, which is the unit they were chosen for.
+
+## 1581. Both share-head censuses are derived from the tree, not from a list someone maintains
+
+`renderHeadTags` is the XSS boundary of the entity-SSR Lambda: it interpolates broadcaster-controlled strings straight into raw `<head>` HTML, and every value must be attribute-escaped. The guard that says so enumerated nine renderers through a hand-maintained `cases` array populated by `import`, so a tenth renderer was outside it by default — the failure mode being silence, not a red test.
+
+Both censuses now walk the tree. The clipping one is additionally keyed on the DECLARATION rather than on the `function` keyword, since an exported arrow or a re-export is the same renderer wearing a different spelling and a keyword-anchored scan reads it as absent.
+
+## 1585. The merge-gate prose is bound to the register it transcribes
+
+`PR_ADVISORY` records which checks are advisory, and the prose an operator or a contributor actually reads was wrong about it in two places. `docs/ops/deployment.md § Merge gates` explained the same five decisions by hand and named neither the register nor the guard, and the root `CLAUDE.md` said a red `lint title` "fails the PR on open" — which is what the row looks like and not what it does, `pr-title-lint.yml` being a workflow of its own that nothing waits for.
+
+So the section's advisory list is compared with the register in BOTH directions, the section must name the register and the gate job's display name, and every sentence in `CLAUDE.md` that names an advisory check has to call it advisory. This is rule 6's shape one document over: a prose claim is a transcription of something the guard already parses, and an anchor matching nothing is a hard error rather than a silent pass.
+
+## 1586. The census says what it indexes, and a floor holds under it
+
+The document names 1,008 of the 2,238 suites the tree holds, so "walk the tree and fail on a file the index omits" is a twelve-hundred-row change rather than the handful a filing assumed. What the omission actually costs is narrower: an unnamed suite can stop declaring tests and no number moves. So the rule is turned round — no test file may declare ZERO, because a suite that counts nothing is one the census could only ever state a wrong number for and it reads exactly like a suite that passes.
+
+The scope statement is the other half. It lived in the guard's header comment and nowhere in the document, so a reader counting coverage found 60 of 549 mobile suites named, no statement of intent anywhere, and re-filed the gap. The guessed rule — "web suites plus anything with no web twin" — was then measured and is false: 343 of the 549 have no web twin AND no mention, and the per-tree coverage (60/549 mobile, 74/439 web, 80/80 `watch_wear`, 79/79 `job_worker`) is a selection showing rather than a rule. The guard now requires the document to carry that statement and prints the live coverage on every pass, so nobody has to trust a transcribed figure. The figures themselves are deliberately NOT compared against the tree: a suite is added most weeks, and a stated total would have to be retyped in a document nobody was otherwise editing.
+
+## 1587. Every toolchain row is a pin or a declared floor, and never neither
+
+The version guard checked the rows it knew about and left the table's other rows outside itself entirely. That is the state Flutter, Melos and Node.js were in while `monorepo.md` said 3.19+, 7.x and Node 20 against a CI running 3.47.0, 7.8.2 and 24.20.0. A guard whose population is a list is a guard that is silent about everything not on it.
+
+Every row is now in exactly one of two registers — an exact pin compared against the source that sets it, or a declared floor whose claim is that CI is at or above it. A row in neither fails, so adding a toolchain to the table is a decision about which kind of claim it makes rather than an omission nobody notices.
+
+## 1590. A failed token refresh is classified by its own error, not by the 401 that provoked it
+
+The drain's refresh arm reported whatever the original 401 said, so a refresh that died below HTTP — no network at all — was announced to the wrist as a session to sign into. The runner is told to re-authenticate at the one moment authentication cannot be attempted. Grading the refresh on its own throwable reports `Offline` for that case, and `syncFaultForRefresh` exists because the two endpoints genuinely disagree about the same status codes; `Refused` is unreachable from it, being a sentence about a queue entry the refresh grant does not carry.
+
+## 1591. A retry the server permanently refuses is a rejected run, not a reason to back off
+
+After a refresh succeeded, a retried run that the server refused outright armed the transient backoff — so the pass stopped for a run no retry would ever move, and the wrist showed a queue waiting on a timer instead of a run the user could discard. The post-refresh retry is now classified like any other attempt: a permanent refusal appends to `rejectedIds` and the pass carries on, which is what puts the run in front of the discard chip.
+
+## 1592. The per-package test-runner table is checked, not read
+
+Which runner a Dart package takes is a fact a session pays for by rediscovering it: `dart test` does not merely skip `api_client`, it crashes the front-end compiler in the FFI transformer, naming no package and no runner. The table that says so is now derived and checked three ways, each catching a drift the other two miss — every package holding a `test/` directory is named exactly once, so a new one cannot arrive undocumented; a package declaring `flutter: sdk: flutter` in its own pubspec is not offered to `dart test`, taken from the pubspec rather than copied from the table; and the packages the table says CI runs are exactly the `--scope=` list of the `test-packages` job, which is the drift that once left `ui_kit` and `core_models` running nowhere.
+
+A fourth claim names `api_client` outright, because the derivation cannot reach it: nothing in this repo says `supabase_flutter` pulls in the Flutter SDK, which is exactly why it is the package that costs a session a run.
+
+## 1595. "No failure vanishes without trace" is a claim about the module, not about one file
+
+The rule existed; its reading was one file. `ViewModelStreamResilienceTest` grepped `catch (…) {}` out of `RunViewModel.kt` alone — 1 of the module's 57 main sources and 21 of its 51 `catch` blocks. `SupabaseClient`, `SessionStore`, `LocalRouteStore`, `TileSource` and the whole `recording/` package could each have gone silent with nothing to notice.
+
+A rule keyed on that SPELLING is also wrong in both directions. It fails correct source, since the empty braces appear inside prose and inside the failure messages of the test that forbids them; and it passes a silence written any other way, of which Kotlin has three and this module uses all three — an empty `catch` body, an empty `Flow.catch` lambda (which carries no parentheses and was never even a candidate for the old regex), and a `runCatching` whose `Result` nothing reads, of which there were five.
+
+So the guard finds the CONSTRUCT and asks what it leaves behind, over three same-length source views in which a brace inside a string cannot move the depth and a `catch` inside a comment is not a site. What must be left behind is an expression — `humanErrorMessage`'s bare `"HTTP $code"` is a value the caller uses, not a silence — or a stated reason, which is the exemption shape the module's thirteen deliberate swallows already used rather than a second mechanism invented here. `Unit` is neither; it is the empty body re-spelled. The five swallows that had a reason and had never written it down now carry it.
+
+`src/main/kotlin` is declared an input of the test task in the same change. A unit test's classpath carries compiled output, so what re-runs the task is bytecode moving — and a COMMENT is precisely what these guards read, so deleting a stated reason beside a discarded `Result` would have left the task UP-TO-DATE on the exact edit the rule exists to refuse.
+
+## 1596. The watchOS DEBUG fence is held by the guard, not by a reading
+
+The watch's direct-sync path signs in with seed credentials against a local Supabase and is compiled out of release builds entirely, so the shipped binary carries no Supabase client, anon key or credential-handling code. That is the claim § 14 rests on and nothing on Linux was checking it — a `#if DEBUG` moved or removed is neither a compile error nor a test failure on the one macOS job that builds the tree. Claim (14) now holds both halves: the password grant is inside the fence, and the fence is the one the release configuration strips.
+
+## 1597. A watch app and its companion are paired by bundle id, so a rename breaks it months before anyone notices
+
+watchOS pairs a watch app to its companion by bundle id and requires the watch's to be the phone's plus a suffix. A rename on either side breaks the pairing the five Mac steps exist to make — and surfaces on the day as "the watch app does not install", a symptom naming no bundle id at all. That precondition is decidable on Linux from the two project files, so claim (10) holds it, alongside the plist rule that already follows the build rather than describing it.
+
+## 1600. The deletion-receipt digest gets a keyed mode, because an address is guessable
+
+`account_deletion_receipts` holds a hex SHA-256 of the deleted address. That is pseudonymisation, not anonymisation, and the difference is reachable: an email address is a GUESSABLE input, so anyone holding a candidate address recomputes the digest and asks the table whether that person deleted their account. The migration's "not a directory of deleted-account addresses" is true only of ENUMERATION — the table cannot be read out, but it can be asked — and the 30-day sweep time-bounds that window rather than closing it (§ 1551).
+
+With `DELETION_AUDIT_KEY` set on the worker the digest is HMAC-SHA256 over a domain-separated address, which no holder of a candidate can reproduce. It is the same env var `delete-account` reads for its own user-id hash, which is why the domain prefix is there at all: two record types keyed by one secret must never produce the same digest for related inputs, and a third use later must collide with neither. The prefix is part of the wire format and is versioned, because changing it re-keys every row.
+
+Absent by default, so nothing changes until an operator provisions it, and setting it on one process and not the other is a safe half-state rather than an error. A keyed worker probes its OWN digest first and the legacy one on a miss: rows written before the changeover carry the unkeyed digest, and a build that looked only at its own would re-send a receipt to everyone deleted inside the 30-day window — a mail to a former user about an account that no longer exists. An unkeyed worker makes no second probe, because with no key the two digests are the same value and it would ask the identical question twice.
+
+## 1602. The deletion evidence trail is bounded at seven years
+
+`deletion_audit_log`'s retention was unbounded, and that was a decision nobody had taken (§ 1551). What bounds the need is the period in which a failure-to-erase claim can still be asserted: the longest ordinary civil limitation period among the jurisdictions served is six years — UK Limitation Act 1980 ss. 2/5, Ireland's Statute of Limitations 1957 s. 11, several US states — plus a year of margin for a claim issued at the limit and served after it. Past seven years we can evidence the policy but not the individual erasure, which is the trade Art 5(1)(e) asks for.
+
+The row is not the receipt guard's shape despite the migration saying it mirrors it: the input is a 122-bit random UUID, so there is no candidate to guess even though the legacy salt is a source constant in a public repo. `deleted_at` defaults to `now()` and nothing backdates it, so the oldest row this schema can hold dates from `20260917_001` and the sweep removes nothing before September 2033 — seven years of runway to revise a live decision, not an irreversible act.
+
+## 1603. The platform is the merchant of record, and both money ledgers say so
+
+`/terms` § 6 contradicted the marketplace design the code implements. The buyer-facing page now says the platform is the merchant of record and the host provides the event, and `20270713000001` writes the same claim onto `event_orders` and `donations` as table comments, so `\d+` states it too. A claim a buyer relies on and a claim the schema carries should not be two different sentences maintained in two places by hand.
+
+## 1605. A pgtap read offered as evidence of a write must run AFTER it
+
+`check_pgtap_refusal_assertions` collects every relation a file's assertions read together with the offset of the assertion that reads it, so one assertion cannot be its own witness and a read can be placed relative to the write it is offered as evidence for. A read that runs BEFORE the call proves nothing about it, and two files were exactly that shape: `reports_test.sql` counted the reporter's rows two steps above the re-file it was credited with observing, and `user_blocks_test.sql` read `user_blocks` four steps above the unblock. Both passed, and would have kept passing had the RPC written nothing at all.
+
+## 1606. A cap test's plant is undone in `afterEach`, not in its own body
+
+Playwright abandons a timed-out test rather than unwinding it, so a `finally` in the test body does not run when the body times out. The club cap test plants USER_A's `create_club` counter at the limit and undid it in exactly such a `finally`: a timeout between the plant and the undo left the counter at the cap for the rest of the clock hour, failing every create in the suite after it. That is the shape of the round-43 report. `afterEach` still runs, which is where the undo belongs — the same fix § 1554 made on the route side.
+
+## 1607. A spec that creates as a seeded user must state its rate-limit budget
+
+`docs/testing/testing.md § 7` spells the rule out and § 1554 and § 1606 fixed two instances of it, but the rule was prose. `rate_limits` is one row per (user, bucket, clock hour) shared by the whole run, so the next spec to drive a create without a `resetRateLimit` in its `beforeEach` re-opens the ordering dependence — and it passes in isolation and on CI's fresh-per-job stack while failing locally an hour after someone ran a cap test.
+
+The population is DERIVED in three steps rather than listed, so a create surface nobody thought about still lands in it: the buckets come from the migrations' `enforce_create_rate_limit` call sites, each bucket names the `data.ts` functions that spend it and each is checked to still insert into that bucket's own table, and the SURFACES come from the app — every `.svelte` calling one of those functions must be registered. What a spec is matched on is the submit control resolved THROUGH the component, an i18n key read out of `locales/en.ts` or a `data-testid`; keying the scan on a literal `'Create club'` would fail correct code the day the copy changes and pass a re-spelled violation.
+
+Scope is seeded users only, and that is the rule rather than an optimisation: a saga spec mints a fresh uuid per test, so it spends a bucket no other spec has heard of and can leak nothing. An exemption list here got that wrong by naming a saga spec the seeded-user filter had already excluded, which the list's own staleness check caught — so the list is gone rather than the check.
+
+## 1608. A render test grades the em table, and skips a script the host cannot paint
+
+`svg_text_width.render.test.ts` rasterises one string per script class and reads the ink back, which is only a measurement of the script while the host has a face for it. The CI runner has none for Han, Hangul or fullwidth Latin: resvg painted one `.notdef` box per code point and all three reported 1002.6 px — the same width to the tenth, because it was the same glyph. The `painted > 0` guard was written to catch exactly that and cannot: a `.notdef` box has ink. The lower bound then passed for free and the ceiling fired on the placeholder's width.
+
+Devanagari is the same fallback and did NOT fail, which is the more useful half. Its estimate is `OTHER_EM` rather than `EAST_ASIAN_EM`, so the ceiling it had to clear was 1995 px against those three's 2205, and 2 x 1002.6 clears it by 10 px. Reproduced here by restricting resvg to a single Latin face, where all four fall back and paint identically: the run was one arithmetic accident away from reporting a fourth failure, and would have gone on reporting a pass for a subject it was not measuring.
+
+The detector is an equality rather than a threshold, so it needs no judgement about how narrow a real glyph may be: U+FDD0 is a Unicode noncharacter, permanently unassigned, so a run of it paints the resolved face's `.notdef` the same number of times, and a subject painting exactly that wide was not painted at all. A subject that falls back is skipped with the reason named. `UNIVERSAL` keeps that escape away from Latin letters, digits and ASCII punctuation — a face carrying none of those is a broken host, not a missing script — so an all-skipped run cannot read as green.
+
+The ceiling is now taken on the em table alone, with `HOST_FACE_MARGIN` divided back out. The margin is § 1580's estimate carrying declared headroom for a face this code cannot see, not drift, and charging it to a ceiling meant for the table made one assertion about both: at 25 % the table gets 1.6x of the ink rather than 2x, which `accented Latin` already spends because `OTHER_EM` is sized for the widest Cyrillic letter and 'é' is a narrow one. Measured at 1.99x against this workstation's face and 2.12x against a slightly narrower one, with nothing about the table having changed.
+
+## 1609. Scorecard's two irreducible findings are verified and dismissed, not worked around
+
+Three Scorecard Token-Permissions / Binary-Artifacts alerts stood open against `main`, and only one of them named something that could be given less privilege. `terraform.yml` declared `security-events: write` at the top of the file when only `trivy-iac` uploads SARIF, so `fmt` and `validate` carried a write scope neither spends; the change above moves it onto that one job.
+
+The other two cannot be reduced, and saying so is more useful than a workaround that pretends otherwise. **The `terraform` caller job in `ci.yml` must grant `security-events: write`** because a called workflow's permissions are a ceiling the CALLER sets, and a caller sets one ceiling for the whole called workflow rather than one per called job — the scope is already the narrowest the mechanism admits, and the alternative is not uploading the IaC scan at all. **`gradle-wrapper.jar` must stay committed**: a checkout has to build without a Gradle already installed, which is the wrapper's entire purpose, so removing the binary removes the build.
+
+What the second one earns instead is verification. `build-watch-wear` now runs `gradle/actions/wrapper-validation` before any `./gradlew` in it, checking both committed jars' SHA-256 against the published Gradle distributions — the risk the Binary-Artifacts check is about is an unreviewable binary, and a checksum against upstream is what makes it reviewable. `min-wrapper-count: 2` is there for the reason every derivation-driven guard in this tree asserts it found something: a moved or renamed wrapper would otherwise make the check pass by scanning nothing.
+
+Both alerts are dismissed as won't-fix with that reasoning recorded on them. A dismissal is the honest disposition for a finding whose remediation is "stop doing the thing correctly"; leaving them open trains the reader to skim the list, which is the failure mode a security tab has.

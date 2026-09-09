@@ -67,9 +67,14 @@ on:
 # `pull-requests: write` used to sit here for a `terraform validate` PR
 # comment nobody ever wired up; no step in this file posts anything, and
 # a write scope granted to no caller of it is standing privilege.
+#
+# `security-events: write` is the same argument one level down: only
+# `trivy-iac` uploads SARIF, so declaring it here handed the scope to
+# `fmt` and `validate` as well, neither of which writes anything. It sits
+# on the one job that spends it instead — which is what Scorecard's
+# Token-Permissions check reads this file for.
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   fmt:
@@ -131,6 +136,11 @@ jobs:
     name: Trivy IaC scan
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # The only job here that writes: the upload step below posts SARIF to the
+    # Security tab. The caller's grant in ci.yml is still the ceiling over it.
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

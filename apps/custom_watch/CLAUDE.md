@@ -106,7 +106,7 @@ no longer applies.
 
 ## Host tests — the current figure, and where NOT to read one
 
-`watch_core` carries **2428 host tests in `watch_core`** today: the `#[test]`
+`watch_core` carries **2431 host tests in `watch_core`** today: the `#[test]`
 fns across the 111 modules `core/src/lib.rs` declares. That is the number
 `check_watch_doc_counts.mjs` re-derives on every PR, so it is the one to quote.
 Re-measure the runtime figure with

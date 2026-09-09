@@ -117,6 +117,19 @@ export async function parseBackupArchive(
  * stripping here means the rest of the profile (display_name,
  * avatar_url, preferred_unit, etc.) upserts cleanly instead of
  * failing the whole row.
+ *
+ * `handle` is here for a different reason and it is the interesting one.
+ * `20270424000002` makes it a public identity claimed through `set_my_handle`
+ * — SECURITY DEFINER, and named there as the ONLY write path — because that
+ * function is what enforces the format and the case-insensitive uniqueness and
+ * tells a caller which of the two it failed. A restore that upserts the column
+ * directly answers neither question: into a DIFFERENT account it always
+ * collides with `user_profiles_handle_lower_key`, into a FRESH one it silently
+ * re-claims a name the deleted account released or collides with whoever took
+ * it since, and either way it arrives as a 23505 that fails the WHOLE profile
+ * row (§ 1563). The archive still carries the handle, so the runner can
+ * re-claim it through the normal flow if it is free — which is the only path
+ * that can tell them if it is not.
  */
 export function stripServerManagedProfileFields(
 	profile: Record<string, unknown>
@@ -125,11 +138,13 @@ export function stripServerManagedProfileFields(
 		subscription_tier: _tier,
 		subscription_at: _subAt,
 		parkrun_number: _parkrun,
+		handle: _handle,
 		...rest
 	} = profile;
 	void _tier;
 	void _subAt;
 	void _parkrun;
+	void _handle;
 	return rest;
 }
 

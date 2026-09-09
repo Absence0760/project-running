@@ -5,6 +5,7 @@ import {
 	buildRouteOgSvg,
 } from './og_route_image';
 import { escapeHtml } from '../util/html_escape';
+import { estimateSvgTextWidthPx } from './svg_text_width';
 
 const sampleTrack = [
 	{ lat: 51.5, lng: -0.1 },
@@ -83,16 +84,37 @@ test('buildMetaLine — marathon uses two-decimal km', () => {
 	assert.equal(buildMetaLine(42195, 'road'), '42.20 km · road');
 });
 
+/// The title as it reaches the rasteriser.
+function titleOf(svg: string): string {
+	return /font-size="56"[^>]*>([^<]*)</.exec(svg)?.[1] ?? '';
+}
+
+/// The card's title box: W 1200 less two 40 px pads.
+const TITLE_BOX_PX = 1120;
+
 test('buildRouteOgSvg — a long route name is clipped to the card, ellipsis included', () => {
-	const svg = buildRouteOgSvg({
-		name: 'a route name far longer than the title line can hold',
-		track: sampleTrack,
-	});
-	const title = /font-size="56"[^>]*>([^<]*)</.exec(svg)?.[1];
-	// 29, not 30: the cut landed on a space, which trimEnd takes before the
-	// ellipsis goes on. The budget is a ceiling, not a target.
-	assert.equal(title, 'a route name far longer than…');
-	assert.ok(title.length <= 30);
+	const name = 'a route name far longer than the title line can hold';
+	const title = titleOf(buildRouteOgSvg({ name, track: sampleTrack }));
+	assert.ok(title.endsWith('…'));
+	assert.ok(name.startsWith(title.slice(0, -1)));
+	assert.ok(estimateSvgTextWidthPx(title, 56) <= TITLE_BOX_PX);
+});
+
+test('buildRouteOgSvg — the title budget is the box, not a cluster count', () => {
+	// Both names are 30 clusters, which the old budget passed unclipped; one of
+	// them painted 1645 px into a 1120 px box and the other 1142. A budget in
+	// clusters cannot bound a box in pixels, so neither survives whole now and
+	// the wider one is cut harder.
+	const capitals = titleOf(buildRouteOgSvg({ name: 'M'.repeat(30), track: sampleTrack }));
+	const lower = titleOf(buildRouteOgSvg({ name: 'n'.repeat(30), track: sampleTrack }));
+	for (const title of [capitals, lower]) {
+		assert.ok(title.endsWith('…'), `${JSON.stringify(title)} was not clipped at all`);
+		assert.ok(estimateSvgTextWidthPx(title, 56) <= TITLE_BOX_PX);
+	}
+	assert.ok(
+		capitals.length < lower.length,
+		`capitals kept ${capitals.length} against lowercase's ${lower.length}`
+	);
 });
 
 test('escapeHtml — escapes the five reserved characters', () => {

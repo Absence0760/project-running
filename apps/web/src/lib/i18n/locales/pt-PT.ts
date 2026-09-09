@@ -4289,6 +4289,7 @@ export const messages = {
 	"gym.catalogue.customBadge": "Personalizado",
 	"gym.catalogue.create": "Adicionar “{name}” como exercício personalizado",
 	"gym.catalogue.createFailed": "Não foi possível adicionar esse exercício.",
+	"gym.catalogue.shadowsBuiltIn": "Adicionado. Substitui o exercício incorporado com o mesmo nome.",
 	"gym.catalogue.category.all": "Todos",
 	"gym.catalogue.category.chest": "Peito",
 	"gym.catalogue.category.back": "Costas",

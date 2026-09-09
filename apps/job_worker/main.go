@@ -529,6 +529,13 @@ func main() {
 	// enabling that is a separate CISO/counsel step (decisions / email.md).
 	digestUnsubSecret := os.Getenv("WEEKLY_DIGEST_UNSUB_SECRET")
 
+	// Keys the account-deletion receipt's send-once digest. Same env var the
+	// delete-account Edge Function reads, and it must be set on BOTH processes
+	// to key both records — setting it here alone is fine and vice versa, each
+	// falls back to its own legacy digest independently. Optional; unset keeps
+	// today's behaviour exactly (decisions § 1600).
+	deletionAuditKey := os.Getenv("DELETION_AUDIT_KEY")
+
 	worker := &internal.Worker{
 		Backend:           client,
 		Matcher:           matcher,
@@ -539,6 +546,7 @@ func main() {
 		Sms:               smsSender,
 		AppBaseURL:        appBaseURL,
 		DigestUnsubSecret: digestUnsubSecret,
+		DeletionAuditKey:  deletionAuditKey,
 		Config: internal.Config{
 			WorkerID:       workerID,
 			PollInterval:   2 * time.Second,

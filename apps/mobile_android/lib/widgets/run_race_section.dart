@@ -70,7 +70,6 @@ class _RunRaceSectionState extends State<RunRaceSection> {
   RaceListingView? _bestCandidate(List<RaceListingView> listings) {
     final run = RunMatchInput(
       runDate: widget.startedAt,
-      runStartLatLng: null,
       runDistanceM: widget.distanceM,
     );
     RaceListingView? best;

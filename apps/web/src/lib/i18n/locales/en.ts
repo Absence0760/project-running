@@ -4307,6 +4307,7 @@ export const en = {
 	"gym.catalogue.customBadge": "Custom",
 	"gym.catalogue.create": "Add “{name}” as a custom exercise",
 	"gym.catalogue.createFailed": "Couldn't add that exercise.",
+	"gym.catalogue.shadowsBuiltIn": "Added. It replaces the built-in exercise of the same name.",
 	"gym.catalogue.category.all": "All",
 	"gym.catalogue.category.chest": "Chest",
 	"gym.catalogue.category.back": "Back",

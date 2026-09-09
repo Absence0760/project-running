@@ -45,6 +45,10 @@ class NetworkWatcher(private val context: Context) {
         }
         awaitClose {
             if (registered) {
+                // Teardown of a flow that is already closing: the collector is
+                // gone, so there is nobody left to tell and no later pass to
+                // arrange. An unregister that throws is the framework refusing
+                // a callback it has already dropped.
                 runCatching { cm.unregisterNetworkCallback(callback) }
             }
         }

@@ -33,15 +33,28 @@
 // as `grep -cE` applies them, so a commented-out declaration does not count
 // and neither does one nested inside another call's arguments.
 //
-// **The second claim is about the files the census does NOT name.** 493 of the
-// 553 mobile suites carry no `### ` heading, and that is the census's design
-// rather than a gap in it — headings index the web suite and name the Dart
-// mirror in prose — so "walk the tree and fail on a file the index omits" is a
-// 493-row change, not the four the filing assumed. What the omission actually
-// costs is that an unnamed suite can stop declaring tests and no number moves.
-// So the rule is turned round: no test file may declare ZERO. A suite that
-// counts nothing is one the census could only ever state a wrong number for,
-// and it reads exactly like a suite that passes (decisions § 1535).
+// **The second claim is about the files the census does NOT name.** It names
+// 1,004 of the 2,227 suites the tree holds, so "walk the tree and fail on a
+// file the index omits" is a 1,223-row change, not the four the filing assumed.
+// What the omission actually costs is that an unnamed suite can stop declaring
+// tests and no number moves. So the rule is turned round: no test file may
+// declare ZERO. A suite that counts nothing is one the census could only ever
+// state a wrong number for, and it reads exactly like a suite that passes
+// (decisions § 1535).
+//
+// **The third claim is that the census SAYS which of the two it is.** The
+// paragraph above was this file's header comment and nowhere else, so a reader
+// counting the document's coverage found 60 of 549 mobile suites named, no
+// statement of intent anywhere in it, and re-filed the gap. The guessed rule —
+// "web suites plus anything with no web twin" — was then measured and is false:
+// 343 of the 549 have no web twin AND no mention, and the per-tree coverage
+// (60/549 mobile, 74/439 web, 80/80 watch_wear, 79/79 job_worker) is a
+// selection showing rather than a rule. `checkScope` requires the document to
+// carry the scope statement, prints the live coverage on every pass so nobody
+// has to trust a transcribed figure, and holds a FLOOR under the index —
+// the figures themselves are deliberately NOT compared against the tree,
+// because a suite is added most weeks and a stated total would have to be
+// retyped in a document nobody was otherwise editing (decisions § 1586).
 //
 // That rule is only as honest as the counters, and the Dart one had a blind
 // spot big enough to hide 16 committed suites: `realtimeWidgetTest` is a
@@ -604,6 +617,108 @@ export function checkPopulation(files, read) {
 	};
 }
 
+
+// ---------------------------------------------------------------------------
+// Claim 3: the census says what it undertakes to index, and the index has a
+// floor under it.
+// ---------------------------------------------------------------------------
+
+/**
+ * The scope statement the census has to carry, matched by phrase. A phrase
+ * that matches NOTHING is a hard error rather than a pass — rule 6's shape in
+ * `check_ci_diagnostics.mjs`, and for the same reason: a paragraph nobody
+ * checks is a paragraph a sweep deletes.
+ */
+export const SCOPE_ANCHOR = /\*\*What this document indexes, and what it does not\.\*\*/;
+
+/**
+ * The floor under the INDEX, deliberately below what the census names today
+ * (1,004 suites of 2,227 on 2026-09-08). It is not a target: retiring a suite
+ * and its section is a legitimate drop of one, where a sweep that deletes
+ * sections wholesale is the thing worth failing on. The same shape, and the
+ * same reasoning, as MIN_TEST_FILES above.
+ */
+export const MIN_INDEXED_SUITES = 900;
+
+/**
+ * The suites the census names, resolved the way `check` resolves them: a
+ * heading's or bullet's token, against the section's directory when the token
+ * is a bare basename.
+ *
+ * @param {string} md the inventory document
+ * @param {(pattern: string) => string[]} expand
+ * @param {string[]} files every tracked path
+ * @returns {{ named: Set<string>, suites: string[] }}
+ */
+export function indexedSuites(md, expand, files) {
+	/** @type {Set<string>} */
+	const named = new Set();
+	for (const heading of censusHeadings(md)) {
+		const dir = sectionDir(heading.claims);
+		for (const claim of [...heading.claims, ...heading.bullets.map((b) => b.claim)]) {
+			const token = claim.token.includes('/')
+				? claim.token
+				: dir
+					? posix.join(dir, claim.token)
+					: claim.token;
+			for (const file of expand(token)) named.add(file);
+		}
+	}
+	const suites = files.filter(
+		(f) => TEST_FILE.test(f) || (f.startsWith(PGTAP_DIR) && f.endsWith('.sql')),
+	);
+	return { named: new Set(suites.filter((f) => named.has(f))), suites };
+}
+
+/**
+ * Claim 3. The document states what it indexes, and the index has not been
+ * gutted.
+ *
+ * The FIGURES in that statement are deliberately not compared against the
+ * tree: a suite is added most weeks and the total would then have to be
+ * retyped in a document nobody was otherwise touching, which is how a stated
+ * number becomes a lie in the first place. What is enforced instead is that
+ * the statement EXISTS, that the coverage is printed here on every run so a
+ * reader who wants the live figure runs this rather than trusting prose, and
+ * that the index cannot silently collapse (decisions § 1586).
+ *
+ * @param {string} md
+ * @param {(pattern: string) => string[]} expand
+ * @param {string[]} files
+ * @returns {{ errors: string[], ok: string[] }}
+ */
+export function checkScope(md, expand, files) {
+	/** @type {string[]} */
+	const errors = [];
+	/** @type {string[]} */
+	const ok = [];
+	if (!SCOPE_ANCHOR.test(md)) {
+		errors.push(
+			`the census holds no scope statement matching /${SCOPE_ANCHOR.source}/. It names a ` +
+				'fraction of the repo\'s suites and says so in that paragraph; without it the next ' +
+				'reader who counts re-files the gap, which is what happened before it was written ' +
+				'(decisions § 1586).',
+		);
+	}
+	const { named, suites } = indexedSuites(md, expand, files);
+	if (named.size < MIN_INDEXED_SUITES) {
+		errors.push(
+			`the census names ${named.size} suite(s) and this guard's floor is ` +
+				`${MIN_INDEXED_SUITES}. Either sections were deleted, or the token reader stopped ` +
+				'resolving them — in which case every count above is being checked against an ' +
+				'index nothing populates. Lower the floor deliberately if the shrink is real.',
+		);
+	}
+	if (errors.length === 0) {
+		ok.push(
+			`the census states its scope and indexes ${named.size} of the ${suites.length} suite(s) ` +
+				`the tree holds; the other ${suites.length - named.size} are covered by the ` +
+				'zero-declaration rule instead',
+		);
+	}
+	return { errors, ok };
+}
+
 /** @returns {string[]} every file git tracks, repo-relative */
 function tracked() {
 	return execFileSync('git', ['ls-files', '-z'], {
@@ -667,10 +782,12 @@ export function loadFile(path) {
 const invokedDirectly = process.argv[1] && import.meta.url === `file://${process.argv[1]}`;
 if (invokedDirectly) {
 	const files = tracked();
-	const census = check(loadFile(INVENTORY), expander(files), loadFile);
+	const md = loadFile(INVENTORY);
+	const census = check(md, expander(files), loadFile);
 	const population = checkPopulation(files, loadFile);
-	const ok = [...census.ok, ...population.ok];
-	const errors = [...census.errors, ...population.errors];
+	const scope = checkScope(md, expander(files), files);
+	const ok = [...census.ok, ...population.ok, ...scope.ok];
+	const errors = [...census.errors, ...population.errors, ...scope.errors];
 	for (const line of ok) console.log(`[OK] check_test_inventory_counts: ${line}`);
 	for (const line of errors) console.error(`::error::check_test_inventory_counts: ${line}`);
 	if (errors.length > 0) {

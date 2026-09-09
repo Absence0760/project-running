@@ -188,6 +188,21 @@ test('stripServerManagedProfileFields: drops subscription_tier + subscription_at
 	assert.equal(out.parkrun_number, undefined);
 });
 
+test('stripServerManagedProfileFields: drops handle, which set_my_handle owns', () => {
+	// `user_profiles_handle_lower_key` is unique on lower(handle), so an
+	// archive restored into a different account — or into a fresh one after
+	// someone else claimed the name — fails the WHOLE profile row on a 23505
+	// the runner sees only as a warning count. The handle stays IN the
+	// archive; what it must not do is claim itself behind the runner's back.
+	const out = stripServerManagedProfileFields({
+		display_name: 'Tester',
+		handle: 'tester'
+	});
+	assert.equal(out.display_name, 'Tester');
+	assert.equal(out.handle, undefined);
+	assert.equal(Object.hasOwn(out, 'handle'), false);
+});
+
 test('stripServerManagedProfileFields: no-op when none of the keys are present', () => {
 	const original = { display_name: 'X', preferred_unit: 'mi' };
 	const out = stripServerManagedProfileFields(original);
