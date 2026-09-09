@@ -62,14 +62,20 @@ name: Terraform
 on:
   workflow_call:
 
-# A called workflow cannot escalate past what the calling job grants,
-# so these are declared in BOTH places and the caller's are the ceiling.
+# A called workflow cannot escalate past what the calling job grants, so
+# every scope here is declared on ci.yml's `terraform` job too and the
+# caller's are the ceiling. That ceiling is necessarily whole-workflow —
+# one `permissions:` block covers every job the call expands into — which
+# is why ci.yml must grant `security-events: write` for a scope only one
+# of the three jobs below uses. Irreducible over there; not here. A
+# top-level grant is held by `fmt` and `validate` as well, and neither
+# writes anything, so the SARIF scope sits on `trivy-iac` alone and the
+# file-wide default stays read-only.
 # `pull-requests: write` used to sit here for a `terraform validate` PR
 # comment nobody ever wired up; no step in this file posts anything, and
 # a write scope granted to no caller of it is standing privilege.
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   fmt:
@@ -131,6 +137,12 @@ jobs:
     name: Trivy IaC scan
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # The only job in this file that writes anything. A job-level block
+    # REPLACES the top-level one rather than adding to it, so the read
+    # scope the checkout needs is restated here.
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
