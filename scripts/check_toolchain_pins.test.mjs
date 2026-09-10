@@ -41,6 +41,9 @@ import {
 	repoPins,
 	resolveVersion,
 	toolVersionAgrees,
+	PREREQ_UNPINNED,
+	PREREQ_ROWS,
+	looksPinned,
 } from './check_toolchain_pins.mjs';
 
 const REPO_ROOT = join(WORKFLOW_DIR, '..', '..');
@@ -951,7 +954,9 @@ const PINS = new Map([
 
 test('parsePrerequisites reads the table under its own heading and stops at the next', () => {
 	const rows = parsePrerequisites(prereqDoc({ Flutter: '3.47.0', 'Node.js': '24.20.0' }));
-	assert.deepEqual([...rows.keys()], ['Tool', 'Flutter', 'Node.js']);
+	// `Tool` is the header, identified by the separator under it and dropped —
+	// a header row in neither register would read as a row nobody decided about.
+	assert.deepEqual([...rows.keys()], ['Flutter', 'Node.js']);
 	assert.equal(rows.get('Flutter')?.version, '3.47.0');
 });
 
@@ -959,6 +964,8 @@ test('a prerequisite row stating a floor rather than the pin fails', () => {
 	const { errors } = checkPrerequisites(
 		prereqDoc({ Flutter: '3.19+', Melos: '7.x', 'Node.js': '20 LTS' }),
 		PINS,
+		undefined,
+		[],
 	);
 	assert.equal(errors.length, 3);
 	assert.match(errors[0], /install Flutter `3\.19\+` where this repo pins 3\.47\.0/);
@@ -983,7 +990,12 @@ test('a version cell names the pin as a whole token, not as a substring', () => 
 });
 
 test('a row the table has lost fails rather than going unchecked', () => {
-	const { errors } = checkPrerequisites(prereqDoc({ Flutter: '3.47.0', Melos: '7.8.2' }), PINS);
+	const { errors } = checkPrerequisites(
+		prereqDoc({ Flutter: '3.47.0', Melos: '7.8.2' }),
+		PINS,
+		undefined,
+		[],
+	);
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /has no `Node\.js` row/);
 });
@@ -1009,4 +1021,80 @@ test('the shipped Prerequisites table states the versions the repo pins', () => 
 		).prereq.errors,
 		[],
 	);
+});
+
+
+test('looksPinned separates an exact release from a floor or from prose', () => {
+	for (const cell of ['3.47.0', '7.8.2', '24.20.0', 'Meerkat 2024.3.1', '^1.1']) {
+		assert.equal(looksPinned(cell), true, cell);
+	}
+	for (const cell of ['15+', 'Hedgehog+', 'bundled with Flutter', '3.19+', '20 LTS', '']) {
+		assert.equal(looksPinned(cell), false, cell);
+	}
+});
+
+test('a prerequisite row in neither register fails, whichever state it should be in', () => {
+	const doc = prereqDoc({ Flutter: '3.47.0', Melos: '7.8.2', 'Node.js': '24.20.0', Ruby: '3.4+' });
+	const { errors } = checkPrerequisites(doc, PINS, undefined, []);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /`Ruby` is a prerequisite row in neither register/);
+	assert.match(errors[0], /or a FLOOR \(add it to PREREQ_UNPINNED/);
+
+	// Declared as a floor, it passes; declared as both, it fails.
+	assert.deepEqual(
+		checkPrerequisites(doc, PINS, undefined, [{ label: 'Ruby', reason: 'no in-repo pin' }]).errors,
+		[],
+	);
+	const both = checkPrerequisites(
+		doc,
+		PINS,
+		[...PREREQ_ROWS, { label: 'Ruby', pin: 'ruby' }],
+		[{ label: 'Ruby', reason: 'no in-repo pin' }],
+	);
+	assert.equal(both.errors.length, 1);
+	assert.match(both.errors[0], /is in BOTH PREREQ_ROWS and PREREQ_UNPINNED/);
+});
+
+test('a floor row that states an exact version fails — a pin nothing compares', () => {
+	const doc = prereqDoc({ Flutter: '3.47.0', Melos: '7.8.2', 'Node.js': '24.20.0', Xcode: '16.2' });
+	const { errors } = checkPrerequisites(doc, PINS, undefined, [
+		{ label: 'Xcode', reason: 'macos-latest ships whatever it ships' },
+	]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /states `16\.2`, which reads as an exact version/);
+
+	// The same row as a floor is exactly what the register is for.
+	const floored = prereqDoc({
+		Flutter: '3.47.0',
+		Melos: '7.8.2',
+		'Node.js': '24.20.0',
+		Xcode: '16+',
+	});
+	assert.deepEqual(
+		checkPrerequisites(floored, PINS, undefined, [
+			{ label: 'Xcode', reason: 'macos-latest ships whatever it ships' },
+		]).errors,
+		[],
+	);
+});
+
+test('a floor entry outliving its row fails rather than sitting unread', () => {
+	const doc = prereqDoc({ Flutter: '3.47.0', Melos: '7.8.2', 'Node.js': '24.20.0' });
+	const { errors } = checkPrerequisites(doc, PINS, undefined, [
+		{ label: 'Xcode', reason: 'no in-repo pin' },
+	]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /PREREQ_UNPINNED names `Xcode`, which the Prerequisites table no longer/);
+});
+
+test('every row of the shipped table is declared in exactly one register', () => {
+	const doc = readFileSync(PREREQ_DOC, 'utf-8');
+	const rows = [...parsePrerequisites(doc).keys()];
+	const declared = new Set([
+		...PREREQ_ROWS.map((r) => r.label),
+		...PREREQ_UNPINNED.map((r) => r.label),
+	]);
+	assert.ok(rows.length > 0);
+	for (const label of rows) assert.ok(declared.has(label), `${label} is in neither register`);
+	assert.equal(rows.length, PREREQ_ROWS.length + PREREQ_UNPINNED.length);
 });

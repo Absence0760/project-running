@@ -4290,6 +4290,7 @@ export const messages = {
 	"gym.catalogue.customBadge": "Perso",
 	"gym.catalogue.create": "Ajouter « {name} » comme exercice personnalisé",
 	"gym.catalogue.createFailed": "Impossible d’ajouter cet exercice.",
+	"gym.catalogue.shadowsBuiltIn": "Ajouté. Il remplace l’exercice intégré du même nom.",
 	"gym.catalogue.category.all": "Tous",
 	"gym.catalogue.category.chest": "Pectoraux",
 	"gym.catalogue.category.back": "Dos",

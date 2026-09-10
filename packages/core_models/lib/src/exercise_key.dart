@@ -82,8 +82,15 @@ const List<String> kExerciseCasePostFold = ['\u03c2', '\u03c3'];
 /// still not a plain space). So two names that share ONE key — `Bench Press`
 /// and `Bench` + U+00A0 + `Press`, which bind to the same PRs, the same routine
 /// rows and the same grouping — sort not merely apart but on opposite sides of
-/// every other name beginning `Bench`, since each kept member sorts above
-/// U+0020. `gym_prs_test.dart` pins both halves of that (decisions § 1496).
+/// every other name beginning `Bench`.
+///
+/// **Which side is not fixed**, and § 1496 read it as fixed: 20 of the 25 sort
+/// ABOVE U+0020 and the five C0 members (U+0009-U+000D) sort BELOW it, so a
+/// shadowed spelling files after the whole `Bench …` block or before all of it
+/// depending on which member it carries. A surface that groups such a pair
+/// therefore cannot reach the second row by scanning in one direction from the
+/// first, whichever direction it picks. `gym_prs_test.dart` derives the split
+/// from the class rather than asserting it (decisions § 1496, § 1565).
 String normaliseExerciseName(String name) =>
     _foldExerciseCase(name.replaceAll(kExerciseWhitespace, ' ').trim())
         .replaceAll(kExerciseCasePostFold[0], kExerciseCasePostFold[1])

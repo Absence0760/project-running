@@ -423,6 +423,44 @@ void main() {
         reason: '"all" is a UI-only sentinel, not a category the column holds');
   });
 
+  // The disclosure, and the window it exists for. `canCreate` normally refuses
+  // a name the catalogue holds, so the reachable case is the one where the two
+  // tests disagree: `canCreate` compares display spellings through
+  // `normaliseExerciseName` while the two partial uniques are enforced on the
+  // STORED `name_key`, and a regenerated fold table parts them (§ 1176). The
+  // fixture states that outright by overriding the global's stored key.
+  testWidgets('a create that shadows a built-in says so', (tester) async {
+    final stale = _entry('e9', 'Bench Press', 'chest', nameKey: 'farmer carry');
+    final api = _ScriptedApi(result: _row('new-1', 'Farmer Carry', 'other'));
+    await _open(tester, catalogue: [stale], api: api);
+    await _type(tester, 'Farmer Carry');
+    await tester.tap(find.text('Add “Farmer Carry” as a custom exercise'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(
+      find.text('Added. It replaces the built-in exercise of the same name.'),
+      findsOneWidget,
+      reason: 'the built-in stops appearing anywhere, which nothing else says',
+    );
+    await tester.pump(kTopBannerMaxDuration);
+    await tester.pump(const Duration(milliseconds: 400));
+  });
+
+  testWidgets('an ordinary create says nothing about built-ins',
+      (tester) async {
+    final api = _ScriptedApi(result: _row('new-1', 'Farmer Carry', 'other'));
+    await _open(tester, catalogue: _catalogue, api: api);
+    await _type(tester, 'Farmer Carry');
+    await tester.tap(find.text('Add “Farmer Carry” as a custom exercise'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(
+      find.text('Added. It replaces the built-in exercise of the same name.'),
+      findsNothing,
+      reason: 'nothing was replaced, so the reader is told nothing',
+    );
+  });
+
   testWidgets('a refused create reports it and stays on the picker',
       (tester) async {
     final api = _ScriptedApi(fail: true);

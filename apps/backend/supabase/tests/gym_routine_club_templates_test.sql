@@ -16,7 +16,7 @@
 --   9. The author can clone their own routine.
 
 begin;
-select plan(13);
+select plan(15);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -159,6 +159,26 @@ set local "request.jwt.claims" = '{"sub":"99999999-0000-0000-0000-00000000a001",
 select lives_ok(
   $$select clone_gym_routine_template('aaaaaaaa-0000-0000-0000-00000000a001')$$,
   'the author can clone their own routine');
+
+-- Read the author's own copy back. Every assertion above reads the
+-- MEMBER's clone and all of them run before this call, so a
+-- clone_gym_routine_template that authorised the author and wrote
+-- nothing passes the `lives_ok` on its own. The author already held one
+-- club-less 'GRCT 5x5' (the source) plus the club-owned template, so
+-- the clone is the second club-less routine and its two sets are the
+-- third and fourth — a head copied without its children shows as 2.
+select is(
+  (select count(*)::int from gym_routines
+     where author_id = '99999999-0000-0000-0000-00000000a001'
+       and club_id is null and title = 'GRCT 5x5'),
+  2, 'the author''s own clone is a second personal, club-less routine');
+select is(
+  (select count(*)::int from gym_routine_sets s
+     join gym_routine_exercises e on e.id = s.routine_exercise_id
+     join gym_routines r on r.id = e.routine_id
+     where r.author_id = '99999999-0000-0000-0000-00000000a001'
+       and r.club_id is null and r.title = 'GRCT 5x5'),
+  4, 'the author''s own clone carries its sets, not just the head');
 
 select finish();
 rollback;

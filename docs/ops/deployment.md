@@ -257,6 +257,54 @@ a one-line job for each. A called workflow's job results fan into the calling
 job, so one `needs:` entry covers every job those files hold today and every
 one they gain later.
 
+### What runs on a pull request and does not block it
+
+Five workflows trigger on a pull request and reach nothing the gate waits for.
+Each is a decision rather than a backlog item, and the decisions live in code:
+`PR_ADVISORY` in
+[`scripts/check_ci_diagnostics.mjs`](../../scripts/check_ci_diagnostics.mjs)
+holds one entry each with the reason folding it into `ci.yml` would be the
+**wrong** answer rather than the unmade one, and that guard's rule 7 fails the
+PR when a pull-request-triggered workflow is in neither the gate nor the
+register. Rule 8 compares the list below against the register in both
+directions, so this section cannot quietly drift out of step with the code the
+way a hand-maintained duplicate does -- a name here that the register has
+dropped, or an entry there this list never mentions, fails `workflow-lint`.
+
+- `security.yml` -- CodeQL's `analyze` declares no severity threshold, so a
+  fold would gate on the analysis completing rather than on what it found. The
+  section below is entirely about this one.
+- `pr-title-lint.yml` -- it triggers on `edited`, which is how a corrected
+  title re-lints. `ci.yml` carries no `types:` and deliberately not that one,
+  since `edited` rebuilds every job on a description typo.
+- `compliance-drift.yml` -- advisory by construction: it runs in warn mode and
+  asks a human whether a doc applies to the diff, which is a judgement rather
+  than a verdict.
+- `labeler.yml` -- it labels a pull request and asserts nothing about it, so
+  there is no verdict for a gate to wait on.
+- `dependabot-auto-merge.yml` -- it ACTS on a pull request (approve + enable
+  auto-merge) rather than checking one, and a required check that merges the PR
+  it is required by is a cycle.
+
+The register carries each reason in full; the list above is the operator's
+index into it. All five go red on a finding and the PR merges anyway, so a red
+row from any of them is read rather than waited for. The root `CLAUDE.md` says
+the same about `pr-title-lint.yml`'s `lint title` in the words a contributor
+meets it in, and rule 8 pins that sentence too.
+
+There is a third option for `lint title` and it is deliberately not taken:
+adding it to the required-status-check set is a repo setting, and it is cheap
+(the job is ~20 s and depends on nothing). It stays out because the required set
+being **exactly one context** is a property worth more than this check --
+`ci.yml` is the one place a job's red is guaranteed to block, and every other
+guard in this repo has been folded into it rather than added beside it
+([§ 1149](../architecture/decisions.md), [§ 1264](../architecture/decisions.md)).
+A second context would make "what blocks a merge" a question with two answers,
+one of them invisible to every guard in the tree. A bad PR title is caught by a
+red row and fixed with a retitle; that is the trade
+([§ 1585](../architecture/decisions.md)).
+
+
 ### CodeQL is the exception, and it is a repo setting
 
 `security.yml`'s four CodeQL analyses and two Trivy jobs are **not** in the
@@ -407,15 +455,23 @@ aws cloudfront get-distribution-config --id <DIST_ID> --query 'DistributionConfi
 next `web@*` release will break every deep link on it; `/200.html` means steps
 1 and 2 are done. `aws s3 ls s3://<bucket>/200.html` answers step 1 on its own.
 
-**The one derived claim, and how to falsify it.** Everything above is read out
-of the workflow, the Terraform and the AWS CLI reference -- no lane holds
-credentials, so none of it has been executed against AWS. The step that carries
-the most weight is that the pre-seeded `200.html` survives the release's
-`aws s3 sync --delete`, which rests on excluded keys not being deletion
-candidates. Confirm it the cheap way the first time through: run step 1, run a
-release, and check `200.html` is still listed. If it is gone, the window
-between the release's two sync passes is real and the pre-seed has to be
-repeated after the deploy instead of before it.
+**The claim that was derived is now measured, on `prod`, 2026-09-10.** It used
+to read that none of this had been executed against AWS, because no lane holds
+credentials. The step carrying the most weight was that the pre-seeded
+`200.html` survives the release's `aws s3 sync --delete`, resting on excluded
+keys not being deletion candidates. It does. `prod` was walked through all three
+steps in order and `web@1.5.0` published on top: the pre-seed survived the
+release, and pass 2 then overwrote it with the new build's shell in the same
+run. Deep links were checked after the deploy and came back byte-identical to
+`200.html` rather than serving the landing page, which is the failure this
+ordering exists to prevent.
+
+Two facts worth carrying forward. `index.html` and `200.html` genuinely diverge
+after the cutover -- the landing page measured 15098 bytes against the shell's
+5927 -- so the rollback note below is load-bearing rather than theoretical. And
+`preview` has not been cut over, because it does not exist: the account holds
+one distribution, and `preview.threkir.com` resolves to nothing. The per-
+environment framing above still stands for whenever that environment is built.
 
 Rollback is the mirror image: revert the Terraform first (the bucket still
 holds an `index.html`, though after a post-cutover deploy it is the landing

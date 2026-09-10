@@ -14,6 +14,7 @@ import 'local_food_store.dart';
 import 'local_gym_store.dart';
 import 'local_route_store.dart';
 import 'local_run_store.dart';
+import 'restore_columns.dart';
 
 /// Full round-trip backup and restore for the signed-in user's data.
 /// See [docs/ops/backup_restore.md](../../../docs/ops/backup_restore.md) for the
@@ -483,8 +484,19 @@ class BackupService {
           row.remove('subscription_tier');
           row.remove('subscription_at');
           row.remove('parkrun_number');
+          // `handle` is a public identity claimed through `set_my_handle`
+          // (20270424000002), which is SECURITY DEFINER precisely so the
+          // format and the case-insensitive uniqueness are enforced and the
+          // caller is told which of the two it failed. Upserting the column
+          // directly answers neither: into a DIFFERENT account it always
+          // collides with `user_profiles_handle_lower_key`, into a FRESH one
+          // it silently re-claims a name the deleted account released, and
+          // either way it arrives as a 23505 that fails the whole profile row.
+          row.remove('handle');
           row['id'] = uid;
-          await client.from('user_profiles').upsert(row);
+          final known = keepKnownColumns(row, kProfileRestoreColumns);
+          noteDroppedColumns('profile', known.dropped, result);
+          await client.from('user_profiles').upsert(known.row);
           result.profileRestored = true;
         }
         final prefs = profile['settings_prefs'];
@@ -523,6 +535,7 @@ class BackupService {
       }
 
       var i = 0;
+      final droppedRunColumns = <String>{};
       for (final entry in runs) {
         onProgress?.call(RestoreProgress.runs(i, runs.length));
         if (entry is! Map) { i++; continue; }
@@ -595,20 +608,25 @@ class BackupService {
         _setOrDrop(r, 'track_url', trackUrl);
         _setOrDrop(r, 'hr_series_url', hrSeriesUrl);
 
+        final known = keepKnownColumns(r, kRunRestoreColumns);
+        droppedRunColumns.addAll(known.dropped);
+
         try {
-          await apiNonNull.upsertRunRowRaw(r);
+          await apiNonNull.upsertRunRowRaw(known.row);
           result.runsImported++;
         } catch (e) {
           result.warnings.add('run $origId: $e');
         }
         i++;
       }
+      noteDroppedColumns('runs', droppedRunColumns.toList(), result);
     }
 
     // Routes.
     final routes = _readJson(archive, 'routes.json') as List?;
     if (routes != null) {
       var i = 0;
+      final droppedRouteColumns = <String>{};
       for (final entry in routes) {
         onProgress?.call(RestoreProgress.routes(i, routes.length));
         if (entry is! Map) { i++; continue; }
@@ -617,14 +635,17 @@ class BackupService {
         final newId = generateNewIds ? _randomUuid() : origId;
         r['id'] = newId;
         r['user_id'] = uid;
+        final known = keepKnownColumns(r, kRouteRestoreColumns);
+        droppedRouteColumns.addAll(known.dropped);
         try {
-          await client.from('routes').upsert(r);
+          await client.from('routes').upsert(known.row);
           result.routesImported++;
         } catch (e) {
           result.warnings.add('route $origId: $e');
         }
         i++;
       }
+      noteDroppedColumns('routes', droppedRouteColumns.toList(), result);
     }
 
     // Gym + food hydrate into the local stores (Phase 4 multi-modal isn't
@@ -639,6 +660,25 @@ class BackupService {
     } finally {
       await fileStream.close();
     }
+  }
+
+  /// One warning per section naming every column the archive carried that
+  /// this build's schema has no home for — not one per row.
+  ///
+  /// The names are what a reader can act on, and they are the same handful on
+  /// every row of a section by construction, so a stale archive of 500 runs
+  /// reports one line rather than 500.
+  @visibleForTesting
+  static void noteDroppedColumns(
+    String section,
+    List<String> dropped,
+    RestoreResult result,
+  ) {
+    if (dropped.isEmpty) return;
+    final names = [...dropped]..sort();
+    result.warnings.add(
+      '$section: dropped ${names.join(', ')} — not columns of this schema',
+    );
   }
 
   /// Carry an archive's own completeness verdict into the restore result.

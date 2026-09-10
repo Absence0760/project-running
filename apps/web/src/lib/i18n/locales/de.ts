@@ -4290,6 +4290,7 @@ export const messages = {
 	"gym.catalogue.customBadge": "Eigene",
 	"gym.catalogue.create": "„{name}“ als eigene Übung hinzufügen",
 	"gym.catalogue.createFailed": "Übung konnte nicht hinzugefügt werden.",
+	"gym.catalogue.shadowsBuiltIn": "Hinzugefügt. Sie ersetzt die integrierte Übung mit demselben Namen.",
 	"gym.catalogue.category.all": "Alle",
 	"gym.catalogue.category.chest": "Brust",
 	"gym.catalogue.category.back": "Rücken",

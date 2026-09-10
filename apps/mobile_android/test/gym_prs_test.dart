@@ -75,16 +75,52 @@ void main() {
     });
 
     test('two rows sharing a key are separated by the whole block between them', () {
-      // Not merely "not adjacent". Every whitespace member the fold keeps sorts
-      // ABOVE U+0020, so the second spelling files after every name sharing the
-      // first word — an unrelated exercise sits between two rows that are one
-      // exercise, and a reader scanning for a duplicate does not see one.
+      // Not merely "not adjacent": the whole block of names sharing the first
+      // word sits between two rows that are ONE exercise, so a reader scanning
+      // for a duplicate does not see one.
+      //
+      // WHICH SIDE it lands on is not fixed, and § 1496 recorded it as fixed —
+      // "every kept member sorts above U+0020". Twenty do; the five C0 members
+      // U+0009-U+000D sort below it, so a tab- or newline-bearing spelling
+      // files BEFORE the whole `Bench …` block where a U+00A0 one files after.
+      // Neither arrives from a keyboard and both arrive from a paste or an
+      // import, so a surface that groups the pair cannot reach the second row
+      // by scanning one direction from the first, whichever it picks.
+      //
+      // Derived from the class rather than listed, so widening
+      // kExerciseWhitespace re-measures instead of silently passing.
+      final members = <int>[];
+      for (var cp = 0; cp <= 0xffff; cp++) {
+        if (kExerciseWhitespace.hasMatch(String.fromCharCode(cp))) members.add(cp);
+      }
+      final kept =
+          members.where((cp) => fold(String.fromCharCode(cp)) != ' ').toList();
+      bool above(int cp) => fold(String.fromCharCode(cp)).compareTo(' ') > 0;
+      expect(kept.where(above).length, 20);
+      expect(kept.where((cp) => !above(cp)).toList(), [0x09, 0x0a, 0x0b, 0x0c, 0x0d]);
+
+      // The plain spelling sits INSIDE the block its own first word opens.
       const plain = 'Bench Press';
-      const nbsp = 'Bench\u00a0Press';
-      expect(normaliseExerciseName(plain), normaliseExerciseName(nbsp));
-      expect(compareFoldedNames(plain, 'a', nbsp, 'b'), -1);
-      expect(compareFoldedNames('Bench Row', 'c', nbsp, 'b'), -1);
-      expect(compareFoldedNames(plain, 'a', 'Bench Row', 'c'), -1);
+      const lower = 'Bench Arm';
+      const upper = 'Bench Row';
+      expect(compareFoldedNames(plain, 'p', lower, 'l'), 1);
+      expect(compareFoldedNames(plain, 'p', upper, 'u'), -1);
+
+      // Every shadowed spelling sits OUTSIDE it, on the side its own member
+      // sorts to — asserted over the whole class rather than over the one
+      // member the filing happened to name.
+      for (final cp in kept) {
+        final shadow = 'Bench${String.fromCharCode(cp)}Press';
+        expect(normaliseExerciseName(plain), normaliseExerciseName(shadow),
+            reason: 'the key unifies the pair');
+        expect(
+          above(cp)
+              ? compareFoldedNames(shadow, 's', upper, 'u')
+              : compareFoldedNames(shadow, 's', lower, 'l'),
+          above(cp) ? 1 : -1,
+          reason: 'U+${cp.toRadixString(16)} does not clear the block',
+        );
+      }
     });
   });
 

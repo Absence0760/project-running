@@ -5019,6 +5019,7 @@ export type Database = {
         }[]
       }
       cleanup_account_deletion_receipts: { Args: never; Returns: undefined }
+      cleanup_deletion_audit_log: { Args: never; Returns: undefined }
       cleanup_stale_export_blobs: { Args: never; Returns: number }
       cleanup_stale_live_run_pings: { Args: never; Returns: number }
       cleanup_stale_race_pings: { Args: never; Returns: number }

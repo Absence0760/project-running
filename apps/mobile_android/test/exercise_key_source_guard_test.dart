@@ -175,6 +175,64 @@ String _statementAt(String code, int at) {
   return code.substring(i + 1, at);
 }
 
+/// Dart's control keywords, which take a parenthesised operand and are
+/// therefore indistinguishable from a call by shape alone. Listed because the
+/// LANGUAGE's grammar is what makes them not declarations, not because of
+/// anything this codebase spells.
+final _notADeclaration = RegExp(
+    r'^(?:if|for|while|switch|catch|return|assert|await|yield|throw|else|do|super|this|new|case)$');
+
+/// A declaration line: a name applied to a parameter list, at column 0 or at
+/// the one indent a class member sits at.
+///
+/// Dart puts no free functions inside a class, so a rule anchored at column 0
+/// alone would name every method of `api_client.dart` after `ApiClient` — and
+/// that file is the one broad module the rule exists to reach. The
+/// discriminators are the language's, not this tree's: a declaration's name is
+/// preceded by a type or a modifier rather than by a `.`, nothing is ASSIGNED
+/// before it, and a method body sits one indent further in than the member,
+/// so a statement cannot be mistaken for the member enclosing it.
+final _declLine = RegExp(
+    r'^ {0,2}(?:(?:abstract|base|final|sealed|interface)\s+)*'
+    r'(?:class|mixin|enum|extension|typedef)\s+(?<type>[A-Za-z_\$][A-Za-z0-9_\$]*)'
+    r'|^ {0,2}(?<prefix>[^\n=(]*?)\b(?<name>[A-Za-z_\$][A-Za-z0-9_\$]*)\s*\(',
+    multiLine: true);
+
+/// Whether the declaration enclosing [at] names an exercise.
+///
+/// The rule that reaches a broad module, where the file-level one is waived and
+/// has to be: `api_client.dart` is 8,000 lines of club, notification and
+/// meal-template names beside its exercise ones, so "this file names an
+/// exercise" says nothing about any one value in it — while "this value is
+/// inside `createCustomExercise`" says everything. The web half gained it for
+/// the same module shape and the same reason (§ 1508).
+///
+/// Additive rather than a replacement for the file rule: it can only widen what
+/// a scan sees, so no shape either scan caught before stops being caught.
+bool _scopeNamesAnExercise(String code, int at) {
+  var name = '';
+  for (final m in _declLine.allMatches(code)) {
+    if (m.start > at) break;
+    final type = m.namedGroup('type');
+    if (type != null) {
+      name = type;
+      continue;
+    }
+    final candidate = m.namedGroup('name');
+    if (candidate == null || _notADeclaration.hasMatch(candidate)) continue;
+    // A name reached through a `.` is a call on something, not a declaration
+    // of it, and a line that ends its statement is not a declaration header
+    // unless the body IS the expression after `=>`.
+    final prefix = m.namedGroup('prefix') ?? '';
+    if (prefix.endsWith('.')) continue;
+    final lineEnd = code.indexOf('\n', m.start);
+    final line = code.substring(m.start, lineEnd < 0 ? code.length : lineEnd);
+    if (line.trimRight().endsWith(';') && !line.contains('=>')) continue;
+    name = candidate;
+  }
+  return _namesAnExercise.hasMatch(name);
+}
+
 /// Every runtime case fold in [source] this guard objects to. Takes the source
 /// rather than reading it, so the mutation test can feed it a planted one.
 List<_Hit> foldHits(String path, String source) {
@@ -189,7 +247,8 @@ List<_Hit> foldHits(String path, String source) {
     final named = _namesAnExercise.hasMatch(_receiverOf(code, at)) ||
         _namesAnExercise.hasMatch(_statementAt(code, at));
     final lowering = m.namedGroup('case') == 'Lower';
-    if (!(lowering && fileNames) && !named) continue;
+    final scoped = lowering && _scopeNamesAnExercise(code, at);
+    if (!(lowering && fileNames) && !named && !scoped) continue;
     final line = '\n'.allMatches(code.substring(0, at)).length + 1;
     out.add(_Hit(path, line, line - 1 < lines.length ? lines[line - 1].trim() : ''));
   }
@@ -279,18 +338,25 @@ bool _isLiteral(String operand) {
 /// ''`, and neither operand says "exercise" where the comparison is written.
 /// The web half's own hole is the same one, closed in the same change.
 ///
+/// This scan has NO file-level rule, so [_broadModules] has nothing here to
+/// waive: the operands name a spelling or they do not, wherever the file sits.
+/// It used to skip a broad module outright, which spared 8,000 lines holding
+/// `createGymRoutine` and `createCustomExercise` from a scan they were never
+/// exempt from — the fold and blankness rails degrade to a receiver test on a
+/// waived file, and this one degraded to nothing at all. The web half carried
+/// the identical hole (§ 1509).
+///
 /// Exported so the mutation test below can feed it planted violations, as
 /// [foldHits] is.
 List<_Hit> rawNameComparisonHits(String path, String source) {
   final code = _blankComments(source);
   final scan = blankNonCode(source);
-  if (_broadModules.contains(path)) return const [];
   final lines = source.split('\n');
   final out = <_Hit>[];
   for (final m in _comparison.allMatches(scan)) {
     final at = m.start;
-    final left = _originOf(code, _receiverOf(code, at));
-    final right = _originOf(code, _operandAfter(code, at + m[0]!.length));
+    final left = _originOf(code, _receiverOf(code, at), at);
+    final right = _originOf(code, _operandAfter(code, at + m[0]!.length), at);
     // A folded operand is the fix, not the defect. Either side carrying the
     // canonical derivation means the comparison is already on the key.
     if (_folded.hasMatch(left) || _folded.hasMatch(right)) continue;
@@ -316,9 +382,44 @@ final _folded = RegExp(r'normaliseExerciseName\s*\(|namesAnExercise\s*\(');
 /// while saying everything inside `gym_compose_sheet.dart`.
 final _namesADisplayField = RegExp(r'\.name\b');
 
+/// A value whose OWN identifier is the display spelling, judged under the same
+/// file-level rule. The scan trusted a `.name` READ and not a value called
+/// `name`, which is the difference between a spelling taken off a row and one
+/// TYPED by the user — and the typed one is the whole reason the catalogue
+/// picker's create path exists. There the value reaches the test through a
+/// getter over a `TextEditingController`, whose text carries no `.name` and no
+/// "exercise", so no amount of chasing the declaration can reach it: the
+/// evidence is the identifier the call site binds, exactly as on the web rail
+/// (decisions § 1483).
+///
+/// Anchored at the START so `named`, whose `isEmpty` two lines under a `where`
+/// that already filtered on the key is a count of blocks rather than a blank
+/// name, is not swept in, and so the trimming chain the defect usually wears
+/// (`name.trim().isEmpty`) is still the same subject. Unlike the `.name` read
+/// it sits beside, this is judged on the length shape too — and under the same
+/// file-OR-SCOPE rule that read is, not the file rule alone.
+final _isANameIdentifier = RegExp(r'^name\b');
+
 final _emptyLiteral = RegExp(r"""^(?:''|"")$""");
 
 final _lengthTail = RegExp(r'\.length\s*$');
+
+/// Every operator a blankness test is written with. Deliberately wider than
+/// [_comparison], which the identity scan uses: `x == ''`, `x.length > 0` and
+/// `x.length < 1` ask one question of one value, and on the web rail the
+/// ordering spellings are the ones the defect actually wore — two of the three
+/// writes § 1367 fixed were `.trim().length > 0` and nothing in that tree could
+/// see them (§ 1508).
+///
+/// A generic argument (`List<String>`) matches the `<` here and is rejected by
+/// [_emptinessSubject], which admits an ordering only against a `.length`
+/// receiver and a 0-or-1 bound. Excluding it here instead would need a parser.
+final _blanknessComparison = RegExp(r'(?<![<>=!])(?:==|!=|<=|>=|<|>)(?!=)');
+
+/// The only bounds an ordering comparison can be asking about emptiness at.
+/// `length > 2` is a minimum-length rule, which is a different claim and not
+/// this scan's.
+final _emptyBound = RegExp(r'^[01]$');
 
 /// Dart's own spelling of the question, which the web half has no analogue for.
 final _emptinessGetter = RegExp(r'\.is(?:Not)?Empty\b');
@@ -347,14 +448,22 @@ String _leftOperand(String code, int at) {
 }
 
 /// The value a comparison is testing for emptiness, or null if it is not an
-/// emptiness test at all, paired with whether the subject may be judged on its
-/// DECLARATION as well as on the operand itself.
+/// emptiness test at all, paired with whether the subject may be judged on the
+/// loosest of the three spelling rules.
 ///
 /// `x == ''` and `x.length == 0` are the same question asked of a string, but
 /// only the first says the subject is one. A list is emptied the same way, and
 /// `named.length == 0` two lines under a `where` that filtered on a name is a
-/// count of blocks, not a blank name — so the length shape is judged on the
-/// operand alone, where the spelling has to be named outright.
+/// count of blocks, not a blank name — so the length shape does not get the
+/// `.name`-READ rule, whose whole content would be the filter's own body.
+///
+/// It still gets the declaration chase, and that is the correction rather than
+/// the port: judging the length shape on the OPERAND alone left
+/// `final trimmed = name.trim(); if (trimmed.length < 1)` invisible on both
+/// rails, which is `createCustomExercise` with one line rewritten. The two
+/// cases separate on the two stricter rules — a chased `name.trim()` is a
+/// spelling by its own identifier, a chased `_exercises.where(…)` is not — so
+/// nothing has to be given up to reach it.
 ({String subject, bool chase})? _emptinessSubject(String left, String right) {
   if (_emptyLiteral.hasMatch(right.trim())) {
     return (subject: left, chase: true);
@@ -362,35 +471,48 @@ String _leftOperand(String code, int at) {
   if (_emptyLiteral.hasMatch(left.trim())) {
     return (subject: right, chase: true);
   }
-  if (right.trim() == '0' && _lengthTail.hasMatch(left)) {
+  if (_emptyBound.hasMatch(right.trim()) && _lengthTail.hasMatch(left)) {
     return (subject: left.replaceAll(_lengthTail, ''), chase: false);
   }
-  if (left.trim() == '0' && _lengthTail.hasMatch(right)) {
+  if (_emptyBound.hasMatch(left.trim()) && _lengthTail.hasMatch(right)) {
     return (subject: right.replaceAll(_lengthTail, ''), chase: false);
   }
   return null;
 }
 
-/// The right-hand side of a bare identifier's declaration, chased up to a few
-/// hops so a value named by a `final` two lines up is still judged on where it
-/// came from.
+/// The right-hand side of a bare identifier's NEAREST PRECEDING declaration,
+/// chased up to a few hops so a value named by a `final` two lines up is still
+/// judged on where it came from.
 ///
 /// [foldHits] reaches that shape with [_statementAt], and a blankness test
 /// cannot: `if (name.isEmpty)` names nothing in its own statement, and the
 /// whole defect is that the declaration one line up read `ex.name.text.trim()`.
 /// The chase stops at the first expression that is not a bare identifier, so a
 /// value that arrives as a widget field or a getter is out of its reach.
-String _originOf(String code, String operand) {
+///
+/// **Nearest, not first**, and [at] is what makes that possible. Both rails
+/// took the file's FIRST declaration of the identifier, which is the right
+/// answer only in a module holding one — `api_client.dart` declares `trimmed`
+/// five times and `data.ts` declares `name` far more, so the chase answered
+/// about a note, a display name or a search box whenever it was asked about an
+/// exercise. It fails BOTH ways: a real defect reads as clean when the first
+/// declaration is innocent, and clean code reads as a defect when the first one
+/// is not. Measured on the tree: with the chase taking the first, an
+/// `createCustomExercise` rewritten to `trimmed.length < 1` resolved to
+/// `notes?.trim()` 5,900 lines above it and the scan reported nothing.
+String _originOf(String code, String operand, int at) {
   var expr = operand.trim();
+  final before = code.substring(0, at);
   final seen = <String>{};
   for (var hop = 0; hop < 4; hop++) {
     if (!_bareIdentifier.hasMatch(expr) || seen.contains(expr)) break;
     seen.add(expr);
-    final m =
-        RegExp(r'\b(?:final|const|var)\s+(?:[\w$<>?,]+\s+)?' + expr + r'\s*=([^;\n]*)')
-            .firstMatch(code);
-    if (m == null) break;
-    expr = m[1]!.trim();
+    final all = RegExp(
+            r'\b(?:final|const|var)\s+(?:[\w$<>?,]+\s+)?' + expr + r'\s*=([^;\n]*)')
+        .allMatches(before)
+        .toList();
+    if (all.isEmpty) break;
+    expr = all.last[1]!.trim();
   }
   return expr;
 }
@@ -416,7 +538,7 @@ List<_Hit> blankSpellingTestHits(String path, String source) {
       _namesAnExercise.hasMatch(scan) && !_broadModules.contains(path);
   final lines = source.split('\n');
   final found = <int, ({String subject, bool chase})>{};
-  for (final m in _comparison.allMatches(scan)) {
+  for (final m in _blanknessComparison.allMatches(scan)) {
     final s = _emptinessSubject(
         _leftOperand(code, m.start), _operandAfter(code, m.start + m[0]!.length));
     if (s != null) found[m.start] = s;
@@ -425,17 +547,29 @@ List<_Hit> blankSpellingTestHits(String path, String source) {
   // rather than a comparison — so the port needs a second pattern the web half
   // has no analogue for. Judged on the receiver plus the declaration chase,
   // exactly as the `== ''` shape is.
+  //
+  // The leading `!` comes off because `_receiverOf`'s character class carries
+  // it for the non-null assertion (`x!.trim()`), so a negated read arrives
+  // INSIDE the chain rather than beside it — and `!x.trim().isNotEmpty` is the
+  // same question as `x.trim().isEmpty`. The web half strips it for the same
+  // reason on its own negation pass.
   for (final m in _emptinessGetter.allMatches(scan)) {
-    found[m.start] = (subject: _receiverOf(code, m.start), chase: true);
+    final chain = _receiverOf(code, m.start).trim();
+    found[m.start] =
+        (subject: chain.replaceFirst(RegExp(r'^!+'), ''), chase: true);
   }
   final out = <_Hit>[];
   for (final at in found.keys.toList()..sort()) {
     final f = found[at]!;
-    final origin = f.chase ? _originOf(code, f.subject) : f.subject;
+    final origin = _originOf(code, f.subject, at);
     // The fix itself, on either the operand or its declaration.
     if (_folded.hasMatch(origin)) continue;
+    final scoped = fileNames || _scopeNamesAnExercise(code, at);
     final spelling = _namesASpelling.hasMatch(origin) ||
-        (f.chase && fileNames && _namesADisplayField.hasMatch(origin));
+        (scoped &&
+            (_isANameIdentifier.hasMatch(f.subject.trim()) ||
+                _isANameIdentifier.hasMatch(origin))) ||
+        (f.chase && scoped && _namesADisplayField.hasMatch(origin));
     if (!spelling) continue;
     final line = '\n'.allMatches(code.substring(0, at)).length + 1;
     out.add(
@@ -536,6 +670,16 @@ void main() {
         'lib/social.dart',
         'final exerciseKey = n.trim().toLowerCase();',
       ],
+      // The rule that reaches a broad module: the file is waived, the chain
+      // names nothing, and the enclosing member is what says it is an exercise.
+      'a broad module, under a member that names an exercise': [
+        '../../packages/api_client/lib/src/api_client.dart',
+        'class ApiClient {\n'
+            '  Future<void> createCustomExercise(String name) async {\n'
+            '    final k = name.trim().toLowerCase();\n'
+            '  }\n'
+            '}',
+      ],
     };
     caught.forEach((label, c) {
       expect(foldHits(c[0], c[1]).length, 1, reason: 'missed: $label');
@@ -557,6 +701,25 @@ void main() {
       'a section label upper-cased for presentation': [
         'lib/screens/gym_records_screen.dart',
         'final e = Exercise();\n  Text(label.toUpperCase());',
+      ],
+      'a broad module, under a member that names nothing of the kind': [
+        '../../packages/api_client/lib/src/api_client.dart',
+        'class ApiClient {\n'
+            '  Future<void> createClub(String name) async {\n'
+            '    final slug = name.trim().toLowerCase();\n'
+            '  }\n'
+            '}',
+      ],
+      'a body statement cannot be mistaken for the member enclosing it': [
+        '../../packages/api_client/lib/src/api_client.dart',
+        'class ApiClient {\n'
+            '  Future<void> createClub(String name) async {\n'
+            '    await client.rpc(\n'
+            '      "exercise_thing",\n'
+            '    );\n'
+            '    final slug = name.trim().toLowerCase();\n'
+            '  }\n'
+            '}',
       ],
     };
     spared.forEach((label, c) {
@@ -599,6 +762,14 @@ void main() {
       'neither operand says exercise where the comparison is written': [
         'lib/widgets/gym_compose_sheet.dart',
         "final name = (s['exercise_name'] as String?) ?? '';\n    if (last.name.text == name) last.sets.add(row);",
+      ],
+      // This scan has no file-level rule, so a broad module has nothing to
+      // waive: the operands say "exercise" or they do not, wherever the file
+      // sits. It read as spared for the fold scan's reason and was spared by
+      // neither (§ 1509).
+      'a broad module, whose operands still name a spelling': [
+        '../../packages/api_client/lib/src/api_client.dart',
+        'if (patch.exerciseName != other.exerciseName) fields["name"] = x;',
       ],
     };
     caught.forEach((label, c) {
@@ -700,6 +871,67 @@ void main() {
         'lib/screens/composer.dart',
         'final e = Exercise();\n    final raw = block.name;\n    final name = raw;\n    if (name.isEmpty) continue;',
       ],
+      // The four shapes below were invisible to this rail until the web half's
+      // § 1508 / § 1509 work was ported. Two of them are how the defect was
+      // actually written over there.
+      'blankness as an ordering test': [
+        'lib/social.dart',
+        'final ok = s.exerciseName.trim().length > 0;',
+      ],
+      'the same, below the boundary': [
+        'lib/social.dart',
+        'if (s.exerciseName.trim().length < 1) continue;',
+      ],
+      'the same, at the boundary': [
+        'lib/social.dart',
+        'if (s.exerciseName.trim().length >= 1) keep();',
+      ],
+      'blankness as a negated emptiness read': [
+        'lib/social.dart',
+        'if (!exerciseName.trim().isNotEmpty) return null;',
+      ],
+      'the trimming chain on a subject the declaration alone cannot place': [
+        'lib/widgets/gym_compose_sheet.dart',
+        'final e = Exercise();\n    final name = trimmed;\n    if (name.trim().isEmpty) return;',
+      ],
+      'a broad module, under a member that names an exercise': [
+        '../../packages/api_client/lib/src/api_client.dart',
+        'class ApiClient {\n'
+            '  Future<List<Object>> fetchExerciseSetHistory(String name) async {\n'
+            '    if (!name.trim().isNotEmpty) return const [];\n'
+            '    return const [];\n'
+            '  }\n'
+            '}',
+      ],
+      // The chase reads the NEAREST preceding declaration. Taking the file's
+      // first missed this entirely, because a `trimmed` declared in an earlier
+      // member answered for the one under test.
+      'a local re-declared under a member that names an exercise': [
+        'lib/screens/gym_screen.dart',
+        '  void _saveNote(String note) {\n'
+            '    final trimmed = note.trim();\n'
+            '  }\n'
+            '  void _addExercise(String name) {\n'
+            '    final trimmed = name.trim();\n'
+            '    if (trimmed.length < 1) return;\n'
+            '  }',
+      ],
+      // The picker's create path: the value arrives through a getter over a
+      // TextEditingController, so the declaration chase cannot reach anything
+      // that names an exercise and the subject identifier is the only evidence
+      // there is (decisions § 1573).
+      "the picker's create path, whose value came from a search box": [
+        'lib/widgets/exercise_catalogue_picker.dart',
+        'final e = exercise;\n    final name = _query;\n    if (name.isEmpty) return;',
+      ],
+      'the same call site written as a comparison': [
+        'lib/widgets/exercise_catalogue_picker.dart',
+        "final e = exercise;\n    final name = _query;\n    if (name == '') return;",
+      ],
+      'the same call site written as a length test': [
+        'lib/widgets/exercise_catalogue_picker.dart',
+        'final e = exercise;\n    final name = _query;\n    if (name.length == 0) return;',
+      ],
     };
     caught.forEach((label, c) {
       expect(blankSpellingTestHits(c[0], c[1]).length, 1, reason: 'missed: $label');
@@ -743,10 +975,75 @@ void main() {
         'lib/t.dart',
         "const doc = 'exerciseName.isEmpty';",
       ],
+      // The ordering shapes admit a `.length` against 0 or 1 and nothing else,
+      // so a list count in a file full of exercises is untouched.
+      'a list counted in a file that names an exercise': [
+        'lib/screens/gym_screen.dart',
+        'final e = Exercise();\n    final first = sets.length > 0 ? sets[0] : null;',
+      ],
+      'a minimum-length rule, which is a different claim': [
+        'lib/social.dart',
+        'if (s.exerciseName.trim().length >= 3) keep();',
+      ],
+      // A generic argument matches the `<` the ordering shapes need and is
+      // rejected on the operands rather than by excluding it up front.
+      'a generic argument in a file that names an exercise': [
+        'lib/widgets/gym_compose_sheet.dart',
+        'final List<Exercise> catalogue = <Exercise>[];',
+      ],
+      // `named` is what the word boundary on the name-identifier rule exists
+      // for: its emptiness is a count of blocks, not a blank spelling.
+      'a count called named, whose declaration folds nothing': [
+        'lib/widgets/routine_builder_sheet.dart',
+        'final e = Exercise();\n    final named = _exercises.where((x) => x.reps > 2);\n    if (named.isEmpty) return;',
+      ],
+      'a broad module, under a member that names nothing of the kind': [
+        '../../packages/api_client/lib/src/api_client.dart',
+        'class ApiClient {\n'
+            '  Future<void> createClub(String name) async {\n'
+            '    if (!name.trim().isNotEmpty) throw StateError("x");\n'
+            '  }\n'
+            '}',
+      ],
+      // The same pair the other way round: taking the file's first declaration
+      // made this a false positive, because the exercise member declares the
+      // identifier the note member then re-uses.
+      'a local re-declared under a member that names nothing of the kind': [
+        'lib/screens/gym_screen.dart',
+        '  void _addExercise(String name) {\n'
+            '    final trimmed = name.trim();\n'
+            '  }\n'
+            '  void _saveNote(String note) {\n'
+            '    final trimmed = note.trim();\n'
+            '    if (trimmed.length < 1) return;\n'
+            '  }',
+      ],
     };
     spared.forEach((label, c) {
       expect(blankSpellingTestHits(c[0], c[1]), isEmpty,
           reason: 'false positive: $label');
     });
+  });
+
+  test('a regression at the picker create path fails the scan', () {
+    // The picker's own file as it stands, plus the regression the three cases
+    // above plant into it. Read from disk rather than restated, because what
+    // makes the call site reachable is a property of the FILE — it names an
+    // exercise, and the value under test is called `name` — and a restatement
+    // would keep passing after the file stopped having it. § 1368 recorded that
+    // this call site was out of the scan's reach on both rails; web closed its
+    // half in § 1483 and this is the port.
+    const picker = 'lib/widgets/exercise_catalogue_picker.dart';
+    final source = File(picker).readAsStringSync();
+    expect(blankSpellingTestHits(picker, source), isEmpty,
+        reason: 'the picker create path is fixed');
+    const fixed = '!namesAnExercise(name) ||';
+    expect(source.contains(fixed), isTrue,
+        reason: 'the create path moved — re-anchor this guard');
+    expect(
+        blankSpellingTestHits(picker, source.replaceFirst(fixed, 'name.isEmpty ||'))
+            .length,
+        1,
+        reason: 'a regression at the picker create path must fail this scan');
   });
 }

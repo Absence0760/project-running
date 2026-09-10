@@ -200,18 +200,38 @@ internal suspend fun drainQueueLoop(
             record(run.id, lastFault, e)
             when (classify(e)) {
                 DrainAction.RetryAfterRefresh -> {
-                    // One-shot refresh-then-retry. If refresh fails OR
-                    // the retry itself fails, stop the loop and arm
-                    // backoff — the next drain trigger (network flap,
-                    // manual sync) will retry from this run forward.
-                    val refreshed = try {
-                        refresh()
+                    // One-shot refresh-then-retry. A refresh that fails stops
+                    // the loop and arms backoff — the next drain trigger
+                    // (network flap, manual sync) retries from this run
+                    // forward. A retry that fails is judged like any other
+                    // attempt: the refresh has already spent its one shot, so
+                    // what remains is the same three-way verdict the outer
+                    // `when` acts on.
+                    val refreshFault: SyncFault? = try {
+                        if (refresh()) {
+                            null
+                        } else {
+                            // No throwable, so nothing to classify: a refresh
+                            // that reported failure without saying why leaves
+                            // the 401's own verdict standing.
+                            SyncFault.SignInRequired
+                        }
                     } catch (inner: Throwable) {
-                        record(run.id, SyncFault.SignInRequired, inner)
-                        false
+                        // The refresh's OWN error, not the 401 that provoked
+                        // it. The 401 proves the server answered moments
+                        // earlier, so a refresh that dies on a dropped socket
+                        // or a `SessionStore` write that throws is not a
+                        // session the server refused to renew — and since
+                        // § 1544 that is an affordance, not a caption: the arc
+                        // offers a sign-in for `SignInRequired` and would cost
+                        // the runner a password they did not need to retype.
+                        val fault = syncFaultForRefresh(inner)
+                        record(run.id, fault, inner)
+                        fault
                     }
-                    if (!refreshed) {
-                        blockedBy = lastFault
+                    if (refreshFault != null) {
+                        lastFault = refreshFault
+                        blockedBy = refreshFault
                         break
                     }
                     try {
@@ -225,8 +245,31 @@ internal suspend fun drainQueueLoop(
                         // again names the one thing that has just succeeded.
                         lastFault = syncFaultFor(inner)
                         record(run.id, lastFault, inner)
-                        blockedBy = lastFault
-                        break
+                        // And the retry's own VERDICT, for the same reason the
+                        // fault is its own. This branch used to break on every
+                        // failure, so a 400/404/409/422 here left the entry
+                        // queued, armed backoff as though it were transient,
+                        // and put the arc on `RetryQueued` for a run no retry
+                        // will ever move — the exact state § 1347 built
+                        // `rejectedIds` and the two-press discard chip to
+                        // escape, reached through the one branch that bypassed
+                        // them.
+                        when (classify(inner)) {
+                            // A refusal is not a stop: the queue's later
+                            // entries may be perfectly acceptable, and the
+                            // permanent verdict is what the chip acts on.
+                            DrainAction.SkipAndContinue -> rejected += run.id
+                            // A second 401 with a token minted seconds ago is
+                            // not a refresh this loop may repeat — the
+                            // one-shot contract is what keeps a rejecting
+                            // server from being asked twice per run — so it
+                            // stops the pass exactly as a transient does.
+                            DrainAction.RetryAfterRefresh,
+                            DrainAction.StopAndRetryLater -> {
+                                blockedBy = lastFault
+                                break
+                            }
+                        }
                     }
                 }
                 DrainAction.StopAndRetryLater -> {

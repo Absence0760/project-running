@@ -1965,7 +1965,12 @@ export function bareWriterCall(sql, byName) {
 
 /**
  * Every relation the file's pgtap assertions read, with the offset of the
- * assertion that reads it — so one assertion cannot be its own witness.
+ * assertion that reads it — so one assertion cannot be its own witness, and so
+ * a read can be placed relative to the write it is offered as evidence for. A
+ * read that runs BEFORE the call proves nothing about it: `reports_test.sql`
+ * counted the reporter's rows two steps above the re-file it was credited with
+ * observing, and `user_blocks_test.sql` read `user_blocks` four steps above the
+ * unblock (decisions 1605).
  * @param {string} text
  * @returns {{ offset: number, relations: Set<string> }[]}
  */
@@ -1981,9 +1986,22 @@ export function assertionReads(text) {
 }
 
 /**
+ * Whether some assertion AFTER [offset] reads one of [tables] — the ordering is
+ * the whole rule, so it lives in one function both the guard and its own suite
+ * call rather than as a comparison spelled twice (decisions 1605).
+ * @param {{ offset: number, relations: Set<string> }[]} reads
+ * @param {number} offset
+ * @param {string[]} tables
+ * @returns {boolean}
+ */
+export function observesWrite(reads, offset, tables) {
+  return reads.some((r) => r.offset > offset && tables.some((t) => r.relations.has(t)));
+}
+
+/**
  * Positive assertions whose whole SQL is one call to a writing function and
- * whose file never reads the table it writes, with what does observe the write
- * instead. Same discipline as the registries above: `tables` is matched exactly
+ * which no LATER assertion in the file reads the table of, with what does
+ * observe the write instead. Same discipline as the registries above: `tables` is matched exactly
  * so an entry cannot outlive the write set it was written about, and a
  * `readBack` must still name an assertion in the same file.
  * @type {{ file: string, description: string, tables: string[], readBack?: string, reason: string }[]}
@@ -2272,20 +2290,18 @@ function main() {
       const written = bareWriterCall(sql, writing);
       if (written !== null) {
         reads ??= assertionReads(text);
-        const observed = reads.some(
-          (r) => r.offset !== call.offset && written.tables.some((t) => r.relations.has(t)),
-        );
-        if (!observed) {
+        if (!observesWrite(reads, call.offset, written.tables)) {
           const entry = unobservedRegistered.get(key);
           if (entry === undefined) {
             failures.push(
               `${file}:${call.line}  "${description}" is one bare call to ${written.name}, and no ` +
-                `assertion in this file reads ${written.tables.join(
+                `assertion AFTER it reads ${written.tables.join(
                   ' / ',
                 )} — so it measures only that no error was raised, and a ${written.name} that ` +
                 `authorised the caller and wrote nothing at all passes it just as well ` +
-                `(decisions 1540). Read the row back, or register the assertion in ` +
-                `UNOBSERVED_RPC_WRITES naming what observes the write instead.`,
+                `(decisions 1540, tightened to the ordered form by 1605). A read EARLIER in the ` +
+                `file is not evidence about this call. Read the row back after it, or register ` +
+                `the assertion in UNOBSERVED_RPC_WRITES naming what observes the write instead.`,
             );
           } else {
             unobservedMatched.add(key);
@@ -2371,7 +2387,7 @@ function main() {
     const key = `${entry.file}\u0000${entry.description}`;
     if (unobservedMatched.has(key)) continue;
     failures.push(
-      `UNOBSERVED_RPC_WRITES entry ${entry.file} / "${entry.description}" is stale: no unobserved bare writer call is there any more. It was rewritten, renamed or deleted, or the file now reads the table — remove the entry so the next one cannot hide behind it.`,
+      `UNOBSERVED_RPC_WRITES entry ${entry.file} / "${entry.description}" is stale: no unobserved bare writer call is there any more. It was rewritten, renamed or deleted, or the file now reads the table after it — remove the entry so the next one cannot hide behind it.`,
     );
   }
 

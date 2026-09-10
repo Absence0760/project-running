@@ -1,5 +1,6 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' show dedupeShadowedExercises;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:ui_kit/ui_kit.dart' show TextLane;
 
@@ -73,6 +74,18 @@ String _gymSetTypeLabel(String s, AppLocalizations l10n) {
 /// history autocomplete plus inline sets (reps / weight / RPE). Writes
 /// through [LocalGymStore] so logging a lift works offline. Presentation
 /// goes through [showFullScreenForm], the shared create/edit-entity wrapper.
+/// A host's catalogue as it stands right now: the entries it has, and whether
+/// that list is known to be the whole catalogue (§ 1332's third state).
+///
+/// Carried as one value because the two are one claim — a list is only as good
+/// as the knowledge of whether it is complete — and because a route builder
+/// that has to be handed a live view can be handed one listenable rather than
+/// two that could disagree between rebuilds.
+typedef GymCatalogueState = ({
+  List<GymCatalogueEntry> entries,
+  bool unavailable,
+});
+
 Future<bool?> showGymComposeSheet({
   required BuildContext context,
   required LocalGymStore store,
@@ -82,6 +95,7 @@ Future<bool?> showGymComposeSheet({
   List<String> suggestions = const [],
   List<GymCatalogueEntry> catalogue = const [],
   bool catalogueUnavailable = false,
+  ValueListenable<GymCatalogueState>? catalogueSource,
   String? prefillTitle,
   ApiClient? api,
 }) {
@@ -100,6 +114,7 @@ Future<bool?> showGymComposeSheet({
       suggestions: suggestions,
       catalogue: catalogue,
       catalogueUnavailable: catalogueUnavailable,
+      catalogueSource: catalogueSource,
       prefillTitle: prefillTitle,
       api: api,
     ),
@@ -128,6 +143,19 @@ class GymComposeSheet extends StatefulWidget {
   /// vanishes on a transient error explains nothing.
   final bool catalogueUnavailable;
 
+  /// A LIVE view of the host's catalogue, which wins over [catalogue] +
+  /// [catalogueUnavailable] whenever it is supplied.
+  ///
+  /// The plain props cannot track a late read in production and never could:
+  /// this sheet is presented through [showFullScreenForm], which pushes a
+  /// `MaterialPageRoute` whose builder runs ONCE, so the values that builder
+  /// closed over are fixed for the life of the route no matter what the host
+  /// does afterwards. Reading `widget.catalogue` on every build (§ 1513) is
+  /// necessary and was never sufficient — it is only reachable from a harness
+  /// that rebuilds this widget in place, which nothing in the app does. A host
+  /// whose catalogue arrives from an async read passes this instead.
+  final ValueListenable<GymCatalogueState>? catalogueSource;
+
   /// Seed for a NEW workout (the class -> gym seam). Pre-fills the title; sets
   /// stay empty for the user to fill. Ignored when [existing] is set.
   final String? prefillTitle;
@@ -145,6 +173,7 @@ class GymComposeSheet extends StatefulWidget {
     this.suggestions = const [],
     this.catalogue = const [],
     this.catalogueUnavailable = false,
+    this.catalogueSource,
     this.prefillTitle,
     this.api,
   });
@@ -182,10 +211,42 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
   /// holding both left the list showing one exercise twice and
   /// [_catalogueByKey]'s last-wins map deciding which id a logged set bound to.
   List<GymCatalogueEntry> get _catalogue => dedupeShadowedExercises(
-        [...widget.catalogue, ..._createdCustoms],
+        [..._hostCatalogue.entries, ..._createdCustoms],
         nameKey: (e) => e.nameKey,
         authorId: (e) => e.authorId,
       );
+
+  /// The host's catalogue right now — the live view when one was supplied,
+  /// else the props. See [GymComposeSheet.catalogueSource] for why a host that
+  /// reads asynchronously has to supply one.
+  GymCatalogueState get _hostCatalogue =>
+      widget.catalogueSource?.value ??
+      (entries: widget.catalogue, unavailable: widget.catalogueUnavailable);
+
+  /// Whether [_catalogue] is known to be the whole catalogue.
+  bool get _catalogueUnavailable => _hostCatalogue.unavailable;
+
+  /// What the picker's route renders from.
+  ///
+  /// The picker is pushed as a route too, and its builder runs once for the
+  /// same reason this sheet's does — so a value read there is frozen at push
+  /// time even when this sheet is tracking its host perfectly. Publishing the
+  /// composer's own effective catalogue through a listenable is what carries a
+  /// read that answers, or a custom created in the picker, across that seam.
+  late final ValueNotifier<GymCatalogueState> _pickerCatalogue =
+      ValueNotifier(_pickerState);
+
+  GymCatalogueState get _pickerState =>
+      (entries: _catalogue, unavailable: _catalogueUnavailable);
+
+  /// Republish for the picker's route. Always notifies: [_catalogue] builds a
+  /// new list every call, so the record never compares equal to the last one.
+  void _publishCatalogue() => _pickerCatalogue.value = _pickerState;
+
+  void _onHostCatalogue() {
+    if (!mounted) return;
+    setState(_publishCatalogue);
+  }
 
   /// normalised name -> catalogue id, for binding a typed name at save time.
   Map<String, String> get _catalogueByKey => {
@@ -209,6 +270,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
   @override
   void initState() {
     super.initState();
+    widget.catalogueSource?.addListener(_onHostCatalogue);
     final existing = widget.existing;
     _titleCtl = TextEditingController(
         text:
@@ -306,7 +368,19 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
   }
 
   @override
+  void didUpdateWidget(covariant GymComposeSheet old) {
+    super.didUpdateWidget(old);
+    if (!identical(old.catalogueSource, widget.catalogueSource)) {
+      old.catalogueSource?.removeListener(_onHostCatalogue);
+      widget.catalogueSource?.addListener(_onHostCatalogue);
+    }
+    _publishCatalogue();
+  }
+
+  @override
   void dispose() {
+    widget.catalogueSource?.removeListener(_onHostCatalogue);
+    _pickerCatalogue.dispose();
     _titleCtl.dispose();
     for (final ex in _exercises) {
       ex.dispose();
@@ -366,12 +440,19 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
   Future<void> _openPicker(_EditExercise ex) async {
     final picked = await Navigator.of(context).push<GymCatalogueEntry>(
       MaterialPageRoute<GymCatalogueEntry>(
-        builder: (_) => ExerciseCataloguePickerScreen(
-          catalogue: _catalogue,
-          unavailable: widget.catalogueUnavailable,
-          api: widget.api,
-          onCreated: (created) =>
-              _createdCustoms = [..._createdCustoms, created],
+        // The builder runs once, so the picker cannot be handed the catalogue
+        // by value: a read answering while browse is open would never reach it.
+        builder: (_) => ValueListenableBuilder<GymCatalogueState>(
+          valueListenable: _pickerCatalogue,
+          builder: (_, state, _) => ExerciseCataloguePickerScreen(
+            catalogue: state.entries,
+            unavailable: state.unavailable,
+            api: widget.api,
+            onCreated: (created) {
+              _createdCustoms = [..._createdCustoms, created];
+              _publishCatalogue();
+            },
+          ),
         ),
       ),
     );
@@ -550,7 +631,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
             Row(
               children: [
                 Expanded(child: _nameField(ex, l10n)),
-                if (_catalogue.isNotEmpty || widget.catalogueUnavailable)
+                if (_catalogue.isNotEmpty || _catalogueUnavailable)
                   IconButton(
                     tooltip: l10n.gymCatalogueBrowse,
                     icon: const Icon(Icons.menu_book_outlined),

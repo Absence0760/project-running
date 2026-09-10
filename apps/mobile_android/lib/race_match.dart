@@ -1,5 +1,3 @@
-import 'run_stats.dart' as run_stats;
-
 /// Pure race auto-match scoring. Twin of
 /// `apps/web/src/lib/integrations/race_match.ts` — keep in lockstep
 /// (algorithm, bands, thresholds, edge cases, test count). No I/O.
@@ -8,6 +6,12 @@ import 'run_stats.dart' as run_stats;
 /// saved, to import the official race result when the recorded run looks like
 /// a listed race: same calendar day + start near the race location + distance
 /// in the race's band. INFORM-tier — nothing writes without confirmation.
+///
+/// Proximity is [ListingMatchInput.distanceMAway], which `search_race_listings`
+/// computes server-side, and it is the ONLY door to that signal — the run side
+/// used to carry a `runStartLatLng` and this module a `LatLng`-shaped
+/// `haversineMetres` to measure from it, and neither was ever read: nothing
+/// assigned the field, nothing but the two suites called the function.
 
 enum RaceDistanceBand { fiveK, tenK, half, marathon, ultra }
 
@@ -33,16 +37,9 @@ RaceDistanceBand? raceDistanceBand(num? distanceM) {
 class RunMatchInput {
   /// Run start as an ISO timestamp or date — only the calendar day is used.
   final String runDate;
-
-  /// Recorded GPS start; null when the run has no track (indoor / manual).
-  final LatLng? runStartLatLng;
   final num? runDistanceM;
 
-  const RunMatchInput({
-    required this.runDate,
-    required this.runStartLatLng,
-    required this.runDistanceM,
-  });
+  const RunMatchInput({required this.runDate, required this.runDistanceM});
 }
 
 class ListingMatchInput {
@@ -58,12 +55,6 @@ class ListingMatchInput {
     required this.distanceM,
     this.distanceMAway,
   });
-}
-
-class LatLng {
-  final double lat;
-  final double lng;
-  const LatLng(this.lat, this.lng);
 }
 
 /// 0..1 confidence that [run] is the race in [listing]. Same-day is required;
@@ -100,12 +91,6 @@ double raceMatchScore(RunMatchInput run, ListingMatchInput listing) {
 bool isRaceMatchCandidate(RunMatchInput run, ListingMatchInput listing) {
   return raceMatchScore(run, listing) >= raceMatchThreshold;
 }
-
-/// Great-circle distance in metres between two points. The object-shaped door
-/// onto the shared `haversineMetres`, not a second formula. Exposed so a
-/// caller can compute distance_m_away when the RPC didn't.
-double haversineMetres(LatLng a, LatLng b) =>
-    run_stats.haversineMetres(a.lat, a.lng, b.lat, b.lng);
 
 bool _sameCalendarDay(String a, String b) => _dayKey(a) == _dayKey(b);
 

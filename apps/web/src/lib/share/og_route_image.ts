@@ -11,11 +11,17 @@ import type { TrackPoint } from '../types';
 import { projectTrack } from '../routes/track_projection';
 import { OG_CARD_LIGHT } from './og_card_palette';
 import { escapeHtml } from '../util/html_escape';
-import { clipText } from '../util/clip_text';
+import { clipToWidthPx } from './svg_text_width';
 
 const W = 1200;
 const H = 630;
 const PAD = 40; // inset margin so the track doesn't hug the edges
+/// The title's face size, named because the width budget is measured in it.
+/// A cluster budget cannot bound a box measured in pixels: one cluster is
+/// 0.24 em of `'` and 1.0 em of a Han character, so the 30 clusters this used
+/// to allow painted 1142 px of lowercase Latin and 1678 px of Han into the
+/// same 1120 px — and a route named in capitals overran it by 525 px.
+const TITLE_SIZE = 56;
 
 const BG = OG_CARD_LIGHT.bg;
 const FG = OG_CARD_LIGHT.brand;
@@ -85,7 +91,7 @@ export function buildRouteOgSvg(input: RouteImageInput): string {
 	const meta = buildMetaLine(input.distance_m, input.surface);
 	const titleY = H - 160;
 	parts.push(
-		`<text x="${PAD}" y="${titleY}" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="56" font-weight="700" fill="${TEXT_FILL}">${escapeHtml(clipText(name, 30))}</text>`,
+		`<text x="${PAD}" y="${titleY}" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="${TITLE_SIZE}" font-weight="700" fill="${TEXT_FILL}">${escapeHtml(clipToWidthPx(name, W - PAD * 2, TITLE_SIZE))}</text>`,
 	);
 	if (meta) {
 		parts.push(

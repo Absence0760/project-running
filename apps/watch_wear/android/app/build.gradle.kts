@@ -209,6 +209,18 @@ tasks.withType<Test>().configureEach {
     inputs.dir("src/main/res")
         .withPathSensitivity(PathSensitivity.RELATIVE)
         .withPropertyName("guardedResourceSet")
+    // The main source read AS TEXT. `SilentFailureGuardTest` walks every `.kt`
+    // under here and `ViewModelStreamResilienceTest` reads one of them, and
+    // neither reads a class: a unit test's classpath carries the compiled
+    // output, so what makes a source change re-run this task is bytecode
+    // moving. A COMMENT does not move it — and a comment is precisely what
+    // both guards accept as a swallow's stated reason, so deleting the reason
+    // beside a `runCatching` that drops its Result would leave this task
+    // UP-TO-DATE on the exact edit the rule exists to refuse. Same shape as
+    // the resource set above and the cross-tree files below.
+    inputs.dir("src/main/kotlin")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+        .withPropertyName("guardedMainSources")
     // ManifestGuardsTest + ManifestPermissionCoverageTest read this directly.
     // It is not on a unit test's classpath, so nothing else makes it an input.
     inputs.file("src/main/AndroidManifest.xml")
