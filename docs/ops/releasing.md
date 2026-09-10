@@ -318,9 +318,16 @@ and install from there.
   the deep link's own directory -- until the `terraform apply` catches up.
   Check before tagging, don't assume:
   `aws cloudfront get-distribution-config --id <DIST_ID> --query 'DistributionConfig.CustomErrorResponses.Items[?ErrorCode==`403`].ResponsePagePath' --output text`
-  -- `/200.html` means done, `/index.html` means do the cutover first. The
-  order, its rollback and the one claim in it that is derived rather than
-  measured are in [`deployment.md` § One-off: the SPA-shell cutover from
+  -- `/200.html` means done, `/index.html` means do the cutover first.
+  **`prod` was cut over on 2026-09-10 and `web@1.5.0` shipped on top of it**,
+  so it needs nothing further; the check above still costs one command and is
+  still worth running, because this note is a record of one distribution's
+  state and not a guarantee about it. `preview` has never been cut over and
+  cannot be: the account holds exactly one distribution and
+  `preview.threkir.com` resolves to nothing, so that environment is unbuilt
+  rather than pending. The order, its rollback and the claim in it that is now
+  measured rather than derived are in [`deployment.md` § One-off: the
+  SPA-shell cutover from
   `index.html` to `200.html`](deployment.md#one-off-the-spa-shell-cutover-from-indexhtml-to-200html).
 - **Supabase Auth URL configuration (every release, web or mobile).**
   In the hosted project's dashboard, confirm **Authentication → URL

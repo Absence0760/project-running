@@ -455,15 +455,23 @@ aws cloudfront get-distribution-config --id <DIST_ID> --query 'DistributionConfi
 next `web@*` release will break every deep link on it; `/200.html` means steps
 1 and 2 are done. `aws s3 ls s3://<bucket>/200.html` answers step 1 on its own.
 
-**The one derived claim, and how to falsify it.** Everything above is read out
-of the workflow, the Terraform and the AWS CLI reference -- no lane holds
-credentials, so none of it has been executed against AWS. The step that carries
-the most weight is that the pre-seeded `200.html` survives the release's
-`aws s3 sync --delete`, which rests on excluded keys not being deletion
-candidates. Confirm it the cheap way the first time through: run step 1, run a
-release, and check `200.html` is still listed. If it is gone, the window
-between the release's two sync passes is real and the pre-seed has to be
-repeated after the deploy instead of before it.
+**The claim that was derived is now measured, on `prod`, 2026-09-10.** It used
+to read that none of this had been executed against AWS, because no lane holds
+credentials. The step carrying the most weight was that the pre-seeded
+`200.html` survives the release's `aws s3 sync --delete`, resting on excluded
+keys not being deletion candidates. It does. `prod` was walked through all three
+steps in order and `web@1.5.0` published on top: the pre-seed survived the
+release, and pass 2 then overwrote it with the new build's shell in the same
+run. Deep links were checked after the deploy and came back byte-identical to
+`200.html` rather than serving the landing page, which is the failure this
+ordering exists to prevent.
+
+Two facts worth carrying forward. `index.html` and `200.html` genuinely diverge
+after the cutover -- the landing page measured 15098 bytes against the shell's
+5927 -- so the rollback note below is load-bearing rather than theoretical. And
+`preview` has not been cut over, because it does not exist: the account holds
+one distribution, and `preview.threkir.com` resolves to nothing. The per-
+environment framing above still stands for whenever that environment is built.
 
 Rollback is the mirror image: revert the Terraform first (the bucket still
 holds an `index.html`, though after a post-cutover deploy it is the landing
