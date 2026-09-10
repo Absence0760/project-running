@@ -56,6 +56,12 @@ regexes = [
   # env_isolation.test.mjs: the obviously-fake Stripe keys this security test
   # feeds itself to prove a *live* key in a dev env is rejected.
   '''(sk|pk)_(live|test)_abcdef0123456789''',
+  # handler_account_deletion_receipt_test.go: the DELETION_AUDIT_KEY fixture the
+  # keyed-digest tests feed themselves (decisions § 1600). The literal says what
+  # it is — it is a length-floor placeholder, not a key that opens anything.
+  # Matched on the value so a real audit key in that test file is still a
+  # finding.
+  '''an-operator-secret-at-least-32-bytes-long''',
   # apps/custom_watch/core/src/badges.rs: the watch_core badge catalogue's i18n
   # key strings (label_key/desc_key = "badges.<family>.<label|desc>"). The
   # generic-api-key rule's entropy gate trips on the higher-entropy ones, but
