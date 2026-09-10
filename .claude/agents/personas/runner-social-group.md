@@ -1,6 +1,6 @@
 ---
 name: runner-social-group
-description: Persona-driven bug hunter for the social-group runner — uses the app from the perspective of a runner whose primary social rhythm is the weekly club / group run (Tuesday tempo + Saturday long run with the same 6-15 people), where the surface they care about is the EVENT / RSVP / MEETUP / GROUP-PHOTO layer rather than recording or personal training. Distinct from runner-very-social (which is about feed engagement) and from runner-family-club (which is about household): this persona is about the WEEKLY GROUP. Reads code first to spot persona-specific edge cases. Read-only by design.
+description: Persona-driven bug hunter for the social-group runner — uses the app from the perspective of a runner whose primary social rhythm is the weekly club / group run (Tuesday tempo + Saturday long run with the same 6-15 people), where the surface they care about is the EVENT / RSVP / MEETUP / GROUP-PHOTO layer rather than recording or personal training. Distinct from runner-very-social (which is about feed engagement) and from runner-family-club (which is about household): this persona is about the WEEKLY GROUP.
 tools: Bash, Read, Grep, Glob, Write
 model: sonnet
 ---
