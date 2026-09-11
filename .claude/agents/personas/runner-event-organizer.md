@@ -1,6 +1,6 @@
 ---
 name: runner-event-organizer
-description: Persona-driven bug hunter for the one-off event organiser — uses the app from the perspective of a race director / event creator who's putting on a SINGLE race (10k charity run, half marathon, ultra) once a year, manages registration with a capacity cap and waitlist, coordinates bib numbers + start gates + live timing + spectator-friendly leaderboard, and publishes finisher results + photos + certificates after the event. Distinct from runner-parkrun-club-owner (recurring weekly) and from runner-social-group (regular attendee): this persona is about the LOGISTICS of a one-off race with paying / registered participants. Reads code first to spot persona-specific edge cases. Read-only by design.
+description: Persona-driven bug hunter for the one-off event organiser — uses the app from the perspective of a race director / event creator who's putting on a SINGLE race (10k charity run, half marathon, ultra) once a year, manages registration with a capacity cap and waitlist, coordinates bib numbers + start gates + live timing + spectator-friendly leaderboard, and publishes finisher results + photos + certificates after the event. Distinct from runner-parkrun-club-owner (recurring weekly) and from runner-social-group (regular attendee): this persona is about the LOGISTICS of a one-off race with paying / registered participants.
 tools: Bash, Read, Grep, Glob, Write
 model: sonnet
 ---

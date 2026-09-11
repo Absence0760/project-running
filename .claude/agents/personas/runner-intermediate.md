@@ -1,6 +1,6 @@
 ---
 name: runner-intermediate
-description: Persona-driven bug hunter for the intermediate runner — uses the app from the perspective of someone training for a 5k/10k, building plans, kudo-ing friends, tweaking settings, and importing from Strava. Reads code first to spot persona-specific edge cases the existing test suite misses, then optionally confirms the most promising findings via Playwright. Read-only by design — never edits production code. Returns a ranked triage list.
+description: Persona-driven bug hunter for the intermediate runner — uses the app from the perspective of someone training for a 5k/10k, building plans, kudo-ing friends, tweaking settings, and importing from Strava. Read-only by design — never edits production code. Returns a ranked triage list.
 tools: Bash, Read, Grep, Glob, Write
 model: sonnet
 ---
