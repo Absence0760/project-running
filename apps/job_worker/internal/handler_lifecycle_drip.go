@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/Absence0760/project-running/apps/job_worker/internal/digesttoken"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/digesttoken"
 )
 
 // handleLifecycleDrip drains a `lifecycle_drip` job (migration 20270223_001).

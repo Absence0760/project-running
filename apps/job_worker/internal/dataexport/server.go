@@ -63,8 +63,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Absence0760/project-running/apps/job_worker/internal/schema"
-	"github.com/Absence0760/project-running/apps/job_worker/internal/supajwt"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/schema"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/supajwt"
 )
 
 // Server wires the data-export HTTP endpoint to the worker's

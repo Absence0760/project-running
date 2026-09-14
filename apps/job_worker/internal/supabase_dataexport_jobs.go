@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/Absence0760/project-running/apps/job_worker/internal/schema"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/schema"
 )
 
 // The durable state of a queued Art 20 export (migration 20270603_001).

@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Absence0760/project-running/apps/job_worker/internal"
+	"github.com/Absence0760/threkir/apps/job_worker/internal"
 )
 
 // exportRunFromRow is a hand-written field-by-field copy between two structs

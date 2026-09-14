@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Absence0760/project-running/apps/job_worker/internal/supajwt"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/supajwt"
 )
 
 func postJob(t *testing.T, base, sub, body string) (*http.Response, map[string]any) {

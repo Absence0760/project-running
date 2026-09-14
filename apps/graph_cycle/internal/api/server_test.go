@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Absence0760/project-running/apps/graph_cycle/internal/graph"
+	"github.com/Absence0760/threkir/apps/graph_cycle/internal/graph"
 )
 
 // testServer builds a 9×9 grid foot graph (loop-rich) behind the API. The

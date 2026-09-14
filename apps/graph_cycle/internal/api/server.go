@@ -18,7 +18,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Absence0760/project-running/apps/graph_cycle/internal/graph"
+	"github.com/Absence0760/threkir/apps/graph_cycle/internal/graph"
 )
 
 // maxTargetDistanceM bounds the cycle search's per-request cost. The web

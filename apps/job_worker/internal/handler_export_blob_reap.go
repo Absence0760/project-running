@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Absence0760/project-running/apps/job_worker/internal/schema"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/schema"
 )
 
 // The Art 20 export retention reaper (kind='export_blob_reap').

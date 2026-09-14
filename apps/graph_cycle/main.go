@@ -27,8 +27,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Absence0760/project-running/apps/graph_cycle/internal/api"
-	"github.com/Absence0760/project-running/apps/graph_cycle/internal/graph"
+	"github.com/Absence0760/threkir/apps/graph_cycle/internal/api"
+	"github.com/Absence0760/threkir/apps/graph_cycle/internal/graph"
 )
 
 func main() {

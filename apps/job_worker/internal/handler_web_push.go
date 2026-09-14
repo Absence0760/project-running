@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/Absence0760/project-running/apps/job_worker/internal/webpush"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/webpush"
 )
 
 // handleWebPush drains a `web_push` job: load the referenced notification,
