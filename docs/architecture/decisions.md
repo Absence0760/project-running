@@ -28851,3 +28851,43 @@ So the fix is to the instrument in both directions. `freshRecordedAt()` anchors 
 
 This is the Dart analogue of § 728, where a Playwright seed's day came from the runner's zone instead of the browser's and was green sixteen hours a day. Same class — a fixture whose correctness depended on when it ran — and the same remedy, which is to derive the value rather than write it down.
 ||||||| 41a0ad7a7
+
+## 1613. The Supabase CLI install is ours, because an unverified download cannot be retried
+
+`supabase/setup-cli` installs the `supabase` npm package, whose postinstall
+fetches the release tarball from GitHub unauthenticated and pipes it into gunzip.
+Nothing in that path verifies what came back, so a throttled or truncated
+response is not a download failure it can retry — it is bytes, handed to gunzip,
+which dies on `Error: incorrect header check` about 30 seconds in. The job fails
+at its install step, before a single test runs, and reports whatever that job was
+named: `Edge Function tests`, `pgtap RLS suite`, `Schema / type drift`,
+`Cross-client round-trip`, a Playwright shard.
+
+On 2026-09-14 that took out at least one job on seven of the eleven open
+Dependabot PRs simultaneously. The failures read as scattered and diff-specific —
+`terraform validate` failing only on the two PRs bumping the AWS provider, a
+Playwright shard failing only on the PR bumping vite — which is exactly what an
+install-step failure looks like when the thing being installed is needed by
+unrelated jobs. It cost a long time to establish that none of it was code, and
+the same class is on record against earlier sweeps.
+
+Re-running until a download happens to land clean is not a fix, so the download
+is ours now. `curl` retries at the transport layer; the sha256 from the release's
+own checksums file is verified before the tarball is trusted; a failure at either
+step re-downloads instead of poisoning the job; and five attempts in, the job
+says so in an `::error::` that names the install step rather than the test suite.
+Checked by mutation in both directions before landing: an unreachable asset
+retries and then emits the error, and a corrupt tarball fails its checksum rather
+than reaching gunzip.
+
+Verifying the checksum is the substantive half. It is what turns a corrupt body
+from something indistinguishable from a valid one into a condition with a name —
+and it closes a real supply-chain gap, since the CLI previously arrived through
+an unverified postinstall in eleven places.
+
+Linux x86_64 only, which is every caller today: all ten `ci.yml` jobs and
+`release-backend` are `ubuntu-latest`. A macOS or arm64 caller adds its asset to
+the action rather than reaching past it. `edge_functions_typecheck_coverage.test.mjs`
+matched the old `supabase/setup-cli` string to find where the stack comes up, so
+it learned the new name too — widened rather than repointed, and it still anchors
+on the same, earliest step.

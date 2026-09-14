@@ -196,7 +196,7 @@ test('the typecheck lane runs before the Supabase stack starts', () => {
 	const ci = readFileSync(CI_WORKFLOW, 'utf8');
 	const steps = parseSteps(ci).filter((s) => s.job === JOB);
 	const check = steps.findIndex((s) => s.name === STEP);
-	const stack = steps.findIndex((s) => /start-supabase|supabase\/setup-cli/.test(s.body));
+	const stack = steps.findIndex((s) => /start-supabase|supabase\/setup-cli|setup-supabase-cli/.test(s.body));
 	assert.ok(check >= 0, `the "${STEP}" step is gone from \`${JOB}\`.`);
 	assert.ok(stack >= 0, `no Supabase stack start found in \`${JOB}\` — has the job changed shape?`);
 	assert.ok(
