@@ -4,7 +4,7 @@
 # project's sops-encrypted secrets, by adding kms:Decrypt + kms:Encrypt
 # to the per-env KMS key policy.
 #
-# project-running uses per-env KMS keys (one per `infra/envs/<env>`)
+# Threkir uses per-env KMS keys (one per `infra/envs/<env>`)
 # rather than a single shared key, so onboarding is a per-env action.
 #
 # What this does:

@@ -78,7 +78,7 @@ if aws sts get-caller-identity >/dev/null 2>&1; then
 			bump_fail
 		fi
 	else
-		warn "No account pin set — confirm $acct is the project-running account before applying"
+		warn "No account pin set — confirm $acct is the Threkir account before applying"
 		dim "Pin it: export EXPECTED_AWS_ACCOUNT=<id>  (or: echo <id> > ../infra-secrets/running/aws-account)"
 	fi
 else
