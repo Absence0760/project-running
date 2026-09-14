@@ -2,12 +2,13 @@
 #
 # sops-init.sh — resolves the placeholder KMS ARNs in the PRIVATE estate repo's
 # `../infra-secrets/.sops.yaml` after `terraform apply` on the per-env web-stack
-# creates the keys, and (optionally) seeds an empty `running/<env>.sops.yaml`
+# creates the keys, and (optionally) seeds an empty `threkir/<env>.sops.yaml`
 # there for any env that doesn't have one yet.
 #
 # Production secrets live in ../infra-secrets (Absence0760/infra-secrets), NOT in
-# this PUBLIC repo (one subdir per project; this project = `running`). Set
-# INFRA_SECRETS_DIR to override the default sibling-clone location.
+# this PUBLIC repo — one subdir per project, named by ESTATE_SLUG in
+# bin/lib/estate.sh. Set INFRA_SECRETS_DIR to override the default sibling-clone
+# location.
 #
 # This script does NOT create KMS keys — that's done by
 # `infra/modules/web-stack` on `terraform apply`. The script's only
@@ -39,13 +40,7 @@
 set -euo pipefail
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
-
-# Production secrets live in the PRIVATE estate repo (Absence0760/infra-secrets),
-# NOT this public repo — one subdir per project (this project = `running`).
-# Default to a sibling clone; override INFRA_SECRETS_DIR if yours is elsewhere.
-INFRA_SECRETS_DIR="${INFRA_SECRETS_DIR:-$REPO_ROOT/../infra-secrets}"
-PROJECT_SLUG="running"
-SOPS_CONFIG="$INFRA_SECRETS_DIR/.sops.yaml"
+. "$(dirname "${BASH_SOURCE[0]}")/lib/estate.sh"
 
 cd "$REPO_ROOT"
 
@@ -88,17 +83,9 @@ if [[ ! -f "$SOPS_CONFIG" ]]; then
 fi
 
 # ----------------------------------------------------------------------------
-# Per-env: read ARN from terraform output, sed-replace into the estate
-# .sops.yaml, optionally seed running/<env>.sops.yaml.
+# Per-env: read ARN from terraform output, write it into the estate .sops.yaml
+# rule that governs the env's secrets file, optionally seed that file.
 # ----------------------------------------------------------------------------
-
-placeholder_for() {
-	# Map env name → placeholder token used in the estate ../infra-secrets/.sops.yaml.
-	case "$1" in
-		preview) echo "KMS_RUNNING_PREVIEW_ARN_PLACEHOLDER" ;;
-		prod)    echo "KMS_RUNNING_PROD_ARN_PLACEHOLDER" ;;
-	esac
-}
 
 env_dir_for() {
 	echo "$REPO_ROOT/infra/envs/$1"
@@ -107,8 +94,11 @@ env_dir_for() {
 for env in "${ENVS[@]}"; do
 	step "Bootstrapping env: $env"
 	env_dir="$(env_dir_for "$env")"
-	placeholder="$(placeholder_for "$env")"
-	secrets_file="$INFRA_SECRETS_DIR/$PROJECT_SLUG/$env.sops.yaml"
+	secrets_rel="$(estate_secrets_rel "$env")"
+	secrets_file="$(estate_secrets_file "$env")"
+	if ! current_kms="$(estate_rule_kms "$secrets_rel")"; then
+		fatal "No creation rule in $SOPS_CONFIG governs $secrets_rel, so sops would refuse to encrypt it. Add one in the estate repo, or check ESTATE_SLUG in bin/lib/estate.sh against the estate's slot."
+	fi
 
 	# Read the KMS arn from terraform output. Fail loudly if the env
 	# hasn't been applied yet — we deliberately don't try to apply on
@@ -132,19 +122,24 @@ for env in "${ENVS[@]}"; do
 	fi
 	ok "$env KMS ARN: $arn"
 
-	# sed-replace the placeholder. Idempotent: if the placeholder is
-	# already gone (because we ran this before), skip the rewrite.
-	if grep -qF "$placeholder" "$SOPS_CONFIG"; then
-		# Use a non-/ delimiter because the ARN contains slashes.
-		sed -i "s|$placeholder|$arn|" "$SOPS_CONFIG"
-		ok "Replaced $placeholder in $SOPS_CONFIG"
+	# Idempotent: a rule already carrying this ARN is left alone. One carrying a
+	# DIFFERENT ARN means the env's key was recreated; existing ciphertext still
+	# decrypts under the old key, so repoint the rule and send the operator to
+	# key-rotate.sh to move that ciphertext across.
+	if [[ "$current_kms" == "$arn" ]]; then
+		ok "$secrets_rel rule already carries this ARN — skipping"
 	else
-		ok "$placeholder already resolved in $SOPS_CONFIG — skipping"
+		if is_kms_arn "$current_kms"; then
+			warn "$secrets_rel rule carried a different key ($current_kms) — repointing it; run bin/key-rotate.sh $env afterwards"
+		fi
+		estate_set_rule_kms "$secrets_rel" "$arn" \
+			|| fatal "Could not rewrite the kms value of the $secrets_rel rule in $SOPS_CONFIG — edit it by hand"
+		ok "Wired $arn into the $secrets_rel rule in $SOPS_CONFIG"
 	fi
 
 	# Seed the secrets file if missing. Empty-but-encrypted is fine:
 	# operators edit it with `sops $secrets_file` to add real values.
-	mkdir -p "$INFRA_SECRETS_DIR/$PROJECT_SLUG"
+	mkdir -p "$ESTATE_SLOT_DIR"
 	if [[ -f "$secrets_file" ]]; then
 		ok "$secrets_file already exists — leaving it alone"
 	else
@@ -153,8 +148,14 @@ for env in "${ENVS[@]}"; do
 		# truncates the target file BEFORE sops runs, so a sops failure
 		# (KMS auth, network) leaves an empty file that breaks the
 		# idempotence check on re-run.
+		# sops chooses the creation rule by the INPUT's name, and /dev/stdin
+		# matches none, so name the file it is becoming. It has to be the full
+		# path: sops strips the config's directory off it before matching, and
+		# run from this repo a path relative to the estate root matched no rule
+		# (measured, sops 3.12).
 		printf 'ANTHROPIC_API_KEY: replace-me\n' \
 			| sops --config "$SOPS_CONFIG" --input-type yaml --output-type yaml \
+				--filename-override "$secrets_file" \
 				--output "$secrets_file" --encrypt /dev/stdin
 		# Verify the seed actually decrypts — catches a broken seed at
 		# write time, not at first read.
@@ -171,19 +172,28 @@ done
 # ----------------------------------------------------------------------------
 
 step "Verifying the estate .sops.yaml is fully resolved for this project"
-if grep -qE 'KMS_RUNNING_(PROD|PREVIEW)_ARN_PLACEHOLDER' "$SOPS_CONFIG"; then
-	warn "$SOPS_CONFIG still has running/* placeholder ARNs — some envs aren't applied yet:"
-	grep -nE 'KMS_RUNNING_(PROD|PREVIEW)_ARN_PLACEHOLDER' "$SOPS_CONFIG" >&2
+unresolved=0
+for env in preview prod; do
+	secrets_rel="$(estate_secrets_rel "$env")"
+	if ! kms="$(estate_rule_kms "$secrets_rel")"; then
+		warn "No creation rule in $SOPS_CONFIG governs $secrets_rel"
+		unresolved=1
+	elif ! is_kms_arn "$kms"; then
+		warn "The $secrets_rel rule still holds $kms — $env isn't applied yet"
+		unresolved=1
+	fi
+done
+if (( unresolved )); then
 	warn "Apply the missing env(s) and re-run this script."
 	exit 0
 fi
-ok "All running/* placeholders resolved"
+ok "Both $ESTATE_SLUG/ rules carry a KMS ARN"
 
 step "Next steps (commit the encrypted file in the PRIVATE estate repo, never here)"
-log "Edit secrets:    sops $INFRA_SECRETS_DIR/$PROJECT_SLUG/<env>.sops.yaml"
+log "Edit secrets:    sops $ESTATE_SLOT_DIR/<env>.sops.yaml"
 log "Re-apply env:    cd infra/envs/<env> && terraform apply"
-log "Verify decrypt:  sops --decrypt $INFRA_SECRETS_DIR/$PROJECT_SLUG/<env>.sops.yaml"
-log "Commit secrets:  (cd $INFRA_SECRETS_DIR && git add $PROJECT_SLUG && git commit)"
+log "Verify decrypt:  sops --decrypt $ESTATE_SLOT_DIR/<env>.sops.yaml"
+log "Commit secrets:  (cd $INFRA_SECRETS_DIR && git add $ESTATE_SLUG .sops.yaml && git commit)"
 log ""
 log "On every key rotation:"
-log "  sops updatekeys $INFRA_SECRETS_DIR/$PROJECT_SLUG/<env>.sops.yaml"
+log "  sops updatekeys $ESTATE_SLOT_DIR/<env>.sops.yaml"

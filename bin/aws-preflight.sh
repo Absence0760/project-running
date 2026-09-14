@@ -16,6 +16,7 @@
 set -euo pipefail
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/lib/estate.sh"
 
 EXPECTED_REGION="us-east-1"
 STATE_BUCKET="threkir-tfstate"
@@ -59,16 +60,17 @@ if aws sts get-caller-identity >/dev/null 2>&1; then
 	ok "Authenticated as $arn"
 	ok "Account: $acct"
 	# Wrong-account guard. The workstation carries several SSO profiles
-	# (mgmt / disag / running); applying prod terraform against the wrong
-	# account is a real footgun. Pin the expected id via EXPECTED_AWS_ACCOUNT,
-	# or drop it in the PRIVATE estate repo at
+	# (mgmt / threkir / disag / jaredhoward); applying prod terraform against
+	# the wrong account is a real footgun. Pin the expected id via
+	# EXPECTED_AWS_ACCOUNT, or drop it in the PRIVATE estate repo at
 	# ../infra-secrets/threkir/aws-account, so nothing account-identifying
 	# lands in this PUBLIC repo. Set + mismatch → hard fail; unset → warn
 	# (the account is printed above either way, so the operator still eyeballs it).
+	# A slot that has moved out from under the pin fails in the estate step
+	# below, rather than reading here as "unset".
 	expected_acct="${EXPECTED_AWS_ACCOUNT:-}"
-	if [[ -z "$expected_acct" ]]; then
-		acct_file="${INFRA_SECRETS_DIR:-$REPO_ROOT/../infra-secrets}/running/aws-account"
-		[[ -f "$acct_file" ]] && expected_acct="$(tr -dc '0-9' <"$acct_file")"
+	if [[ -z "$expected_acct" && -f "$ESTATE_SLOT_DIR/aws-account" ]]; then
+		expected_acct="$(tr -dc '0-9' <"$ESTATE_SLOT_DIR/aws-account")"
 	fi
 	if [[ -n "$expected_acct" ]]; then
 		if [[ "$acct" == "$expected_acct" ]]; then
@@ -79,7 +81,7 @@ if aws sts get-caller-identity >/dev/null 2>&1; then
 		fi
 	else
 		warn "No account pin set — confirm $acct is the Threkir account before applying"
-		dim "Pin it: export EXPECTED_AWS_ACCOUNT=<id>  (or: echo <id> > ../infra-secrets/threkir/aws-account)"
+		dim "Pin it: export EXPECTED_AWS_ACCOUNT=<id>  (or: echo <id> > $ESTATE_SLOT_DIR/aws-account)"
 	fi
 else
 	err "AWS auth failed — run 'aws sso login --profile \${AWS_PROFILE:-threkir}'"
@@ -127,17 +129,28 @@ fi
 
 step "estate secrets (.sops.yaml)"
 # Prod secrets live in the PRIVATE estate repo ../infra-secrets, not here.
-infra_secrets_dir="${INFRA_SECRETS_DIR:-$REPO_ROOT/../infra-secrets}"
-sops_config="$infra_secrets_dir/.sops.yaml"
-if [[ ! -f "$sops_config" ]]; then
-	warn "estate secrets repo not found at $infra_secrets_dir"
+if [[ ! -f "$SOPS_CONFIG" ]]; then
+	warn "estate secrets repo not found at $INFRA_SECRETS_DIR"
 	dim "Clone Absence0760/infra-secrets as a sibling, or set INFRA_SECRETS_DIR."
-elif grep -qE 'KMS_RUNNING_(PROD|PREVIEW)_ARN_PLACEHOLDER' "$sops_config" 2>/dev/null; then
-	warn "estate .sops.yaml has unresolved running/* placeholder ARNs:"
-	grep -nE 'KMS_RUNNING_(PROD|PREVIEW)_ARN_PLACEHOLDER' "$sops_config" | sed 's/^/      /'
-	dim "Run bin/sops-init.sh after applying envs/<env>/."
+elif [[ ! -d "$ESTATE_SLOT_DIR" ]]; then
+	# The account pin and every secrets path resolve under the slot, so a
+	# missing slot has already switched the wrong-account guard above off.
+	err "estate repo has no $ESTATE_SLUG/ slot — it moved, or ESTATE_SLUG in bin/lib/estate.sh is stale"
+	bump_fail
 else
-	ok "estate .sops.yaml has the running/* KMS ARNs resolved"
+	ok "estate slot: $ESTATE_SLOT_DIR"
+	for env in preview prod; do
+		secrets_rel="$(estate_secrets_rel "$env")"
+		if ! kms="$(estate_rule_kms "$secrets_rel")"; then
+			err "no creation rule in the estate .sops.yaml governs $secrets_rel — sops will refuse to encrypt it"
+			bump_fail
+		elif is_kms_arn "$kms"; then
+			ok "$secrets_rel rule carries its KMS ARN"
+		else
+			warn "$secrets_rel rule still holds $kms"
+			dim "Run bin/sops-init.sh $env after applying infra/envs/$env/."
+		fi
+	done
 fi
 
 step "Verdict"

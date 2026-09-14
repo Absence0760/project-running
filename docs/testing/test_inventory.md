@@ -1408,6 +1408,53 @@ The generate-route Lambda's wrapper, measured the same way. The method gate (whi
 
 What the eight production Lambdas may put in a CloudWatch line. A per-handler table declares which `event.<field>` its log lines may name — the five share Lambdas declare `rawPath` (a share path is a public URL naming a public entity), the other three declare nothing, and a handler absent from the table fails rather than defaulting to permissive. The second rule requires every log line to be a literal message plus object literals, so no caught value is spread whole. Both walk the sources with a top-level argument splitter that tracks bracket depth and string state, both carry a population floor, and both were checked to discriminate: `path: event.rawPath` added to osrm-proxy's catch fails the first by name (that path *is* the runner's waypoint coordinates), and `console.error('…', e)` restored in the coach's stream pump fails the second. See [decisions § 897](../architecture/decisions.md).
 
+### `scripts/check_estate_slot.test.mjs` — 11 tests
+
+The estate secrets slot named in one place ([decisions § 1615](../architecture/decisions.md)).
+The real tree is the positive control, and each case mutates an in-memory copy of
+it: a stale slug in `bin/lib/estate.sh`, caught against both Terraform
+`secrets_path` defaults and every written path; the slug assigned twice or
+computed; the lib missing; a Terraform default naming the wrong env or none; a
+`bin/` script assigning the slot or config itself, supplying its own
+`INFRA_SECRETS_DIR` default, or naming a `KMS_*_ARN_PLACEHOLDER`; and a stale
+slot in each path shape across `CLAUDE.md`, a script, the ops and Android
+deployment docs, `infra/README.md` and an `outputs.tf` description, including a
+path that ends a sentence. Two vacuity cases — no estate path in scope, no `bin/`
+script read — and three non-findings: a comment naming a placeholder, a history
+doc, an `.example` template.
+
+### `scripts/bin_lib_estate.test.mjs` — 11 tests
+
+`bin/lib/estate.sh`'s sops creation-rule lookup, against fixture configs
+([decisions § 1615](../architecture/decisions.md)). Each file resolves to its
+own rule; a path no rule governs fails with nothing printed — the renamed-slot
+case, and an escaped dot that must stay literal; the first matching rule wins,
+and a rule with no `path_regex` matches everything; double-quoted, unquoted,
+dash-line and trailing-comment spellings are read; keys nested under
+`key_groups`, and keys after the rules end, are not. A rewrite changes exactly
+one line and keeps the file mode, keeps the dash on a dash-line key, and refuses
+a path with no rule or a rule with no `kms` key. The slot paths derive from one
+resolved directory, and `is_kms_arn` rejects a placeholder, an alias ARN and a
+trailing space. The parser's output was also compared under GNU awk,
+`gawk --posix` and Ubuntu 24.04's `mawk`: identical.
+
+### `scripts/bin_estate_scripts.test.mjs` — 11 tests
+
+`sops-init.sh`, `key-rotate.sh`, `secret-set.sh` and `aws-preflight.sh`, driven
+against a fixture estate with `aws`, `terraform`, `sops` and `gh` stubbed on
+`PATH`; the sops stub records its arguments ([decisions § 1615](../architecture/decisions.md)).
+`sops-init.sh` wires an unwired rule and seeds with a `--filename-override`
+naming the absolute target — the seeding defect that entry fixed — skips a rule
+already carrying the key, repoints a different key with the rotate warning, and
+refuses rules naming another slot before writing anything. `key-rotate.sh`
+rotates under the governing rule's key, leaves an already-rotated file alone,
+sends a placeholder to `sops-init.sh` (reaching the warning a file with no ARN
+used to exit before) and refuses the pre-rename rules. `secret-set.sh` writes
+through the estate config and names `sops-init.sh` when the file is missing.
+`aws-preflight.sh` passes on the pinned account, only warns on a placeholder, and
+hard-fails a wrong account, a missing slot and a missing rule. Not covered: sops's
+own matching and KMS, `deploy-env.sh`, `disaster-recovery.sh`.
+
 ---
 
 ## Suite totals after the #789 coverage round (2026-08-31)

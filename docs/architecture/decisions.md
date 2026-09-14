@@ -28956,3 +28956,82 @@ do not cover this. It is recoverable rather than a deadlock only because no
 workflow runs `terraform apply` — the apply is operator-run through
 `bin/deploy-env.sh` — so the rename cannot lock us out of undoing it. The window
 is between the rename and the apply, and nothing deploys in it.
+
+## 1615. The estate slot is named once, and a sops rule is found by the file it governs
+
+The private estate secrets repo moved this project's slot from `running/` to
+`threkir/`, and #897 repointed the consumers. The Terraform half landed whole,
+because a stale `secrets_file` default fails `terraform plan` with
+file-not-found. The `bin/` half moved every comment that named the slot and none
+of the values: six scripts each assigned the slot, the estate directory or a
+path into it for themselves, and a stale value in a shell script fails quietly.
+`sops-init.sh` and `secret-set.sh` would have written into `running/`, which no
+creation rule covers; `key-rotate.sh` looked for a `running/` rule;
+`disaster-recovery.sh` probed a `running/` file; and `aws-preflight.sh` stopped
+finding the account pin at `running/aws-account`, which drops its wrong-account
+check from a hard failure to a warning. That check had been off since the
+rename, and nothing was red.
+
+**The slot has one spelling.** `bin/lib/estate.sh` holds `ESTATE_SLUG`, the
+resolved estate directory and the config path, and every script that touches the
+estate sources it. `scripts/check_estate_slot.mjs`, in the `infra-guards` job,
+holds the rest of the repo to it: the slug against both Terraform
+`secrets_path` defaults, no other `bin/` script assigning or defaulting any of
+them, and every estate path written across `bin/`, `infra/`, `docs/ops/`,
+`CLAUDE.md` and the app deployment docs naming the same slot. It is
+`ESTATE_SLUG` and not a project slug because § 1614 keeps two identifiers on the
+old name on purpose — the local Supabase `project_id` and the Fly.io org — and
+the estate slot is a third identifier, which moves when the estate does.
+`aws-preflight.sh` now hard-fails when the estate is cloned but the slot is not
+in it, since the pin and every path it checks resolve under the slot.
+
+**A rule is found by the file it governs, not by how the rule is spelled.** The
+placeholder was the second stale spelling. Three scripts decided whether a key
+was wired by grepping for `KMS_RUNNING_(PROD|PREVIEW)_ARN_PLACEHOLDER`, and
+`key-rotate.sh` derived the placeholder it expected from the slug — so fixing
+the slug alone would have broken it the other way. The estate's `threkir/preview`
+rule still holds `KMS_RUNNING_PREVIEW_ARN_PLACEHOLDER`; a slug-derived
+`KMS_THREKIR_…` finds nothing, and `sops-init.sh` read "not found" as "already
+resolved". The estate's own `sops-init.sh` names placeholders
+`KMS_<PROJECT>_ARN_PLACEHOLDER`, with no env, so there was never one convention
+to follow. The lib does what sops does instead: it takes the first creation
+rule whose `path_regex` matches the file's estate-relative path, and calls that
+rule wired when its `kms` value is a key ARN. Neither the regex text nor the
+placeholder name is read. That also let `sops-init.sh` do what its header already
+promised: a rule holding a *different* ARN, from a recreated key, is repointed
+with a warning to run `key-rotate.sh`, where the placeholder `sed` silently kept
+the old key. § 951 was the first time `key-rotate.sh` went stale on a spelling.
+
+**Seeding could never have worked.** `sops-init.sh` encrypted its seed from
+`/dev/stdin`, and sops chooses a creation rule by the INPUT's name, not by
+`--output`. Measured against sops 3.12.2 with a throwaway config and no
+credentials: `/dev/stdin` matches no rule; `--filename-override` with the
+absolute target path reaches the KMS call, including through the
+`repo/../infra-secrets` spelling `INFRA_SECRETS_DIR` defaults to; the same
+override written relative to the estate root matches nothing when sops runs from
+this repo. The seed now passes the absolute path. The manual steps in
+`infra/README.md` had the same defect — `sops --encrypt /tmp/coach.yaml >
+running/…` names `/tmp/coach.yaml` as the input — and now pass `--config` and the
+override. The commit hints that used `git commit -am`, which never stages a newly
+seeded file, now `git add` it.
+
+**What CI can see.** No runner has the estate clone, KMS or sops, so the scripts
+cannot run for real in CI. `scripts/bin_estate_scripts.test.mjs` drives
+`sops-init.sh`, `key-rotate.sh`, `secret-set.sh` and `aws-preflight.sh` against a
+fixture estate with `aws`, `terraform`, `sops` and `gh` stubbed on `PATH`, which
+is what pins the seed's `--filename-override`, each rule state's message and the
+preflight's hard failures. `deploy-env.sh` and `disaster-recovery.sh` are not
+driven: one applies Terraform and the other is interactive. The web suite's
+"three sops operator scripts agree" test in `credential_guards.test.ts` is
+retired rather than rewritten: it required each script to declare
+`PROJECT_SLUG` and `key-rotate.sh` to derive the placeholder name from it, which
+are the two spellings this entry removes, and what it protected — one slot, and
+a rotation that reads its own file's rule — is now structural in the lib and
+pinned by these suites.
+`scripts/bin_lib_estate.test.mjs` pins
+the lookup against fixture configs: first match wins, a rule with no
+`path_regex` matches everything, the quoted, dash-line and nested-key spellings
+are read correctly, and a rewrite changes exactly one line and keeps the file
+mode. The guard's own suite mutates the real tree. The lookup was also run
+read-only against the real estate config, where prod and the keystore resolve to
+ARNs, preview to its placeholder and `running/…` to no rule.
