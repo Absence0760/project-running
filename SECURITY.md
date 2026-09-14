@@ -6,7 +6,7 @@ Please **do not** open a public GitHub issue for security reports.
 Instead, send the details to the project owner via GitHub's private
 security advisory flow:
 
-  https://github.com/Absence0760/project-running/security/advisories/new
+  https://github.com/Absence0760/threkir/security/advisories/new
 
 When reporting, include:
 

@@ -1,4 +1,4 @@
-title = "project-running gitleaks config"
+title = "threkir gitleaks config"
 
 # Extend (don't replace) gitleaks' built-in ruleset.
 [extend]

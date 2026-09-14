@@ -211,7 +211,7 @@ Without exercising it, the backup is a fiction. Run this once per quarter, docum
 
 ```bash
 # 1. Create a fresh staging project at supabase.com (free tier is fine).
-# 2. From a local clone of project-running:
+# 2. From a local clone of threkir:
 cd apps/backend
 supabase link --project-ref <staging-ref>
 
