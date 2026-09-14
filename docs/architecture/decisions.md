@@ -28918,3 +28918,41 @@ matched the old `supabase/setup-cli` string to find where the stack comes up, so
 it learned the new name too — widened rather than repointed, and it still anchors
 on the same, earliest step.
 ||||||| bd5e334c3
+
+## 1614. The repo becomes `threkir`, and three other things that share the string do not
+
+Threkir has been the product's name for a long time — 489 tracked files said so
+against 62 still saying `project-running` — so the repo, the two Go module paths
+and the AWS account move to it. What makes this worth an entry is not the rename
+but the three identifiers that read the same and must NOT move with it.
+
+**`config.toml`'s `project_id` stays.** It is the local Supabase project name,
+and the container names derive from it — `supabase_db_project-running`,
+`supabase_auth_project-running`. `ci.yml` runs `docker exec` against those
+derived names in three places, so renaming the id without renaming them in
+lockstep breaks CI, and renaming both would orphan a stack that several sessions
+share in one checkout. It is a local-dev identifier that happens to spell the old
+repo name; nothing user-facing reads it.
+
+**The Fly.io org stays.** `job_worker/deployment.md` says why, in a line written
+before anyone needed it: Fly org slugs "are embedded in billing and token scoping
+and are painful to change later, so get it right at creation." The worker is live
+under it. The replacement was therefore scoped to the repo-QUALIFIED form
+`Absence0760/project-running` rather than the bare string, which left every Fly
+reference untouched by construction instead of by review.
+
+**The AWS account name moves, but in its own step.** It is cosmetic — account ID
+`374902171933` is immutable and every trust policy, cross-account role, KMS key
+policy and tfstate path keys on the ID, not the name, which is also why all six
+workstation SSO profiles need no edit. The two `bin/` scripts that name the
+account in prose move WITH the account rename rather than ahead of it, so the
+docs are true at every point rather than only at the end.
+
+**The one that does break things is `infra/github-oidc`.** Both deploy roles gate
+on an exact `sub` claim of the form `repo:<owner/repo>:environment:<env>`, so the
+instant the repo is renamed every Actions token stops matching and neither
+environment can be assumed. GitHub's rename redirects cover clones and links and
+do not cover this. It is recoverable rather than a deadlock only because no
+workflow runs `terraform apply` — the apply is operator-run through
+`bin/deploy-env.sh` — so the rename cannot lock us out of undoing it. The window
+is between the rename and the apply, and nothing deploys in it.
