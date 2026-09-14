@@ -1,0 +1,68 @@
+name: Setup Supabase CLI
+description: >
+  Install a pinned Supabase CLI release onto PATH, verifying its checksum
+  and retrying a failed download.
+
+  Why a composite action rather than `supabase/setup-cli`: that action
+  installs the `supabase` npm package, whose postinstall fetches the release
+  tarball from GitHub unauthenticated and pipes it straight into gunzip. A
+  throttled or truncated response is therefore not retried and not detected
+  as corrupt -- it reaches gunzip as garbage and the job dies on
+  `Error: incorrect header check` about 30 seconds in, before any test runs.
+
+  On 2026-09-14 that took out a job on seven of eleven open PRs at once,
+  across `Edge Function tests`, `pgtap RLS suite`, `Schema / type drift`,
+  `Cross-client round-trip` and four Playwright shards. Nothing was wrong
+  with any of those diffs, and re-running each PR until it happened to land
+  a clean download is not a fix -- the same class is recorded against
+  earlier sweeps too.
+
+  So the download is ours: `curl` retries at the transport layer, the
+  sha256 in the release's own checksums file is verified before the tarball
+  is trusted, and a failure at either step re-downloads rather than
+  poisoning the job. Verifying the checksum is also the point at which a
+  corrupt body stops being indistinguishable from a valid one -- which is
+  what made the old failure so confusing to read.
+
+  Linux x86_64 only, which is every caller today (all ten `ci.yml` jobs and
+  `release-backend` run on `ubuntu-latest`). A macOS or arm64 caller should
+  add its asset here rather than reach past this action.
+
+inputs:
+  version:
+    description: Supabase CLI version to install, without a leading "v".
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install the Supabase CLI
+      shell: bash
+      env:
+        SUPABASE_CLI_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        ver="$SUPABASE_CLI_VERSION"
+        dest="$RUNNER_TEMP/supabase-cli"
+        base="https://github.com/supabase/cli/releases/download/v${ver}"
+        tarball="supabase_linux_amd64.tar.gz"
+        mkdir -p "$dest"
+
+        for attempt in 1 2 3 4 5; do
+          if curl -fsSL --connect-timeout 20 --max-time 300 \
+                -o "$dest/$tarball" "$base/$tarball" \
+            && curl -fsSL --connect-timeout 20 --max-time 60 \
+                -o "$dest/checksums.txt" "$base/supabase_${ver}_checksums.txt" \
+            && (cd "$dest" && grep " ${tarball}\$" checksums.txt | sha256sum -c - >/dev/null) \
+            && tar -xzf "$dest/$tarball" -C "$dest" supabase; then
+            echo "$dest" >> "$GITHUB_PATH"
+            echo "Supabase CLI ${ver} installed on attempt ${attempt}; checksum verified."
+            exit 0
+          fi
+          rm -f "$dest/$tarball" "$dest/checksums.txt"
+          echo "::warning::Supabase CLI ${ver} install attempt ${attempt} failed (download or checksum); retrying."
+          sleep $((attempt * 10))
+        done
+
+        echo "::error::Could not install the Supabase CLI ${ver} after 5 attempts. Every attempt either failed to download ${tarball} or failed its sha256 against the release checksums -- this is the install step, so no test has run yet."
+        exit 1
