@@ -12,7 +12,7 @@ set -euo pipefail
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 
-PROFILE="${1:-${AWS_PROFILE:-running}}"
+PROFILE="${1:-${AWS_PROFILE:-threkir}}"
 
 need_cmd aws
 

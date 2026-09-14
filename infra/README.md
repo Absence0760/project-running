@@ -174,11 +174,11 @@ aws configure sso
 # default output: json
 # profile name: running     (or whatever you want)
 
-aws sso login --profile running
-aws sts get-caller-identity --profile running   # proves it works
+aws sso login --profile threkir
+aws sts get-caller-identity --profile threkir   # proves it works
 
 # Persist the profile choice for future shells:
-echo 'export AWS_PROFILE=running' > ~/.bashrc.d/26-aliases-aws.sh
+echo 'export AWS_PROFILE=threkir' > ~/.bashrc.d/26-aliases-aws.sh
 ```
 
 ### 1. Bootstrap (one-time — S3 state bucket)

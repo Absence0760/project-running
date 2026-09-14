@@ -82,7 +82,7 @@ if aws sts get-caller-identity >/dev/null 2>&1; then
 		dim "Pin it: export EXPECTED_AWS_ACCOUNT=<id>  (or: echo <id> > ../infra-secrets/running/aws-account)"
 	fi
 else
-	err "AWS auth failed — run 'aws sso login --profile \${AWS_PROFILE:-running}'"
+	err "AWS auth failed — run 'aws sso login --profile \${AWS_PROFILE:-threkir}'"
 	bump_fail
 fi
 
