@@ -723,6 +723,7 @@ car_lock
 car_mirror_heat
 car_rental
 car_repair
+car_seat_off
 car_tag
 card_giftcard
 card_membership
@@ -1097,6 +1098,7 @@ developer_mode_tv
 device_band
 device_hub
 device_reset
+device_swoosh_star
 device_thermostat
 device_unknown
 devices
@@ -2401,6 +2403,7 @@ mobile_sound
 mobile_sound_2
 mobile_sound_off
 mobile_speaker
+mobile_tap
 mobile_text
 mobile_text_2
 mobile_theft
@@ -2787,6 +2790,8 @@ pentagon
 people
 people_alt
 people_outline
+people_size_decrease
+people_size_increase
 percent
 percent_discount
 performance_max
@@ -3494,10 +3499,12 @@ space_dashboard
 space_dashboard_2
 spatial_audio
 spatial_audio_off
+spatial_gallery
 spatial_speaker
 spatial_tracking
 speaker
 speaker_2
+speaker_3
 speaker_group
 speaker_notes
 speaker_notes_off
@@ -3610,6 +3617,7 @@ stay_current_landscape
 stay_current_portrait
 stay_primary_landscape
 stay_primary_portrait
+steering_wheel_cool
 steering_wheel_heat
 step
 step_into
@@ -3773,6 +3781,7 @@ tamper_detection_on
 tap_and_play
 tapas
 target
+target_check
 task
 task_alt
 tatami_seat

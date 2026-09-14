@@ -44,7 +44,15 @@ if (!dev && env.SENTRY_DSN) {
 }
 
 const sentryHandle = Sentry.sentryHandle();
-const sentryHandleError = Sentry.handleErrorWithSentry();
+// The type argument is load-bearing. Sentry 10.74.0 made this generic
+// (`<T extends AnyErrorHandler = SentryHandleServerError>(handleError?: T): T`)
+// so it could type-check against SvelteKit 1.x, 2.x and 3 at once. Called with
+// no argument there is nothing to infer `T` from, and it resolves to the
+// CONSTRAINT — `(input: never) => unknown` — not the default, which makes the
+// wrapped hook reject its own input and return `unknown`. Naming SvelteKit's
+// own `HandleServerError` says what this hook is instead of relying on an
+// inference fallback that already moved once.
+const sentryHandleError = Sentry.handleErrorWithSentry<HandleServerError>();
 
 export const handle: Handle = async ({ event, resolve }) => {
 	if (isConsentGiven(event.request)) {
