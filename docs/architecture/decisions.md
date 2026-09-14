@@ -28852,6 +28852,32 @@ So the fix is to the instrument in both directions. `freshRecordedAt()` anchors 
 This is the Dart analogue of § 728, where a Playwright seed's day came from the runner's zone instead of the browser's and was green sixteen hours a day. Same class — a fixture whose correctness depended on when it ran — and the same remedy, which is to derive the value rather than write it down.
 ||||||| 41a0ad7a7
 
+## 1612. A generic default is not a contract, so the Sentry error hook names its own type
+
+`@sentry/sveltekit` 10.74.0 changed `handleErrorWithSentry` from a concrete
+`(handleError?: HandleServerError) => HandleServerError` into
+`<T extends AnyErrorHandler = SentryHandleServerError>(handleError?: T) => T`, so that one
+package could type-check against SvelteKit 1.x, 2.x and 3 at once — those majors moved
+`HandleServerError` from `@sveltejs/kit` to `@sveltejs/kit/hooks` and neither import path
+satisfies both. Reasonable change upstream; it broke us because we called it with no argument.
+
+With nothing passed there is no inference site for `T`, and it does not fall back to the
+default — it resolves to the CONSTRAINT, `AnyErrorHandler = (input: never) => unknown`. That
+constraint is deliberately permissive (a `never` parameter accepts any single-argument hook,
+parameters being contravariant), which is exactly what makes it useless as a return type: the
+wrapped hook then rejects its own input as not assignable to `never`, and returns `unknown`
+where SvelteKit wants `MaybePromise<void | App.Error>`. Two errors in `hooks.server.ts`, both
+from a call that had not changed.
+
+The fix is to name the type rather than inherit whatever the default happens to be this
+release: `Sentry.handleErrorWithSentry<HandleServerError>()`. It says what the hook is, it is
+checked against SvelteKit's own type rather than a structural stand-in, and it cannot move
+again underneath us — the previous spelling depended on an upstream default, which is not a
+contract. The type argument looks redundant and is not; the comment at the call site says so.
+
+Found by `svelte-check` in the `build-web` job on the Dependabot bump, not by a test — nothing
+executes this path in CI, which is why the type-check is the gate that has to catch it.
+
 ## 1613. The Supabase CLI install is ours, because an unverified download cannot be retried
 
 `supabase/setup-cli` installs the `supabase` npm package, whose postinstall
@@ -28891,3 +28917,4 @@ the action rather than reaching past it. `edge_functions_typecheck_coverage.test
 matched the old `supabase/setup-cli` string to find where the stack comes up, so
 it learned the new name too — widened rather than repointed, and it still anchors
 on the same, earliest step.
+||||||| bd5e334c3
