@@ -128,9 +128,18 @@ Function moves per
   but is the one INLINE-ADDRESS template (`inlineAddressTemplates`): its payload
   carries `{email, locale}` and no `user_id` (the user is gone by send time),
   so `handleLifecycleEmail` routes it to `handleAccountDeletionReceipt`, which
-  resolves the address from the payload (not GoTrue) and dedups on a SHA-256
-  hash of the address via the non-cascading `account_deletion_receipts` table
-  (not `lifecycle_email_log`, which cascades away with the user). All templates
+  resolves the address from the payload (not GoTrue) and dedups on a hash
+  of the address via the non-cascading `account_deletion_receipts` table
+  (not `lifecycle_email_log`, which cascades away with the user). **That hash
+  is keyed when `DELETION_AUDIT_KEY` is set on THIS process** — HMAC-SHA256 over
+  a domain-separated address — and the legacy bare SHA-256 when it is not: an
+  address is a guessable input, so only the keyed form stops a holder of a
+  candidate address recomputing the digest and asking the table whether that
+  person deleted their account (`decisions § 1551`, `§ 1600`). It is the same
+  env var `delete-account` reads for its own user-id HMAC, and setting it on one
+  process and not the other is a safe half-state, not an error. A keyed worker
+  probes its own digest first and the LEGACY one on a miss, so provisioning the
+  key re-sends nothing to anyone deleted inside the table's 30-day window. All templates
   live in `email_i18n.go`, localized across six locales. A future digest reuses
   the kind with a cron enqueue + its own opt-in preference.
   `lifecycle_drip` (`handler_lifecycle_drip.go`) is the engagement sibling of
@@ -266,7 +275,7 @@ apps/job_worker/
 │   ├── handler_notification_email_test.go # 9 tests on gating / opt-out / idempotency
 │   ├── handler_lifecycle_email.go # kind='lifecycle_email' (welcome) render + send-once
 │   ├── handler_lifecycle_email_test.go # 6 tests on send / dedup / no-address / nil-sender
-│   ├── handler_account_deletion_receipt_test.go # 9 tests on inline-address send / hash send-once / no-address / send-error / nil-sender / locale / no-prefs-link
+│   ├── handler_account_deletion_receipt_test.go # 16 tests on inline-address send / hash send-once / no-address / send-error / nil-sender / locale / no-prefs-link / keyed + legacy digest + the changeover probe
 │   ├── mailer.go            # EmailSender iface + SMTPSender + pure render/preference logic; importantKinds + inAppOnlyKinds + pathForKind
 │   ├── mailer_test.go       # tests on emailMode / shouldEmail / inAppOnlyKinds / render / MIME + header-injection sanitizer (buildMIME + safety-email owner name, issue #375)
 │   ├── notification_copy_guard_test.go # TS↔Go lockstep: every NotificationKind has catalogue copy or a recorded inAppOnlyKinds exemption, renders something other than "default", and deep-links the same entity web does

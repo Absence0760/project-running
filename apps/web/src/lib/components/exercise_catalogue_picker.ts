@@ -166,3 +166,42 @@ export function cataloguePickerView<E extends CatalogueEntry>(
 		hiddenExact: shown === undefined ? (exact[0] ?? null) : null,
 	};
 }
+
+/// The two stored fields the shadow test reads. `author_id` is null for a
+/// seeded global and set for an owner custom; `name_key` is the STORED key the
+/// two partial uniques are enforced on, never a re-derivation of it — the
+/// client's frozen fold table and the server's agree only while the migration
+/// that re-folds the column has kept up (§ 1176), and a re-derivation would
+/// split a pair the index considers one.
+export interface ShadowSubject {
+	name_key: string;
+	author_id: string | null;
+}
+
+/**
+ * Does `made` — a custom just created here — shadow a seeded global the
+ * catalogue already holds?
+ *
+ * `exercises`' two uniques are PARTIAL, so the author's index cannot see a row
+ * whose `author_id` is null: creating a custom under a seeded global's name
+ * SUCCEEDS, and `dedupeShadowedExercises` then resolves the pair to the custom
+ * and drops the global from every list the reader sees. That is the behaviour
+ * `api_database.md` asks for and it is the one nothing told the reader about —
+ * the built-in exercise they were using simply stops appearing, with no event
+ * anywhere to explain it (§ 1810).
+ *
+ * The picker's `canCreate` normally forbids this, and the residual is exactly
+ * the window that makes the disclosure worth having: `canCreate` compares
+ * `normaliseExerciseName` over display spellings while the database compares
+ * the stored `name_key`, so the two part in the window a regenerated fold table
+ * opens, and a stale list cannot hold a global added since the read. Judged on
+ * the row the SERVER stamped, so what is reported is what the index did rather
+ * than what this build would have derived.
+ */
+export function shadowsSeededGlobal(
+	catalogue: readonly ShadowSubject[],
+	made: ShadowSubject,
+): boolean {
+	if (made.author_id == null) return false;
+	return catalogue.some((e) => e.author_id == null && e.name_key === made.name_key);
+}

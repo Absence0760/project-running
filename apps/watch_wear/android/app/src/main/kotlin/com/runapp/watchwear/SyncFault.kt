@@ -77,3 +77,40 @@ fun syncFaultMessage(fault: SyncFault): Int = when (fault) {
     SyncFault.Refused -> R.string.sync_fault_refused
     SyncFault.Unknown -> R.string.sync_fault_unknown
 }
+
+/// Classify a failure of the token refresh the DRAIN performs, in the
+/// vocabulary the sync banner speaks.
+///
+/// Not [syncFaultFor], which reads every throwable as an UPLOAD's: on that
+/// endpoint a 400 is a run the server refuses and reports as
+/// [SyncFault.Refused], which is a claim about a run the refresh endpoint
+/// never saw. And not [refreshFaultFor] on its own, which answers in
+/// [AuthFault] — the sign-in screen's vocabulary, with no member for a queue
+/// and no member the sync chip reads. This is the translation between them,
+/// and it exists because the two endpoints give the same status codes
+/// different meanings: the asymmetry [refreshFaultFor] was written for, one
+/// vocabulary over.
+///
+/// The 401 that provoked the refresh is not evidence about the refresh. It
+/// proves the server answered moments earlier, so a refresh that dies on a
+/// dropped socket is [SyncFault.Offline] and a `SessionStore` write that
+/// throws is [SyncFault.Unknown] — neither is a session that expired, and
+/// since § 1544 that difference is an affordance rather than a caption: the
+/// PreRun arc spends its one slot offering a sign-in for
+/// [SyncFault.SignInRequired], so misreading a socket as a spent token costs
+/// the runner a password they did not need to retype.
+internal fun syncFaultForRefresh(e: Throwable): SyncFault = when (refreshFaultFor(e)) {
+    AuthFault.SessionExpired -> SyncFault.SignInRequired
+    AuthFault.Offline -> SyncFault.Offline
+    // Waiting is the whole remedy for both, and the wrist has no separate
+    // sentence for being rate-limited — the runner does the same thing about
+    // a busy server and a throttled one.
+    AuthFault.ServerBusy, AuthFault.RateLimited -> SyncFault.ServerBusy
+    // Not reachable from [refreshFaultFor], which reads a 4xx on the refresh
+    // grant as a session rather than as a typo — there is no password on this
+    // path to have got wrong. Mapped rather than thrown so a later change to
+    // that classifier degrades to the sentence nearest it instead of taking
+    // the drain down.
+    AuthFault.InvalidCredentials -> SyncFault.SignInRequired
+    AuthFault.Unknown -> SyncFault.Unknown
+}

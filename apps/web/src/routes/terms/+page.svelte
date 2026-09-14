@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { OPERATOR, OPERATOR_FACTS_COMPLETE } from '$lib/legal/operator';
 
-	const lastUpdated = '2026-07-14';
+	const lastUpdated = '2026-09-08';
 </script>
 
 <svelte:head>
@@ -113,38 +113,46 @@
 	<p>
 		Clubs on Threkir can host paid events (for example a class with a per-session fee), and
 		users can attach fundraising pages to runs and events. For these transactions
-		<strong>Threkir is a platform, not the seller</strong>:
+		<strong>Threkir takes the payment and the host provides the event</strong>. Those are two
+		different responsibilities and they sit with two different people:
 	</p>
 	<ul>
-		<li>
-			<strong>Your contract is with the host.</strong> When you buy an event registration, the
-			seller (merchant of record) is the event host — the person teaching the class or organising
-			the event — not Threkir. Payment is processed by Stripe into the host's own Stripe account;
-			Threkir charges the host a platform fee per transaction. The host, not Threkir, is
-			responsible for delivering the event and for its tax obligations.
+		<li data-merchant-of-record="platform">
+			<strong>Threkir is the merchant of record; the host provides the event.</strong> When you
+			buy an event registration your card is charged by Threkir through Stripe, and it is our
+			name that appears on your statement. We pass the money to the host's own Stripe account,
+			less a platform fee we charge the host per transaction. The <em>host</em> — the person
+			teaching the class or organising the event — is who delivers the event, describes it, sets
+			its refund policy, and is responsible for their own tax obligations. So your contract for
+			<em>attending</em> the event is with the host; your contract for the <em>payment</em> is
+			with us.
 		</li>
 		<li>
 			<strong>Refunds for event registrations</strong> follow the refund policy the host sets for
 			each event (full refund until the event starts, full refund until 24 hours before, or no
-			refund), shown on the event page. You can cancel a registration from the event page; if
-			your order is refund-eligible the refund is issued automatically, including our platform
-			fee. If the <em>host</em> cancels an occurrence, every paid registration for it is refunded
-			in full regardless of the policy.
+			refund), shown on the event page before you pay. You can cancel a registration from the
+			event page; if your order is refund-eligible <strong>we</strong> issue the refund
+			automatically, including our platform fee. If the <em>host</em> cancels an occurrence,
+			every paid registration for it is refunded in full regardless of the policy. Because the
+			charge is ours, a dispute you raise with your card issuer is raised against Threkir — talk
+			to us first and we will usually settle it faster than a chargeback will.
 		</li>
-		<li>
-			<strong>Donations</strong> to a fundraiser are payments to the fundraiser's owner, made
-			into that person's own Stripe account. Threkir does not verify charitable status, is not a
-			party to any commitment the fundraiser owner makes to pass funds on, and does not issue
-			tax receipts. Check the fundraiser owner's identity and promises before donating; nothing
-			on a fundraiser page is tax or financial advice.
+		<li data-merchant-of-record="platform">
+			<strong>Donations</strong> to a fundraiser are charged by Threkir on the same basis and
+			passed to the fundraiser owner's own Stripe account. Threkir does not verify charitable
+			status, is not a party to any commitment the fundraiser owner makes to pass funds on, and
+			does not issue tax receipts. Check the fundraiser owner's identity and promises before
+			donating; nothing on a fundraiser page is tax or financial advice.
 		</li>
-		<li>
+		<li data-merchant-of-record="platform">
 			<strong>If you host paid events or fundraisers</strong>, you must onboard a payout account
-			with Stripe and accept the Stripe Connected Account Agreement. You are the merchant of
-			record: you own refunds, chargebacks (including our platform fee being reversed on a
-			refund or chargeback), and your own tax reporting. You must describe events accurately,
-			honour the refund policy you set, and use donation proceeds consistently with what your
-			fundraiser page says.
+			with Stripe and accept the Stripe Connected Account Agreement. <strong>Threkir, not you,
+			is the merchant of record</strong>: the charge carries our name on your buyer's statement,
+			we issue refunds under the policy you set on each event, and a disputed charge is debited
+			from our Stripe account rather than yours. The platform fee comes back to you when an
+			order is refunded. What is yours is the event and your own tax reporting: you must
+			describe events accurately, deliver what you sold, honour the refund policy you set, and
+			use donation proceeds consistently with what your fundraiser page says.
 		</li>
 	</ul>
 

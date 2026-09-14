@@ -6,7 +6,12 @@
 // round delta that would be read as the file's whole count.
 
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
+
+const CENSUS_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 import {
 	DART_TEST_WRAPPERS,
@@ -22,6 +27,12 @@ import {
 	globRe,
 	looksLikePath,
 	sectionDir,
+	checkScope,
+	indexedSuites,
+	SCOPE_ANCHOR,
+	MIN_INDEXED_SUITES,
+	INVENTORY,
+	loadFile,
 } from './check_test_inventory_counts.mjs';
 
 test('counterFor uses the recompute command the document prescribes, per kind', () => {
@@ -340,4 +351,73 @@ test('an exemption that has stopped applying fails in both directions', () => {
 	);
 	assert.equal(missing.length, 1);
 	assert.match(missing[0], /matches no test file/);
+});
+
+
+// ---------------------------------------------------------------------------
+// Claim 3 — the census says what it undertakes to index.
+// ---------------------------------------------------------------------------
+
+/// A tree with enough named suites to clear the floor, plus one the census
+/// never mentions. `SCOPED` is the smallest document that satisfies the anchor.
+function scoped(headingCount = MIN_INDEXED_SUITES) {
+	const files = Array.from({ length: headingCount }, (_, i) => `apps/web/src/lib/a${i}.test.ts`);
+	files.push('apps/web/src/lib/unnamed.test.ts');
+	const md =
+		'# Test inventory\n\n**What this document indexes, and what it does not.** A selection.\n\n' +
+		files
+			.slice(0, headingCount)
+			.map((f) => `### \`${f}\` — 1 test\n\nprose\n`)
+			.join('\n');
+	return { files, md };
+}
+
+test('indexedSuites resolves what the census names, and counts nothing else', () => {
+	const { files, md } = scoped(3);
+	const { named, suites } = indexedSuites(md, expander(files), files);
+	assert.equal(named.size, 3);
+	assert.equal(suites.length, 4);
+	assert.ok(!named.has('apps/web/src/lib/unnamed.test.ts'));
+});
+
+test('the census carries its scope statement, and a deleted one fails', () => {
+	const { files, md } = scoped();
+	assert.deepEqual(checkScope(md, expander(files), files).errors, []);
+
+	const stripped = md.replace('**What this document indexes, and what it does not.**', '**Scope.**');
+	const { errors } = checkScope(stripped, expander(files), files);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /holds no scope statement matching/);
+});
+
+test('an index gutted below the floor fails rather than reporting a smaller census', () => {
+	const { files, md } = scoped(MIN_INDEXED_SUITES - 1);
+	const { errors } = checkScope(md, expander(files), files);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], new RegExp(`names ${MIN_INDEXED_SUITES - 1} suite\\(s\\)`));
+	assert.match(errors[0], /floor is /);
+});
+
+test('the floor also catches a token reader that has stopped resolving anything', () => {
+	const { files, md } = scoped();
+	// Every heading names a path the expander cannot find: the counts above
+	// would then be checked against an index nothing populates.
+	const { errors } = checkScope(md, () => [], files);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /token reader stopped resolving them/);
+});
+
+test('the committed census states its scope and clears the floor', () => {
+	const files = execFileSync('git', ['ls-files', '-z'], {
+		cwd: CENSUS_ROOT,
+		encoding: 'utf-8',
+		maxBuffer: 64 * 1024 * 1024,
+	})
+		.split('\0')
+		.filter(Boolean);
+	const md = loadFile(INVENTORY);
+	assert.ok(SCOPE_ANCHOR.test(md));
+	const { errors, ok } = checkScope(md, expander(files), files);
+	assert.deepEqual(errors, []);
+	assert.match(ok[0], /indexes \d+ of the \d+ suite\(s\)/);
 });

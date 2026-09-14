@@ -406,6 +406,19 @@ pub fn haversine_metres(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64 {
 /// `f64`: its other callers (roadbook, route geometry, privacy zones, turn
 /// cues) are phone-fed batch consumers with no per-fix cost to save, and
 /// changing their numbers to buy nothing is not a trade worth making.
+///
+/// `a` is clamped into `[0, 1]` for the reason the `f64` copy states, and this
+/// copy is the MORE exposed of the two: `f32` carries ~1e-7 of relative
+/// precision against `f64`'s ~1e-16, so the rounding that pushes `a` past 1 is
+/// correspondingly commoner. Measured over the 258 480 half-degree antipodal
+/// pairs, where `a` is exactly 1 in exact arithmetic and rounding alone
+/// decides: unclamped, 12 960 of them answered NaN while [`haversine_metres`]
+/// answered a number on every one, and the NaN band reaches 0.029 deg — about
+/// 3.2 km — off the exact antipode rather than sitting on a knife edge. A NaN
+/// here fails every `>` and `>=` in [`crate::trackback`], so the back-to-start
+/// distance renders as NaN and the heading anchor never advances. The clamp is
+/// bit-for-bit identity everywhere else: 2 000 000 random sub-kilometre legs
+/// and 2 000 000 random global pairs each compared equal to the last bit.
 pub fn haversine_metres_f32(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f32 {
     const R: f32 = 6_371_000.0;
     let d_lat = ((lat2 - lat1) as f32).to_radians();
@@ -417,6 +430,7 @@ pub fn haversine_metres_f32(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f32 {
             * libm::cosf((lat2 as f32).to_radians())
             * sin_lng
             * sin_lng;
+    let a = a.clamp(0.0, 1.0);
     R * 2.0 * libm::atan2f(libm::sqrtf(a), libm::sqrtf(1.0 - a))
 }
 
@@ -963,11 +977,110 @@ mod tests {
 
     /// Antipodal-scale inputs are not a fix-path case, but the `f32` `1.0 - a`
     /// must not go negative and hand `sqrtf` a NaN.
+    ///
+    /// `(-40, 75)` to `(40, -105)` is the pair this test was written with, and
+    /// it answered finitely for years with no clamp in the function — the
+    /// property held for the sample rather than for the function. It stays as
+    /// the on-the-happy-side case; the sweep below is what actually pins it.
     #[test]
     fn the_f32_haversine_stays_finite_at_antipodal_scale() {
         let d = haversine_metres_f32(-40.0, 75.0, 40.0, -105.0);
         assert!(d.is_finite(), "antipodal distance {d}");
         assert!((d - 20_015_000.0).abs() < 5_000.0, "antipodal distance {d}");
+    }
+
+    /// The whole antipodal family, where `a` is exactly 1 in exact arithmetic
+    /// so `f32` rounding alone decides which side of the `sqrtf(1 - a)` branch
+    /// the pair lands on. Unclamped, 12 960 of these 258 480 pairs answer NaN;
+    /// [`haversine_metres`] answers a number on every one of them, which is
+    /// the divergence between two copies of one function that § 305 is about.
+    #[test]
+    fn the_f32_haversine_is_finite_across_the_whole_antipodal_family() {
+        let mut checked = 0usize;
+        let mut lat = -89.5_f64;
+        while lat <= 89.5 {
+            let mut lng = -180.0_f64;
+            while lng < 180.0 {
+                let alat = -lat;
+                let alng = if lng >= 0.0 { lng - 180.0 } else { lng + 180.0 };
+                let d = haversine_metres_f32(lat, lng, alat, alng);
+                assert!(
+                    d.is_finite(),
+                    "({lat}, {lng}) -> ({alat}, {alng}) gave {d}; f64 gives {}",
+                    haversine_metres(lat, lng, alat, alng)
+                );
+                assert!(
+                    (d - 20_015_087.0).abs() < 5_000.0,
+                    "({lat}, {lng}) -> ({alat}, {alng}) gave {d}"
+                );
+                checked += 1;
+                lng += 0.5;
+            }
+            lat += 0.5;
+        }
+        assert_eq!(checked, 258_480);
+    }
+
+    /// One named pair out of that family, so a regression names an input
+    /// rather than a loop index. Unclamped this is NaN in `f32` while the
+    /// `f64` sibling answers 20 015 086.662 m on the same two coordinates.
+    #[test]
+    fn the_two_haversine_copies_agree_where_rounding_decides() {
+        let (lat1, lng1, lat2, lng2) = (-86.0, -180.0, 86.0, 0.0);
+        let f32_m = haversine_metres_f32(lat1, lng1, lat2, lng2);
+        let f64_m = haversine_metres(lat1, lng1, lat2, lng2);
+        assert!(f64_m.is_finite(), "f64 copy gave {f64_m}");
+        assert!(
+            f32_m.is_finite(),
+            "f32 copy gave {f32_m} where the f64 copy gives {f64_m}"
+        );
+        assert!(
+            ((f32_m as f64) - f64_m).abs() < 5.0,
+            "f32 {f32_m} vs f64 {f64_m}"
+        );
+    }
+
+    /// The clamp costs nothing anywhere else. Over the leg lengths the fix
+    /// path actually produces, the clamped and unclamped forms are equal to
+    /// the last bit — so adding it moved no pinned `trackback` figure, and
+    /// this is the assertion that keeps that true.
+    #[test]
+    fn the_f32_clamp_is_identity_on_every_leg_a_fix_path_produces() {
+        fn unclamped(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f32 {
+            const R: f32 = 6_371_000.0;
+            let d_lat = ((lat2 - lat1) as f32).to_radians();
+            let d_lng = ((lng2 - lng1) as f32).to_radians();
+            let sin_lat = libm::sinf(d_lat / 2.0);
+            let sin_lng = libm::sinf(d_lng / 2.0);
+            let a = sin_lat * sin_lat
+                + libm::cosf((lat1 as f32).to_radians())
+                    * libm::cosf((lat2 as f32).to_radians())
+                    * sin_lng
+                    * sin_lng;
+            R * 2.0 * libm::atan2f(libm::sqrtf(a), libm::sqrtf(1.0 - a))
+        }
+
+        let mut checked = 0usize;
+        for lat in [0.0_f64, 40.0, 51.5, 67.0, 78.0, -33.9, 89.0] {
+            for hop_m in [0.5_f64, 1.0, 4.0, 25.0, 240.0, 1_000.0, 25_000.0] {
+                let d_lat = hop_m / 111_320.0;
+                let d_lon = d_lat / libm::cos(lat * core::f64::consts::PI / 180.0);
+                for (lat2, lon2) in [
+                    (lat + d_lat, -105.0),
+                    (lat, -105.0 + d_lon),
+                    (lat + d_lat, -105.0 + d_lon),
+                    (lat - d_lat, -105.0 - d_lon),
+                ] {
+                    assert_eq!(
+                        haversine_metres_f32(lat, -105.0, lat2, lon2).to_bits(),
+                        unclamped(lat, -105.0, lat2, lon2).to_bits(),
+                        "clamp changed the answer at lat {lat} hop {hop_m} m"
+                    );
+                    checked += 1;
+                }
+            }
+        }
+        assert_eq!(checked, 196);
     }
 
     #[test]

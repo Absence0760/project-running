@@ -279,8 +279,19 @@ type Worker struct {
 	// degraded — but enabling the actual digest SEND is a separate
 	// CISO/counsel-gated step (no pg_cron schedule ships here).
 	DigestUnsubSecret string
-	Config            Config
-	Log               *slog.Logger
+	// DeletionAuditKey is the operator secret keying the account-deletion
+	// receipt's send-once digest (DELETION_AUDIT_KEY, the same env var
+	// delete-account reads for hashUserIdForAudit). Empty -> the legacy
+	// unkeyed SHA-256 of the address, which an adversary holding a candidate
+	// address can recompute to ask the table whether that person deleted their
+	// account; set -> HMAC-SHA256 over a domain-separated input, which ends
+	// that test rather than time-bounding it (decisions § 1551, § 1600).
+	// Absent by default on purpose: nothing changes until an operator
+	// provisions it, and a keyed worker reads BOTH digests so the changeover
+	// re-sends no receipt.
+	DeletionAuditKey string
+	Config           Config
+	Log              *slog.Logger
 	// OnPollTick fires after every claim attempt (whether or not a job
 	// was returned). Used by the /health server to distinguish "queue
 	// empty" from "loop wedged" — see main.go. Safe to leave nil; the

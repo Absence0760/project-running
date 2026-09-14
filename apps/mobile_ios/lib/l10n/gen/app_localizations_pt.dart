@@ -10337,6 +10337,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Não foi possível carregar o catálogo de exercícios, pelo que esta lista pode estar incompleta.';
 
   @override
+  String get gymCatalogueShadowsBuiltIn =>
+      'Adicionado. Substitui o exercício incorporado com o mesmo nome.';
+
+  @override
   String gymCatalogueOtherCategory(String name, String category) {
     return '“$name” já está no catálogo, em $category.';
   }
@@ -24372,6 +24376,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get gymCatalogueUnavailable =>
       'Não foi possível carregar o catálogo de exercícios, então esta lista pode estar incompleta.';
+
+  @override
+  String get gymCatalogueShadowsBuiltIn =>
+      'Adicionado. Ele substitui o exercício integrado de mesmo nome.';
 
   @override
   String gymCatalogueOtherCategory(String name, String category) {

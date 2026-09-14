@@ -90,6 +90,62 @@ class SyncFaultTest {
     }
 
     @Test
+    fun `the refresh endpoint's 4xx is a session, where the upload endpoint's is a run`() {
+        // The whole reason `syncFaultForRefresh` exists. The drain's refresh
+        // POST and its upload POST answer with the same status codes and mean
+        // different things by them, so classifying the refresh's own failure
+        // with `syncFaultFor` reports `Refused` — a claim about a run that
+        // endpoint never saw.
+        val invalidGrant = HttpException(400, "invalid_grant")
+        assertEquals(SyncFault.Refused, syncFaultFor(invalidGrant))
+        assertEquals(SyncFault.SignInRequired, syncFaultForRefresh(invalidGrant))
+        // 429 is the second disagreement and runs the other way: the upload
+        // path reads an unrecognised 4xx as permanent, where a throttled
+        // refresh is something the runner waits out.
+        val throttled = HttpException(429, "too many requests")
+        assertEquals(SyncFault.Refused, syncFaultFor(throttled))
+        assertEquals(SyncFault.ServerBusy, syncFaultForRefresh(throttled))
+    }
+
+    @Test
+    fun `a refresh that never reached the server is not a session that expired`() {
+        // Since § 1544 this is an affordance rather than a caption: the PreRun
+        // arc spends its one slot offering a sign-in for `SignInRequired`, so
+        // a dropped socket read as a spent token costs a runner a password
+        // they did not need to retype. The 401 that provoked the refresh is
+        // not evidence about the refresh.
+        assertEquals(SyncFault.Offline, syncFaultForRefresh(RuntimeException("Connection reset")))
+        assertEquals(
+            SyncFault.Offline,
+            syncFaultForRefresh(RuntimeException("Unable to resolve host \"x.supabase.co\"")),
+        )
+        assertEquals(SyncFault.ServerBusy, syncFaultForRefresh(HttpException(503, "down")))
+        // A `SessionStore.save` that throws on an EncryptedSharedPreferences
+        // fault is the one failure on this path that never touched a network.
+        assertEquals(
+            SyncFault.Unknown,
+            syncFaultForRefresh(IllegalStateException("could not decrypt keyset")),
+        )
+    }
+
+    @Test
+    fun `the refresh classifier cannot claim the server refused a run`() {
+        // `Refused` is a sentence about a queue entry, and the refresh grant
+        // carries none — reaching it from this classifier would put the
+        // discard chip in front of a runner whose runs are fine.
+        val reached = corpus.map { syncFaultForRefresh(it.second) }.toSet()
+        assertEquals(
+            setOf(
+                SyncFault.SignInRequired,
+                SyncFault.Offline,
+                SyncFault.ServerBusy,
+                SyncFault.Unknown,
+            ),
+            reached,
+        )
+    }
+
+    @Test
     fun `no two faults say the same sentence`() {
         // A member that shares another's string is a distinction the runner
         // cannot see, which makes the classification above unobservable.

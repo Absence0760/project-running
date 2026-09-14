@@ -2,9 +2,14 @@
 // Guardrail: the TS↔Dart parity-pair registry says the same thing in both
 // places it is written down.
 //
-//   CLAUDE.md — the "TS↔Dart parity helpers must stay in lockstep" bullet,
-//     which is the human-facing list a session reads to decide whether an
-//     edit it just made needs mirroring to the other platform.
+//   docs/architecture/parity_pairs.md — the "TS↔Dart parity helpers must stay
+//     in lockstep" bullet, which is the human-facing list a session reads to
+//     decide whether an edit it just made needs mirroring to the other
+//     platform. It lived in the root CLAUDE.md until it reached 115 KB — about
+//     29,000 tokens re-sent on every prompt of every session, to carry a
+//     registry that only matters when a session touches one of the pairs. The
+//     bullet moved verbatim; CLAUDE.md keeps the rule and points here, and
+//     property 5 below is what keeps that pointer honest.
 //   .claude/agents/shared-library-syncer.md — the "The pairs (canonical list)"
 //     table, which is the list the shared-library-syncer AGENT works from.
 //
@@ -24,16 +29,21 @@
 //
 // Four properties, all cheap:
 //
-//   1. Every pair named in CLAUDE.md has a row in the syncer table.
-//   2. Every row in the syncer table is named in CLAUDE.md. The reverse
-//      direction matters because CLAUDE.md is what a session reads FIRST: a
+//   1. Every pair named in the registry has a row in the syncer table.
+//   2. Every row in the syncer table is named in the registry. The reverse
+//      direction matters because the registry is what a session reads FIRST: a
 //      pair missing from it reads as a single-platform helper, and the edit
 //      never reaches the agent that would have caught the divergence.
-//   3. Where CLAUDE.md annotates the two file paths, they agree with the row.
+//   3. Where the registry annotates the two file paths, they agree with the row.
 //   4. Every path either registry names exists on disk. A rename that leaves
 //      a registry pointing at nothing is the same defect one step later —
 //      and it was already live: profile_query.ts's own header named a Dart
 //      twin at a path that does not exist.
+//   5. The root CLAUDE.md still points at the registry. Property 2 rests on a
+//      session reaching the list at all, and the list is no longer in the file
+//      every session is handed. A dropped link would leave every pair reading
+//      as a single-platform helper with all four other properties green — the
+//      §604 failure mode one level up, so it is checked rather than trusted.
 //
 // Check 4 overlaps deliberately with `lib_structure_guards.test.ts`, which
 // already asserts the table's web `.ts` paths exist. That one lives in the web
@@ -61,16 +71,22 @@ import { fileURLToPath } from 'node:url';
 import { foldSoftWraps, markdownTables } from './markdown_lines.mjs';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-export const CLAUDE_DOC = join(REPO_ROOT, 'CLAUDE.md');
+export const REGISTRY_DOC = join(REPO_ROOT, 'docs', 'architecture', 'parity_pairs.md');
 export const SYNCER_DOC = join(REPO_ROOT, '.claude', 'agents', 'shared-library-syncer.md');
+/// The file every session is handed on every prompt. It no longer carries the
+/// list, so what it must carry instead is the way to it — see property 5.
+export const ORIENTATION_DOC = join(REPO_ROOT, 'CLAUDE.md');
 
-const CLAUDE_BULLET = 'TS↔Dart parity helpers must stay in lockstep.';
-const CLAUDE_LIST = 'The pairs are:';
+/// The registry's repo-relative path, as the orientation doc must spell it.
+export const REGISTRY_REL = 'docs/architecture/parity_pairs.md';
+
+const REGISTRY_BULLET = 'TS↔Dart parity helpers must stay in lockstep.';
+const REGISTRY_LIST = 'The pairs are:';
 const SYNCER_HEADING = '## The pairs (canonical list)';
 
 /// The paragraph directly below the lockstep bullet, listing the watch's
 /// one-way `no_std` ports. It is separated from the bullet by a blank line and
-/// must stay that way — see `parseClaudePairs`.
+/// must stay that way — see `parseRegistryPairs`.
 const WATCH_PARAGRAPH = /third parity rail/;
 
 const WEB_LIB = 'apps/web/src/lib/';
@@ -104,14 +120,14 @@ const TEST_PATH = /`([A-Za-z0-9_./-]+(?:\.test\.ts|_test\.dart))`/g;
  */
 
 /**
- * Every pair named in CLAUDE.md's lockstep bullet, mapped to the two paths it
+ * Every pair named in the registry's lockstep bullet, mapped to the two paths it
  * annotates (null when it names none — the bare head entries and the tail
  * clause carry no paths, and are checked for membership only).
  *
  * @param {string} text
  * @returns {{ pairs: Map<string, PairPaths | null>, errors: string[] }}
  */
-export function parseClaudePairs(text) {
+export function parseRegistryPairs(text) {
 	/** @type {Map<string, PairPaths | null>} */
 	const pairs = new Map();
 	/** @type {string[]} */
@@ -126,11 +142,11 @@ export function parseClaudePairs(text) {
 	// decisions § 774.
 	text = foldSoftWraps(text);
 
-	const bulletAt = text.indexOf(CLAUDE_BULLET);
+	const bulletAt = text.indexOf(REGISTRY_BULLET);
 	if (bulletAt === -1) {
 		errors.push(
-			`CLAUDE.md has no "${CLAUDE_BULLET}" bullet. Either the parity-pair registry ` +
-				`was removed, or it was reworded and this guard now checks nothing.`,
+			`${REGISTRY_REL} has no "${REGISTRY_BULLET}" bullet. Either the parity-pair ` +
+				`registry was removed, or it was reworded and this guard now checks nothing.`,
 		);
 		return { pairs, errors };
 	}
@@ -157,28 +173,28 @@ export function parseClaudePairs(text) {
 
 	if (WATCH_PARAGRAPH.test(bullet)) {
 		errors.push(
-			`the CLAUDE.md lockstep bullet runs into the watch-port paragraph with no blank ` +
+			`the registry's lockstep bullet runs into the watch-port paragraph with no blank ` +
 				`line between them, so this guard would read one-way \`no_std\` Rust ports as ` +
 				`enforced web↔mobile pairs. Put the blank line back.`,
 		);
 		return { pairs, errors };
 	}
 
-	const listAt = bullet.indexOf(CLAUDE_LIST);
+	const listAt = bullet.indexOf(REGISTRY_LIST);
 	if (listAt === -1) {
 		errors.push(
-			`the CLAUDE.md lockstep bullet has no "${CLAUDE_LIST}" enumeration. The list ` +
+			`the registry's lockstep bullet has no "${REGISTRY_LIST}" enumeration. The list ` +
 				`was reworded; update this guard's anchor rather than leaving it matching ` +
 				`nothing.`,
 		);
 		return { pairs, errors };
 	}
-	const body = bullet.slice(listAt + CLAUDE_LIST.length);
+	const body = bullet.slice(listAt + REGISTRY_LIST.length);
 
 	const head = body.match(BARE_HEAD);
 	if (head === null) {
 		errors.push(
-			`the CLAUDE.md pair list does not open with the run of bare names ` +
+			`the registry's pair list does not open with the run of bare names ` +
 				`(\`training\`, \`segments\`, …). Its shape changed and this guard would ` +
 				`silently drop those pairs.`,
 		);
@@ -193,7 +209,7 @@ export function parseClaudePairs(text) {
 	}
 	if (annotated === 0) {
 		errors.push(
-			`no entry in the CLAUDE.md pair list is written as \`name\` (web \`x.ts\` ↔ ` +
+			`no entry in the registry's pair list is written as \`name\` (web \`x.ts\` ↔ ` +
 				`mobile \`x.dart\`). The annotation form changed and this guard can no ` +
 				`longer read the list.`,
 		);
@@ -285,13 +301,13 @@ function endsWithPath(full, suffix) {
 }
 
 /**
- * @param {string} claudeText
+ * @param {string} registryText
  * @param {string} syncerText
  * @param {(path: string) => boolean} [exists]
  * @returns {{ errors: string[], ok: string[] }}
  */
-export function checkRegistries(claudeText, syncerText, exists = (p) => existsSync(join(REPO_ROOT, p))) {
-	const claude = parseClaudePairs(claudeText);
+export function checkRegistries(registryText, syncerText, exists = (p) => existsSync(join(REPO_ROOT, p))) {
+	const claude = parseRegistryPairs(registryText);
 	const syncer = parseSyncerRows(syncerText);
 	const errors = [...claude.errors, ...syncer.errors];
 	/** @type {string[]} */
@@ -304,7 +320,7 @@ export function checkRegistries(claudeText, syncerText, exists = (p) => existsSy
 	const missingFromSyncer = [...claude.pairs.keys()].filter((n) => !syncer.rows.has(n)).sort();
 	if (missingFromSyncer.length > 0) {
 		errors.push(
-			`${missingFromSyncer.length} pair(s) named in CLAUDE.md have no row in the ` +
+			`${missingFromSyncer.length} pair(s) named in ${REGISTRY_REL} have no row in the ` +
 				`shared-library-syncer table: ${missingFromSyncer.join(', ')}.\n` +
 				`  The table is the list the agent works from — its own instructions tell ` +
 				`it to stop rather than invent a parity claim about a pair it cannot find ` +
@@ -317,10 +333,10 @@ export function checkRegistries(claudeText, syncerText, exists = (p) => existsSy
 	if (missingFromClaude.length > 0) {
 		errors.push(
 			`${missingFromClaude.length} pair(s) in the shared-library-syncer table are ` +
-				`not named in CLAUDE.md's lockstep bullet: ${missingFromClaude.join(', ')}.\n` +
-				`  CLAUDE.md is what a session reads first, so an unlisted pair reads as a ` +
-				`single-platform helper and the edit never reaches the agent. Add each to ` +
-				`the "The pairs are:" enumeration (decisions.md § 604).`,
+				`not named in the registry's lockstep bullet: ${missingFromClaude.join(', ')}.\n` +
+				`  ${REGISTRY_REL} is what a session reads first, so an unlisted pair reads ` +
+				`as a single-platform helper and the edit never reaches the agent. Add each ` +
+				`to the "The pairs are:" enumeration (decisions.md § 604).`,
 		);
 	}
 
@@ -330,7 +346,7 @@ export function checkRegistries(claudeText, syncerText, exists = (p) => existsSy
 		const expectedWeb = WEB_LIB + annotation.ts;
 		if (row.web !== expectedWeb) {
 			errors.push(
-				`${name} — CLAUDE.md names web \`${annotation.ts}\` (${expectedWeb}) but the ` +
+				`${name} — the registry names web \`${annotation.ts}\` (${expectedWeb}) but the ` +
 					`syncer row points at \`${row.web}\`. One of the two registries is aimed ` +
 					`at the wrong file.`,
 			);
@@ -338,7 +354,7 @@ export function checkRegistries(claudeText, syncerText, exists = (p) => existsSy
 		const mobilePaths = pathsInCell(row.cells[1]);
 		if (!mobilePaths.some((p) => endsWithPath(p, annotation.dart))) {
 			errors.push(
-				`${name} — CLAUDE.md names mobile \`${annotation.dart}\`, which the syncer ` +
+				`${name} — the registry names mobile \`${annotation.dart}\`, which the syncer ` +
 					`row's mobile cell does not mention (it names ` +
 					`${mobilePaths.length > 0 ? mobilePaths.map((p) => `\`${p}\``).join(', ') : 'no path at all'}).`,
 			);
@@ -375,11 +391,36 @@ export function checkRegistries(claudeText, syncerText, exists = (p) => existsSy
 	return { errors, ok };
 }
 
+/**
+ * Property 5. The root CLAUDE.md is the only file every session is handed
+ * unprompted, and it no longer carries the list — so what it must carry is the
+ * way to it. Checked on the repo-relative PATH rather than on any sentence
+ * around it: the wording is free to change, a moved or misspelt path is not,
+ * and a link is the one thing whose absence makes the other four properties
+ * vacuous for a session that never opens the registry.
+ *
+ * @param {string} orientationText
+ * @returns {string[]} errors
+ */
+export function checkOrientationPointer(orientationText) {
+	if (orientationText.includes(REGISTRY_REL)) return [];
+	return [
+		`the root CLAUDE.md does not name \`${REGISTRY_REL}\`, so nothing points a ` +
+			`session at the parity-pair registry.\n` +
+			`  CLAUDE.md is the file every session reads first and the list is not in ` +
+			`it, so without the pointer every pair reads as a single-platform helper ` +
+			`while this guard's other properties stay green (decisions.md § 604).`,
+	];
+}
+
 function main() {
 	const { errors, ok } = checkRegistries(
-		readFileSync(CLAUDE_DOC, 'utf-8'),
+		readFileSync(REGISTRY_DOC, 'utf-8'),
 		readFileSync(SYNCER_DOC, 'utf-8'),
 	);
+	const pointerErrors = checkOrientationPointer(readFileSync(ORIENTATION_DOC, 'utf-8'));
+	errors.push(...pointerErrors);
+	if (pointerErrors.length === 0) ok.push(`the root CLAUDE.md points at ${REGISTRY_REL}`);
 
 	for (const line of ok) console.log(`[OK] ${line}`);
 	for (const line of errors) console.error(`[FAIL] ${line}`);

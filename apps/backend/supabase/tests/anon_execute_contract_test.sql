@@ -140,6 +140,7 @@ insert into server_only (fn, keeps_service_role) values
   ('award_achievements_for_user', false),
   ('claim_next_job', true),
   ('cleanup_account_deletion_receipts', false),
+  ('cleanup_deletion_audit_log', true),
   ('cleanup_stale_export_blobs', true),
   ('cleanup_stale_live_run_pings', true),
   ('cleanup_stale_race_pings', true),

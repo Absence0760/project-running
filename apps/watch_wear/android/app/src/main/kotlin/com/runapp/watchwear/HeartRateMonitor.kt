@@ -81,6 +81,10 @@ class HeartRateMonitor(context: Context) {
             close()
         }
         awaitClose {
+            // Same as NetworkWatcher's: the flow is closing, so a refusal here
+            // reaches no collector. Health Services throws on a callback it has
+            // already released, which is the case in which the unregister was
+            // unnecessary anyway.
             runCatching {
                 client.unregisterMeasureCallbackAsync(DataType.HEART_RATE_BPM, callback)
             }

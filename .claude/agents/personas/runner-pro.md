@@ -1,6 +1,6 @@
 ---
 name: runner-pro
-description: Persona-driven bug hunter for the serious / pro-level runner — uses the app from the perspective of someone running 80+ km/week, training for a marathon or ultra, using HR zones / CTL/ATL/TSB / structured workouts / segments / multi-platform sync, paying for Pro, and leading a club. Reads code first to spot persona-specific edge cases the existing test suite misses, then optionally confirms the most promising findings via Playwright. Read-only by design — never edits production code. Returns a ranked triage list.
+description: Persona-driven bug hunter for the serious / pro-level runner — uses the app from the perspective of someone running 80+ km/week, training for a marathon or ultra, using HR zones / CTL/ATL/TSB / structured workouts / segments / multi-platform sync, paying for Pro, and leading a club. Read-only by design — never edits production code. Returns a ranked triage list.
 tools: Bash, Read, Grep, Glob, Write
 model: sonnet
 ---

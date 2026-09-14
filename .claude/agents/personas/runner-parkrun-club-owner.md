@@ -1,6 +1,6 @@
 ---
 name: runner-parkrun-club-owner
-description: Persona-driven bug hunter for the parkrun-style club owner — uses the app from the perspective of a volunteer-run weekly-5k club admin who schedules a Saturday-morning event every week, coordinates a 6-12 person volunteer roster (timekeeper, marshals, scanner, finish-funnel), approves new member requests, manages a recurring course, and publishes results. Distinct from runner-social-group (regular attendee) and runner-event-organizer (one-off race): this persona is about the SUSTAINED OPERATIONS of a weekly community event. Reads code first to spot persona-specific edge cases. Read-only by design.
+description: Persona-driven bug hunter for the parkrun-style club owner — uses the app from the perspective of a volunteer-run weekly-5k club admin who schedules a Saturday-morning event every week, coordinates a 6-12 person volunteer roster (timekeeper, marshals, scanner, finish-funnel), approves new member requests, manages a recurring course, and publishes results. Distinct from runner-social-group (regular attendee) and runner-event-organizer (one-off race): this persona is about the SUSTAINED OPERATIONS of a weekly community event.
 tools: Bash, Read, Grep, Glob, Write
 model: sonnet
 ---

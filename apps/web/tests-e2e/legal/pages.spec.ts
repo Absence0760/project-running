@@ -82,7 +82,15 @@ test.describe('Legal pages', () => {
 		await expect(page.getByText(/14-day right of withdrawal/)).toBeVisible();
 		await expect(page.getByText(/Cancellation is at least as easy as signup/)).toBeVisible();
 		const body = await page.locator('.legal-page').innerText();
+		// The phrase alone passed whichever party §6 named, and until 2026-09-08
+		// it named the host — the last surviving statement of what decisions § 769
+		// disproved, contradicting `payouts.merchantNote` in the same product
+		// (§ 1548). Assert the DIRECTION, in both the buyer's bullet and the
+		// host's. `merchant_of_record_guard.test.ts` ties the same claim to the
+		// two Stripe parameters that make it true.
 		expect(body).toContain('merchant of record');
+		expect(body).toMatch(/Threkir is the merchant of record/);
+		expect(body).not.toMatch(/You are the merchant of\s+record/i);
 		expect(body).toContain('dmca@threkir.com');
 	});
 

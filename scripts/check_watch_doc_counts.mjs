@@ -87,6 +87,10 @@ export const DOC_FILES = [
 	'apps/custom_watch/CLAUDE.md',
 	'apps/custom_watch/local_testing.md',
 	'CLAUDE.md',
+	// The watch's one-way `no_std` ports, and the `simplifyToBudget` clause
+	// naming the 256-point CRS1 course budget, were part of the root CLAUDE.md
+	// until the parity registry moved out of it. The figures came with them.
+	'docs/architecture/parity_pairs.md',
 ];
 
 /**

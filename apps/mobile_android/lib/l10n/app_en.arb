@@ -13625,6 +13625,10 @@
   "gymCatalogueCategoryLabel": "Category",
   "gymCatalogueEmpty": "No exercises match.",
   "gymCatalogueUnavailable": "Couldn't load the exercise catalogue, so this list may be incomplete.",
+  "gymCatalogueShadowsBuiltIn": "Added. It replaces the built-in exercise of the same name.",
+  "@gymCatalogueShadowsBuiltIn": {
+    "description": "Shown after creating a custom exercise whose name matches a seeded global, which the catalogue read then resolves to the custom."
+  },
   "gymCatalogueOtherCategory": "“{name}” is already in the catalogue, under {category}.",
   "@gymCatalogueOtherCategory": {
     "description": "Shown when the typed name matches a catalogue entry the category filter is hiding",

@@ -286,8 +286,8 @@ export function rawNameComparisonHits(path: string, source: string): Hit[] {
 	const out: Hit[] = [];
 	for (const m of scan.matchAll(COMPARISON)) {
 		const at = m.index ?? 0;
-		const left = originOf(code, receiverOf(code, at));
-		const right = originOf(code, operandAfter(code, at + m[0].length));
+		const left = originOf(code, receiverOf(code, at), at);
+		const right = originOf(code, operandAfter(code, at + m[0].length), at);
 		// A folded operand is the fix, not the defect. Either side carrying the
 		// canonical derivation means the comparison is already on the key.
 		if (/normaliseExerciseName\s*\(/.test(left) || /normaliseExerciseName\s*\(/.test(right)) continue;
@@ -322,7 +322,12 @@ const NAMES_A_DISPLAY_FIELD = /\.name\b/;
 /// Unlike the `.name` read this sits beside, it is judged on the length shape
 /// too: `named` is what that carve-out exists for and the word boundary
 /// already excludes it.
-const IS_A_NAME_IDENTIFIER = /^name\b/;
+///
+/// The plural is here because [iteratedCollection] resolves an arrow parameter
+/// to the collection, and a list of spellings is called `names` — the one
+/// `fetchExerciseSetHistoryBatch` filters. `named` is excluded by the same word
+/// boundary either way.
+const IS_A_NAME_IDENTIFIER = /^names?\b/;
 
 /// An empty-string literal, read out of the comment-stripped text where string
 /// BODIES are still present. [blankQuoted] preserves offsets by replacing a
@@ -376,8 +381,14 @@ function leftOperand(code: string, at: number): string {
 /// same way, and
 /// `named.length === 0` two lines under `const named = exercises.filter((e) =>
 /// e.name.trim() !== '')` is a count of blocks, not a blank name — so the
-/// length shape is judged on the operand alone, where the spelling has to be
-/// named outright.
+/// length shape does not get the `.name`-READ rule, whose whole content there
+/// would be the filter's own body.
+///
+/// It still gets the declaration chase. Judging the length shape on the OPERAND
+/// alone left `const trimmed = name.trim(); if (trimmed.length < 1)` invisible
+/// on both rails, which is a create path with one line rewritten; the two cases
+/// separate on the two stricter rules, since a chased `name.trim()` is a
+/// spelling by its own identifier and a chased `exercises.filter(…)` is not.
 function emptinessSubject(left: string, right: string): { subject: string; chase: boolean } | null {
 	if (isEmptyLiteral(right)) return { subject: left, chase: true };
 	if (isEmptyLiteral(left)) return { subject: right, chase: true };
@@ -388,9 +399,31 @@ function emptinessSubject(left: string, right: string): { subject: string; chase
 	return null;
 }
 
-/// The right-hand side of a bare identifier's declaration, chased up to a few
-/// hops so a value named by a `const` two lines up is still judged on where it
-/// came from.
+/// The collection an arrow parameter iterates, or `''` when [expr] is not one.
+///
+/// `names.filter((n) => …)` binds `n` to an element of `names`, and no
+/// declaration chase can see that — there is no `const n =` anywhere to find.
+/// `fetchExerciseSetHistoryBatch` decides blankness on exactly that subject, so
+/// until this existed the one call site the module's own name says is about
+/// exercises was reachable by no rule the scan has: not the receiver, not the
+/// declaration chase, not the enclosing declaration (§ 1508 measured the limit
+/// and left it open). Its cover was a positive assertion in `data.test.ts` that
+/// the body CALLS `namesAnExercise`, which a body can do while deciding on the
+/// spelling three lines away.
+///
+/// The nearest such binding before the subject wins, for [originOf]'s reason:
+/// one module iterates many collections and the first is rarely the right one.
+function iteratedCollection(code: string, expr: string, at: number): string {
+	const bind = new RegExp(`\\.\\s*[A-Za-z_$][\\w$]*\\s*\\(\\s*\\(?\\s*${expr}\\s*\\)?\\s*=>`, 'g');
+	let last = -1;
+	for (const m of code.slice(0, at).matchAll(bind)) last = m.index ?? -1;
+	return last < 0 ? '' : receiverOf(code, last);
+}
+
+/// The right-hand side of a bare identifier's NEAREST PRECEDING declaration,
+/// chased up to a few hops so a value named by a `const` two lines up is still
+/// judged on where it came from — falling back to the collection it iterates
+/// when the identifier is an arrow parameter rather than a declaration.
 ///
 /// [foldHits] reaches that shape with [statementAt], and a blankness test
 /// cannot: `if (name === '')` names nothing in its own statement, and the whole
@@ -398,15 +431,31 @@ function emptinessSubject(left: string, right: string): { subject: string; chase
 /// stops at the first expression that is not a bare identifier, which is why
 /// the catalogue picker's `query` prop is out of reach — noted where the scan
 /// is asserted.
-function originOf(code: string, operand: string): string {
+///
+/// **Nearest, not first**, and [at] is what makes that possible. The chase took
+/// the file's FIRST declaration of the identifier, which is the right answer
+/// only in a module holding one — `data.ts` declares `name` dozens of times, so
+/// it answered about a club, a meal template or a gear item whenever it was
+/// asked about an exercise. It fails BOTH ways: a real defect reads as clean
+/// when the first declaration is innocent, and clean code reads as a defect
+/// when the first one is not. Both directions are pinned below.
+function originOf(code: string, operand: string, at: number): string {
 	let expr = operand.trim();
+	const before = code.slice(0, at);
 	const seen = new Set<string>();
 	for (let hop = 0; hop < 4; hop++) {
 		if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(expr) || seen.has(expr)) break;
 		seen.add(expr);
-		const m = new RegExp(`\\b(?:const|let|var)\\s+${expr}\\s*(?::[^=;\\n]*)?=([^;\\n]*)`).exec(code);
-		if (!m) break;
-		expr = m[1].trim();
+		const re = new RegExp(`\\b(?:const|let|var)\\s+${expr}\\s*(?::[^=;\\n]*)?=([^;\\n]*)`, 'g');
+		let last: RegExpMatchArray | null = null;
+		for (const m of before.matchAll(re)) last = m;
+		if (!last) {
+			const collection = iteratedCollection(code, expr, at);
+			if (collection.trim() === '') break;
+			expr = collection.trim();
+			continue;
+		}
+		expr = last[1].trim();
 	}
 	return expr;
 }
@@ -463,13 +512,15 @@ export function blankSpellingTestHits(path: string, source: string): Hit[] {
 	const out: Hit[] = [];
 	for (const found of candidates) {
 		const at = found.at;
-		const origin = found.chase ? originOf(code, found.subject) : found.subject;
+		const origin = originOf(code, found.subject, at);
 		// The fix itself, on either the operand or its declaration.
 		if (/normaliseExerciseName\s*\(|namesAnExercise\s*\(/.test(origin)) continue;
 		const scoped = fileNamesAnExercise || scopeNamesAnExercise(code, at);
 		const spelling =
 			NAMES_A_SPELLING.test(origin) ||
-			(scoped && IS_A_NAME_IDENTIFIER.test(found.subject.trim())) ||
+			(scoped &&
+				(IS_A_NAME_IDENTIFIER.test(found.subject.trim()) ||
+					IS_A_NAME_IDENTIFIER.test(origin))) ||
 			(found.chase && scoped && NAMES_A_DISPLAY_FIELD.test(origin));
 		if (!spelling) continue;
 		const line = code.slice(0, at).split('\n').length;

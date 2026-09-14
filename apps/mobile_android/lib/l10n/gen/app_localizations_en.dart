@@ -10227,6 +10227,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Couldn\'t load the exercise catalogue, so this list may be incomplete.';
 
   @override
+  String get gymCatalogueShadowsBuiltIn =>
+      'Added. It replaces the built-in exercise of the same name.';
+
+  @override
   String gymCatalogueOtherCategory(String name, String category) {
     return '“$name” is already in the catalogue, under $category.';
   }

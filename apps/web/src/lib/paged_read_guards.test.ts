@@ -101,6 +101,41 @@ function localDeclaration(src: string, name: string): string | null {
 	return null;
 }
 
+/**
+ * The bare identifier a chain's own root call names, or null when the chain
+ * roots in something else. `build().range(...)` and `build('*').range(...)`
+ * both keep their ordering in the closure rather than in the chain, and the
+ * arguments are walked over balanced parens so a call taking one resolves the
+ * same as a call taking none — a zero-argument-only match read `fetchRuns`'
+ * `select` parameter as an unordered paged read (§ 1560).
+ *
+ * A member call (`.select(...)`) is deliberately not a root: only a local
+ * `const` declaration can be resolved, and `supabase.from(...)` is not one.
+ */
+function rootCallee(chain: string): string | null {
+	const text = chain.trim();
+	if (!text.endsWith(')')) return null;
+	let depth = 0;
+	let open = -1;
+	for (let i = text.length - 1; i >= 0; i--) {
+		const c = text[i];
+		if (c === ')') depth++;
+		else if (c === '(') {
+			depth--;
+			if (depth === 0) {
+				open = i;
+				break;
+			}
+		}
+	}
+	if (open <= 0) return null;
+	const head = text.slice(0, open).trimEnd();
+	const name = /([A-Za-z_][\w]*)$/.exec(head);
+	if (!name) return null;
+	if (head.endsWith(`.${name[1]}`)) return null;
+	return name[1];
+}
+
 /** Every `.order('col'` in a chunk of source, in order. */
 function orderKeys(text: string): string[] {
 	return [...text.matchAll(/\.order\(\s*['"]([A-Za-z_][\w]*)['"]/g)].map((m) => m[1]);
@@ -118,9 +153,9 @@ test('every paged read ends its ordering on a column unique per row', () => {
 			let orders = orderKeys(chain);
 			// `build().range(...)` — the ordering lives in the closure, not
 			// in the chain the call returns.
-			const rootCall = /([A-Za-z_][\w]*)\(\s*\)\s*$/.exec(chain.trim());
-			if (orders.length === 0 && rootCall) {
-				const body = localDeclaration(src, rootCall[1]);
+			if (orders.length === 0) {
+				const callee = rootCallee(chain);
+				const body = callee ? localDeclaration(src, callee) : null;
 				if (body) orders = orderKeys(body);
 			}
 			const rel = file.slice(resolve(srcRoot, '..').length + 1);

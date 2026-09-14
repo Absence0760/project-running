@@ -55,12 +55,20 @@ export function asRun(row: RunRow, track: TrackPoint[] | null): Run {
 /// which is what the blanket `track: null` did on every narrowed row (§ 1520).
 /// `undefined` is exactly "not selected": JSON has no such value, so a
 /// selected-but-empty column arrives as `null` and is narrowed like any other.
+///
+/// The return type DENIES `track` rather than declaring it optional, which is
+/// what `Partial<Run>` did: the key is not one a projection can select
+/// (§ 1468), so a reader that names it is asking for a column this read never
+/// looked at and the compiler says so (§ 1561). `projected_run_guard.test.ts`
+/// covers the consumers that reach a row past the type.
+export type ProjectedRun = Omit<Partial<Run>, 'track'>;
+
 export function asProjectedRun({
 	source,
 	activity_type,
 	metadata,
 	...rest
-}: Partial<RunRow>): Partial<Run> {
+}: Partial<RunRow>): ProjectedRun {
 	return {
 		...rest,
 		...(source !== undefined ? { source: parseRunSource(source) } : {}),

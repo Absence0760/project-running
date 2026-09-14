@@ -2893,6 +2893,7 @@
   "gymCatalogueCategoryLabel": "Catégorie",
   "gymCatalogueEmpty": "Aucun exercice ne correspond.",
   "gymCatalogueUnavailable": "Impossible de charger le catalogue d’exercices, cette liste est peut-être incomplète.",
+  "gymCatalogueShadowsBuiltIn": "Ajouté. Il remplace l’exercice intégré du même nom.",
   "gymCatalogueOtherCategory": "« {name} » est déjà dans le catalogue, dans {category}.",
   "gymCatalogueCustomBadge": "Perso",
   "gymCatalogueCreate": "Ajouter « {name} » comme exercice personnalisé",

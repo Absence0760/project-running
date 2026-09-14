@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readdirSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { renderShareRunHeadTags, type ShareRunMeta } from './share_run_meta';
 import { renderShareEventHeadTags, type ShareEventHead } from './share_event_meta';
@@ -50,17 +53,20 @@ const withJsonLd = {
 	jsonLd: '{"@context":"https://schema.org"}',
 };
 
+// Keyed on the EXPORTED NAME rather than on a nickname, so the census below
+// is a set comparison against the directory and not a mapping someone has to
+// keep in their head.
 const cases: Array<{ name: string; out: () => string }> = [
-	{ name: 'run', out: () => renderShareRunHeadTags(withJsonLd as ShareRunMeta) },
-	{ name: 'event', out: () => renderShareEventHeadTags(withJsonLd as ShareEventHead) },
-	{ name: 'club', out: () => renderShareClubHeadTags(withJsonLd as ShareClubHead) },
-	{ name: 'profile', out: () => renderShareProfileHeadTags(withJsonLd as ShareProfileHead) },
-	{ name: 'race', out: () => renderShareRaceHeadTags(withJsonLd as ShareRaceHead) },
-	{ name: 'route', out: () => renderShareRouteHeadTags(withJsonLd as ShareRouteHead) },
-	{ name: 'session', out: () => renderShareSessionHeadTags(withJsonLd as ShareSessionHead) },
-	{ name: 'workout', out: () => renderShareWorkoutHeadTags(withJsonLd as ShareWorkoutHead) },
+	{ name: 'renderShareRunHeadTags', out: () => renderShareRunHeadTags(withJsonLd as ShareRunMeta) },
+	{ name: 'renderShareEventHeadTags', out: () => renderShareEventHeadTags(withJsonLd as ShareEventHead) },
+	{ name: 'renderShareClubHeadTags', out: () => renderShareClubHeadTags(withJsonLd as ShareClubHead) },
+	{ name: 'renderShareProfileHeadTags', out: () => renderShareProfileHeadTags(withJsonLd as ShareProfileHead) },
+	{ name: 'renderShareRaceHeadTags', out: () => renderShareRaceHeadTags(withJsonLd as ShareRaceHead) },
+	{ name: 'renderShareRouteHeadTags', out: () => renderShareRouteHeadTags(withJsonLd as ShareRouteHead) },
+	{ name: 'renderShareSessionHeadTags', out: () => renderShareSessionHeadTags(withJsonLd as ShareSessionHead) },
+	{ name: 'renderShareWorkoutHeadTags', out: () => renderShareWorkoutHeadTags(withJsonLd as ShareWorkoutHead) },
 	{
-		name: 'recap',
+		name: 'renderShareRecapHeadTags',
 		out: () =>
 			renderShareRecapHeadTags({
 				title: INJ,
@@ -72,10 +78,60 @@ const cases: Array<{ name: string; out: () => string }> = [
 ];
 
 for (const c of cases) {
-	test(`renderShare${c.name}HeadTags — hostile fields cannot break out of the head markup`, () => {
+	test(`${c.name} — hostile fields cannot break out of the head markup`, () => {
 		assertSafe(c.out(), c.name);
 	});
 }
+
+/// The census. Until this existed the `cases` array above was enumerated by
+/// `import`, so a tenth renderer was escaped by nobody's assertion and nothing
+/// said so — the shape § 1476 built the JSON-LD census to close and § 1531 the
+/// clipping census to close, one property over on the same head.
+///
+/// The scan reads the DECLARATION rather than the `function` keyword: an
+/// `export const renderShareXHeadTags = (…) =>` is the same renderer spelled
+/// differently, and a census that missed it would fail in the silent direction.
+/// Generics and `async` are tolerated for the same reason.
+const RENDERER_DECL =
+	/^export\s+(?:async\s+)?(?:function\s+(renderShare\w+HeadTags)\s*[<(]|(?:const|let|var)\s+(renderShare\w+HeadTags)\s*[:=])/gm;
+
+test('every renderShare*HeadTags renderer is censused above', () => {
+	const dir = dirname(fileURLToPath(import.meta.url));
+	const declared = new Set<string>();
+	for (const file of readdirSync(dir)) {
+		if (!file.endsWith('.ts') || file.endsWith('.test.ts')) continue;
+		const src = readFileSync(join(dir, file), 'utf-8');
+		for (const m of src.matchAll(RENDERER_DECL)) declared.add(m[1] ?? m[2]);
+	}
+	const censused = new Set(cases.map((c) => c.name));
+	assert.ok(declared.size > 0, 'the scan found no renderShare*HeadTags renderers at all');
+	for (const name of declared) {
+		assert.ok(
+			censused.has(name),
+			`${name} is exported but not censused in share_head_escaping.test.ts`,
+		);
+	}
+	for (const name of censused) {
+		assert.ok(declared.has(name), `${name} is censused but no longer exported`);
+	}
+});
+
+/// There are TEN `buildShare*` entity builders and nine renderers, and the
+/// difference is not a gap: `buildShareBadgeMeta` returns a `ShareRunMeta` and
+/// is rendered by `renderShareRunHeadTags`, so the badge entity's head is
+/// covered by the run row above rather than by one of its own. That is an
+/// inheritance the census cannot see, so it is asserted rather than described —
+/// a badge builder that grew its own shape would break this and be told to
+/// bring a renderer and a row.
+test('the badge entity inherits the run renderer rather than owning one', () => {
+	const dir = dirname(fileURLToPath(import.meta.url));
+	const src = readFileSync(join(dir, 'share_badge_meta.ts'), 'utf-8');
+	assert.match(
+		src,
+		/export function buildShareBadgeMeta\([^)]*\): ShareRunMeta \{/,
+		'buildShareBadgeMeta no longer returns ShareRunMeta — it now needs its own renderer and its own row above',
+	);
+});
 
 // The run renderer's jsonLd is optional; when omitted it must simply drop the
 // script line rather than emit `undefined`.

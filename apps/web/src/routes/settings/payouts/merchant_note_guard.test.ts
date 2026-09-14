@@ -55,7 +55,7 @@ test('the platform stays merchant of record: no checkout call site sends on_beha
 	for (const file of ['events-checkout/lib.ts', 'events-checkout/index.ts']) {
 		assert.ok(
 			!edgeFunctionCode(file).includes('on_behalf_of'),
-			`${file} sends on_behalf_of, which makes the HOST the business of record for the payment. payouts.merchantNote tells the host the opposite in all seven locales, and /terms §6 tells the buyer the opposite again — settle club_events.md § Refunds' sign-off item and rewrite both before landing this.`,
+			`${file} sends on_behalf_of, which makes the HOST the business of record for the payment. payouts.merchantNote tells the host the opposite in all seven locales, /terms §6 tells the buyer and the host the same in English, and the event_orders + donations table comments say it in the database — settle club_events.md § Refunds' sign-off item and rewrite all four before landing this.`,
 		);
 	}
 });

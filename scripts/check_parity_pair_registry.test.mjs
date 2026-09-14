@@ -3,10 +3,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-	CLAUDE_DOC,
+	ORIENTATION_DOC,
+	REGISTRY_DOC,
+	REGISTRY_REL,
 	SYNCER_DOC,
+	checkOrientationPointer,
 	checkRegistries,
-	parseClaudePairs,
+	parseRegistryPairs,
 	parseSyncerRows,
 	pathsInCell,
 } from './check_parity_pair_registry.mjs';
@@ -35,7 +38,7 @@ const ROADBOOK_ROW = [
 	'test/roadbook_test.dart',
 ];
 
-/// A CLAUDE.md shaped like the real one: the lockstep bullet on ONE line,
+/// A registry doc shaped like the real one: the lockstep bullet on ONE line,
 /// opening with a run of bare names, then entries that annotate their paths,
 /// then the track_projection tail clause. The watch-port paragraph follows on
 /// its own line — those are one-way ports and must NOT be read as pairs.
@@ -80,7 +83,7 @@ function fakeSyncer({
 /// reading a file-not-found error by accident.
 const allExist = () => true;
 
-test('a pair in CLAUDE.md but missing from the syncer table fails, and is named', () => {
+test('a pair in the registry but missing from the syncer table fails, and is named', () => {
 	const claude = fakeClaude({
 		annotated: [
 			['roadbook', 'routes/roadbook.ts', 'roadbook.dart'],
@@ -95,7 +98,7 @@ test('a pair in CLAUDE.md but missing from the syncer table fails, and is named'
 	assert.doesNotMatch(errors[0], /roadbook/);
 });
 
-test('a row in the syncer table not named in CLAUDE.md fails too', () => {
+test('a row in the syncer table not named in the registry fails too', () => {
 	const syncer = fakeSyncer({
 		rows: [
 			...HEAD_ROWS,
@@ -108,7 +111,7 @@ test('a row in the syncer table not named in CLAUDE.md fails too', () => {
 
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /nearby/);
-	assert.match(errors[0], /not named in CLAUDE\.md/);
+	assert.match(errors[0], /not named in the registry/);
 });
 
 test('the bare head names and the track_projection tail count as registered pairs', () => {
@@ -117,18 +120,18 @@ test('the bare head names and the track_projection tail count as registered pair
 	const { errors } = checkRegistries(fakeClaude(), fakeSyncer(), allExist);
 	assert.deepEqual(errors, []);
 
-	const { pairs } = parseClaudePairs(fakeClaude());
+	const { pairs } = parseRegistryPairs(fakeClaude());
 	assert.deepEqual([...pairs.keys()], ['training', 'segments', 'roadbook', 'track_projection']);
 });
 
 test('the watch-port paragraph is not read as a pair list', () => {
 	// `storm` sits on the line AFTER the bullet and is deliberately not a pair.
-	const { pairs } = parseClaudePairs(fakeClaude());
+	const { pairs } = parseRegistryPairs(fakeClaude());
 	assert.equal(pairs.has('storm'), false);
 	assert.equal(pairs.has('roadbook'), true);
 });
 
-test('a CLAUDE.md path that disagrees with its syncer row fails', () => {
+test('a registry path that disagrees with its syncer row fails', () => {
 	const claude = fakeClaude({ annotated: [['roadbook', 'runs/roadbook.ts', 'roadbook.dart']] });
 	const { errors } = checkRegistries(claude, fakeSyncer(), allExist);
 
@@ -136,7 +139,7 @@ test('a CLAUDE.md path that disagrees with its syncer row fails', () => {
 	assert.match(errors[0], /aimed at the wrong file/);
 });
 
-test('a CLAUDE.md mobile path the syncer row never mentions fails', () => {
+test('a registry mobile path the syncer row never mentions fails', () => {
 	const claude = fakeClaude({ annotated: [['roadbook', 'routes/roadbook.ts', 'road_book.dart']] });
 	const { errors } = checkRegistries(claude, fakeSyncer(), allExist);
 
@@ -190,7 +193,7 @@ test('the mirror-test column resolves both of its relative forms', () => {
 // nothing, so every way of losing a parser's grip must FAIL rather than
 // report two empty sets as agreement.
 
-test('a renamed CLAUDE.md bullet fails instead of passing over an empty set', () => {
+test('a renamed registry bullet fails instead of passing over an empty set', () => {
 	const claude = fakeClaude({ bullet: 'Parity helpers, keep them the same.' });
 	const { errors } = checkRegistries(claude, fakeSyncer(), allExist);
 
@@ -250,7 +253,7 @@ test('two empty registries do not read as agreement', () => {
 
 test('the committed registries agree', () => {
 	const { errors, ok } = checkRegistries(
-		readFileSync(CLAUDE_DOC, 'utf-8'),
+		readFileSync(REGISTRY_DOC, 'utf-8'),
 		readFileSync(SYNCER_DOC, 'utf-8'),
 	);
 
@@ -263,10 +266,10 @@ test('the real registries carry the whole pair set, not a fragment of it', () =>
 	// carried dozens of pairs since long before this guard, so a parse that
 	// returns a handful means the prose or the table shifted under it in a way
 	// the anchor checks did not catch.
-	const { pairs } = parseClaudePairs(readFileSync(CLAUDE_DOC, 'utf-8'));
+	const { pairs } = parseRegistryPairs(readFileSync(REGISTRY_DOC, 'utf-8'));
 	const { rows } = parseSyncerRows(readFileSync(SYNCER_DOC, 'utf-8'));
 
-	assert.ok(pairs.size >= 60, `CLAUDE.md parsed only ${pairs.size} pairs`);
+	assert.ok(pairs.size >= 60, `the registry parsed only ${pairs.size} pairs`);
 	assert.ok(rows.size >= 60, `the syncer table parsed only ${rows.size} rows`);
 	assert.equal(pairs.size, rows.size);
 });
@@ -306,8 +309,8 @@ test('a soft-wrapped bullet is read exactly as the one-line form', () => {
 			['route_snap', 'routes/route_snap.ts', 'route_snap.dart'],
 		],
 	});
-	const flat = parseClaudePairs(claude).pairs;
-	const wrapped = parseClaudePairs(reflow(claude, 40)).pairs;
+	const flat = parseRegistryPairs(claude).pairs;
+	const wrapped = parseRegistryPairs(reflow(claude, 40)).pairs;
 
 	assert.ok(flat.size > 0);
 	assert.deepEqual([...wrapped.keys()].sort(), [...flat.keys()].sort());
@@ -322,7 +325,7 @@ test('a pair written past a soft wrap is still checked against the syncer table'
 		'plus the `track_projection.ts`',
 		'\n  `route_snap` (web `routes/route_snap.ts` ↔ mobile `route_snap.dart`), plus the `track_projection.ts`',
 	);
-	const { pairs } = parseClaudePairs(claude);
+	const { pairs } = parseRegistryPairs(claude);
 	assert.ok(pairs.has('route_snap'));
 
 	const { errors } = checkRegistries(claude, fakeSyncer(), allExist);
@@ -335,7 +338,7 @@ test('losing the blank line before the watch-port paragraph fails loudly', () =>
 	// Without the separator the bullet would swallow the one-way `no_std` Rust
 	// ports below it and report them as enforced web↔mobile pairs.
 	const claude = fakeClaude().replace(/\n\nMany of these/, '\n  Many of these');
-	const { pairs, errors } = parseClaudePairs(claude);
+	const { pairs, errors } = parseRegistryPairs(claude);
 
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /runs into the watch-port paragraph/);
@@ -343,9 +346,9 @@ test('losing the blank line before the watch-port paragraph fails loudly', () =>
 });
 
 test('the committed bullet survives being reflowed at 100 columns', () => {
-	const claude = readFileSync(CLAUDE_DOC, 'utf-8');
-	const flat = parseClaudePairs(claude).pairs;
-	const wrapped = parseClaudePairs(reflow(claude, 100)).pairs;
+	const claude = readFileSync(REGISTRY_DOC, 'utf-8');
+	const flat = parseRegistryPairs(claude).pairs;
+	const wrapped = parseRegistryPairs(reflow(claude, 100)).pairs;
 
 	assert.deepEqual([...wrapped.keys()].sort(), [...flat.keys()].sort());
 	assert.deepEqual(
@@ -358,7 +361,7 @@ test('the committed bullet survives being reflowed at 100 columns', () => {
 //
 // `parseSyncerRows` found its rows with `startsWith('|')` and cut them with a
 // flat `slice(1, -1)`. GFM makes both wrapping pipes optional, so the first
-// dropped a row whole — reporting the pair as one CLAUDE.md registers and the
+// dropped a row whole — reporting the pair as one the registry registers and the
 // table does not, which is the § 604 defect the guard exists to catch, pointed
 // at a table that carries it — and the second ate the MIRROR-TEST column, so
 // every path in it went unchecked with nothing said.
@@ -384,4 +387,29 @@ test('a syncer row keeps every column however its wrapping pipes are written', (
 		assert.equal(parsed?.cells.length, 3, row);
 		assert.match(parsed?.cells[2] ?? '', /training_test\.dart/, row);
 	}
+});
+
+// --- Property 5: the orientation doc still points at the registry.
+//
+// The list moved out of the root CLAUDE.md to stop re-sending 115 KB on every
+// prompt. Properties 1-4 all rest on a session reaching the list, and the file
+// every session IS handed no longer contains it — so the link is the whole
+// remaining path to it, and an absent link fails nothing else.
+
+test('the committed CLAUDE.md points at the registry', () => {
+	assert.deepEqual(checkOrientationPointer(readFileSync(ORIENTATION_DOC, 'utf-8')), []);
+});
+
+test('an orientation doc that stops naming the registry fails', () => {
+	const dropped = readFileSync(ORIENTATION_DOC, 'utf-8').replaceAll(REGISTRY_REL, 'docs/architecture/pairs.md');
+
+	const errors = checkOrientationPointer(dropped);
+
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /does not name/);
+	assert.match(errors[0], /single-platform helper/);
+});
+
+test('an empty orientation doc does not read as a pointer', () => {
+	assert.equal(checkOrientationPointer('').length, 1);
 });

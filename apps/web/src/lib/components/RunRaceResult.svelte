@@ -76,7 +76,6 @@
 	function bestCandidate(listings: RaceListingResult[]): RaceListingResult | null {
 		const run = {
 			runDate: startedAt,
-			runStartLatLng: null,
 			runDistanceM: distanceM
 		};
 		let best: RaceListingResult | null = null;

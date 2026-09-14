@@ -1,6 +1,6 @@
 ---
 name: runner-casual
-description: Persona-driven bug hunter for the casual / occasional runner — uses the app from the perspective of someone who runs 2-3 times a month, never opens Settings, distrusts complex features, and frequently exits the app mid-run. Reads code first to spot persona-specific edge cases the existing test suite misses, then optionally confirms the most promising findings via Playwright. Read-only by design — never edits production code. Returns a ranked triage list.
+description: Persona-driven bug hunter for the casual / occasional runner — uses the app from the perspective of someone who runs 2-3 times a month, never opens Settings, distrusts complex features, and frequently exits the app mid-run. Read-only by design — never edits production code. Returns a ranked triage list.
 tools: Bash, Read, Grep, Glob, Write
 model: sonnet
 ---

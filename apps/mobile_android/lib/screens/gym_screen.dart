@@ -161,19 +161,24 @@ class _GymScreenState extends State<GymScreen> {
   // 20270222_001), fetched best-effort on refresh and merged into the
   // composer's autocomplete. Empty offline / signed-out — the composer falls
   // back to history-only suggestions and logs free-text, exactly as before.
-  List<GymCatalogueEntry> _catalogue = const [];
-
-  // Whether [_catalogue] is known to be the whole catalogue. Starts true
-  // because "not yet read" and "the read failed" are the same state to every
-  // consumer: the catalogue is not known, so nothing downstream may claim a
-  // typed name is free. Cleared only by a read that answered.
+  //
+  // Published as a LISTENABLE rather than passed by value, because the composer
+  // is presented as a pushed route whose builder runs once: a value handed to
+  // it is fixed for the life of that route, so a read answering while the sheet
+  // is open would never reach it (§ 1571).
+  //
+  // `unavailable` starts true because "not yet read" and "the read failed" are
+  // the same state to every consumer: the catalogue is not known, so nothing
+  // downstream may claim a typed name is free. Cleared only by a read that
+  // answered.
   //
   // An empty catalogue is otherwise the state in which every name looks free —
   // the picker's exact-match test finds nothing and offers to create a name the
   // catalogue already holds, which mints a shadow against a seeded global the
   // author's partial unique cannot see, or 23505s against the user's own custom
   // after the affordance said the name was free.
-  bool _catalogueUnavailable = true;
+  final ValueNotifier<GymCatalogueState> _catalogue =
+      ValueNotifier((entries: const [], unavailable: true));
 
   // Routines (gym_programming.md P1) are a parallel planning surface owned by
   // this screen — the same "each surface owns its store" precedent the gym /
@@ -212,6 +217,7 @@ class _GymScreenState extends State<GymScreen> {
   void dispose() {
     widget.store.removeListener(_onStoreChange);
     _routineStore.removeListener(_onStoreChange);
+    _catalogue.dispose();
     super.dispose();
   }
 
@@ -239,19 +245,23 @@ class _GymScreenState extends State<GymScreen> {
       // reports itself through [_catalogueUnavailable] rather than silently.
       try {
         final cat = await api.fetchExerciseCatalogue();
-        _catalogue = [
-          for (final e in cat)
-            (
-              name: e.name,
-              id: e.id,
-              category: e.category,
-              authorId: e.authorId,
-              nameKey: e.nameKey,
-            ),
-        ];
-        _catalogueUnavailable = false;
+        _catalogue.value = (
+          entries: [
+            for (final e in cat)
+              (
+                name: e.name,
+                id: e.id,
+                category: e.category,
+                authorId: e.authorId,
+                nameKey: e.nameKey,
+              ),
+          ],
+          unavailable: false,
+        );
       } catch (e) {
-        _catalogueUnavailable = true;
+        // Keep whatever was last known and say it is no longer vouched for.
+        _catalogue.value =
+            (entries: _catalogue.value.entries, unavailable: true);
         debugPrint('gym_screen: catalogue fetch failed: $e');
       }
       _isOnline = true;
@@ -275,8 +285,7 @@ class _GymScreenState extends State<GymScreen> {
       context: context,
       store: widget.store,
       suggestions: gymExerciseSuggestions(widget.store.workouts),
-      catalogue: _catalogue,
-      catalogueUnavailable: _catalogueUnavailable,
+      catalogueSource: _catalogue,
       api: widget.api,
     );
     if (saved == true) await _maybeSync();

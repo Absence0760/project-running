@@ -7,8 +7,6 @@
 // the race's band. This is an INFORM-tier suggestion — nothing writes without
 // the user confirming.
 
-import { haversineMetres as sharedHaversineMetres } from '../runs/run_stats';
-
 export type RaceDistanceBand = '5k' | '10k' | 'half' | 'marathon' | 'ultra';
 
 /// Confidence at or above which a candidate is worth offering.
@@ -33,8 +31,6 @@ export function raceDistanceBand(distanceM: number | null | undefined): RaceDist
 export interface RunMatchInput {
 	/// Run start as an ISO timestamp or a Date — only the calendar day is used.
 	runDate: string;
-	/// Recorded GPS start point; null when the run has no track (indoor / manual).
-	runStartLatLng: { lat: number; lng: number } | null;
 	runDistanceM: number | null;
 }
 
@@ -52,6 +48,12 @@ export interface ListingMatchInput {
 /// distance band; each contributes when its input is available, and the score
 /// is normalised over the signals that COULD be evaluated so a run with no
 /// track (proximity unknown) can still match on day + distance.
+///
+/// Proximity is `listing.distance_m_away`, which `search_race_listings`
+/// computes server-side, and it is the ONLY door to that signal — the run side
+/// used to carry a `runStartLatLng` and this module an object-shaped
+/// `haversineMetres` to measure from it, and neither was ever read: nothing
+/// assigned the field, nothing but the two suites called the function.
 export function raceMatchScore(run: RunMatchInput, listing: ListingMatchInput): number {
 	if (!sameCalendarDay(run.runDate, listing.race_date)) return 0;
 
@@ -85,17 +87,6 @@ export function raceMatchScore(run: RunMatchInput, listing: ListingMatchInput): 
 /// Whether a listing is a confident-enough candidate to offer.
 export function isRaceMatchCandidate(run: RunMatchInput, listing: ListingMatchInput): boolean {
 	return raceMatchScore(run, listing) >= RACE_MATCH_THRESHOLD;
-}
-
-/// Great-circle distance in metres between two lat/lng points. The
-/// object-shaped door onto the shared `haversineMetres`, not a second
-/// formula. Exposed so a caller can compute distance_m_away when the RPC
-/// didn't.
-export function haversineMetres(
-	a: { lat: number; lng: number },
-	b: { lat: number; lng: number }
-): number {
-	return sharedHaversineMetres(a.lat, a.lng, b.lat, b.lng);
 }
 
 function sameCalendarDay(a: string, b: string): boolean {

@@ -9805,6 +9805,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get gymCatalogueUnavailable => '種目カタログを読み込めませんでした。このリストは不完全な可能性があります。';
 
   @override
+  String get gymCatalogueShadowsBuiltIn => '追加しました。同名の組み込み種目を置き換えます。';
+
+  @override
   String gymCatalogueOtherCategory(String name, String category) {
     return '「$name」はすでにカタログにあります（$category）。';
   }

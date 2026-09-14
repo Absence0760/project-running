@@ -1885,6 +1885,28 @@ test('the exercise catalogue read pages, and says so when it fails', () => {
 	);
 });
 
+test('a signed-out catalogue read is unknown, not a vouched-for empty one', () => {
+	// Reason: the third state is "this list is not known to be the whole
+	// catalogue", and every way of not having read it belongs in it. Signed out
+	// answered `error: null` — the shape the caller turns into
+	// `catalogueUnavailable = false` — so the one branch that has read nothing
+	// at all was the one claiming most confidently that every name is free. The
+	// sole caller never reaches it (the page returns before `load()` with no
+	// user), which is what kept it invisible and is why the branch has to be
+	// right on its own rather than by the grace of its caller.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const start = source.indexOf('export async function fetchExerciseCatalogue(');
+	assert.ok(start >= 0, 'fetchExerciseCatalogue moved — re-anchor this guard');
+	const body = source.slice(start, source.indexOf('\nexport ', start + 1));
+	const at = body.indexOf('!auth.user?.id');
+	assert.ok(at >= 0, 'the signed-out branch moved — re-anchor this guard');
+	assert.doesNotMatch(
+		body.slice(at, body.indexOf(';', at) + 1),
+		/error:\s*null/,
+		'a read that never happened is unavailable, not an empty catalogue',
+	);
+});
+
 test('a CHECK-constrained union is narrowed at the read boundary, not asserted', () => {
 	// Reason: the generated row and RPC types spell every one of these columns
 	// `string`, so assigning one straight into its client union is an

@@ -33,8 +33,14 @@ void main() {
     test('different calendar day scores 0', () {
       final s = raceMatchScore(
         const RunMatchInput(
-            runDate: '2025-09-20T09:00:00Z', runStartLatLng: null, runDistanceM: 21097),
-        const ListingMatchInput(raceDate: '2025-09-21', distanceM: 21097, distanceMAway: 100),
+          runDate: '2025-09-20T09:00:00Z',
+          runDistanceM: 21097,
+        ),
+        const ListingMatchInput(
+          raceDate: '2025-09-21',
+          distanceM: 21097,
+          distanceMAway: 100,
+        ),
       );
       expect(s, 0);
     });
@@ -42,54 +48,74 @@ void main() {
     test('same day with near start + matching band scores high', () {
       final s = raceMatchScore(
         const RunMatchInput(
-            runDate: '2025-09-21T09:00:00Z',
-            runStartLatLng: LatLng(0, 0),
-            runDistanceM: 21097),
-        const ListingMatchInput(raceDate: '2025-09-21', distanceM: 21097, distanceMAway: 200),
+          runDate: '2025-09-21T09:00:00Z',
+          runDistanceM: 21097,
+        ),
+        const ListingMatchInput(
+          raceDate: '2025-09-21',
+          distanceM: 21097,
+          distanceMAway: 200,
+        ),
       );
       expect(s, greaterThan(0.95));
     });
 
     test('same day only (no proximity, no band) normalises to 1', () {
       final s = raceMatchScore(
-        const RunMatchInput(runDate: '2025-09-21', runStartLatLng: null, runDistanceM: null),
-        const ListingMatchInput(raceDate: '2025-09-21', distanceM: null, distanceMAway: null),
+        const RunMatchInput(runDate: '2025-09-21', runDistanceM: null),
+        const ListingMatchInput(
+          raceDate: '2025-09-21',
+          distanceM: null,
+          distanceMAway: null,
+        ),
       );
       expect(s, 1);
     });
 
     test('same day + matching band but no proximity still strong', () {
       final s = raceMatchScore(
-        const RunMatchInput(runDate: '2025-09-21', runStartLatLng: null, runDistanceM: 5000),
-        const ListingMatchInput(raceDate: '2025-09-21', distanceM: 5000, distanceMAway: null),
+        const RunMatchInput(runDate: '2025-09-21', runDistanceM: 5000),
+        const ListingMatchInput(
+          raceDate: '2025-09-21',
+          distanceM: 5000,
+          distanceMAway: null,
+        ),
       );
       expect(s, 1);
     });
 
     test('same day + mismatched band lowers the score', () {
       final s = raceMatchScore(
-        const RunMatchInput(runDate: '2025-09-21', runStartLatLng: null, runDistanceM: 5000),
-        const ListingMatchInput(raceDate: '2025-09-21', distanceM: 42195, distanceMAway: null),
+        const RunMatchInput(runDate: '2025-09-21', runDistanceM: 5000),
+        const ListingMatchInput(
+          raceDate: '2025-09-21',
+          distanceM: 42195,
+          distanceMAway: null,
+        ),
       );
       expect((s - 0.5 / 0.7).abs() < 1e-9, isTrue);
     });
 
     test('proximity falloff is linear to the radius edge', () {
       final s = raceMatchScore(
-        const RunMatchInput(
-            runDate: '2025-09-21', runStartLatLng: LatLng(0, 0), runDistanceM: null),
+        const RunMatchInput(runDate: '2025-09-21', runDistanceM: null),
         const ListingMatchInput(
-            raceDate: '2025-09-21', distanceM: null, distanceMAway: raceMatchRadiusM / 2),
+          raceDate: '2025-09-21',
+          distanceM: null,
+          distanceMAway: raceMatchRadiusM / 2,
+        ),
       );
       expect((s - 0.65 / 0.8).abs() < 1e-9, isTrue);
     });
 
     test('start beyond the radius contributes no proximity points', () {
       final s = raceMatchScore(
-        const RunMatchInput(
-            runDate: '2025-09-21', runStartLatLng: LatLng(0, 0), runDistanceM: null),
+        const RunMatchInput(runDate: '2025-09-21', runDistanceM: null),
         const ListingMatchInput(
-            raceDate: '2025-09-21', distanceM: null, distanceMAway: raceMatchRadiusM * 3),
+          raceDate: '2025-09-21',
+          distanceM: null,
+          distanceMAway: raceMatchRadiusM * 3,
+        ),
       );
       expect((s - 0.5 / 0.8).abs() < 1e-9, isTrue);
     });
@@ -97,8 +123,14 @@ void main() {
     test('full ISO timestamp compares on the calendar day', () {
       final s = raceMatchScore(
         const RunMatchInput(
-            runDate: '2025-09-21T23:59:00Z', runStartLatLng: null, runDistanceM: 10000),
-        const ListingMatchInput(raceDate: '2025-09-21', distanceM: 10000, distanceMAway: null),
+          runDate: '2025-09-21T23:59:00Z',
+          runDistanceM: 10000,
+        ),
+        const ListingMatchInput(
+          raceDate: '2025-09-21',
+          distanceM: 10000,
+          distanceMAway: null,
+        ),
       );
       expect(s, 1);
     });
@@ -106,29 +138,29 @@ void main() {
 
   group('isRaceMatchCandidate', () {
     test('gates on the threshold', () {
-      const near = RunMatchInput(
-          runDate: '2025-09-21', runStartLatLng: LatLng(0, 0), runDistanceM: 21097);
+      const near = RunMatchInput(runDate: '2025-09-21', runDistanceM: 21097);
       expect(
-        isRaceMatchCandidate(near,
-            const ListingMatchInput(raceDate: '2025-09-21', distanceM: 21097, distanceMAway: 100)),
+        isRaceMatchCandidate(
+          near,
+          const ListingMatchInput(
+            raceDate: '2025-09-21',
+            distanceM: 21097,
+            distanceMAway: 100,
+          ),
+        ),
         isTrue,
       );
       expect(
-        isRaceMatchCandidate(near,
-            const ListingMatchInput(raceDate: '2025-09-22', distanceM: 21097, distanceMAway: 100)),
+        isRaceMatchCandidate(
+          near,
+          const ListingMatchInput(
+            raceDate: '2025-09-22',
+            distanceM: 21097,
+            distanceMAway: 100,
+          ),
+        ),
         isFalse,
       );
-    });
-  });
-
-  group('haversineMetres', () {
-    test('~0 for identical points', () {
-      expect(haversineMetres(const LatLng(51.5, -0.1), const LatLng(51.5, -0.1)) < 1e-6, isTrue);
-    });
-
-    test('~111km per degree of latitude', () {
-      final d = haversineMetres(const LatLng(0, 0), const LatLng(1, 0));
-      expect((d - 111195).abs() < 500, isTrue);
     });
   });
 

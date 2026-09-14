@@ -2893,6 +2893,7 @@
   "gymCatalogueCategoryLabel": "カテゴリ",
   "gymCatalogueEmpty": "該当する種目がありません。",
   "gymCatalogueUnavailable": "種目カタログを読み込めませんでした。このリストは不完全な可能性があります。",
+  "gymCatalogueShadowsBuiltIn": "追加しました。同名の組み込み種目を置き換えます。",
   "gymCatalogueOtherCategory": "「{name}」はすでにカタログにあります（{category}）。",
   "gymCatalogueCustomBadge": "カスタム",
   "gymCatalogueCreate": "「{name}」をカスタム種目として追加",

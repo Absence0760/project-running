@@ -10348,6 +10348,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Der Übungskatalog konnte nicht geladen werden, diese Liste ist möglicherweise unvollständig.';
 
   @override
+  String get gymCatalogueShadowsBuiltIn =>
+      'Hinzugefügt. Sie ersetzt die integrierte Übung mit demselben Namen.';
+
+  @override
   String gymCatalogueOtherCategory(String name, String category) {
     return '„$name“ ist bereits im Katalog, unter $category.';
   }

@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -114,11 +115,24 @@ func (w *Worker) handleAccountDeletionReceipt(ctx context.Context, p LifecycleEm
 		w.Log.Warn("lifecycle_email: account_deleted has no address; skipping")
 		return nil
 	}
-	hash := hashEmailForReceipt(email)
+	hash := receiptDigest(email, w.DeletionAuditKey)
 
 	already, err := w.Backend.AccountDeletionReceiptAlreadySent(ctx, hash)
 	if err != nil {
 		return fmt.Errorf("check receipt log: %w", err)
+	}
+	// Changeover read. Rows written before the operator provisioned the key
+	// carry the LEGACY unkeyed digest, and the keyed build cannot recognise
+	// them — without this probe, provisioning the key re-sends a receipt to
+	// everyone who deleted inside the table's 30-day window, which is a mail to
+	// a former user about an account that no longer exists. Once every row
+	// predating the changeover has aged out of that window the probe can go;
+	// until then a miss on the keyed digest is not yet a miss.
+	if !already && w.DeletionAuditKey != "" {
+		already, err = w.Backend.AccountDeletionReceiptAlreadySent(ctx, hashEmailForReceipt(email))
+		if err != nil {
+			return fmt.Errorf("check legacy receipt log: %w", err)
+		}
 	}
 	if already {
 		return nil
@@ -140,11 +154,54 @@ func (w *Worker) handleAccountDeletionReceipt(ctx context.Context, p LifecycleEm
 	return nil
 }
 
-// hashEmailForReceipt is the send-once key for the account-deletion receipt:
-// hex SHA-256 of the lowercased, trimmed address. Keeping a hash (not the raw
-// address) means account_deletion_receipts is not a directory of deleted
-// accounts, matching deletion_audit_log's pseudonymisation intent.
+// receiptDigestDomain separates this digest's HMAC input from every other use
+// of the same operator key. DELETION_AUDIT_KEY also keys delete-account's
+// hashUserIdForAudit, which HMACs a bare user id; prefixing here means the two
+// record types can never produce the same digest for related inputs, and a
+// third use of the key later cannot collide with either. It is part of the
+// wire format: changing the string re-keys every row and would re-send a
+// receipt for anyone still inside the 30-day window, so it is versioned.
+const receiptDigestDomain = "account-deletion-receipt:v1:"
+
+// normaliseReceiptEmail is the ONE normalisation both digests take, so a
+// differently cased or padded re-enqueue dedups under either mode.
+func normaliseReceiptEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
+}
+
+// hashEmailForReceipt is the LEGACY, unkeyed send-once key: hex SHA-256 of the
+// lowercased, trimmed address. It is what every row written before an operator
+// provisioned DELETION_AUDIT_KEY carries, which is why it survives as its own
+// function rather than as a branch — the keyed handler still has to recognise
+// those rows (decisions § 1600).
+//
+// It is pseudonymisation, not anonymisation, and the difference is the whole
+// reason the keyed mode exists: an email address is a GUESSABLE input, so a
+// holder of a candidate address can recompute this digest and ask the table
+// whether that person deleted their account. The table cannot be enumerated;
+// it can be queried. The 30-day sweep time-bounds that window rather than
+// closing it (decisions § 1551).
 func hashEmailForReceipt(email string) string {
-	sum := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(email))))
+	sum := sha256.Sum256([]byte(normaliseReceiptEmail(email)))
 	return hex.EncodeToString(sum[:])
+}
+
+// receiptDigest is the send-once key this worker WRITES. With a key set it is
+// HMAC-SHA256 over the domain-separated address, which an adversary cannot
+// reproduce from a candidate address, so the membership test above stops
+// existing rather than merely expiring. With no key it is exactly the legacy
+// digest, so an operator who has provisioned nothing sees no change at all —
+// the guard needs only stable equality, and an HMAC serves that identically.
+//
+// The key reaches this worker through its OWN environment (DELETION_AUDIT_KEY
+// on the job_worker process); setting it for the Edge Function alone keys the
+// audit log and leaves the receipt digest legacy, which is a safe half-state
+// and not an error.
+func receiptDigest(email, key string) string {
+	if key == "" {
+		return hashEmailForReceipt(email)
+	}
+	mac := hmac.New(sha256.New, []byte(key))
+	mac.Write([]byte(receiptDigestDomain + normaliseReceiptEmail(email)))
+	return hex.EncodeToString(mac.Sum(nil))
 }

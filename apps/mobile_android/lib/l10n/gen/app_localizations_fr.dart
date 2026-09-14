@@ -10363,6 +10363,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Impossible de charger le catalogue d’exercices, cette liste est peut-être incomplète.';
 
   @override
+  String get gymCatalogueShadowsBuiltIn =>
+      'Ajouté. Il remplace l’exercice intégré du même nom.';
+
+  @override
   String gymCatalogueOtherCategory(String name, String category) {
     return '« $name » est déjà dans le catalogue, dans $category.';
   }

@@ -27,9 +27,11 @@
 /// any row with a non-null `author_id` in a result set is by construction the
 /// caller's. No user id is needed and none is taken.
 ///
-/// **The key is the row's own `name_key`, not a re-derivation of it**, and that
-/// is the one deliberate difference from the web half, which folds `name`
-/// through `normaliseExerciseName`. Two reasons, and the second is the load
+/// **The key is the row's own `name_key`, not a re-derivation of it**, on BOTH
+/// halves of the pair. This header recorded that as the one deliberate
+/// difference from the web side for as long as the web side re-derived it; it
+/// was never a divergence worth keeping and § 1510 closed it, so the note
+/// outlived what it described. Two reasons, and the second is the load
 /// bearing one. `name_key` is what the two partial uniques are enforced ON, so
 /// it is by definition what makes two rows a shadow pair; and it is stamped by
 /// the `exercises_stamp_name_key` trigger at write time (20270711000001), where

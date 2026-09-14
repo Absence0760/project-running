@@ -9,7 +9,7 @@
 --   4. The template author may clone their own plan even with no club.
 
 begin;
-select plan(8);
+select plan(10);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -107,6 +107,23 @@ select lives_ok(
   $$select clone_session_template('11111111-0000-0000-0000-0000000c5001')$$,
   'the template author can clone their own plan'
 );
+
+-- Read the author's own copy back. Every assertion above reads the
+-- MEMBER's clone and all of them run before this call, so a
+-- clone_session_template that authorised the author and wrote nothing
+-- passes the `lives_ok` on its own. The author holds the club-owned
+-- template; a club-less plan under their name can only be the clone.
+select is(
+  (select count(*)::int from session_plans
+     where author_id = '99999999-0000-0000-0000-0000000c5001'
+       and title = 'CST Flow' and club_id is null and is_public = false),
+  1, 'the author''s own clone is a personal, private, club-less copy');
+select is(
+  (select count(*)::int from session_plan_items i
+     join session_plans p on p.id = i.plan_id
+     where p.author_id = '99999999-0000-0000-0000-0000000c5001'
+       and p.title = 'CST Flow' and p.club_id is null),
+  2, 'the author''s own clone carries both items, not just the head');
 
 select finish();
 rollback;
