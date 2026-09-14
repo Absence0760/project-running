@@ -1650,7 +1650,7 @@ jobs:
     # The Terraform under infra/ provisions the production web stack, the KMS
     # keys behind sops, the GitHub OIDC deploy roles and DNS, and most of what
     # is load-bearing about it was stated in prose and enforced by nothing.
-    # Two guards, both offline — no AWS credentials, no `terraform init`, so
+    # Four guards, all offline — no AWS credentials, no `terraform init`, so
     # this job needs neither the Terraform CLI nor a network round trip:
     #
     #   check_infra_iam.mjs      the OIDC trust contract (StringEquals on a
@@ -1677,6 +1677,14 @@ jobs:
     #                            — the only signal a Lambda-origin failure has,
     #                            since the distribution-wide 403 fallback
     #                            rewrites one into a 200 shell.
+    #   check_estate_slot.mjs    the private estate secrets slot named once, in
+    #                            bin/lib/estate.sh, and the Terraform
+    #                            secrets_file defaults, every bin/ script and
+    #                            every operator doc agreeing with it — beside
+    #                            the suites for that lib's sops creation-rule
+    #                            lookup and for the scripts that read the
+    #                            estate through it, driven against a fixture
+    #                            estate with aws/terraform/sops stubbed (§ 1615).
     #
     # Each guard's own `node --test` suite runs beside it: a parser that
     # silently stops matching passes vacuously, which is the failure mode a
@@ -1718,6 +1726,27 @@ jobs:
           fi
           if ! node --test scripts/check_infra_coverage.test.mjs; then
             echo "::error::The infra coverage guard's own unit tests failed. The Terraform itself is fine — the check above just passed — so this is a defect in scripts/check_infra_coverage.mjs."
+            exit 1
+          fi
+      - name: The estate secrets slot, named once
+        run: |
+          if ! node scripts/check_estate_slot.mjs; then
+            echo "::error::A path into the private estate secrets repo names a slot other than the one bin/lib/estate.sh declares, a bin/ script resolves the estate on its own, or a Terraform secrets_file default has moved. Nothing here is about IAM scope, error responses or alarm coverage; those are the other checks in this job."
+            echo "The failing line above names the file, the line and the slot it found. decisions § 1615 is why the slot is named in exactly one place."
+            exit 1
+          fi
+          if ! node --test scripts/check_estate_slot.test.mjs; then
+            echo "::error::The estate slot guard's own unit tests failed. The tree itself is fine — the check above just passed — so this is a defect in scripts/check_estate_slot.mjs, and a scan that stopped matching would have passed the check vacuously."
+            exit 1
+          fi
+          if ! node --test scripts/bin_lib_estate.test.mjs; then
+            echo "::error::bin/lib/estate.sh's unit tests failed: its sops creation-rule lookup no longer picks the rule sops would, or a rewrite changes more than the one kms value. sops-init.sh, key-rotate.sh, secret-set.sh, aws-preflight.sh and disaster-recovery.sh all read the estate through it."
+            echo "Reproduce with: node --test scripts/bin_lib_estate.test.mjs (needs bash and awk, no install)."
+            exit 1
+          fi
+          if ! node --test scripts/bin_estate_scripts.test.mjs; then
+            echo "::error::A bin/ script that reads the private estate secrets repo no longer behaves as pinned against the fixture estate: sops-init.sh wiring or seeding, key-rotate.sh or secret-set.sh resolving the slot file, or aws-preflight.sh's account pin and estate hard failures. The failing test names the script and the case."
+            echo "Reproduce with: node --test scripts/bin_estate_scripts.test.mjs (needs bash, awk, jq and git; aws, terraform, sops and gh are stubbed)."
             exit 1
           fi
 
