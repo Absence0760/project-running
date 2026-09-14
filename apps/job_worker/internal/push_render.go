@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/Absence0760/project-running/apps/job_worker/internal/nativepush"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/nativepush"
 )
 
 // Web-push channel preference, stored in user_settings.prefs.push_notifications.

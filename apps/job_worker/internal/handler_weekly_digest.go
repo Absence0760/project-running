@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Absence0760/project-running/apps/job_worker/internal/digesttoken"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/digesttoken"
 )
 
 // digestWindow is the look-back the weekly summary covers.

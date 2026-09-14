@@ -12,7 +12,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/Absence0760/project-running/apps/job_worker/internal/supajwt"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/supajwt"
 )
 
 const testJWTSecret = "test-jwt-secret"

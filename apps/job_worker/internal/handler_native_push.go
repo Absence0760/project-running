@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/Absence0760/project-running/apps/job_worker/internal/nativepush"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/nativepush"
 )
 
 // handleNativePush drains a `native_push` job: load the referenced

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/Absence0760/project-running/apps/job_worker/internal/exif"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/exif"
 )
 
 // handleClubPhotoProcess is the club_photos sibling of handlePhotoProcess.

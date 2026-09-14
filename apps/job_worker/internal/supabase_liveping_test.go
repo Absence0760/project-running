@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/Absence0760/project-running/apps/job_worker/internal/livehub"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/livehub"
 )
 
 func TestInsertLivePing_WireShape(t *testing.T) {

@@ -8134,7 +8134,7 @@ On the money path the failure is silent and one-directional: a per-instance over
 
 **Date:** 2026-08-11
 
-The `storm` scenario went red on a PR that touches no firmware ([#752](https://github.com/Absence0760/project-running/pull/752); web share lookups, `api_client.dart`, docs). The reported failure was `expected the tracker's first measured tendency … no decoded log line matched /baro: storm (\w+) delta=…/`, which reads as a storm-classifier regression. The classifier was innocent. The firmware had stopped executing at t≈19 s — the log ends mid-run, Renode's own log goes silent for the remaining 287 s, and the `dev-blink` LED task stops toggling with everything else, so it is the whole executor that stopped, not one task. The harness then spent its full 300 s budget waiting and blamed whichever assertion happened to be holding the wait. Tracked as [#754](https://github.com/Absence0760/project-running/issues/754); the corrupting write is still unidentified.
+The `storm` scenario went red on a PR that touches no firmware ([#752](https://github.com/Absence0760/threkir/pull/752); web share lookups, `api_client.dart`, docs). The reported failure was `expected the tracker's first measured tendency … no decoded log line matched /baro: storm (\w+) delta=…/`, which reads as a storm-classifier regression. The classifier was innocent. The firmware had stopped executing at t≈19 s — the log ends mid-run, Renode's own log goes silent for the remaining 287 s, and the `dev-blink` LED task stops toggling with everything else, so it is the whole executor that stopped, not one task. The harness then spent its full 300 s budget waiting and blamed whichever assertion happened to be holding the wait. Tracked as [#754](https://github.com/Absence0760/threkir/issues/754); the corrupting write is still unidentified.
 
 **Liveness has to be measured on the wall clock, which is the opposite of every other silence measure in the harness.** `GNSS_SILENCE_S` — and `dropout`'s void reasoning — deliberately measure in the firmware's own virtual seconds, because the gaps they reason about are gaps the *firmware* saw and the two clocks drift apart under host load. That choice is right for them and useless here: a guest that stops executing stops stamping lines, so its virtual clock freezes with it and no virtual-time measurement can ever observe the stall. Only real time distinguishes *stopped* from *quiet*.
 
@@ -8148,7 +8148,7 @@ The `storm` scenario went red on a PR that touches no firmware ([#752](https://g
 
 **Date:** 2026-08-11
 
-[#713](https://github.com/Absence0760/project-running/issues/713) panics with `RefCell already mutably borrowed` inside `embassy_sync::watch`'s generic code. All 37 `Watch`es in `state.rs` monomorphise through that one line, so the message names a source location and nothing else — not which `Watch`, and not whether the borrow flag held a legitimate count or something that was never a count. Those two readings are the whole question: the first is a logic bug, the second is the corruption [#754](https://github.com/Absence0760/project-running/issues/754) shows. Twelve local reproduction attempts came back clean against a CI rate near 1 in 30, so waiting to catch it live is a poor bet. The firmware is made to explain itself on the next natural occurrence instead — the same wager as [§ 582](#582-a-wedged-sim-guest-is-named-by-the-harness-and-only-the-wall-clock-can-notice-one), one layer down.
+[#713](https://github.com/Absence0760/threkir/issues/713) panics with `RefCell already mutably borrowed` inside `embassy_sync::watch`'s generic code. All 37 `Watch`es in `state.rs` monomorphise through that one line, so the message names a source location and nothing else — not which `Watch`, and not whether the borrow flag held a legitimate count or something that was never a count. Those two readings are the whole question: the first is a logic bug, the second is the corruption [#754](https://github.com/Absence0760/threkir/issues/754) shows. Twelve local reproduction attempts came back clean against a CI rate near 1 in 30, so waiting to catch it live is a poor bet. The firmware is made to explain itself on the next natural occurrence instead — the same wager as [§ 582](#582-a-wedged-sim-guest-is-named-by-the-harness-and-only-the-wall-clock-can-notice-one), one layer down.
 
 **`panic_probe` is replaced rather than wrapped**, because a `#[panic_handler]` is singular and there is no hook to add to. The first two statements reproduce its behaviour exactly: the message still contains "panicked" (the substring `sim/ci_smoke.py` scans every scenario's log for) and the halt is still a halt. What is added is a dump of every `Watch`'s first and last two words, and interrupts are masked first so the snapshot is coherent.
 
@@ -9312,7 +9312,7 @@ The guard is `_shared/offline_worker_boot_guard.test.ts`, and it pins the proper
 
 **Decided (2026-08-19, prompted by PR #794.)** A `templates`-repo sync proposed 21 files into this repo, additive by path and therefore blind to what it collided with by *name*. Three of them were regressions, and the two classes are worth guarding rather than re-catching by review, because both fail in the one direction review is worst at: green.
 
-**A second emitter of the required check.** The sync re-added `ci-gate-docs.yml`, which [§ 577](https://github.com/Absence0760/project-running/pull/577) had deleted. The required status check on `main` is a job *named* `CI gate`, and GitHub does not require every check sharing that name to pass: on #457 the PR read `mergeStateStatus = UNSTABLE` — mergeable — with `CI gate = success` published by a workflow that passes trivially in ~2 s, while 40 real checks were still queued. Since this repo asks for a docs update with nearly every change, most PRs pass through that window. The re-added file's own header still asserted the assumption #457 disproved ("both emit a CI gate check and GitHub requires all of them green"), and its stated premise was stale twice over: `ci.yml` no longer carries a docs `paths-ignore`, having been made the sole emitter with its heavy jobs skipping instead. Worth noting how well-camouflaged the re-add was — the file had been rewritten to satisfy the existing base-branch workflow guard, so it would have gone green on exactly the suite that exists to catch workflow mistakes.
+**A second emitter of the required check.** The sync re-added `ci-gate-docs.yml`, which [§ 577](https://github.com/Absence0760/threkir/pull/577) had deleted. The required status check on `main` is a job *named* `CI gate`, and GitHub does not require every check sharing that name to pass: on #457 the PR read `mergeStateStatus = UNSTABLE` — mergeable — with `CI gate = success` published by a workflow that passes trivially in ~2 s, while 40 real checks were still queued. Since this repo asks for a docs update with nearly every change, most PRs pass through that window. The re-added file's own header still asserted the assumption #457 disproved ("both emit a CI gate check and GitHub requires all of them green"), and its stated premise was stale twice over: `ci.yml` no longer carries a docs `paths-ignore`, having been made the sole emitter with its heavy jobs skipping instead. Worth noting how well-camouflaged the re-add was — the file had been rewritten to satisfy the existing base-branch workflow guard, so it would have gone green on exactly the suite that exists to catch workflow mistakes.
 
 **Two files, one agent name.** The same sync added `.claude/agents/repo-security-auditor.md` and `.claude/agents/compliance-auditor.md` while this repo already carried both under `.claude/agents/auditors/`. A subagent resolves by its frontmatter `name:`, so those are two definitions of one agent with no rule saying which answers, and the incoming pair described a *different application* — a `<CMS>` webhook HMAC, `backend/src/routes/cms-webhook.ts`, an `orders-store` PII table on DynamoDB, "static site, no SSR" — none of which exists here, while dropping the `Write` tool the `/audit/*` commands need to persist findings to `reviews/`. A confidently wrong auditor is worse than a missing one: it reports against paths the repo does not have, and the reader has no reason to doubt it.
 
@@ -10291,7 +10291,7 @@ One nearby literal was fixed on the way past and one was left. `routes/heatmap.s
 
 ## 759. The per-column grant on `public.events` is the fix, not the defect — and the one consequence that would have mattered does not happen
 
-**Decided 2026-08-27.** [#789](https://github.com/Absence0760/project-running/issues/789) filed that `public.events` "grants SELECT per-column, not table-wide, so `has_table_privilege` is false while `select count(*)` succeeds — silently blocking any system-column read by `anon`/`authenticated`", and asked whether it is deliberate and whether other tables share it. **Both observations reproduce exactly. Both conclusions drawn from them are wrong, and the second one is wrong in the direction that would have leaked data.**
+**Decided 2026-08-27.** [#789](https://github.com/Absence0760/threkir/issues/789) filed that `public.events` "grants SELECT per-column, not table-wide, so `has_table_privilege` is false while `select count(*)` succeeds — silently blocking any system-column read by `anon`/`authenticated`", and asked whether it is deliberate and whether other tables share it. **Both observations reproduce exactly. Both conclusions drawn from them are wrong, and the second one is wrong in the direction that would have leaked data.**
 
 **The observations, measured.** `has_table_privilege('anon', 'public.events', 'SELECT')` is `false` while `set role anon; select count(*) from public.events` returns 12 — Postgres checks column privileges for the columns a query names, and a `count(*)` names none. A direct `select xmin` / `ctid` / `tableoid` as `anon` or `authenticated` raises `42501`, because a per-column grant enumerates user columns only. Neither is news: [§ 753](#753-the-pgtap-owner-bypass-did-have-a-query-to-add-a-predicate-to--a-row-level-security-policy-is-one--and-the-residue-it-was-filed-for-was-zero-assertions-wide) already recorded the second in passing, as the reason its second mutation operator keeps the owner bypass.
 
@@ -10405,7 +10405,7 @@ One nearby literal was fixed on the way past and one was left. `routes/heatmap.s
 
 ## 763. Three of the four write-locked tables held a wider INSERT than UPDATE, and the one that mattered was a live forgery path rather than the unwritable column the filing predicted
 
-**Decided 2026-08-27.** [#789](https://github.com/Absence0760/project-running/issues/789) filed the write-side companion to [§ 759](#759-the-per-column-grant-on-publicevents-is-the-fix-not-the-defect--and-the-one-consequence-that-would-have-mattered-does-not-happen): "four tables carry column-level INSERT/UPDATE for `authenticated`; a column added there is silently *unwritable* (42501 on a PATCH), and three of the four still hold a table-level INSERT beside a column-scoped UPDATE." **The two counts are right, the headline defect has never fired, and the aside at the end of the sentence is the one that was live on `main`.**
+**Decided 2026-08-27.** [#789](https://github.com/Absence0760/threkir/issues/789) filed the write-side companion to [§ 759](#759-the-per-column-grant-on-publicevents-is-the-fix-not-the-defect--and-the-one-consequence-that-would-have-mattered-does-not-happen): "four tables carry column-level INSERT/UPDATE for `authenticated`; a column added there is silently *unwritable* (42501 on a PATCH), and three of the four still hold a table-level INSERT beside a column-scoped UPDATE." **The two counts are right, the headline defect has never fired, and the aside at the end of the sentence is the one that was live on `main`.**
 
 **What the catalogue actually says.** Four tables hold a column-level write grant, and only for `authenticated` — `anon` holds none, so the write side is *not* the read side's "both roles identical" shape. Only **one** of the four (`event_attendees`, `20270520_001`) column-scopes **INSERT**; the other three column-scope UPDATE alone. So the filed defect is only unconditionally true on that one table: on `achievements`, `challenge_participants` and `coach_messages` a new column would have been **insertable and not updatable** — write-once by accident, a POST that succeeds and a PATCH that 42501s, which is a stranger failure than the one described. And it has never happened: no column has been added to any of the four since its lockdown landed, measured across all 434 migrations. It is a latent risk worth pinning, not a present bug.
 
@@ -11255,7 +11255,7 @@ first-draft bugs.
 
 ## 794. The page ring was drawn by hand beside the chain it draws, and it had been wrong since § 376
 
-**Decided 2026-08-30.** [§ 793](#793-the-watchs-golden-wire-vectors-were-pinned-twice-and-compared-never-and-the-two-docs-that-read-as-contracts-about-the-radio-were-both-wrong)'s doc sweep found this and [#829](https://github.com/Absence0760/project-running/pull/829) built the guard for it; that PR turned out to be a second, independent integration of round 25 and was closed as superseded by [#828](https://github.com/Absence0760/project-running/pull/828), which is on `main`. Everything else in it exists on `main` already under different filenames. This one thing does not, and it is the half worth keeping, because it is the only piece of round 25 that caught a live defect nothing else was watching.
+**Decided 2026-08-30.** [§ 793](#793-the-watchs-golden-wire-vectors-were-pinned-twice-and-compared-never-and-the-two-docs-that-read-as-contracts-about-the-radio-were-both-wrong)'s doc sweep found this and [#829](https://github.com/Absence0760/threkir/pull/829) built the guard for it; that PR turned out to be a second, independent integration of round 25 and was closed as superseded by [#828](https://github.com/Absence0760/threkir/pull/828), which is on `main`. Everything else in it exists on `main` already under different filenames. This one thing does not, and it is the half worth keeping, because it is the only piece of round 25 that caught a live defect nothing else was watching.
 
 **`docs/custom_watch/navigation.md`'s page-cycle diagram is `page.rs`'s own `next()` chain drawn out by hand, and the two had disagreed since the storm page landed.** The drawn ring stepped `SUN --> WPT`; the firmware steps `SUN --> BARO --> WPT`. `BARO` — [§ 376](#376-storm-detection-trends-a-sea-level-reduced-pressure-against-gps-altitude-and-says-nothing-at-all-when-it-cannot)'s storm watch — was declared, reachable on the wrist, and absent from the canonical drawing of the ring BTN3 walks, and the prose above the diagram called the closing run a trio where the firmware walks four.
 
@@ -28918,3 +28918,41 @@ matched the old `supabase/setup-cli` string to find where the stack comes up, so
 it learned the new name too — widened rather than repointed, and it still anchors
 on the same, earliest step.
 ||||||| bd5e334c3
+
+## 1614. The repo becomes `threkir`, and three other things that share the string do not
+
+Threkir has been the product's name for a long time — 489 tracked files said so
+against 62 still saying `project-running` — so the repo, the two Go module paths
+and the AWS account move to it. What makes this worth an entry is not the rename
+but the three identifiers that read the same and must NOT move with it.
+
+**`config.toml`'s `project_id` stays.** It is the local Supabase project name,
+and the container names derive from it — `supabase_db_project-running`,
+`supabase_auth_project-running`. `ci.yml` runs `docker exec` against those
+derived names in three places, so renaming the id without renaming them in
+lockstep breaks CI, and renaming both would orphan a stack that several sessions
+share in one checkout. It is a local-dev identifier that happens to spell the old
+repo name; nothing user-facing reads it.
+
+**The Fly.io org stays.** `job_worker/deployment.md` says why, in a line written
+before anyone needed it: Fly org slugs "are embedded in billing and token scoping
+and are painful to change later, so get it right at creation." The worker is live
+under it. The replacement was therefore scoped to the repo-QUALIFIED form
+`Absence0760/project-running` rather than the bare string, which left every Fly
+reference untouched by construction instead of by review.
+
+**The AWS account name moves, but in its own step.** It is cosmetic — account ID
+`374902171933` is immutable and every trust policy, cross-account role, KMS key
+policy and tfstate path keys on the ID, not the name, which is also why all six
+workstation SSO profiles need no edit. The two `bin/` scripts that name the
+account in prose move WITH the account rename rather than ahead of it, so the
+docs are true at every point rather than only at the end.
+
+**The one that does break things is `infra/github-oidc`.** Both deploy roles gate
+on an exact `sub` claim of the form `repo:<owner/repo>:environment:<env>`, so the
+instant the repo is renamed every Actions token stops matching and neither
+environment can be assumed. GitHub's rename redirects cover clones and links and
+do not cover this. It is recoverable rather than a deadlock only because no
+workflow runs `terraform apply` — the apply is operator-run through
+`bin/deploy-env.sh` — so the rename cannot lock us out of undoing it. The window
+is between the rename and the apply, and nothing deploys in it.

@@ -1,1 +1,1 @@
-github_repo = "Absence0760/project-running"
+github_repo = "Absence0760/threkir"

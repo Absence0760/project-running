@@ -29,7 +29,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Absence0760/project-running/apps/job_worker/internal/schema"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/schema"
 )
 
 const (

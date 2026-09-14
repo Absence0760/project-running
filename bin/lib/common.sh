@@ -24,7 +24,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # aws-login.sh implemented the default — every bare `aws` call in the
 # other scripts silently used the default profile in shells without
 # the export (e.g. non-interactive ones).
-export AWS_PROFILE="${AWS_PROFILE:-running}"
+export AWS_PROFILE="${AWS_PROFILE:-threkir}"
 
 if [[ -t 1 ]]; then
 	C_RESET=$'\033[0m'

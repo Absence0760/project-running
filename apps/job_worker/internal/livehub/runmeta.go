@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Absence0760/project-running/apps/job_worker/internal/schema"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/schema"
 
-	"github.com/Absence0760/project-running/apps/job_worker/internal/supakey"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/supakey"
 )
 
 // RunMeta captures the two `runs` columns the authorizer cares about:

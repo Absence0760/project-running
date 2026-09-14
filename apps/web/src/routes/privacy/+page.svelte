@@ -251,7 +251,7 @@
 		We give at least 30 days' notice before a new sub-processor goes live. The canonical
 		disclosure is our maintained
 		<a
-			href="https://github.com/Absence0760/project-running/blob/main/docs/compliance/sub-processor-changelog.md"
+			href="https://github.com/Absence0760/threkir/blob/main/docs/compliance/sub-processor-changelog.md"
 			target="_blank"
 			rel="noopener noreferrer">sub-processor changelog</a
 		>; registered users are additionally notified by email (and, where available, in-app). You may

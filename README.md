@@ -1,4 +1,4 @@
-# project-running
+# Threkir
 
 Cross-platform running + gym + nutrition app: Flutter (Android + iOS), native
 Apple Watch (SwiftUI) and Wear OS (Compose), a SvelteKit web app, and a

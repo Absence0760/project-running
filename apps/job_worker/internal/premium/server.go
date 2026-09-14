@@ -36,7 +36,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Absence0760/project-running/apps/job_worker/internal/supajwt"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/supajwt"
 )
 
 // Server wires the four Pro endpoints to the Supabase service-role

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Absence0760/project-running/apps/job_worker/internal/nativepush"
-	"github.com/Absence0760/project-running/apps/job_worker/internal/webpush"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/nativepush"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/webpush"
 )
 
 // Backend is the subset of SupabaseClient methods the worker needs.

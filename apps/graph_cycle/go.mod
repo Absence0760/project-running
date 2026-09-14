@@ -1,4 +1,4 @@
-module github.com/Absence0760/project-running/apps/graph_cycle
+module github.com/Absence0760/threkir/apps/graph_cycle
 
 // Patch-level floor, not a bare `go 1.26`: CVE-2026-46600 has no fix in the
 // 1.25 line at all, so anything below 1.26.6 links a stdlib that cannot be

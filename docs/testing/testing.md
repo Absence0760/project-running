@@ -352,7 +352,7 @@ flutter test --plain-name "your new scenario"
 flutter test
 
 # Or the whole workspace
-cd /path/to/project-running
+cd /path/to/threkir
 melos exec --scope="run_recorder" --scope="mobile_android" --scope="api_client" --scope="gpx_parser" --scope="ui_kit" --scope="core_models" -- flutter test
 ```
 

@@ -15,16 +15,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Absence0760/project-running/apps/job_worker/internal"
-	"github.com/Absence0760/project-running/apps/job_worker/internal/bouncehook"
-	"github.com/Absence0760/project-running/apps/job_worker/internal/dataexport"
-	"github.com/Absence0760/project-running/apps/job_worker/internal/livehub"
-	"github.com/Absence0760/project-running/apps/job_worker/internal/nativepush"
-	"github.com/Absence0760/project-running/apps/job_worker/internal/premium"
-	"github.com/Absence0760/project-running/apps/job_worker/internal/stravahook"
-	"github.com/Absence0760/project-running/apps/job_worker/internal/supajwt"
-	"github.com/Absence0760/project-running/apps/job_worker/internal/unsubscribe"
-	"github.com/Absence0760/project-running/apps/job_worker/internal/webpush"
+	"github.com/Absence0760/threkir/apps/job_worker/internal"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/bouncehook"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/dataexport"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/livehub"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/nativepush"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/premium"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/stravahook"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/supajwt"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/unsubscribe"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/webpush"
 )
 
 // stravaJobEnqueuer adapts SupabaseClient.EnqueueStravaEvent to the

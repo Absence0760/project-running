@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Absence0760/project-running/apps/job_worker/internal/supajwt"
+	"github.com/Absence0760/threkir/apps/job_worker/internal/supajwt"
 )
 
 // JWTAuthorizer plugs into [Server.Authorizer] to enforce the live
