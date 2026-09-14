@@ -54,6 +54,20 @@ void main() {
   final checkpointId = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb01';
   final instanceStart = DateTime.utc(2026, 6, 14, 7);
 
+  /// `recorded_at` for a fixture row, anchored to now.
+  ///
+  /// [LocalCrossingsStore.kSyncedRetention] drops a SYNCED crossing this many
+  /// days after the instant `recorded_at` names, and [replaceFromServer]
+  /// applies it to the incoming rows too — so a literal date here does not stay
+  /// a fixture. It ages out of the window and takes its assertion with it: the
+  /// positive ones start failing on a date nobody chose, and the negative ones
+  /// go on passing over a store the prune already emptied. `instanceStart` is
+  /// an occurrence key rather than an age and stays a fixed instant.
+  String freshRecordedAt() => DateTime.now()
+      .toUtc()
+      .subtract(const Duration(minutes: 5))
+      .toIso8601String();
+
   setUp(() async {
     dir = Directory.systemTemp.createTempSync('local_crossings_store_test_');
     store = LocalCrossingsStore();
@@ -153,7 +167,7 @@ void main() {
             'checkpoint_id': checkpointId,
             'instance_start': e.value,
             'bib': e.key,
-            'recorded_at': DateTime.utc(2026, 6, 14, 7, 5).toIso8601String(),
+            'recorded_at': freshRecordedAt(),
           },
       ]);
       final here =
@@ -191,9 +205,14 @@ void main() {
           'checkpoint_id': checkpointId,
           'instance_start': 'not a date',
           'bib': 'corrupt',
-          'recorded_at': DateTime.utc(2026, 6, 14, 7, 5).toIso8601String(),
+          'recorded_at': freshRecordedAt(),
         },
       ]);
+      // The row has to still BE here for the empty result to mean anything:
+      // a fixture the ingest dropped for some other reason (retention, say)
+      // would satisfy the emptiness below without the unreadable-instance path
+      // ever running.
+      expect(store.rowsById, contains('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa99'));
       expect(store.rowsForCheckpoint(eventId, checkpointId, instanceStart),
           isEmpty);
     });
@@ -240,7 +259,7 @@ void main() {
           'checkpoint_id': checkpointId,
           'instance_start': local.toIso8601String(),
           'bib': 'legacy',
-          'recorded_at': DateTime.utc(2026, 6, 14, 7, 5).toIso8601String(),
+          'recorded_at': freshRecordedAt(),
         },
         syncState: CrossingSyncState.pendingCreate,
       );
@@ -267,7 +286,7 @@ void main() {
           'checkpoint_id': checkpointId,
           'instance_start': 'not a date',
           'bib': 'corrupt',
-          'recorded_at': DateTime.utc(2026, 6, 14, 7, 5).toIso8601String(),
+          'recorded_at': freshRecordedAt(),
         },
         syncState: CrossingSyncState.pendingCreate,
       );
