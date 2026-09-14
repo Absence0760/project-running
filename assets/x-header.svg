@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="500" viewBox="0 0 1500 500">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1500" y2="500" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FE5932"/>
+      <stop offset="0.58" stop-color="#FE5932"/>
+      <stop offset="1" stop-color="#A01E77"/>
+    </linearGradient>
+  </defs>
+  <rect width="1500" height="500" fill="url(#bg)"/>
+  <path d="M -20 440 C 180 390, 300 480, 500 430 S 840 330, 1060 385 S 1380 470, 1520 405"
+        fill="none" stroke="#ffffff" stroke-opacity="0.16" stroke-width="6" stroke-linecap="round"/>
+  <g fill="#ffffff" fill-opacity="0.08" fill-rule="evenodd" transform="translate(1340 250) scale(7) translate(-54.5 -50)">
+    <path d="M30 10 H44 V90 H30 Z M44 29 H58 A21 21 0 0 1 58 71 H44 Z M44 42 H56 A8 8 0 0 1 56 58 H44 Z"/>
+  </g>
+  <text x="750" y="205" fill="#ffffff" text-anchor="middle"
+        font-family="Noto Sans, Cantarell, sans-serif"
+        font-size="150" font-weight="700" letter-spacing="-3"
+        dominant-baseline="central">Threkir</text>
+  <text x="750" y="315" fill="#ffffff" fill-opacity="0.92" text-anchor="middle"
+        font-family="Noto Sans, Cantarell, sans-serif"
+        font-size="46" font-weight="400" letter-spacing="0.5"
+        dominant-baseline="central">Run. Train. Together.</text>
+</svg>
