@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # secret-set.sh — set or update a single key in an env's encrypted secrets
-# file (../infra-secrets/running/<env>.sops.yaml, in the PRIVATE estate repo)
+# file (../infra-secrets/threkir/<env>.sops.yaml, in the PRIVATE estate repo)
 # without opening the editor.
 #
 # This wraps `sops --set` so you can script secret rotations or one-
@@ -38,7 +38,7 @@ set -euo pipefail
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 
-# Secrets live in the PRIVATE estate repo ../infra-secrets/running/, NOT this
+# Secrets live in the PRIVATE estate repo ../infra-secrets/threkir/, NOT this
 # public repo. Override INFRA_SECRETS_DIR if your clone isn't a sibling.
 INFRA_SECRETS_DIR="${INFRA_SECRETS_DIR:-$REPO_ROOT/../infra-secrets}"
 PROJECT_SLUG="running"

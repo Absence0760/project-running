@@ -4,8 +4,8 @@
 # they live in the PRIVATE estate repo Absence0760/infra-secrets (cloned as a
 # sibling at ../infra-secrets), one subdir per project:
 #
-#     ../infra-secrets/running/prod.sops.yaml
-#     ../infra-secrets/running/preview.sops.yaml
+#     ../infra-secrets/threkir/prod.sops.yaml
+#     ../infra-secrets/threkir/preview.sops.yaml
 #
 # The creation rules + KMS ARNs for those files live in
 # ../infra-secrets/.sops.yaml. `bin/sops-init.sh <env>` wires this project's
@@ -13,7 +13,7 @@
 # and seeds the encrypted file; `bin/secret-set.sh <env> <KEY>` edits it. The
 # Terraform `sops_file` data source in infra/envs/<env>/main.tf reads the
 # external path (the `secrets_file` var, default
-# ../infra-secrets/running/<env>.sops.yaml).
+# ../infra-secrets/threkir/<env>.sops.yaml).
 #
 # This file intentionally declares NO creation_rules so that running
 # `sops --encrypt` anywhere under infra/ FAILS CLOSED ("no matching creation

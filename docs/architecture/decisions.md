@@ -14676,7 +14676,7 @@ so every mutation below it is a real mutation.
 ## 951. Two ways this repo addressed its secrets file wrongly: an env that took all of it, and a rotation script that found none of it
 
 `local.lambda_env` was `merge(base, has_secrets ? sops.data : {})` — the entire
-decrypted `../infra-secrets/running/<env>.sops.yaml`. That file is shared:
+decrypted `../infra-secrets/threkir/<env>.sops.yaml`. That file is shared:
 `GRAPHHOPPER_API_KEY` and `GRAPH_CYCLE_API_KEY` live in it for the
 generate-route Lambda, and every key it grows for any future consumer would land
 in the coach function's environment whether the handler reads it or not —

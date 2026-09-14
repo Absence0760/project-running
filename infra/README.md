@@ -154,7 +154,7 @@ Working from zero — no AWS account, no domain, no AWS CLI:
 
 **0.2 — Domain.** Either register one fresh (Porkbun, Namecheap, Cloudflare Registrar — all fine; you don't need Route 53 to register, only to host DNS) or pick an apex you already own. The default examples use `threkir.com` — search the repo for it and swap if you're using something else. The places that hardcode it are:
 - `infra/dns/` — set `apex_domain` in the committed `infra/dns/terraform.tfvars` (which also carries `email_auth_records`, the Resend DKIM/SPF/MX/DMARC set plus the `default._bimi` sender-logo record — public DNS data, Terraformed so a DR rebuild restores mail deliverability instead of dropping it; the BIMI logo render is gated on DMARC reaching enforcement + a paid VMC, see docs/features/email.md § Sender brand logo)
-- `infra/envs/{preview,prod}/terraform.tfvars` — set `apex_domain` there (canonical copies live in the private estate repo as `../infra-secrets/running/{preview,prod}.tfvars`, symlinked into place — see § 4/5)
+- `infra/envs/{preview,prod}/terraform.tfvars` — set `apex_domain` there (canonical copies live in the private estate repo as `../infra-secrets/threkir/{preview,prod}.tfvars`, symlinked into place — see § 4/5)
 - `infra/envs/preview/variables.tf` + `infra/envs/prod/variables.tf` — `default = "threkir.com"` if you want a fallback
 
 **0.3 — Workstation tooling.**
@@ -242,7 +242,7 @@ cd ../envs/preview
 # are non-secret: publishable key, public URLs, alert emails; the private repo
 # keeps them off public GitHub and makes any workstation deploy-ready). Symlink
 # it in; fall back to cp-from-example only if you're not using the estate repo.
-ln -s ../../../../infra-secrets/running/preview.tfvars terraform.tfvars
+ln -s ../../../../infra-secrets/threkir/preview.tfvars terraform.tfvars
 $EDITOR terraform.tfvars                          # fill in supabase URL + anon key
 terraform init
 terraform apply
@@ -256,7 +256,7 @@ The first apply creates the KMS key, S3 bucket, CloudFront distribution, and Lam
 > under `infra/` (a sops file in public history leaks KMS-ARN metadata + secret
 > key names; `infra/.gitignore` blocks it as a fail-safe). The Terraform
 > `sops_file` data source reads the external path via the `secrets_file` var
-> (default `../infra-secrets/running/<env>.sops.yaml`); set `TF_VAR_secrets_file`
+> (default `../infra-secrets/threkir/<env>.sops.yaml`); set `TF_VAR_secrets_file`
 > if your estate clone lives elsewhere. See [decisions.md §53](../docs/architecture/decisions.md) and `infra/.sops.yaml`.
 
 The scripted path does the rest (`bin/sops-init.sh` wires the env's KMS ARN into the estate `.sops.yaml` and seeds the encrypted file; `bin/secret-set.sh` writes a key). The equivalent manual steps for preview:
@@ -294,11 +294,11 @@ terraform apply
 > apply and/or set the two `*_reserved_concurrency = -1` tfvars overrides while it's pending —
 > full recipe in [deployment_lean.md § Rock-bottom deploy steps](../docs/ops/deployment_lean.md#rock-bottom-deploy-steps).
 
-Same flow, in `envs/prod/` (ciphertext → `../infra-secrets/running/prod.sops.yaml`):
+Same flow, in `envs/prod/` (ciphertext → `../infra-secrets/threkir/prod.sops.yaml`):
 
 ```bash
 cd ../prod
-ln -s ../../../../infra-secrets/running/prod.tfvars terraform.tfvars   # canonical copy in the estate repo (see § 4)
+ln -s ../../../../infra-secrets/threkir/prod.tfvars terraform.tfvars   # canonical copy in the estate repo (see § 4)
 $EDITOR terraform.tfvars
 terraform init
 terraform apply
@@ -330,13 +330,13 @@ Once green: visit `preview.<your-apex>` (or `<your-apex>` for prod) and confirm 
 Edit a secret in place (the encrypted file lives in the PRIVATE estate repo):
 
 ```bash
-sops ../infra-secrets/running/prod.sops.yaml      # opens $EDITOR with decrypted YAML
+sops ../infra-secrets/threkir/prod.sops.yaml      # opens $EDITOR with decrypted YAML
 ( cd ../infra-secrets && git commit -am 'running: rotate prod secret' )   # commit in the private repo
 cd infra/envs/prod && terraform apply             # publishes a new Lambda version with the new env
 bin/lambda-alias-sync.sh prod                     # repoint the CI-owned `live` aliases so it actually serves
 ```
 
-Or non-interactively for one specific key (no shell history leak — value comes via stdin / `--from-file`; `bin/secret-set.sh` writes to `../infra-secrets/running/<env>.sops.yaml`):
+Or non-interactively for one specific key (no shell history leak — value comes via stdin / `--from-file`; `bin/secret-set.sh` writes to `../infra-secrets/threkir/<env>.sops.yaml`):
 
 ```bash
 echo -n "$NEW_VALUE" | bin/secret-set.sh prod ANTHROPIC_API_KEY
@@ -355,7 +355,7 @@ Remote state in `s3://threkir-tfstate/`. Locking is S3-native via `use_lockfile 
 
 ## Disaster recovery
 
-If the AWS account itself is gone, see [`apps/web/deployment.md` § Disaster recovery](../apps/web/deployment.md#disaster-recovery) for the rebuild procedure. Important nuance: KMS keys can't be cross-account-recovered, so the existing `../infra-secrets/running/*.sops.yaml` ciphertext is unrecoverable in that scenario (the plaintext is gone with the key) — re-issue the secrets fresh and re-encrypt against the new env's KMS key. The private estate repo is the backup of record for the *encrypted* blobs, but it cannot rescue you from a lost KMS key.
+If the AWS account itself is gone, see [`apps/web/deployment.md` § Disaster recovery](../apps/web/deployment.md#disaster-recovery) for the rebuild procedure. Important nuance: KMS keys can't be cross-account-recovered, so the existing `../infra-secrets/threkir/*.sops.yaml` ciphertext is unrecoverable in that scenario (the plaintext is gone with the key) — re-issue the secrets fresh and re-encrypt against the new env's KMS key. The private estate repo is the backup of record for the *encrypted* blobs, but it cannot rescue you from a lost KMS key.
 
 For an interactive rebuild walkthrough that probes which phases are already done and resumes mid-flow, run [`bin/disaster-recovery.sh`](../bin/README.md) (or `bin/disaster-recovery.sh --status` for a read-only state check).
 

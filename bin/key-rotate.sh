@@ -2,7 +2,7 @@
 #
 # key-rotate.sh — re-encrypt an env's secrets file under the current
 # KMS key. The encrypted file lives in the PRIVATE estate repo
-# (../infra-secrets/running/<env>.sops.yaml), NOT this public repo.
+# (../infra-secrets/threkir/<env>.sops.yaml), NOT this public repo.
 #
 # Use case: you've changed the KMS key (via terraform — destroyed +
 # recreated, or moved to a different key in the estate `.sops.yaml`),
