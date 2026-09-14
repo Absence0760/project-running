@@ -107,7 +107,7 @@ test('a stale slot in any written path shape is caught, in every scanned surface
 	])) {
 		const files = fresh();
 		edit(files, rel, from, to);
-		const hits = findingsMatching(files, new RegExp(`^${rel.replace(/[.]/g, '\\.')}:\\d+: .*names the estate slot "running"`));
+		const hits = checkEstateSlot(files).findings.filter((f) => f.startsWith(`${rel}:`) && f.includes('names the estate slot "running"'));
 		assert.equal(hits.length, 1, `${rel}: ${hits.join(' | ') || 'no finding'}`);
 	}
 });
