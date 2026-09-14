@@ -134,7 +134,7 @@ Adding a stack means: the directory, an entry in the `stack:` matrix, an entry i
 > ```bash
 > bin/aws-preflight.sh                                 # confirm tooling + AWS auth
 > bin/deploy-preview.sh                                # apply bootstrap → dns → oidc → preview, idempotent
-> bin/sops-init.sh preview                             # wire KMS ARN into ../infra-secrets + seed running/preview.sops.yaml
+> bin/sops-init.sh preview                             # wire KMS ARN into ../infra-secrets + seed threkir/preview.sops.yaml
 > bin/secret-set.sh preview ANTHROPIC_API_KEY < ~/key  # write the real Anthropic key (stdin, never argv)
 > cd infra/envs/preview && terraform apply             # push the new env var to Lambda
 > bin/preview-status.sh preview                        # health check
@@ -162,7 +162,7 @@ Working from zero — no AWS account, no domain, no AWS CLI:
 - Terraform ≥ 1.13 (`dnf install terraform`)
 - AWS CLI v2 (already installed per workstation conventions)
 - sops (already installed; uses age locally + AWS KMS for shared)
-- The PRIVATE estate secrets repo cloned as a sibling of this repo: `git clone git@github.com:Absence0760/infra-secrets.git ../infra-secrets`. Production sops ciphertext lives there (under `running/`), never in this public repo. Set `INFRA_SECRETS_DIR` / `TF_VAR_secrets_file` if your clone lives elsewhere.
+- The PRIVATE estate secrets repo cloned as a sibling of this repo: `git clone git@github.com:Absence0760/infra-secrets.git ../infra-secrets`. Production sops ciphertext lives there (under `threkir/`), never in this public repo. Set `INFRA_SECRETS_DIR` / `TF_VAR_secrets_file` if your clone lives elsewhere.
 
 **0.4 — AWS CLI SSO.**
 
@@ -252,7 +252,7 @@ The first apply creates the KMS key, S3 bucket, CloudFront distribution, and Lam
 
 > **Secrets live in the PRIVATE estate repo, NOT here.** This repo is PUBLIC.
 > Production sops ciphertext is committed to `Absence0760/infra-secrets` (cloned
-> as a sibling at `../infra-secrets`), under `running/<env>.sops.yaml` — never
+> as a sibling at `../infra-secrets`), under `threkir/<env>.sops.yaml` — never
 > under `infra/` (a sops file in public history leaks KMS-ARN metadata + secret
 > key names; `infra/.gitignore` blocks it as a fail-safe). The Terraform
 > `sops_file` data source reads the external path via the `secrets_file` var
@@ -264,15 +264,14 @@ The scripted path does the rest (`bin/sops-init.sh` wires the env's KMS ARN into
 ```bash
 ARN=$(terraform output -raw kms_key_arn)                       # from infra/envs/preview
 cd ../../../../infra-secrets                                   # the private estate repo
-sed -i "s|KMS_RUNNING_PREVIEW_ARN_PLACEHOLDER|$ARN|" .sops.yaml
-grep -q 'KMS_RUNNING_PREVIEW_ARN_PLACEHOLDER' .sops.yaml && { echo 'ERROR: estate .sops.yaml still has the preview placeholder'; exit 1; }
-mkdir -p running
+$EDITOR .sops.yaml                                             # set `kms:` on the ^threkir/preview\.sops\.yaml$ rule to $ARN
+mkdir -p threkir
 echo 'ANTHROPIC_API_KEY: sk-ant-...' > /tmp/coach.yaml
 echo 'SUPABASE_SECRET_KEY: sb_secret_...' >> /tmp/coach.yaml   # coach assistant-message persistence (XSS audit H1); without it the coach streams but doesn't save replies. Use the sb_secret_… key (decisions §280), not the legacy service_role JWT
 echo 'SENTRY_DSN: ...' >> /tmp/coach.yaml      # optional
-sops --encrypt /tmp/coach.yaml > running/preview.sops.yaml
+sops --config "$PWD/.sops.yaml" --filename-override "$PWD/threkir/preview.sops.yaml" --output threkir/preview.sops.yaml --encrypt /tmp/coach.yaml   # sops picks the rule by the INPUT's name, so name the target, in full
 shred -u /tmp/coach.yaml
-git add running/preview.sops.yaml .sops.yaml && git commit -m 'running: preview secrets'   # commit in the PRIVATE repo
+git add threkir/preview.sops.yaml .sops.yaml && git commit -m 'threkir: preview secrets'   # commit in the PRIVATE repo
 ```
 
 Re-apply (back in `infra/envs/preview`) to wire the secrets into the Lambda:
@@ -304,14 +303,13 @@ terraform init
 terraform apply
 ARN=$(terraform output -raw kms_key_arn)
 ( cd ../../../../infra-secrets
-  sed -i "s|KMS_RUNNING_PROD_ARN_PLACEHOLDER|$ARN|" .sops.yaml
-  grep -q 'KMS_RUNNING_PROD_ARN_PLACEHOLDER' .sops.yaml && { echo 'ERROR: estate .sops.yaml still has the prod placeholder'; exit 1; }
-  mkdir -p running
+  $EDITOR .sops.yaml                                           # set `kms:` on the ^threkir/prod\.sops\.yaml$ rule to $ARN
+  mkdir -p threkir
   echo 'ANTHROPIC_API_KEY: sk-ant-...' > /tmp/coach.yaml
   echo 'SUPABASE_SECRET_KEY: sb_secret_...' >> /tmp/coach.yaml   # coach assistant-message persistence (XSS audit H1)
-  sops --encrypt /tmp/coach.yaml > running/prod.sops.yaml
+  sops --config "$PWD/.sops.yaml" --filename-override "$PWD/threkir/prod.sops.yaml" --output threkir/prod.sops.yaml --encrypt /tmp/coach.yaml
   shred -u /tmp/coach.yaml
-  git add running/prod.sops.yaml .sops.yaml && git commit -m 'running: prod secrets' )
+  git add threkir/prod.sops.yaml .sops.yaml && git commit -m 'threkir: prod secrets' )
 terraform apply
 ```
 

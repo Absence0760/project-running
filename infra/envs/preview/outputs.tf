@@ -6,7 +6,7 @@ output "lambda_alias" { value = module.web.lambda_alias }
 output "generate_route_lambda_function_name" { value = module.web.generate_route_lambda_function_name }
 output "generate_route_lambda_alias" { value = module.web.generate_route_lambda_alias }
 output "kms_key_arn" {
-  description = "Put this in ../infra-secrets/.sops.yaml (running/preview rule); `bin/sops-init.sh preview` wires it automatically."
+  description = "Put this in ../infra-secrets/.sops.yaml (the threkir/preview rule); `bin/sops-init.sh preview` wires it automatically."
   value       = module.web.kms_key_arn
 }
 output "kms_key_alias" { value = module.web.kms_key_alias }
