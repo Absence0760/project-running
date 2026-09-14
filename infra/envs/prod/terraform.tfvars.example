@@ -2,7 +2,7 @@
 #
 # These are non-secret config values. Real secrets (ANTHROPIC_API_KEY,
 # server-side SENTRY_DSN) live in the sops-encrypted file in the PRIVATE
-# estate repo — ../infra-secrets/running/prod.sops.yaml — not here and
+# estate repo — ../infra-secrets/threkir/prod.sops.yaml — not here and
 # NOT anywhere in this public repo.
 
 apex_domain              = "threkir.com"

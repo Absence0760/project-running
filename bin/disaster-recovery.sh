@@ -253,7 +253,7 @@ if probe_phase_done 3b; then
 else
 	step "Phase 3b — sops-encrypt Lambda runtime secrets"
 	log "Resolves the running/preview KMS ARN in the estate ../infra-secrets/.sops.yaml,"
-	log "seeds an encrypted ../infra-secrets/running/preview.sops.yaml, and reapplies"
+	log "seeds an encrypted ../infra-secrets/threkir/preview.sops.yaml, and reapplies"
 	log "preview so the Lambda picks up the env vars."
 	if confirm "Run bin/sops-init.sh preview?"; then
 		"$REPO_ROOT/bin/sops-init.sh" preview

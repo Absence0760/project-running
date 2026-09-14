@@ -19,10 +19,10 @@ data "terraform_remote_state" "dns" {
 # Read the OIDC deploy role ARN — see envs/prod/main.tf for rationale.
 locals {
   domain_name = "${var.preview_subdomain}.${var.apex_domain}"
-  # Secrets live in the PRIVATE estate repo ../infra-secrets/running/, NOT this
+  # Secrets live in the PRIVATE estate repo ../infra-secrets/threkir/, NOT this
   # public repo. Override `secrets_file` (TF_VAR_secrets_file) if your estate
   # clone isn't a sibling of this repo. See infra/README.md + decisions.md §53.
-  secrets_path = var.secrets_file != "" ? var.secrets_file : "${path.module}/../../../../infra-secrets/running/preview.sops.yaml"
+  secrets_path = var.secrets_file != "" ? var.secrets_file : "${path.module}/../../../../infra-secrets/threkir/preview.sops.yaml"
 }
 
 module "web" {

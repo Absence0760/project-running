@@ -62,7 +62,7 @@ if aws sts get-caller-identity >/dev/null 2>&1; then
 	# (mgmt / disag / running); applying prod terraform against the wrong
 	# account is a real footgun. Pin the expected id via EXPECTED_AWS_ACCOUNT,
 	# or drop it in the PRIVATE estate repo at
-	# ../infra-secrets/running/aws-account, so nothing account-identifying
+	# ../infra-secrets/threkir/aws-account, so nothing account-identifying
 	# lands in this PUBLIC repo. Set + mismatch → hard fail; unset → warn
 	# (the account is printed above either way, so the operator still eyeballs it).
 	expected_acct="${EXPECTED_AWS_ACCOUNT:-}"
@@ -79,7 +79,7 @@ if aws sts get-caller-identity >/dev/null 2>&1; then
 		fi
 	else
 		warn "No account pin set — confirm $acct is the Threkir account before applying"
-		dim "Pin it: export EXPECTED_AWS_ACCOUNT=<id>  (or: echo <id> > ../infra-secrets/running/aws-account)"
+		dim "Pin it: export EXPECTED_AWS_ACCOUNT=<id>  (or: echo <id> > ../infra-secrets/threkir/aws-account)"
 	fi
 else
 	err "AWS auth failed — run 'aws sso login --profile \${AWS_PROFILE:-threkir}'"

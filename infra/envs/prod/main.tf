@@ -46,7 +46,7 @@ locals {
   # estate repo is cloned as a sibling of this one; override `secrets_file`
   # (TF_VAR_secrets_file) if your clone lives elsewhere. See infra/README.md and
   # decisions.md §53.
-  secrets_path = var.secrets_file != "" ? var.secrets_file : "${path.module}/../../../../infra-secrets/running/prod.sops.yaml"
+  secrets_path = var.secrets_file != "" ? var.secrets_file : "${path.module}/../../../../infra-secrets/threkir/prod.sops.yaml"
 }
 
 module "web" {
@@ -134,7 +134,7 @@ module "web" {
   lambda_throttle_alarm_threshold = 1
 
   # Null on first apply (the external secrets file doesn't exist yet). The
-  # operator encrypts ../infra-secrets/running/prod.sops.yaml against the KMS key
+  # operator encrypts ../infra-secrets/threkir/prod.sops.yaml against the KMS key
   # created here, then re-applies and the Lambda gets the real env vars.
   secrets_file     = fileexists(local.secrets_path) ? local.secrets_path : null
   extra_lambda_env = var.extra_lambda_env

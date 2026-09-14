@@ -363,7 +363,7 @@ resource "aws_kms_key" "secrets" {
   tags                    = var.tags
 
   # Losing this key during a careless `terraform destroy` makes the env's
-  # secrets file (../infra-secrets/running/<env>.sops.yaml) permanently
+  # secrets file (../infra-secrets/threkir/<env>.sops.yaml) permanently
   # undecryptable. The
   # 30-day deletion window doesn't help when Terraform is the thing
   # initiating the destroy — prevent_destroy forces a manual

@@ -31,7 +31,7 @@ variable "extra_lambda_env" {
 }
 
 variable "secrets_file" {
-  description = "Path to this env's sops-encrypted secrets file. Defaults to ../infra-secrets/running/preview.sops.yaml (the PRIVATE estate repo, cloned as a sibling). NEVER point this inside this public repo. Empty = use the default path."
+  description = "Path to this env's sops-encrypted secrets file. Defaults to ../infra-secrets/threkir/preview.sops.yaml (the PRIVATE estate repo, cloned as a sibling). NEVER point this inside this public repo. Empty = use the default path."
   type        = string
   default     = ""
 }

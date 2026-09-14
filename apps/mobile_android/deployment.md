@@ -99,10 +99,10 @@ base64 -w0 -i upload-keystore.jks | xclip -selection clipboard
 Restore after a lost workstation:
 
 ```bash
-AWS_PROFILE=threkir sops --decrypt --extract '["keystore_jks_base64"]' ../infra-secrets/running/android-upload-keystore.sops.yaml | base64 -d > upload-keystore.jks
+AWS_PROFILE=threkir sops --decrypt --extract '["keystore_jks_base64"]' ../infra-secrets/threkir/android-upload-keystore.sops.yaml | base64 -d > upload-keystore.jks
 ```
 
-The passwords live in the same file (`sops ../infra-secrets/running/android-upload-keystore.sops.yaml` to view), and in the owner's Bitwarden.
+The passwords live in the same file (`sops ../infra-secrets/threkir/android-upload-keystore.sops.yaml` to view), and in the owner's Bitwarden.
 
 ### GitHub Secrets required
 
