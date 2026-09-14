@@ -26,6 +26,7 @@
 set -euo pipefail
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/lib/estate.sh"
 
 if [[ $# -lt 1 ]]; then
 	fatal "Usage: bin/deploy-env.sh <preview|prod> [--plan|--auto-approve|--skip-preflight]"
@@ -75,7 +76,7 @@ if [[ $SKIP_PREFLIGHT -eq 0 ]]; then
 		ok "Preflight passed"
 		# Surface the identity + target account even on SUCCESS — the operator
 		# must SEE which account they're about to apply to (the box carries
-		# mgmt/disag/running profiles). Audit bin-scripts High.
+		# mgmt/threkir/disag/jaredhoward profiles). Audit bin-scripts High.
 		grep -E 'Account:|Authenticated as|expected pin|No account pin' "$preflight_log" | sed 's/^/      /' || true
 	else
 		warn "Preflight surfaced issues:"
@@ -175,8 +176,7 @@ if [[ $PLAN_ONLY -eq 0 ]]; then
 	# secrets file exists in the estate repo, the operator has already
 	# done phase 2 and this was just a re-apply — point them at the
 	# health check. Otherwise walk them through wiring the secret.
-	infra_secrets_dir="${INFRA_SECRETS_DIR:-$REPO_ROOT/../infra-secrets}"
-	secrets_file="$infra_secrets_dir/running/$ENV_NAME.sops.yaml"
+	secrets_file="$(estate_secrets_file "$ENV_NAME")"
 	if [[ -f "$secrets_file" ]]; then
 		ok "Secrets file present ($secrets_file) — the Lambda has the coach key."
 		log "Verify the env is healthy (coach should answer 401, not 503):"
@@ -184,12 +184,12 @@ if [[ $PLAN_ONLY -eq 0 ]]; then
 	else
 		warn "No coach secret wired yet — the Lambda is up but /api/coach returns 503."
 		log "Phase 2 — wire the secret (it lives in the PRIVATE ../infra-secrets repo, never here):"
-		if [[ ! -d "$infra_secrets_dir" ]]; then
+		if [[ ! -d "$INFRA_SECRETS_DIR" ]]; then
 			dim "  git clone git@github.com:Absence0760/infra-secrets.git ../infra-secrets   # clone the estate repo first"
 		fi
-		dim "  bin/sops-init.sh $ENV_NAME                                   # wire KMS ARN + seed running/$ENV_NAME.sops.yaml"
+		dim "  bin/sops-init.sh $ENV_NAME                                   # wire KMS ARN + seed $ESTATE_SLUG/$ENV_NAME.sops.yaml"
 		dim "  echo -n \"sk-ant-…\" | bin/secret-set.sh $ENV_NAME ANTHROPIC_API_KEY   # real key via stdin"
-		dim "  (cd $infra_secrets_dir && git commit -am 'running: $ENV_NAME secrets')  # commit in the PRIVATE repo"
+		dim "  (cd $INFRA_SECRETS_DIR && git add $ESTATE_SLUG/$ENV_NAME.sops.yaml .sops.yaml && git commit -m '$ESTATE_SLUG: $ENV_NAME secrets')  # commit in the PRIVATE repo"
 		dim "  bin/deploy-$ENV_NAME.sh                                       # re-run: idempotent, wires the secret into the Lambda"
 		dim "  bin/preview-status.sh $ENV_NAME                              # confirm coach now answers 401, not 503"
 	fi
